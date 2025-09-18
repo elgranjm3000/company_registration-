@@ -158,17 +158,12 @@ imports:
  &#8226;   <a href="#linecache">linecache</a>
  &#8226;   <a href="#locale">locale</a>
  &#8226;   <a href="#mysql.connector">mysql.connector</a>
- &#8226;   <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
- &#8226;   <a href="#mysql.connector.constants">mysql.connector.constants</a>
- &#8226;   <a href="#mysql.connector.conversion">mysql.connector.conversion</a>
- &#8226;   <a href="#mysql.connector.cursor">mysql.connector.cursor</a>
- &#8226;   <a href="#mysql.connector.errorcode">mysql.connector.errorcode</a>
- &#8226;   <a href="#mysql.connector.errors">mysql.connector.errors</a>
  &#8226;   <a href="#mysql.connector.pooling">mysql.connector.pooling</a>
  &#8226;   <a href="#ntpath">ntpath</a>
  &#8226;   <a href="#operator">operator</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#posixpath">posixpath</a>
+ &#8226;   <a href="#psycopg2">psycopg2</a>
  &#8226;   <a href="#pyi_rth__tkinter.py">pyi_rth__tkinter.py</a>
  &#8226;   <a href="#pyi_rth_inspect.py">pyi_rth_inspect.py</a>
  &#8226;   <a href="#pyi_rth_multiprocessing.py">pyi_rth_multiprocessing.py</a>
@@ -180,10 +175,9 @@ imports:
  &#8226;   <a href="#sre_parse">sre_parse</a>
  &#8226;   <a href="#stat">stat</a>
  &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#threading">threading</a>
  &#8226;   <a href="#tkinter">tkinter</a>
- &#8226;   <a href="#tkinter.constants">tkinter.constants</a>
  &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
- &#8226;   <a href="#tkinter.font">tkinter.font</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
  &#8226;   <a href="#tkinter.scrolledtext">tkinter.scrolledtext</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
@@ -286,33 +280,12 @@ imported by:
 </div>
 
 <div class="node">
-  <a name="'email.message'"></a>
-  <a target="code" href="" type="text/plain"><tt>'email.message'</tt></a>
-<span class="moduletype">MissingModule</span>  <div class="import">
-imported by:
-    <a href="#mysql.opentelemetry.importlib_metadata._adapters">mysql.opentelemetry.importlib_metadata._adapters</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="'http.client'"></a>
-  <a target="code" href="" type="text/plain"><tt>'http.client'</tt></a>
-<span class="moduletype">MissingModule</span>  <div class="import">
-imported by:
-    <a href="#xmlrpc.client">xmlrpc.client</a>
-
-  </div>
-
-</div>
-
-<div class="node">
   <a name="'java.lang'"></a>
   <a target="code" href="" type="text/plain"><tt>'java.lang'</tt></a>
 <span class="moduletype">MissingModule</span>  <div class="import">
 imported by:
     <a href="#platform">platform</a>
+ &#8226;   <a href="#xml.sax._exceptions">xml.sax._exceptions</a>
 
   </div>
 
@@ -359,29 +332,7 @@ imported by:
 <span class="moduletype">MissingModule</span>  <div class="import">
 imported by:
     <a href="#pickle">pickle</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="'urllib.parse'"></a>
-  <a target="code" href="" type="text/plain"><tt>'urllib.parse'</tt></a>
-<span class="moduletype">MissingModule</span>  <div class="import">
-imported by:
-    <a href="#pathlib">pathlib</a>
- &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="'xml.parsers'"></a>
-  <a target="code" href="" type="text/plain"><tt>'xml.parsers'</tt></a>
-<span class="moduletype">MissingModule</span>  <div class="import">
-imported by:
-    <a href="#xmlrpc.client">xmlrpc.client</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
 
   </div>
 
@@ -768,6 +719,23 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="_json"></a>
+  <tt>_json</tt> <span class="moduletype"><tt>/usr/lib/python3.9/lib-dynload/_json.cpython-39-x86_64-linux-gnu.so</tt></span>  <div class="import">
+imports:
+    <a href="#json.decoder">json.decoder</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#json.decoder">json.decoder</a>
+ &#8226;   <a href="#json.encoder">json.encoder</a>
+ &#8226;   <a href="#json.scanner">json.scanner</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="_locale"></a>
   <tt>_locale</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
 imported by:
@@ -975,6 +943,17 @@ imported by:
   <tt>_random</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
 imported by:
     <a href="#random">random</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="_scproxy"></a>
+  <a target="code" href="" type="text/plain"><tt>_scproxy</tt></a>
+<span class="moduletype">MissingModule</span>  <div class="import">
+imported by:
+    <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -1216,6 +1195,7 @@ imported by:
     <a href="#_weakrefset">_weakrefset</a>
  &#8226;   <a href="#collections">collections</a>
  &#8226;   <a href="#weakref">weakref</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
 
   </div>
 
@@ -1285,6 +1265,7 @@ imported by:
     <a href="#_collections_abc">_collections_abc</a>
  &#8226;   <a href="#app.py">app.py</a>
  &#8226;   <a href="#contextlib">contextlib</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
  &#8226;   <a href="#functools">functools</a>
  &#8226;   <a href="#importlib.abc">importlib.abc</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
@@ -1408,9 +1389,13 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#encodings.base64_codec">encodings.base64_codec</a>
+    <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email.base64mime">email.base64mime</a>
+ &#8226;   <a href="#email.encoders">email.encoders</a>
+ &#8226;   <a href="#encodings.base64_codec">encodings.base64_codec</a>
  &#8226;   <a href="#secrets">secrets</a>
  &#8226;   <a href="#ssl">ssl</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
 
   </div>
@@ -1422,10 +1407,15 @@ imported by:
   <tt>binascii</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
 imported by:
     <a href="#base64">base64</a>
+ &#8226;   <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email.base64mime">email.base64mime</a>
+ &#8226;   <a href="#email.contentmanager">email.contentmanager</a>
+ &#8226;   <a href="#email.header">email.header</a>
  &#8226;   <a href="#encodings.hex_codec">encodings.hex_codec</a>
  &#8226;   <a href="#encodings.uu_codec">encodings.uu_codec</a>
  &#8226;   <a href="#quopri">quopri</a>
  &#8226;   <a href="#secrets">secrets</a>
+ &#8226;   <a href="#uu">uu</a>
  &#8226;   <a href="#zipfile">zipfile</a>
 
   </div>
@@ -1445,6 +1435,7 @@ imported by:
     <a href="#multiprocessing.heap">multiprocessing.heap</a>
  &#8226;   <a href="#random">random</a>
  &#8226;   <a href="#statistics">statistics</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -1512,6 +1503,8 @@ imports:
   <div class="import">
 imported by:
     <a href="#_strptime">_strptime</a>
+ &#8226;   <a href="#email._parseaddr">email._parseaddr</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#ssl">ssl</a>
 
   </div>
@@ -1654,9 +1647,11 @@ imported by:
  &#8226;   <a href="#encodings.utf_8_sig">encodings.utf_8_sig</a>
  &#8226;   <a href="#encodings.uu_codec">encodings.uu_codec</a>
  &#8226;   <a href="#encodings.zlib_codec">encodings.zlib_codec</a>
+ &#8226;   <a href="#json">json</a>
  &#8226;   <a href="#mysql.connector.optionfiles">mysql.connector.optionfiles</a>
  &#8226;   <a href="#pickle">pickle</a>
  &#8226;   <a href="#tokenize">tokenize</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
 
   </div>
 
@@ -1690,6 +1685,7 @@ imported by:
  &#8226;   <a href="#configparser">configparser</a>
  &#8226;   <a href="#contextlib">contextlib</a>
  &#8226;   <a href="#dis">dis</a>
+ &#8226;   <a href="#email.feedparser">email.feedparser</a>
  &#8226;   <a href="#functools">functools</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#inspect">inspect</a>
@@ -1708,8 +1704,10 @@ imported by:
  &#8226;   <a href="#pkgutil">pkgutil</a>
  &#8226;   <a href="#platform">platform</a>
  &#8226;   <a href="#pprint">pprint</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
  &#8226;   <a href="#queue">queue</a>
  &#8226;   <a href="#selectors">selectors</a>
+ &#8226;   <a href="#shlex">shlex</a>
  &#8226;   <a href="#shutil">shutil</a>
  &#8226;   <a href="#ssl">ssl</a>
  &#8226;   <a href="#statistics">statistics</a>
@@ -1718,6 +1716,7 @@ imported by:
  &#8226;   <a href="#tokenize">tokenize</a>
  &#8226;   <a href="#traceback">traceback</a>
  &#8226;   <a href="#typing">typing</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
  &#8226;   <a href="#zipp._functools">zipp._functools</a>
 
   </div>
@@ -1737,6 +1736,7 @@ imports:
 imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#configparser">configparser</a>
+ &#8226;   <a href="#http.client">http.client</a>
  &#8226;   <a href="#inspect">inspect</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#mysql.opentelemetry.attributes">mysql.opentelemetry.attributes</a>
@@ -1908,6 +1908,7 @@ imported by:
  &#8226;   <a href="#mysql.opentelemetry.trace">mysql.opentelemetry.trace</a>
  &#8226;   <a href="#subprocess">subprocess</a>
  &#8226;   <a href="#typing">typing</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#zipfile">zipfile</a>
 
   </div>
@@ -1947,7 +1948,9 @@ imported by:
  &#8226;   <a href="#argparse">argparse</a>
  &#8226;   <a href="#collections">collections</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
  &#8226;   <a href="#gettext">gettext</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#mysql.connector.authentication">mysql.connector.authentication</a>
  &#8226;   <a href="#tarfile">tarfile</a>
  &#8226;   <a href="#weakref">weakref</a>
@@ -2073,6 +2076,8 @@ imported by:
     <a href="#_strptime">_strptime</a>
  &#8226;   <a href="#app.py">app.py</a>
  &#8226;   <a href="#calendar">calendar</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
  &#8226;   <a href="#mysql.connector.connection">mysql.connector.connection</a>
  &#8226;   <a href="#mysql.connector.conversion">mysql.connector.conversion</a>
@@ -2105,6 +2110,7 @@ imported by:
  &#8226;   <a href="#mysql.connector.protocol">mysql.connector.protocol</a>
  &#8226;   <a href="#mysql.connector.types">mysql.connector.types</a>
  &#8226;   <a href="#mysql.connector.utils">mysql.connector.utils</a>
+ &#8226;   <a href="#psycopg2">psycopg2</a>
  &#8226;   <a href="#statistics">statistics</a>
  &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
 
@@ -2160,11 +2166,471 @@ imported by:
 
 <div class="node">
   <a name="email"></a>
-  <a target="code" href="" type="text/plain"><tt>email</tt></a>
-<span class="moduletype">ExcludedModule</span>  <div class="import">
+  <a target="code" href="/usr/lib/python3.9/email/__init__.py" type="text/plain"><tt>email</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
+imports:
+    <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.header">email.header</a>
+ &#8226;   <a href="#email.parser">email.parser</a>
+
+  </div>
+  <div class="import">
 imported by:
-    <a href="#importlib.metadata">importlib.metadata</a>
+    <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email._parseaddr">email._parseaddr</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+ &#8226;   <a href="#email.base64mime">email.base64mime</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.contentmanager">email.contentmanager</a>
+ &#8226;   <a href="#email.encoders">email.encoders</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.feedparser">email.feedparser</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.header">email.header</a>
+ &#8226;   <a href="#email.headerregistry">email.headerregistry</a>
+ &#8226;   <a href="#email.iterators">email.iterators</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.parser">email.parser</a>
+ &#8226;   <a href="#email.policy">email.policy</a>
+ &#8226;   <a href="#email.quoprimime">email.quoprimime</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#mysql.opentelemetry.importlib_metadata">mysql.opentelemetry.importlib_metadata</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email._encoded_words"></a>
+  <a target="code" href="/usr/lib/python3.9/email/_encoded_words.py" type="text/plain"><tt>email._encoded_words</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#base64">base64</a>
+ &#8226;   <a href="#binascii">binascii</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#functools">functools</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#string">string</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email.message">email.message</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email._header_value_parser"></a>
+  <a target="code" href="/usr/lib/python3.9/email/_header_value_parser.py" type="text/plain"><tt>email._header_value_parser</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#operator">operator</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#string">string</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#urllib">urllib</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email.headerregistry">email.headerregistry</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email._parseaddr"></a>
+  <a target="code" href="/usr/lib/python3.9/email/_parseaddr.py" type="text/plain"><tt>email._parseaddr</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#calendar">calendar</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#time">time</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.utils">email.utils</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email._policybase"></a>
+  <a target="code" href="/usr/lib/python3.9/email/_policybase.py" type="text/plain"><tt>email._policybase</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#abc">abc</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.header">email.header</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.feedparser">email.feedparser</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.parser">email.parser</a>
+ &#8226;   <a href="#email.policy">email.policy</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.base64mime"></a>
+  <a target="code" href="/usr/lib/python3.9/email/base64mime.py" type="text/plain"><tt>email.base64mime</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#base64">base64</a>
+ &#8226;   <a href="#binascii">binascii</a>
+ &#8226;   <a href="#email">email</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.header">email.header</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.charset"></a>
+  <a target="code" href="/usr/lib/python3.9/email/charset.py" type="text/plain"><tt>email.charset</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email.base64mime">email.base64mime</a>
+ &#8226;   <a href="#email.encoders">email.encoders</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.quoprimime">email.quoprimime</a>
+ &#8226;   <a href="#functools">functools</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+ &#8226;   <a href="#email.contentmanager">email.contentmanager</a>
+ &#8226;   <a href="#email.header">email.header</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.contentmanager"></a>
+  <a target="code" href="/usr/lib/python3.9/email/contentmanager.py" type="text/plain"><tt>email.contentmanager</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#binascii">binascii</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.quoprimime">email.quoprimime</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.policy">email.policy</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.encoders"></a>
+  <a target="code" href="/usr/lib/python3.9/email/encoders.py" type="text/plain"><tt>email.encoders</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#base64">base64</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#quopri">quopri</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.charset">email.charset</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.errors"></a>
+  <a target="code" href="/usr/lib/python3.9/email/errors.py" type="text/plain"><tt>email.errors</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.contentmanager">email.contentmanager</a>
+ &#8226;   <a href="#email.feedparser">email.feedparser</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.header">email.header</a>
+ &#8226;   <a href="#email.headerregistry">email.headerregistry</a>
+ &#8226;   <a href="#email.message">email.message</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.feedparser"></a>
+  <a target="code" href="/usr/lib/python3.9/email/feedparser.py" type="text/plain"><tt>email.feedparser</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#collections">collections</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.parser">email.parser</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.generator"></a>
+  <a target="code" href="/usr/lib/python3.9/email/generator.py" type="text/plain"><tt>email.generator</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#copy">copy</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#random">random</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#time">time</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.message">email.message</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.header"></a>
+  <a target="code" href="/usr/lib/python3.9/email/header.py" type="text/plain"><tt>email.header</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#binascii">binascii</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email.base64mime">email.base64mime</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.quoprimime">email.quoprimime</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.headerregistry"></a>
+  <a target="code" href="/usr/lib/python3.9/email/headerregistry.py" type="text/plain"><tt>email.headerregistry</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#types">types</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.policy">email.policy</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.iterators"></a>
+  <a target="code" href="/usr/lib/python3.9/email/iterators.py" type="text/plain"><tt>email.iterators</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#sys">sys</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.message">email.message</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.message"></a>
+  <a target="code" href="/usr/lib/python3.9/email/message.py" type="text/plain"><tt>email.message</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.errors">email.errors</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.iterators">email.iterators</a>
+ &#8226;   <a href="#email.policy">email.policy</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#quopri">quopri</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#uu">uu</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.contentmanager">email.contentmanager</a>
+ &#8226;   <a href="#email.feedparser">email.feedparser</a>
+ &#8226;   <a href="#email.policy">email.policy</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#mysql.opentelemetry.importlib_metadata._adapters">mysql.opentelemetry.importlib_metadata._adapters</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.parser"></a>
+  <a target="code" href="/usr/lib/python3.9/email/parser.py" type="text/plain"><tt>email.parser</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+ &#8226;   <a href="#email.feedparser">email.feedparser</a>
+ &#8226;   <a href="#io">io</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email">email</a>
+ &#8226;   <a href="#http.client">http.client</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.policy"></a>
+  <a target="code" href="/usr/lib/python3.9/email/policy.py" type="text/plain"><tt>email.policy</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+ &#8226;   <a href="#email.contentmanager">email.contentmanager</a>
+ &#8226;   <a href="#email.headerregistry">email.headerregistry</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#sys">sys</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.message">email.message</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.quoprimime"></a>
+  <a target="code" href="/usr/lib/python3.9/email/quoprimime.py" type="text/plain"><tt>email.quoprimime</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#email">email</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#string">string</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#email.contentmanager">email.contentmanager</a>
+ &#8226;   <a href="#email.header">email.header</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="email.utils"></a>
+  <a target="code" href="/usr/lib/python3.9/email/utils.py" type="text/plain"><tt>email.utils</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#datetime">datetime</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email._parseaddr">email._parseaddr</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#random">random</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#socket">socket</a>
+ &#8226;   <a href="#time">time</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email._policybase">email._policybase</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.headerregistry">email.headerregistry</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.policy">email.policy</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -4688,6 +5154,7 @@ imports:
 imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#ast">ast</a>
+ &#8226;   <a href="#http">http</a>
  &#8226;   <a href="#inspect">inspect</a>
  &#8226;   <a href="#mysql.opentelemetry.sdk.trace.sampling">mysql.opentelemetry.sdk.trace.sampling</a>
  &#8226;   <a href="#mysql.opentelemetry.semconv.resource">mysql.opentelemetry.semconv.resource</a>
@@ -4745,6 +5212,7 @@ imported by:
  &#8226;   <a href="#shutil">shutil</a>
  &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tracemalloc">tracemalloc</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -4772,6 +5240,27 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="ftplib"></a>
+  <a target="code" href="/usr/lib/python3.9/ftplib.py" type="text/plain"><tt>ftplib</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#netrc">netrc</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#socket">socket</a>
+ &#8226;   <a href="#ssl">ssl</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#warnings">warnings</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#urllib.request">urllib.request</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="functools"></a>
   <a target="code" href="/usr/lib/python3.9/functools.py" type="text/plain"><tt>functools</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
@@ -4793,10 +5282,13 @@ imported by:
  &#8226;   <a href="#configparser">configparser</a>
  &#8226;   <a href="#contextlib">contextlib</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email.charset">email.charset</a>
  &#8226;   <a href="#fnmatch">fnmatch</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#importlib.util">importlib.util</a>
  &#8226;   <a href="#inspect">inspect</a>
+ &#8226;   <a href="#ipaddress">ipaddress</a>
  &#8226;   <a href="#linecache">linecache</a>
  &#8226;   <a href="#locale">locale</a>
  &#8226;   <a href="#multiprocessing.reduction">multiprocessing.reduction</a>
@@ -4813,6 +5305,7 @@ imported by:
  &#8226;   <a href="#pickle">pickle</a>
  &#8226;   <a href="#pkgutil">pkgutil</a>
  &#8226;   <a href="#platform">platform</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
  &#8226;   <a href="#re">re</a>
  &#8226;   <a href="#signal">signal</a>
  &#8226;   <a href="#tempfile">tempfile</a>
@@ -4876,6 +5369,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#base64">base64</a>
+ &#8226;   <a href="#mimetypes">mimetypes</a>
  &#8226;   <a href="#quopri">quopri</a>
 
   </div>
@@ -4900,6 +5394,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#mysql.connector.connection">mysql.connector.connection</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -4925,6 +5420,7 @@ imports:
 imported by:
     <a href="#argparse">argparse</a>
  &#8226;   <a href="#getopt">getopt</a>
+ &#8226;   <a href="#optparse">optparse</a>
 
   </div>
 
@@ -4990,6 +5486,7 @@ imported by:
     <a href="#hmac">hmac</a>
  &#8226;   <a href="#mysql.connector.plugins.caching_sha2_password">mysql.connector.plugins.caching_sha2_password</a>
  &#8226;   <a href="#random">random</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#uuid">uuid</a>
 
   </div>
@@ -5029,6 +5526,80 @@ imports:
 imported by:
     <a href="#multiprocessing.connection">multiprocessing.connection</a>
  &#8226;   <a href="#secrets">secrets</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="http"></a>
+  <a target="code" href="/usr/lib/python3.9/http/__init__.py" type="text/plain"><tt>http</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
+imports:
+    <a href="#enum">enum</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#http.client">http.client</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="http.client"></a>
+  <a target="code" href="/usr/lib/python3.9/http/client.py" type="text/plain"><tt>http.client</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#collections.abc">collections.abc</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.parser">email.parser</a>
+ &#8226;   <a href="#http">http</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#socket">socket</a>
+ &#8226;   <a href="#ssl">ssl</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#warnings">warnings</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#http.cookiejar">http.cookiejar</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="http.cookiejar"></a>
+  <a target="code" href="/usr/lib/python3.9/http/cookiejar.py" type="text/plain"><tt>http.cookiejar</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#calendar">calendar</a>
+ &#8226;   <a href="#copy">copy</a>
+ &#8226;   <a href="#datetime">datetime</a>
+ &#8226;   <a href="#http">http</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#threading">threading</a>
+ &#8226;   <a href="#time">time</a>
+ &#8226;   <a href="#traceback">traceback</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#warnings">warnings</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -5283,10 +5854,17 @@ imported by:
  &#8226;   <a href="#configparser">configparser</a>
  &#8226;   <a href="#csv">csv</a>
  &#8226;   <a href="#dis">dis</a>
+ &#8226;   <a href="#email.feedparser">email.feedparser</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.iterators">email.iterators</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.parser">email.parser</a>
  &#8226;   <a href="#encodings.quopri_codec">encodings.quopri_codec</a>
  &#8226;   <a href="#encodings.uu_codec">encodings.uu_codec</a>
  &#8226;   <a href="#getpass">getpass</a>
  &#8226;   <a href="#gzip">gzip</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#lzma">lzma</a>
@@ -5302,17 +5880,39 @@ imported by:
  &#8226;   <a href="#pprint">pprint</a>
  &#8226;   <a href="#quopri">quopri</a>
  &#8226;   <a href="#runpy">runpy</a>
+ &#8226;   <a href="#shlex">shlex</a>
  &#8226;   <a href="#socket">socket</a>
  &#8226;   <a href="#subprocess">subprocess</a>
  &#8226;   <a href="#tarfile">tarfile</a>
  &#8226;   <a href="#tempfile">tempfile</a>
  &#8226;   <a href="#tokenize">tokenize</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#uuid">uuid</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
  &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
  &#8226;   <a href="#zipfile">zipfile</a>
  &#8226;   <a href="#zipimport">zipimport</a>
  &#8226;   <a href="#zipp">zipp</a>
  &#8226;   <a href="#zipp.compat.py310">zipp.compat.py310</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="ipaddress"></a>
+  <a target="code" href="/usr/lib/python3.9/ipaddress.py" type="text/plain"><tt>ipaddress</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#functools">functools</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2._ipaddress">psycopg2._ipaddress</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
 
   </div>
 
@@ -5343,7 +5943,6 @@ imported by:
  &#8226;   <a href="#reprlib">reprlib</a>
  &#8226;   <a href="#statistics">statistics</a>
  &#8226;   <a href="#threading">threading</a>
- &#8226;   <a href="#tkinter.font">tkinter.font</a>
  &#8226;   <a href="#tokenize">tokenize</a>
  &#8226;   <a href="#traceback">traceback</a>
  &#8226;   <a href="#weakref">weakref</a>
@@ -5367,12 +5966,81 @@ imported by:
 
 <div class="node">
   <a name="json"></a>
-  <a target="code" href="" type="text/plain"><tt>json</tt></a>
-<span class="moduletype">ExcludedModule</span>  <div class="import">
+  <a target="code" href="/usr/lib/python3.9/json/__init__.py" type="text/plain"><tt>json</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
+imports:
+    <a href="#codecs">codecs</a>
+ &#8226;   <a href="#json.decoder">json.decoder</a>
+ &#8226;   <a href="#json.encoder">json.encoder</a>
+ &#8226;   <a href="#json.scanner">json.scanner</a>
+
+  </div>
+  <div class="import">
 imported by:
-    <a href="#mysql.opentelemetry.sdk.resources">mysql.opentelemetry.sdk.resources</a>
+    <a href="#json.decoder">json.decoder</a>
+ &#8226;   <a href="#json.encoder">json.encoder</a>
+ &#8226;   <a href="#json.scanner">json.scanner</a>
+ &#8226;   <a href="#mysql.opentelemetry.sdk.resources">mysql.opentelemetry.sdk.resources</a>
  &#8226;   <a href="#mysql.opentelemetry.sdk.trace">mysql.opentelemetry.sdk.trace</a>
  &#8226;   <a href="#mysql.opentelemetry.sdk.util.instrumentation">mysql.opentelemetry.sdk.util.instrumentation</a>
+ &#8226;   <a href="#psycopg2._json">psycopg2._json</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="json.decoder"></a>
+  <a target="code" href="/usr/lib/python3.9/json/decoder.py" type="text/plain"><tt>json.decoder</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#_json">_json</a>
+ &#8226;   <a href="#json">json</a>
+ &#8226;   <a href="#json.scanner">json.scanner</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#_json">_json</a>
+ &#8226;   <a href="#json">json</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="json.encoder"></a>
+  <a target="code" href="/usr/lib/python3.9/json/encoder.py" type="text/plain"><tt>json.encoder</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#_json">_json</a>
+ &#8226;   <a href="#json">json</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#json">json</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="json.scanner"></a>
+  <a target="code" href="/usr/lib/python3.9/json/scanner.py" type="text/plain"><tt>json.scanner</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#_json">_json</a>
+ &#8226;   <a href="#json">json</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#json">json</a>
+ &#8226;   <a href="#json.decoder">json.decoder</a>
 
   </div>
 
@@ -5470,6 +6138,7 @@ imports:
 imported by:
     <a href="#concurrent.futures._base">concurrent.futures._base</a>
  &#8226;   <a href="#hashlib">hashlib</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#multiprocessing.util">multiprocessing.util</a>
  &#8226;   <a href="#mysql.connector.logger">mysql.connector.logger</a>
  &#8226;   <a href="#mysql.opentelemetry.attributes">mysql.opentelemetry.attributes</a>
@@ -5483,6 +6152,7 @@ imported by:
  &#8226;   <a href="#mysql.opentelemetry.trace.span">mysql.opentelemetry.trace.span</a>
  &#8226;   <a href="#mysql.opentelemetry.trace.status">mysql.opentelemetry.trace.status</a>
  &#8226;   <a href="#mysql.opentelemetry.util._providers">mysql.opentelemetry.util._providers</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
 
   </div>
 
@@ -5532,6 +6202,27 @@ imported by:
  &#8226;   <a href="#random">random</a>
  &#8226;   <a href="#selectors">selectors</a>
  &#8226;   <a href="#statistics">statistics</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="mimetypes"></a>
+  <a target="code" href="/usr/lib/python3.9/mimetypes.py" type="text/plain"><tt>mimetypes</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#getopt">getopt</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#posixpath">posixpath</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#winreg">winreg</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -6463,8 +7154,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.py">app.py</a>
- &#8226;   <a href="#mysql.connector.connection">mysql.connector.connection</a>
+    <a href="#mysql.connector.connection">mysql.connector.connection</a>
  &#8226;   <a href="#mysql.connector.connection_cext">mysql.connector.connection_cext</a>
  &#8226;   <a href="#mysql.connector.cursor">mysql.connector.cursor</a>
  &#8226;   <a href="#mysql.connector.cursor_cext">mysql.connector.cursor_cext</a>
@@ -6612,8 +7302,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.py">app.py</a>
- &#8226;   <a href="#mysql.connector">mysql.connector</a>
+    <a href="#mysql.connector">mysql.connector</a>
  &#8226;   <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
  &#8226;   <a href="#mysql.connector.connection">mysql.connector.connection</a>
  &#8226;   <a href="#mysql.connector.connection_cext">mysql.connector.connection_cext</a>
@@ -6649,8 +7338,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.py">app.py</a>
- &#8226;   <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
+    <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
  &#8226;   <a href="#mysql.connector.connection">mysql.connector.connection</a>
  &#8226;   <a href="#mysql.connector.connection_cext">mysql.connector.connection_cext</a>
 
@@ -6679,8 +7367,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.py">app.py</a>
- &#8226;   <a href="#mysql.connector.connection">mysql.connector.connection</a>
+    <a href="#mysql.connector.connection">mysql.connector.connection</a>
  &#8226;   <a href="#mysql.connector.cursor_cext">mysql.connector.cursor_cext</a>
  &#8226;   <a href="#mysql.connector.opentelemetry.instrumentation">mysql.connector.opentelemetry.instrumentation</a>
 
@@ -6767,8 +7454,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.py">app.py</a>
- &#8226;   <a href="#mysql.connector">mysql.connector</a>
+    <a href="#mysql.connector">mysql.connector</a>
  &#8226;   <a href="#mysql.connector.cursor_cext">mysql.connector.cursor_cext</a>
  &#8226;   <a href="#mysql.connector.locales">mysql.connector.locales</a>
 
@@ -6790,8 +7476,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.py">app.py</a>
- &#8226;   <a href="#mysql.connector">mysql.connector</a>
+    <a href="#mysql.connector">mysql.connector</a>
  &#8226;   <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
  &#8226;   <a href="#mysql.connector.authentication">mysql.connector.authentication</a>
  &#8226;   <a href="#mysql.connector.connection">mysql.connector.connection</a>
@@ -7396,7 +8081,7 @@ imported by:
   <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/mysql/opentelemetry/importlib_metadata/_adapters.py" type="text/plain"><tt>mysql.opentelemetry.importlib_metadata._adapters</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#'email.message'">'email.message'</a>
+    <a href="#email.message">email.message</a>
  &#8226;   <a href="#functools">functools</a>
  &#8226;   <a href="#mysql.opentelemetry.importlib_metadata">mysql.opentelemetry.importlib_metadata</a>
  &#8226;   <a href="#mysql.opentelemetry.importlib_metadata._compat">mysql.opentelemetry.importlib_metadata._compat</a>
@@ -7693,6 +8378,7 @@ imports:
  &#8226;   <a href="#sys">sys</a>
  &#8226;   <a href="#typing">typing</a>
  &#8226;   <a href="#urllib">urllib</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
 
   </div>
   <div class="import">
@@ -8116,6 +8802,25 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="netrc"></a>
+  <a target="code" href="/usr/lib/python3.9/netrc.py" type="text/plain"><tt>netrc</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#os">os</a>
+ &#8226;   <a href="#pwd">pwd</a>
+ &#8226;   <a href="#shlex">shlex</a>
+ &#8226;   <a href="#stat">stat</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#ftplib">ftplib</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="nt"></a>
   <a target="code" href="" type="text/plain"><tt>nt</tt></a>
 <span class="moduletype">MissingModule</span>  <div class="import">
@@ -8148,6 +8853,23 @@ imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib">pathlib</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="nturl2path"></a>
+  <a target="code" href="/usr/lib/python3.9/nturl2path.py" type="text/plain"><tt>nturl2path</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#string">string</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -8214,6 +8936,7 @@ imports:
 imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#collections">collections</a>
+ &#8226;   <a href="#email._header_value_parser">email._header_value_parser</a>
  &#8226;   <a href="#fractions">fractions</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#inspect">inspect</a>
@@ -8221,6 +8944,25 @@ imported by:
  &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#statistics">statistics</a>
  &#8226;   <a href="#typing">typing</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="optparse"></a>
+  <a target="code" href="/usr/lib/python3.9/optparse.py" type="text/plain"><tt>optparse</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#gettext">gettext</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#textwrap">textwrap</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#uu">uu</a>
 
   </div>
 
@@ -8265,18 +9007,21 @@ imported by:
  &#8226;   <a href="#concurrent.futures.thread">concurrent.futures.thread</a>
  &#8226;   <a href="#configparser">configparser</a>
  &#8226;   <a href="#ctypes">ctypes</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
  &#8226;   <a href="#fnmatch">fnmatch</a>
  &#8226;   <a href="#genericpath">genericpath</a>
  &#8226;   <a href="#getopt">getopt</a>
  &#8226;   <a href="#getpass">getpass</a>
  &#8226;   <a href="#gettext">gettext</a>
  &#8226;   <a href="#gzip">gzip</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#inspect">inspect</a>
  &#8226;   <a href="#linecache">linecache</a>
  &#8226;   <a href="#locale">locale</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#lzma">lzma</a>
+ &#8226;   <a href="#mimetypes">mimetypes</a>
  &#8226;   <a href="#multiprocessing.connection">multiprocessing.connection</a>
  &#8226;   <a href="#multiprocessing.context">multiprocessing.context</a>
  &#8226;   <a href="#multiprocessing.forkserver">multiprocessing.forkserver</a>
@@ -8311,12 +9056,15 @@ imported by:
  &#8226;   <a href="#mysql.opentelemetry.trace">mysql.opentelemetry.trace</a>
  &#8226;   <a href="#mysql.opentelemetry.util._importlib_metadata">mysql.opentelemetry.util._importlib_metadata</a>
  &#8226;   <a href="#mysql.opentelemetry.util._providers">mysql.opentelemetry.util._providers</a>
+ &#8226;   <a href="#netrc">netrc</a>
  &#8226;   <a href="#ntpath">ntpath</a>
+ &#8226;   <a href="#optparse">optparse</a>
  &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#pkgutil">pkgutil</a>
  &#8226;   <a href="#platform">platform</a>
  &#8226;   <a href="#posixpath">posixpath</a>
  &#8226;   <a href="#posixpath">posixpath</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
  &#8226;   <a href="#py_compile">py_compile</a>
  &#8226;   <a href="#pyi_rth__tkinter.py">pyi_rth__tkinter.py</a>
  &#8226;   <a href="#pyi_rth_inspect.py">pyi_rth_inspect.py</a>
@@ -8324,6 +9072,7 @@ imported by:
  &#8226;   <a href="#pyi_rth_pkgutil.py">pyi_rth_pkgutil.py</a>
  &#8226;   <a href="#random">random</a>
  &#8226;   <a href="#runpy">runpy</a>
+ &#8226;   <a href="#shlex">shlex</a>
  &#8226;   <a href="#shutil">shutil</a>
  &#8226;   <a href="#socket">socket</a>
  &#8226;   <a href="#ssl">ssl</a>
@@ -8334,7 +9083,11 @@ imported by:
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#uu">uu</a>
  &#8226;   <a href="#uuid">uuid</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
  &#8226;   <a href="#zipfile">zipfile</a>
  &#8226;   <a href="#zipimport">zipimport</a>
  &#8226;   <a href="#zipp.glob">zipp.glob</a>
@@ -8348,8 +9101,7 @@ imported by:
   <a target="code" href="/usr/lib/python3.9/pathlib.py" type="text/plain"><tt>pathlib</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#'urllib.parse'">'urllib.parse'</a>
- &#8226;   <a href="#_collections_abc">_collections_abc</a>
+    <a href="#_collections_abc">_collections_abc</a>
  &#8226;   <a href="#errno">errno</a>
  &#8226;   <a href="#fnmatch">fnmatch</a>
  &#8226;   <a href="#functools">functools</a>
@@ -8364,6 +9116,7 @@ imports:
  &#8226;   <a href="#re">re</a>
  &#8226;   <a href="#stat">stat</a>
  &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
 
   </div>
   <div class="import">
@@ -8534,10 +9287,12 @@ imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#fnmatch">fnmatch</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
+ &#8226;   <a href="#mimetypes">mimetypes</a>
  &#8226;   <a href="#mysql.opentelemetry.importlib_metadata">mysql.opentelemetry.importlib_metadata</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#posixpath">posixpath</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#zipfile">zipfile</a>
  &#8226;   <a href="#zipp">zipp</a>
 
@@ -8567,10 +9322,192 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="psycopg2"></a>
+  <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/__init__.py" type="text/plain"><tt>psycopg2</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
+imports:
+    <a href="#decimal">decimal</a>
+ &#8226;   <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._psycopg">psycopg2._psycopg</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#app.py">app.py</a>
+ &#8226;   <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._ipaddress">psycopg2._ipaddress</a>
+ &#8226;   <a href="#psycopg2._json">psycopg2._json</a>
+ &#8226;   <a href="#psycopg2._psycopg">psycopg2._psycopg</a>
+ &#8226;   <a href="#psycopg2._range">psycopg2._range</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+ &#8226;   <a href="#psycopg2.sql">psycopg2.sql</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="psycopg2._ipaddress"></a>
+  <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/_ipaddress.py" type="text/plain"><tt>psycopg2._ipaddress</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#ipaddress">ipaddress</a>
+ &#8226;   <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2.extras">psycopg2.extras</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="psycopg2._json"></a>
+  <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/_json.py" type="text/plain"><tt>psycopg2._json</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#json">json</a>
+ &#8226;   <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._psycopg">psycopg2._psycopg</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="psycopg2._psycopg"></a>
+  <tt>psycopg2._psycopg</tt> <span class="moduletype"><tt>/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/_psycopg.cpython-39-x86_64-linux-gnu.so</tt></span>  <div class="import">
+imports:
+    <a href="#psycopg2">psycopg2</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._json">psycopg2._json</a>
+ &#8226;   <a href="#psycopg2._range">psycopg2._range</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="psycopg2._range"></a>
+  <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/_range.py" type="text/plain"><tt>psycopg2._range</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._psycopg">psycopg2._psycopg</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="psycopg2.extensions"></a>
+  <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/extensions.py" type="text/plain"><tt>psycopg2.extensions</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._json">psycopg2._json</a>
+ &#8226;   <a href="#psycopg2._psycopg">psycopg2._psycopg</a>
+ &#8226;   <a href="#psycopg2._range">psycopg2._range</a>
+ &#8226;   <a href="#re">re</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._ipaddress">psycopg2._ipaddress</a>
+ &#8226;   <a href="#psycopg2._json">psycopg2._json</a>
+ &#8226;   <a href="#psycopg2._range">psycopg2._range</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+ &#8226;   <a href="#psycopg2.sql">psycopg2.sql</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="psycopg2.extras"></a>
+  <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/extras.py" type="text/plain"><tt>psycopg2.extras</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#collections">collections</a>
+ &#8226;   <a href="#functools">functools</a>
+ &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2._ipaddress">psycopg2._ipaddress</a>
+ &#8226;   <a href="#psycopg2._json">psycopg2._json</a>
+ &#8226;   <a href="#psycopg2._psycopg">psycopg2._psycopg</a>
+ &#8226;   <a href="#psycopg2._range">psycopg2._range</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.sql">psycopg2.sql</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#select">select</a>
+ &#8226;   <a href="#time">time</a>
+ &#8226;   <a href="#uuid">uuid</a>
+ &#8226;   <a href="#warnings">warnings</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2._json">psycopg2._json</a>
+ &#8226;   <a href="#psycopg2._range">psycopg2._range</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="psycopg2.sql"></a>
+  <a target="code" href="/home/muentes/company_registration/venv/lib/python3.9/site-packages/psycopg2/sql.py" type="text/plain"><tt>psycopg2.sql</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#psycopg2">psycopg2</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#string">string</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#psycopg2.extras">psycopg2.extras</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="pwd"></a>
   <tt>pwd</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
 imported by:
     <a href="#getpass">getpass</a>
+ &#8226;   <a href="#netrc">netrc</a>
  &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#posixpath">posixpath</a>
  &#8226;   <a href="#shutil">shutil</a>
@@ -8599,6 +9536,16 @@ imports:
   <div class="import">
 imported by:
     <a href="#zipfile">zipfile</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="pyexpat"></a>
+  <tt>pyexpat</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
+imported by:
+    <a href="#xml.parsers.expat">xml.parsers.expat</a>
 
   </div>
 
@@ -8656,7 +9603,9 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#encodings.quopri_codec">encodings.quopri_codec</a>
+    <a href="#email.encoders">email.encoders</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#encodings.quopri_codec">encodings.quopri_codec</a>
 
   </div>
 
@@ -8682,7 +9631,9 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#mysql.connector.pooling">mysql.connector.pooling</a>
+    <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#mysql.connector.pooling">mysql.connector.pooling</a>
  &#8226;   <a href="#mysql.opentelemetry.sdk.trace.id_generator">mysql.opentelemetry.sdk.trace.id_generator</a>
  &#8226;   <a href="#secrets">secrets</a>
  &#8226;   <a href="#statistics">statistics</a>
@@ -8718,12 +9669,28 @@ imported by:
  &#8226;   <a href="#configparser">configparser</a>
  &#8226;   <a href="#csv">csv</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email.feedparser">email.feedparser</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.header">email.header</a>
+ &#8226;   <a href="#email.message">email.message</a>
+ &#8226;   <a href="#email.policy">email.policy</a>
+ &#8226;   <a href="#email.quoprimime">email.quoprimime</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
  &#8226;   <a href="#encodings.idna">encodings.idna</a>
  &#8226;   <a href="#fnmatch">fnmatch</a>
  &#8226;   <a href="#fractions">fractions</a>
+ &#8226;   <a href="#ftplib">ftplib</a>
  &#8226;   <a href="#gettext">gettext</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#inspect">inspect</a>
+ &#8226;   <a href="#ipaddress">ipaddress</a>
+ &#8226;   <a href="#json.decoder">json.decoder</a>
+ &#8226;   <a href="#json.encoder">json.encoder</a>
+ &#8226;   <a href="#json.scanner">json.scanner</a>
  &#8226;   <a href="#locale">locale</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
@@ -8743,12 +9710,18 @@ imported by:
  &#8226;   <a href="#platform">platform</a>
  &#8226;   <a href="#posixpath">posixpath</a>
  &#8226;   <a href="#pprint">pprint</a>
+ &#8226;   <a href="#psycopg2._range">psycopg2._range</a>
+ &#8226;   <a href="#psycopg2.extensions">psycopg2.extensions</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
+ &#8226;   <a href="#shlex">shlex</a>
  &#8226;   <a href="#string">string</a>
  &#8226;   <a href="#tarfile">tarfile</a>
  &#8226;   <a href="#textwrap">textwrap</a>
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tokenize">tokenize</a>
  &#8226;   <a href="#typing">typing</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#warnings">warnings</a>
  &#8226;   <a href="#zipp">zipp</a>
  &#8226;   <a href="#zipp.glob">zipp.glob</a>
@@ -8833,7 +9806,8 @@ imported by:
   <a name="select"></a>
   <tt>select</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
 imported by:
-    <a href="#selectors">selectors</a>
+    <a href="#psycopg2.extras">psycopg2.extras</a>
+ &#8226;   <a href="#selectors">selectors</a>
  &#8226;   <a href="#subprocess">subprocess</a>
 
   </div>
@@ -8859,6 +9833,27 @@ imported by:
  &#8226;   <a href="#multiprocessing.forkserver">multiprocessing.forkserver</a>
  &#8226;   <a href="#socket">socket</a>
  &#8226;   <a href="#subprocess">subprocess</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="shlex"></a>
+  <a target="code" href="/usr/lib/python3.9/shlex.py" type="text/plain"><tt>shlex</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#collections">collections</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#warnings">warnings</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#netrc">netrc</a>
 
   </div>
 
@@ -8942,6 +9937,9 @@ imports:
   <div class="import">
 imported by:
     <a href="#_ssl">_ssl</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#ftplib">ftplib</a>
+ &#8226;   <a href="#http.client">http.client</a>
  &#8226;   <a href="#multiprocessing.connection">multiprocessing.connection</a>
  &#8226;   <a href="#multiprocessing.forkserver">multiprocessing.forkserver</a>
  &#8226;   <a href="#multiprocessing.reduction">multiprocessing.reduction</a>
@@ -8951,6 +9949,7 @@ imported by:
  &#8226;   <a href="#mysql.connector.network">mysql.connector.network</a>
  &#8226;   <a href="#platform">platform</a>
  &#8226;   <a href="#ssl">ssl</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#uuid">uuid</a>
 
   </div>
@@ -9036,8 +10035,11 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
+    <a href="#ftplib">ftplib</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#mysql.connector.abstracts">mysql.connector.abstracts</a>
  &#8226;   <a href="#mysql.connector.network">mysql.connector.network</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -9055,6 +10057,7 @@ imports:
 imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#genericpath">genericpath</a>
+ &#8226;   <a href="#netrc">netrc</a>
  &#8226;   <a href="#ntpath">ntpath</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib">pathlib</a>
@@ -9106,8 +10109,14 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#logging">logging</a>
+    <a href="#email._encoded_words">email._encoded_words</a>
+ &#8226;   <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email.quoprimime">email.quoprimime</a>
+ &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#ntpath">ntpath</a>
+ &#8226;   <a href="#nturl2path">nturl2path</a>
+ &#8226;   <a href="#psycopg2.sql">psycopg2.sql</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
 
   </div>
 
@@ -9223,12 +10232,17 @@ imported by:
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#dis">dis</a>
+ &#8226;   <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.iterators">email.iterators</a>
+ &#8226;   <a href="#email.policy">email.policy</a>
  &#8226;   <a href="#encodings">encodings</a>
  &#8226;   <a href="#encodings.rot_13">encodings.rot_13</a>
  &#8226;   <a href="#encodings.utf_16">encodings.utf_16</a>
  &#8226;   <a href="#encodings.utf_32">encodings.utf_32</a>
  &#8226;   <a href="#enum">enum</a>
  &#8226;   <a href="#fractions">fractions</a>
+ &#8226;   <a href="#ftplib">ftplib</a>
  &#8226;   <a href="#getopt">getopt</a>
  &#8226;   <a href="#getpass">getpass</a>
  &#8226;   <a href="#gettext">gettext</a>
@@ -9240,6 +10254,7 @@ imported by:
  &#8226;   <a href="#linecache">linecache</a>
  &#8226;   <a href="#locale">locale</a>
  &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#mimetypes">mimetypes</a>
  &#8226;   <a href="#multiprocessing">multiprocessing</a>
  &#8226;   <a href="#multiprocessing.connection">multiprocessing.connection</a>
  &#8226;   <a href="#multiprocessing.context">multiprocessing.context</a>
@@ -9264,6 +10279,7 @@ imported by:
  &#8226;   <a href="#mysql.opentelemetry.sdk.resources">mysql.opentelemetry.sdk.resources</a>
  &#8226;   <a href="#mysql.opentelemetry.util._importlib_metadata">mysql.opentelemetry.util._importlib_metadata</a>
  &#8226;   <a href="#ntpath">ntpath</a>
+ &#8226;   <a href="#optparse">optparse</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#pickle">pickle</a>
@@ -9279,6 +10295,7 @@ imported by:
  &#8226;   <a href="#quopri">quopri</a>
  &#8226;   <a href="#runpy">runpy</a>
  &#8226;   <a href="#selectors">selectors</a>
+ &#8226;   <a href="#shlex">shlex</a>
  &#8226;   <a href="#shutil">shutil</a>
  &#8226;   <a href="#socket">socket</a>
  &#8226;   <a href="#sre_compile">sre_compile</a>
@@ -9293,9 +10310,17 @@ imported by:
  &#8226;   <a href="#traceback">traceback</a>
  &#8226;   <a href="#types">types</a>
  &#8226;   <a href="#typing">typing</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#uu">uu</a>
  &#8226;   <a href="#uuid">uuid</a>
  &#8226;   <a href="#warnings">warnings</a>
  &#8226;   <a href="#weakref">weakref</a>
+ &#8226;   <a href="#xml.parsers.expat">xml.parsers.expat</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax._exceptions">xml.sax._exceptions</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
  &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
  &#8226;   <a href="#zipfile">zipfile</a>
  &#8226;   <a href="#zipimport">zipimport</a>
@@ -9364,6 +10389,8 @@ imported by:
  &#8226;   <a href="#multiprocessing.heap">multiprocessing.heap</a>
  &#8226;   <a href="#multiprocessing.synchronize">multiprocessing.synchronize</a>
  &#8226;   <a href="#multiprocessing.util">multiprocessing.util</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#urllib.response">urllib.response</a>
 
   </div>
 
@@ -9392,6 +10419,7 @@ imported by:
     <a href="#argparse">argparse</a>
  &#8226;   <a href="#mysql.opentelemetry.importlib_metadata">mysql.opentelemetry.importlib_metadata</a>
  &#8226;   <a href="#mysql.opentelemetry.importlib_metadata._adapters">mysql.opentelemetry.importlib_metadata._adapters</a>
+ &#8226;   <a href="#optparse">optparse</a>
 
   </div>
 
@@ -9418,10 +10446,12 @@ imports:
   <div class="import">
 imported by:
     <a href="#_threading_local">_threading_local</a>
+ &#8226;   <a href="#app.py">app.py</a>
  &#8226;   <a href="#bz2">bz2</a>
  &#8226;   <a href="#concurrent.futures._base">concurrent.futures._base</a>
  &#8226;   <a href="#concurrent.futures.process">concurrent.futures.process</a>
  &#8226;   <a href="#concurrent.futures.thread">concurrent.futures.thread</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#multiprocessing.context">multiprocessing.context</a>
  &#8226;   <a href="#multiprocessing.dummy">multiprocessing.dummy</a>
@@ -9464,8 +10494,12 @@ imported by:
  &#8226;   <a href="#_strptime">_strptime</a>
  &#8226;   <a href="#concurrent.futures._base">concurrent.futures._base</a>
  &#8226;   <a href="#datetime">datetime</a>
+ &#8226;   <a href="#email._parseaddr">email._parseaddr</a>
+ &#8226;   <a href="#email.generator">email.generator</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
  &#8226;   <a href="#gc">gc</a>
  &#8226;   <a href="#gzip">gzip</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#multiprocessing.connection">multiprocessing.connection</a>
  &#8226;   <a href="#multiprocessing.managers">multiprocessing.managers</a>
@@ -9478,12 +10512,14 @@ imported by:
  &#8226;   <a href="#mysql.connector.types">mysql.connector.types</a>
  &#8226;   <a href="#mysql.opentelemetry.sdk.trace">mysql.opentelemetry.sdk.trace</a>
  &#8226;   <a href="#pprint">pprint</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
  &#8226;   <a href="#queue">queue</a>
  &#8226;   <a href="#random">random</a>
  &#8226;   <a href="#ssl">ssl</a>
  &#8226;   <a href="#subprocess">subprocess</a>
  &#8226;   <a href="#tarfile">tarfile</a>
  &#8226;   <a href="#threading">threading</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#uuid">uuid</a>
  &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
  &#8226;   <a href="#zipfile">zipfile</a>
@@ -9519,7 +10555,6 @@ imported by:
  &#8226;   <a href="#tkinter.constants">tkinter.constants</a>
  &#8226;   <a href="#tkinter.dialog">tkinter.dialog</a>
  &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
- &#8226;   <a href="#tkinter.font">tkinter.font</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
  &#8226;   <a href="#tkinter.scrolledtext">tkinter.scrolledtext</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
@@ -9555,8 +10590,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#app.py">app.py</a>
- &#8226;   <a href="#tkinter">tkinter</a>
+    <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.scrolledtext">tkinter.scrolledtext</a>
 
   </div>
@@ -9597,23 +10631,6 @@ imports:
 imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#tkinter">tkinter</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="tkinter.font"></a>
-  <a target="code" href="/usr/lib/python3.9/tkinter/font.py" type="text/plain"><tt>tkinter.font</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#itertools">itertools</a>
- &#8226;   <a href="#tkinter">tkinter</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#app.py">app.py</a>
 
   </div>
 
@@ -9726,6 +10743,7 @@ imports:
 imported by:
     <a href="#app.py">app.py</a>
  &#8226;   <a href="#concurrent.futures.process">concurrent.futures.process</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#multiprocessing.managers">multiprocessing.managers</a>
  &#8226;   <a href="#multiprocessing.pool">multiprocessing.pool</a>
@@ -9785,6 +10803,7 @@ imported by:
  &#8226;   <a href="#ctypes">ctypes</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#dis">dis</a>
+ &#8226;   <a href="#email.headerregistry">email.headerregistry</a>
  &#8226;   <a href="#enum">enum</a>
  &#8226;   <a href="#functools">functools</a>
  &#8226;   <a href="#importlib">importlib</a>
@@ -9810,6 +10829,7 @@ imported by:
  &#8226;   <a href="#tempfile">tempfile</a>
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#typing">typing</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
 
   </div>
 
@@ -9905,6 +10925,7 @@ imported by:
  &#8226;   <a href="#mysql.connector.utils">mysql.connector.utils</a>
  &#8226;   <a href="#sre_parse">sre_parse</a>
  &#8226;   <a href="#stringprep">stringprep</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
 
   </div>
 
@@ -9912,10 +10933,147 @@ imported by:
 
 <div class="node">
   <a name="urllib"></a>
-  <a target="code" href="" type="text/plain"><tt>urllib</tt></a>
-<span class="moduletype">ExcludedModule</span>  <div class="import">
+  <a target="code" href="/usr/lib/python3.9/urllib/__init__.py" type="text/plain"><tt>urllib</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
 imported by:
-    <a href="#mysql.opentelemetry.sdk.resources">mysql.opentelemetry.sdk.resources</a>
+    <a href="#email._header_value_parser">email._header_value_parser</a>
+ &#8226;   <a href="#mysql.opentelemetry.sdk.resources">mysql.opentelemetry.sdk.resources</a>
+ &#8226;   <a href="#urllib.error">urllib.error</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#urllib.response">urllib.response</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="urllib.error"></a>
+  <a target="code" href="/usr/lib/python3.9/urllib/error.py" type="text/plain"><tt>urllib.error</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#urllib">urllib</a>
+ &#8226;   <a href="#urllib.response">urllib.response</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#urllib.request">urllib.request</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="urllib.parse"></a>
+  <a target="code" href="/usr/lib/python3.9/urllib/parse.py" type="text/plain"><tt>urllib.parse</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#collections">collections</a>
+ &#8226;   <a href="#ipaddress">ipaddress</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#types">types</a>
+ &#8226;   <a href="#unicodedata">unicodedata</a>
+ &#8226;   <a href="#urllib">urllib</a>
+ &#8226;   <a href="#warnings">warnings</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
+ &#8226;   <a href="#mimetypes">mimetypes</a>
+ &#8226;   <a href="#mysql.opentelemetry.sdk.resources">mysql.opentelemetry.sdk.resources</a>
+ &#8226;   <a href="#nturl2path">nturl2path</a>
+ &#8226;   <a href="#pathlib">pathlib</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
+ &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="urllib.request"></a>
+  <a target="code" href="/usr/lib/python3.9/urllib/request.py" type="text/plain"><tt>urllib.request</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#_scproxy">_scproxy</a>
+ &#8226;   <a href="#base64">base64</a>
+ &#8226;   <a href="#bisect">bisect</a>
+ &#8226;   <a href="#contextlib">contextlib</a>
+ &#8226;   <a href="#email">email</a>
+ &#8226;   <a href="#email.utils">email.utils</a>
+ &#8226;   <a href="#fnmatch">fnmatch</a>
+ &#8226;   <a href="#ftplib">ftplib</a>
+ &#8226;   <a href="#getpass">getpass</a>
+ &#8226;   <a href="#hashlib">hashlib</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#mimetypes">mimetypes</a>
+ &#8226;   <a href="#nturl2path">nturl2path</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#posixpath">posixpath</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#socket">socket</a>
+ &#8226;   <a href="#ssl">ssl</a>
+ &#8226;   <a href="#string">string</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#tempfile">tempfile</a>
+ &#8226;   <a href="#time">time</a>
+ &#8226;   <a href="#urllib">urllib</a>
+ &#8226;   <a href="#urllib.error">urllib.error</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#urllib.response">urllib.response</a>
+ &#8226;   <a href="#warnings">warnings</a>
+ &#8226;   <a href="#winreg">winreg</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#http.cookiejar">http.cookiejar</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="urllib.response"></a>
+  <a target="code" href="/usr/lib/python3.9/urllib/response.py" type="text/plain"><tt>urllib.response</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#tempfile">tempfile</a>
+ &#8226;   <a href="#urllib">urllib</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#urllib.error">urllib.error</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="uu"></a>
+  <a target="code" href="/usr/lib/python3.9/uu.py" type="text/plain"><tt>uu</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#binascii">binascii</a>
+ &#8226;   <a href="#optparse">optparse</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#sys">sys</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#email.message">email.message</a>
 
   </div>
 
@@ -9944,6 +11102,7 @@ imports:
 imported by:
     <a href="#mysql.connector.pooling">mysql.connector.pooling</a>
  &#8226;   <a href="#mysql.opentelemetry.context">mysql.opentelemetry.context</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
 
   </div>
 
@@ -9984,10 +11143,13 @@ imported by:
  &#8226;   <a href="#configparser">configparser</a>
  &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#enum">enum</a>
+ &#8226;   <a href="#ftplib">ftplib</a>
  &#8226;   <a href="#getpass">getpass</a>
  &#8226;   <a href="#gettext">gettext</a>
  &#8226;   <a href="#gzip">gzip</a>
  &#8226;   <a href="#hmac">hmac</a>
+ &#8226;   <a href="#http.client">http.client</a>
+ &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#importlib">importlib</a>
  &#8226;   <a href="#importlib.abc">importlib.abc</a>
  &#8226;   <a href="#importlib.util">importlib.util</a>
@@ -10008,12 +11170,16 @@ imported by:
  &#8226;   <a href="#mysql.opentelemetry.sdk.trace">mysql.opentelemetry.sdk.trace</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pkgutil">pkgutil</a>
+ &#8226;   <a href="#psycopg2.extras">psycopg2.extras</a>
  &#8226;   <a href="#random">random</a>
  &#8226;   <a href="#runpy">runpy</a>
+ &#8226;   <a href="#shlex">shlex</a>
  &#8226;   <a href="#sre_parse">sre_parse</a>
  &#8226;   <a href="#ssl">ssl</a>
  &#8226;   <a href="#subprocess">subprocess</a>
  &#8226;   <a href="#tempfile">tempfile</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#zipfile">zipfile</a>
 
   </div>
@@ -10052,6 +11218,7 @@ imported by:
  &#8226;   <a href="#mysql.connector.cursor">mysql.connector.cursor</a>
  &#8226;   <a href="#mysql.connector.cursor_cext">mysql.connector.cursor_cext</a>
  &#8226;   <a href="#tempfile">tempfile</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
 
   </div>
 
@@ -10062,7 +11229,210 @@ imported by:
   <a target="code" href="" type="text/plain"><tt>winreg</tt></a>
 <span class="moduletype">MissingModule</span>  <div class="import">
 imported by:
-    <a href="#platform">platform</a>
+    <a href="#mimetypes">mimetypes</a>
+ &#8226;   <a href="#platform">platform</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/__init__.py" type="text/plain"><tt>xml</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
+imports:
+    <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml.parsers">xml.parsers</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.parsers"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/parsers/__init__.py" type="text/plain"><tt>xml.parsers</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
+imports:
+    <a href="#xml">xml</a>
+ &#8226;   <a href="#xml.parsers.expat">xml.parsers.expat</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml.parsers.expat">xml.parsers.expat</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.parsers.expat"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/parsers/expat.py" type="text/plain"><tt>xml.parsers.expat</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#pyexpat">pyexpat</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#xml.parsers">xml.parsers</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml.parsers">xml.parsers</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xmlrpc.client">xmlrpc.client</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.sax"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/sax/__init__.py" type="text/plain"><tt>xml.sax</tt></a>
+<span class="moduletype">Package</span>  <div class="import">
+imports:
+    <a href="#'org.python'">'org.python'</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#xml">xml</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax._exceptions">xml.sax._exceptions</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.handler">xml.sax.handler</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax._exceptions">xml.sax._exceptions</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.handler">xml.sax.handler</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.sax._exceptions"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/sax/_exceptions.py" type="text/plain"><tt>xml.sax._exceptions</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#'java.lang'">'java.lang'</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.sax.expatreader"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/sax/expatreader.py" type="text/plain"><tt>xml.sax.expatreader</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#_weakref">_weakref</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#weakref">weakref</a>
+ &#8226;   <a href="#xml.parsers">xml.parsers</a>
+ &#8226;   <a href="#xml.parsers.expat">xml.parsers.expat</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax._exceptions">xml.sax._exceptions</a>
+ &#8226;   <a href="#xml.sax.handler">xml.sax.handler</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml">xml</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.sax.handler"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/sax/handler.py" type="text/plain"><tt>xml.sax.handler</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#xml.sax">xml.sax</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.sax.saxutils"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/sax/saxutils.py" type="text/plain"><tt>xml.sax.saxutils</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#codecs">codecs</a>
+ &#8226;   <a href="#io">io</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#urllib.request">urllib.request</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax.handler">xml.sax.handler</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.xmlreader">xml.sax.xmlreader</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="xml.sax.xmlreader"></a>
+  <a target="code" href="/usr/lib/python3.9/xml/sax/xmlreader.py" type="text/plain"><tt>xml.sax.xmlreader</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax._exceptions">xml.sax._exceptions</a>
+ &#8226;   <a href="#xml.sax.handler">xml.sax.handler</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#xml">xml</a>
+ &#8226;   <a href="#xml.sax">xml.sax</a>
+ &#8226;   <a href="#xml.sax.expatreader">xml.sax.expatreader</a>
+ &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
 
   </div>
 
@@ -10084,17 +11454,18 @@ imported by:
   <a target="code" href="/usr/lib/python3.9/xmlrpc/client.py" type="text/plain"><tt>xmlrpc.client</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#'http.client'">'http.client'</a>
- &#8226;   <a href="#'urllib.parse'">'urllib.parse'</a>
- &#8226;   <a href="#'xml.parsers'">'xml.parsers'</a>
- &#8226;   <a href="#base64">base64</a>
+    <a href="#base64">base64</a>
  &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#decimal">decimal</a>
  &#8226;   <a href="#errno">errno</a>
  &#8226;   <a href="#gzip">gzip</a>
+ &#8226;   <a href="#http.client">http.client</a>
  &#8226;   <a href="#io">io</a>
  &#8226;   <a href="#sys">sys</a>
  &#8226;   <a href="#time">time</a>
+ &#8226;   <a href="#urllib.parse">urllib.parse</a>
+ &#8226;   <a href="#xml.parsers">xml.parsers</a>
+ &#8226;   <a href="#xml.parsers.expat">xml.parsers.expat</a>
  &#8226;   <a href="#xmlrpc">xmlrpc</a>
 
   </div>
