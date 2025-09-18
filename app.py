@@ -38,14 +38,14 @@ class CompleteSyncApp:
             'host': 'localhost',
             'database': 'pruebadb',
             'user': 'postgres',
-            'password': 'muentes123.'
+            'password': ''
         }
         
         self.mysql_config = {
-            'host': '91.238.160.176',
+            'host': '',
             'database': 'chrystal_movil',
             'user': 'chrystal_app',
-            'password': 'muentes123.'
+            'password': ''
         }
         
         # Variable global para company_id
