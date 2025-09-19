@@ -737,6 +737,7 @@ class CompleteSyncApp:
             WHERE a.code IS NOT NULL 
               AND a.code != ''
               AND LENGTH(a.code) <= 255
+              AND a.status = '01'
             ORDER BY a.code
             """
             
@@ -802,7 +803,7 @@ class CompleteSyncApp:
                     description if description else None,
                     float(price) if price else 0.0,
                     float(cost) if cost else 0.0,
-                    100,
+                    stock if stock else 0,
                     int(min_stock) if min_stock else 0,
                     category_id,
                     status
