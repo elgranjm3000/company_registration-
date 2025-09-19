@@ -8,7 +8,7 @@ Aplicación de escritorio desarrollada en Python con interfaz gráfica moderna p
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)
 
 ### 🏠 Panel Principal
-![Dashboard](./screenshots/desktop.png) ![Dashboard](./screenshots/desktop.png)
+![Dashboard](./screenshots/desktop.png)
 
 ## 🚀 Características Principales
 
