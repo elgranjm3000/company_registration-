@@ -9,6 +9,8 @@ import sys
 import os
 from datetime import datetime
 import threading
+import bcrypt
+
 
 def resource_path(relative_path):
     """Obtener ruta de recurso para PyInstaller"""
@@ -17,6 +19,21 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
+def laravel_hash_make(password):
+    """Generar hash compatible con Laravel Hash::make()"""
+    # Convertir password a bytes si es string
+    if isinstance(password, str):
+        password = password.encode('utf-8')
+    
+    # Laravel usa cost=10 por defecto
+    salt = bcrypt.gensalt(rounds=10)
+    hashed = bcrypt.hashpw(password, salt)
+    
+    # Laravel espera $2y$ en lugar de $2b$ (compatibilidad PHP)
+    laravel_hash = hashed.decode('utf-8').replace('$2b$', '$2y$')
+    
+    return laravel_hash
 
 class CompleteSyncApp:
     def __init__(self, root):
@@ -666,7 +683,7 @@ class CompleteSyncApp:
             
             for code, description in departments:
                 insert_query = """
-                INSERT INTO categories (
+                INSERT IGNORE INTO categories (
                     company_id, name, description, status, created_at, updated_at
                 ) VALUES (
                     %s, %s, %s, 'active', NOW(), NOW()
@@ -915,6 +932,8 @@ class CompleteSyncApp:
             self.log_message(f"Error sincronizando customers: {str(e)}", "error")
             raise
     
+
+    
     def sync_users(self):
         """Sincronizar users (sellers)"""
         self.log_message("=== SINCRONIZANDO USERS (SELLERS) ===", "info")
@@ -957,8 +976,8 @@ class CompleteSyncApp:
                 seller_code, user_name, email, user_password, user_code = user_data
                 user_count += 1
                 
-                hashed_password = "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"
-                
+                # Hashear la contraseña usando bcrypt                
+                laravel_password_hash = laravel_hash_make(user_password)
                 insert_query = """
                 INSERT INTO users (
                     name,
@@ -969,19 +988,19 @@ class CompleteSyncApp:
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, 'seller', 'active', %s, NOW(), NOW()
+                    %s, %s, 'seller', 'inactive', %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
                     role = 'seller',
-                    status = 'active',
+                    status = 'inactive',
                     updated_at = NOW()
                 """
-                
+
                 mysql_cursor.execute(insert_query, (
                     user_name,
                     email,
-                    hashed_password
+                    laravel_password_hash
                 ))
                 
                 if user_count % 5 == 0:
@@ -1072,12 +1091,12 @@ class CompleteSyncApp:
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, 'active', 0.0, 0.0, 0, %s, 0.0, 0.0, 0.0, 'active', NOW(), NOW()
+                    %s, %s, %s, %s, 'inactive', 0.0, 0.0, 0, %s, 0.0, 0.0, 0.0, 'inactive', NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     description = VALUES(description),
                     status = VALUES(status),
-                    seller_status = 'active',
+                    seller_status = 'inactive',
                     user_code = VALUES(user_code),
                     updated_at = NOW()
                 """
