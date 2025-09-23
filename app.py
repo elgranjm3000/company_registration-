@@ -901,51 +901,55 @@ class CompleteSyncApp:
             mysql_cursor = mysql_conn.cursor()
             
             customer_count = 0
+            inserted_count = 0
+            updated_count = 0
+            skipped_count = 0  # Si usas la versión con control
             for client_data in clients:
                 if not self.sync_running:
                     break
                     
                 code, description, address, client_id, email = client_data
                 customer_count += 1
+                # Verificar si el customer ya existe
+                check_query = "SELECT id, name FROM customers WHERE document_number = %s AND company_id = %s"
+                mysql_cursor.execute(check_query, (code, self.company_id))
+                existing_customer = mysql_cursor.fetchone()
                 
                 # Generar email temporal si no existe
                 if not email or email.strip() == '':
                     email = f"customer_{code}@temp.local"
                 
-                insert_query = """
-                INSERT INTO customers (
-                    company_id,
-                    name,
-                    email,
-                    document_number,
-                    address,
-                    status,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    %s, %s, %s, %s, %s, 'active', NOW(), NOW()
-                )
-                ON DUPLICATE KEY UPDATE
-                    name = VALUES(name),
-                    document_number = VALUES(document_number),
-                    address = VALUES(address),
-                    status = 'active',
-                    updated_at = NOW()
-                """
-                
-                mysql_cursor.execute(insert_query, (
-                    self.company_id,
-                    description,
-                    email,
-                    code,
-                    address if address else None
-                ))
+                if existing_customer:
+                    # ACTUALIZAR si el nombre cambió
+                    existing_id, existing_name = existing_customer
+                    if existing_name != description:
+                        update_query = """
+                        UPDATE customers 
+                        SET name = %s, email = %s, address = %s, updated_at = NOW() 
+                        WHERE id = %s
+                        """
+                        mysql_cursor.execute(update_query, (description, email, address, existing_id))
+                        updated_count += 1
+                    else:
+                        # No hacer nada si no hay cambios
+                        skipped_count += 1
+                else:
+                    # INSERTAR nuevo
+                    insert_query = """
+                    INSERT INTO customers (
+                        company_id, name, email, document_number, address, status, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, 'active', NOW(), NOW())
+                    """
+                    mysql_cursor.execute(insert_query, (
+                        self.company_id, description, email, code, address if address else None
+                    ))
+                    inserted_count += 1
                 
                 if customer_count % 10 == 0:
-                    self.log_message(f"Procesados {customer_count} customers...")
-            
+                    self.log_message(f"Procesados {customer_count} customers...")            
+                    
             mysql_conn.commit()
-            self.log_message(f"Customers importados: {customer_count}", "success")
+            self.log_message(f"Total: {customer_count}, Nuevos: {inserted_count}, Actualizados: {updated_count}, Sin cambios: {skipped_count}", "success")
             
             pg_cursor.close()
             pg_conn.close()
