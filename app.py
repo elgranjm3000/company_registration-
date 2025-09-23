@@ -580,7 +580,7 @@ class CompleteSyncApp:
             mysql_cursor = mysql_conn.cursor()
             
             # Verificar si ya existe la compañía por RIF
-            mysql_cursor.execute("SELECT id, name FROM companies WHERE rif = %s", (company_rif,))
+            mysql_cursor.execute("SELECT id, name FROM companies WHERE rif = %s OR email = %s", (company_rif, company_email))
             existing = mysql_cursor.fetchone()
             
             if existing:
