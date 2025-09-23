@@ -58,11 +58,12 @@ class CompleteSyncApp:
             'password': ''
         }
         
+        # Configuración MySQL con valores fijos (ocultos al usuario)
         self.mysql_config = {
-            'host': '',
+            'host': '91.238.160.176',  # Valor fijo oculto
             'database': 'chrystal_movil',
             'user': 'chrystal_app',
-            'password': ''
+            'password': 'muentes123.'  # Valor fijo oculto
         }
         
         # Variable global para company_id
@@ -159,26 +160,25 @@ class CompleteSyncApp:
         self.pg_pass_var = tk.StringVar(value=self.postgresql_config['password'])
         ttk.Entry(pg_frame, textvariable=self.pg_pass_var, show="*", width=25).grid(row=3, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
-        # Configuración MySQL
+        # Configuración MySQL (solo campos visibles - host y password ocultos)
         mysql_frame = ttk.LabelFrame(scrollable_frame, text="MySQL (Destino)", padding="10")
         mysql_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         mysql_frame.columnconfigure(1, weight=1)
         
-        ttk.Label(mysql_frame, text="Host:").grid(row=0, column=0, sticky=tk.W)
-        self.mysql_host_var = tk.StringVar(value=self.mysql_config['host'])
-        ttk.Entry(mysql_frame, textvariable=self.mysql_host_var, width=25).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
-        
-        ttk.Label(mysql_frame, text="Database:").grid(row=1, column=0, sticky=tk.W)
+        # Campo Database visible
+        ttk.Label(mysql_frame, text="Database:").grid(row=0, column=0, sticky=tk.W)
         self.mysql_db_var = tk.StringVar(value=self.mysql_config['database'])
-        ttk.Entry(mysql_frame, textvariable=self.mysql_db_var, width=25).grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
+        ttk.Entry(mysql_frame, textvariable=self.mysql_db_var, width=25).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
-        ttk.Label(mysql_frame, text="Usuario:").grid(row=2, column=0, sticky=tk.W)
+        # Campo Usuario visible
+        ttk.Label(mysql_frame, text="Usuario:").grid(row=1, column=0, sticky=tk.W)
         self.mysql_user_var = tk.StringVar(value=self.mysql_config['user'])
-        ttk.Entry(mysql_frame, textvariable=self.mysql_user_var, width=25).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
+        ttk.Entry(mysql_frame, textvariable=self.mysql_user_var, width=25).grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
-        ttk.Label(mysql_frame, text="Password:").grid(row=3, column=0, sticky=tk.W)
-        self.mysql_pass_var = tk.StringVar(value=self.mysql_config['password'])
-        ttk.Entry(mysql_frame, textvariable=self.mysql_pass_var, show="*", width=25).grid(row=3, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
+        # Nota informativa sobre la configuración
+        info_label = ttk.Label(mysql_frame, text="Nota: Host y contraseña preconfigurados", 
+                              font=('Arial', 8), foreground='#666666')
+        info_label.grid(row=2, column=0, columnspan=2, pady=(5, 0))
         
         # Configuración de Compañía
         company_frame = ttk.LabelFrame(scrollable_frame, text="Datos de la Compañía", padding="10")
@@ -350,17 +350,24 @@ class CompleteSyncApp:
             'password': self.pg_pass_var.get()
         }
         
+        # MySQL config: mantener valores fijos para host y password, actualizar solo los campos visibles
         self.mysql_config = {
-            'host': self.mysql_host_var.get(),
+            'host': '91.238.160.176',  # Valor fijo
             'database': self.mysql_db_var.get(),
             'user': self.mysql_user_var.get(),
-            'password': self.mysql_pass_var.get()
+            'password': 'muentes123.'  # Valor fijo
         }
     
     def test_connections(self):
         """Probar conexiones a ambas bases de datos"""
         self.update_config()
         self.log_message("=== PROBANDO CONEXIONES ===", "info")
+        
+        # Debug: Mostrar configuración MySQL (sin password completa)
+        self.log_message(f"MySQL Config - Host: {self.mysql_config['host']}", "info")
+        self.log_message(f"MySQL Config - Database: {self.mysql_config['database']}", "info")
+        self.log_message(f"MySQL Config - User: {self.mysql_config['user']}", "info")
+        self.log_message(f"MySQL Config - Password: {'*' * len(self.mysql_config['password'])}", "info")
         
         # Probar PostgreSQL
         try:
@@ -377,13 +384,20 @@ class CompleteSyncApp:
         
         # Probar MySQL
         try:
+            self.log_message("Intentando conexión MySQL...", "info")
             mysql_conn = mysql.connector.connect(**self.mysql_config)
             if mysql_conn.is_connected():
                 db_info = mysql_conn.get_server_info()
                 self.log_message(f"MySQL conectado: Server {db_info}", "success")
+                self.log_message(f"Conectado a base de datos: {self.mysql_config['database']}", "success")
                 mysql_conn.close()
         except Exception as e:
             self.log_message(f"Error conectando MySQL: {str(e)}", "error")
+            self.log_message("Posibles causas:", "info")
+            self.log_message("1. Usuario sin permisos desde esta IP", "info")
+            self.log_message("2. Contraseña incorrecta", "info")
+            self.log_message("3. Usuario no existe", "info")
+            self.log_message("4. Firewall bloqueando conexión", "info")
             return
             
         self.log_message("Todas las conexiones exitosas", "success")
@@ -682,23 +696,33 @@ class CompleteSyncApp:
             mysql_cursor = mysql_conn.cursor()
             
             for code, description in departments:
-                insert_query = """
-                INSERT IGNORE INTO categories (
-                    company_id, name, description, status, created_at, updated_at
-                ) VALUES (
-                    %s, %s, %s, 'active', NOW(), NOW()
-                )
-                ON DUPLICATE KEY UPDATE
-                    name = VALUES(name),
-                    description = VALUES(description),
-                    updated_at = NOW()
+                check_query = """
+                SELECT id FROM categories WHERE name = %s AND description = %s and company_id = %s
                 """
-                
-                mysql_cursor.execute(insert_query, (
-                    self.company_id,
-                    code,
-                    description if description else None
-                ))
+                mysql_cursor.execute(check_query, (code, description,self.company_id))
+                existing = mysql_cursor.fetchone()
+
+                if existing:
+                    update_query = """
+                    UPDATE categories SET
+                        company_id = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """
+                    mysql_cursor.execute(update_query, (self.company_id, existing[0]))
+                else:
+                    insert_query = """
+                    INSERT INTO categories (
+                        company_id, name, description, status, created_at, updated_at
+                    ) VALUES (
+                        %s, %s, %s, 'active', NOW(), NOW()
+                    )
+                    """
+                    mysql_cursor.execute(insert_query, (
+                        self.company_id,
+                        code,
+                        description if description else None
+                    ))
             
             mysql_conn.commit()
             self.log_message(f"Categories importadas: {len(departments)}", "success")
@@ -931,8 +955,6 @@ class CompleteSyncApp:
         except Exception as e:
             self.log_message(f"Error sincronizando customers: {str(e)}", "error")
             raise
-    
-
     
     def sync_users(self):
         """Sincronizar users (sellers)"""
