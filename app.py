@@ -571,14 +571,14 @@ class CompleteSyncApp:
                 COALESCE(e.account, c.email, '') as email
             FROM company c
             LEFT JOIN emails e ON c.email = e.account
-            WHERE c.address IS NOT NULL 
+            WHERE c.email = %s AND (c.address IS NOT NULL 
                OR c.phone IS NOT NULL 
-               OR c.description IS NOT NULL
+               OR c.description IS NOT NULL)
             ORDER BY c.id
             LIMIT 1
             """
             
-            pg_cursor.execute(query)
+            pg_cursor.execute(query, (company_email.upper(),))
             company_data = pg_cursor.fetchone()
             
             # Usar datos de PostgreSQL si existen
@@ -588,6 +588,24 @@ class CompleteSyncApp:
             else:
                 address, phone = None, None
                 self.log_message("No se encontraron datos adicionales en PostgreSQL", "warning")
+                 # Cerrar conexión PostgreSQL
+                pg_cursor.close()
+                pg_conn.close()
+                
+                # Mostrar mensaje y detener
+                messagebox.showerror("Proceso Detenido", 
+                                    "No se encontraron datos en PostgreSQL.\n" +
+                                    "Verifique que exista una compañía con el email especificado.\n" +
+                                    "El proceso se ha detenido.")
+                
+                # Detener el flag de sincronización
+                self.sync_running = False
+                self.sync_btn.config(state=tk.NORMAL)
+                self.stop_btn.config(state=tk.DISABLED)
+                self.status_var.set("Proceso detenido - No hay datos en PostgreSQL")
+                
+                # Lanzar excepción para salir del método
+                raise Exception("Datos de compañía no encontrados en PostgreSQL")
             
             # Conectar MySQL
             mysql_conn = mysql.connector.connect(**self.mysql_config)
@@ -631,7 +649,8 @@ class CompleteSyncApp:
                     %s, %s, %s, %s, %s, 1, 'active', NOW(), NOW()
                 )
                 """
-                
+                company_email = company_email.lower()
+
                 mysql_cursor.execute(insert_query, (
                     address,
                     phone,
@@ -847,7 +866,7 @@ class CompleteSyncApp:
                     stock if stock else 0,
                     int(min_stock) if min_stock else 0,
                     category_id,
-                    status
+                    "active"
                 ))
                 
                 if product_count % 10 == 0:
