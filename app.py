@@ -10,7 +10,8 @@ import os
 from datetime import datetime
 import threading
 import bcrypt
-
+import json
+import base64
 
 def resource_path(relative_path):
     """Obtener ruta de recurso para PyInstaller"""
@@ -35,6 +36,17 @@ def laravel_hash_make(password):
     
     return laravel_hash
 
+def safe_float(value):
+    if isinstance(value, memoryview):
+        try:
+            value = value.tobytes().decode('utf-8')
+        except Exception:
+            return 0.0
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
 class CompleteSyncApp:
     def __init__(self, root):
         self.root = root
@@ -55,15 +67,21 @@ class CompleteSyncApp:
             'host': 'localhost',
             'database': 'pruebadb',
             'user': 'postgres',
-            'password': ''
+            'password': 'muentes123.'
         }
         
         # Configuración MySQL con valores fijos (ocultos al usuario)
+        #self.mysql_config = {
+        #    'host': '91.238.160.176',  # Valor fijo oculto
+        #    'database': 'chrystal_movil',
+        #    'user': 'chrystal_app',
+        #    'password': 'muentes123.'  # Valor fijo oculto
+        #}
         self.mysql_config = {
-            'host': '91.238.160.176',  # Valor fijo oculto
-            'database': 'chrystal_movil',
-            'user': 'chrystal_app',
-            'password': 'muentes123.'  # Valor fijo oculto
+            'host': 'localhost',  # Valor fijo oculto
+            'database': 'salesapi',
+            'user': 'root',
+            'password': 'tiger.'  # Valor fijo oculto
         }
         
         # Variable global para company_id
@@ -165,15 +183,6 @@ class CompleteSyncApp:
         mysql_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         mysql_frame.columnconfigure(1, weight=1)
         
-        # Campo Database visible
-        ttk.Label(mysql_frame, text="Database:").grid(row=0, column=0, sticky=tk.W)
-        self.mysql_db_var = tk.StringVar(value=self.mysql_config['database'])
-        ttk.Entry(mysql_frame, textvariable=self.mysql_db_var, width=25).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
-        
-        # Campo Usuario visible
-        ttk.Label(mysql_frame, text="Usuario:").grid(row=1, column=0, sticky=tk.W)
-        self.mysql_user_var = tk.StringVar(value=self.mysql_config['user'])
-        ttk.Entry(mysql_frame, textvariable=self.mysql_user_var, width=25).grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
         # Nota informativa sobre la configuración
         info_label = ttk.Label(mysql_frame, text="Nota: Host y contraseña preconfigurados", 
@@ -351,11 +360,18 @@ class CompleteSyncApp:
         }
         
         # MySQL config: mantener valores fijos para host y password, actualizar solo los campos visibles
+        #self.mysql_config = {
+        #    'host': '91.238.160.176',  # Valor fijo
+        #    'database': self.mysql_db_var.get(),
+        #    'user': self.mysql_user_var.get(),
+        #    'password': 'muentes123.'  # Valor fijo
+        #}
+        
         self.mysql_config = {
-            'host': '91.238.160.176',  # Valor fijo
-            'database': self.mysql_db_var.get(),
-            'user': self.mysql_user_var.get(),
-            'password': 'muentes123.'  # Valor fijo
+            'host': 'localhost',  # Valor fijo
+            'database': 'salesapi',
+            'user': 'root',
+            'password': 'tiger'  # Valor fijo
         }
     
     def test_connections(self):
@@ -571,15 +587,43 @@ class CompleteSyncApp:
                 COALESCE(e.account, c.email, '') as email
             FROM company c
             LEFT JOIN emails e ON c.email = e.account
-            WHERE c.email = %s AND (c.address IS NOT NULL 
+            WHERE LOWER(c.email) = LOWER(%s) AND (c.address IS NOT NULL 
                OR c.phone IS NOT NULL 
                OR c.description IS NOT NULL)
             ORDER BY c.id
             LIMIT 1
             """
             
-            pg_cursor.execute(query, (company_email.upper(),))
+            pg_cursor.execute(query, (company_email,))
             company_data = pg_cursor.fetchone()
+            # Conectar MySQL
+            mysql_conn = mysql.connector.connect(**self.mysql_config)
+            mysql_cursor = mysql_conn.cursor()
+            
+            mysql_cursor.execute("SELECT codigo, correo_electronico FROM acceso WHERE codigo = %s AND correo_electronico = %s", (company_rif, company_email))
+            acceso = mysql_cursor.fetchone()
+            
+            if acceso:
+                self.log_message("Datos adicionales obtenidos de mysql acceso", "info")                
+            
+            else:
+                self.log_message("No se encontraron datos adicionales en acceso", "warning")
+                mysql_cursor.close()
+                mysql_conn.close()
+                
+                messagebox.showerror("Proceso Detenido", 
+                                    "No se encontraron datos en acceso.\n" +
+                                    "Verifique que exista una compañía con el email y rif especificado.\n" +
+                                    "El proceso se ha detenido.")
+                
+                # Detener el flag de sincronización
+                self.sync_running = False
+                self.sync_btn.config(state=tk.NORMAL)
+                self.stop_btn.config(state=tk.DISABLED)
+                self.status_var.set("Proceso detenido - No hay datos en mysql")
+                
+                # Lanzar excepción para salir del método
+                raise Exception("Datos de compañía no encontrados en mysql")
             
             # Usar datos de PostgreSQL si existen
             if company_data:
@@ -607,12 +651,10 @@ class CompleteSyncApp:
                 # Lanzar excepción para salir del método
                 raise Exception("Datos de compañía no encontrados en PostgreSQL")
             
-            # Conectar MySQL
-            mysql_conn = mysql.connector.connect(**self.mysql_config)
-            mysql_cursor = mysql_conn.cursor()
+            
             
             # Verificar si ya existe la compañía por RIF
-            mysql_cursor.execute("SELECT id, name FROM companies WHERE rif = %s OR email = %s", (company_rif, company_email))
+            mysql_cursor.execute("SELECT id, name FROM companies WHERE rif = %s AND email = %s", (company_rif, company_email))
             existing = mysql_cursor.fetchone()
             
             if existing:
@@ -755,6 +797,9 @@ class CompleteSyncApp:
             self.log_message(f"Error sincronizando categories: {str(e)}", "error")
             raise
     
+    
+    
+   
     def sync_products(self):
         """Sincronizar products con JOINs completos"""
         self.log_message("=== SINCRONIZANDO PRODUCTS ===", "info")
@@ -765,11 +810,13 @@ class CompleteSyncApp:
             pg_cursor = pg_conn.cursor()
             
             query = """
-            SELECT 
-                a.code,
+            SELECT                 
+                a.code,    
                 a.description,
-                a.short_name,
-                a.department,
+                a.short_name,				
+                a.department,	
+                c.stock as stock,
+                a.product_type,
                 CASE 
                     WHEN b.maximum_price IS NULL OR b.maximum_price < 0 OR b.maximum_price > 99999999 
                     THEN 0 
@@ -779,25 +826,22 @@ class CompleteSyncApp:
                     WHEN b.offer_price IS NULL OR b.offer_price < 0 OR b.offer_price > 99999999 
                     THEN 0 
                     ELSE b.offer_price 
-                END as cost,
-                CASE 
-                    WHEN c.stock IS NULL OR c.stock < 0 OR c.stock > 2147483647 
-                    THEN 0 
-                    ELSE c.stock 
-                END as stock,
+                END as cost,               
                 CASE 
                     WHEN a.minimal_stock IS NULL OR a.minimal_stock < 0 OR a.minimal_stock > 2147483647 
                     THEN 0 
                     ELSE a.minimal_stock 
                 END as min_stock,
-                CASE WHEN a.status = 'A' THEN 'active' ELSE 'inactive' END as status
+                CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END as status,
+                d.image_type,
+	            d.product_image                
             FROM products a
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
             LEFT JOIN products_stock c ON a.code = c.product_code
+            LEFT JOIN products_image d ON  d.main_code = a.code
             WHERE a.code IS NOT NULL 
-              AND a.code != ''
-              AND LENGTH(a.code) <= 255
-              AND a.status = '01'
+            AND a.code != ''             
+            AND a.status = '01'
             ORDER BY a.code
             """
             
@@ -821,11 +865,16 @@ class CompleteSyncApp:
                 if not self.sync_running:
                     break
                     
-                code, description, short_name, department, price, cost, stock, min_stock, status = product_data
+                # CORREGIDO: Variables en el MISMO ORDEN que el SELECT
+                code, description, short_name, department, stock, product_type, price, cost, min_stock, status, image_type,product_image = product_data
+                #  1       2           3           4          5       6            7      8       9         10
+                
                 product_count += 1
                 
                 # Obtener category_id
                 category_id = category_mapping.get(department, 1)
+                
+                image_json = self.create_image_json(image_type, product_image)
                 
                 insert_query = """
                 INSERT INTO products (
@@ -839,10 +888,12 @@ class CompleteSyncApp:
                     min_stock,
                     category_id,
                     status,
+                    product_type,
+                    images,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -853,23 +904,40 @@ class CompleteSyncApp:
                     min_stock = VALUES(min_stock),
                     category_id = VALUES(category_id),
                     status = VALUES(status),
+                    product_type = VALUES(product_type),
+                    images = VALUES(images),
                     updated_at = NOW()
                 """
                 
                 mysql_cursor.execute(insert_query, (
                     self.company_id,
                     code,
-                    short_name,
+                    short_name,  # El nombre del producto es short_name
                     description if description else None,
-                    float(price) if price else 0.0,
-                    float(cost) if cost else 0.0,
+                    safe_float(price),
+                    safe_float(cost),
                     stock if stock else 0,
                     int(min_stock) if min_stock else 0,
                     category_id,
-                    "active"
+                    status,  # Usar el status calculado del SELECT
+                    product_type,
+                    image_json
                 ))
                 
-                if product_count % 10 == 0:
+                # Debug opcional
+                if product_count <= 5:  # Solo mostrar los primeros 5 para debug
+                    print(f"Producto {product_count}:")
+                    print(f"  Code: {code}")
+                    print(f"  Name: {short_name}")
+                    print(f"  Description: {description}")
+                    print(f"  Department: {department}")
+                    print(f"  Price: {price}")
+                    print(f"  Cost: {cost}")
+                    print(f"  Stock: {stock}")
+                    print(f"  Status: {status}")
+                    print("---")
+                
+                if product_count % 100 == 0:
                     self.log_message(f"Procesados {product_count} products...")
             
             mysql_conn.commit()
@@ -883,6 +951,41 @@ class CompleteSyncApp:
         except Exception as e:
             self.log_message(f"Error sincronizando products: {str(e)}", "error")
             raise
+        
+    def create_image_json(self, image_type, product_image):
+        """Crear JSON para el campo image"""
+        try:
+            # Si no hay imagen, retornar None o JSON vacío
+            if not product_image and not image_type:
+                return None
+            
+            # Procesar product_image según su tipo
+            processed_image = None
+            if product_image:
+                if isinstance(product_image, memoryview):
+                    # Convertir memoryview a bytes, luego a base64
+                    image_bytes = product_image.tobytes()
+                    processed_image = base64.b64encode(image_bytes).decode('utf-8')
+                elif isinstance(product_image, bytes):
+                    # Convertir bytes directamente a base64
+                    processed_image = base64.b64encode(product_image).decode('utf-8')
+                else:
+                    # Si ya es string u otro tipo, usarlo directamente
+                    processed_image = str(product_image)
+            
+            # Crear el diccionario JSON
+            image_data = {
+                "type": image_type if image_type else None,
+                "product_image": processed_image,
+                "description": "products"
+            }
+            
+            # Convertir a JSON string
+            return json.dumps(image_data, ensure_ascii=False)
+            
+        except Exception as e:
+            self.log_message(f"Error creando JSON de imagen: {str(e)}", "warning")
+            return None
     
     def sync_customers(self):
         """Sincronizar customers (clients → customers)"""
