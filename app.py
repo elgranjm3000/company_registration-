@@ -7,7 +7,7 @@ from psycopg2 import Error as PostgreSQLError
 import re
 import sys
 import os
-from datetime import datetime
+from datetime import datetime,timedelta
 import threading
 import bcrypt
 import json
@@ -71,18 +71,18 @@ class CompleteSyncApp:
         }
         
         # Configuración MySQL con valores fijos (ocultos al usuario)
-        #self.mysql_config = {
-        #    'host': '91.238.160.176',  # Valor fijo oculto
-        #    'database': 'chrystal_movil',
-        #    'user': 'chrystal_app',
-        #    'password': 'muentes123.'  # Valor fijo oculto
-        #}
         self.mysql_config = {
-            'host': 'localhost',  # Valor fijo oculto
-            'database': 'salesapi',
-            'user': 'root',
-            'password': 'tiger.'  # Valor fijo oculto
+            'host': '91.238.160.176',  # Valor fijo oculto
+            'database': 'chrystal_movil',
+            'user': 'chrystal_app',
+            'password': 'muentes123.'  # Valor fijo oculto
         }
+        #self.mysql_config = {
+        #    'host': 'localhost',  # Valor fijo oculto
+        #    'database': 'salesapi',
+        #    'user': 'root',
+        #    'password': 'tiger.'  # Valor fijo oculto
+        #}
         
         # Variable global para company_id
         self.company_id = None
@@ -99,6 +99,34 @@ class CompleteSyncApp:
         self.log_message("PostgreSQL → MySQL", "info")
         self.log_message("Versión: 1.0 - Basado en script bash completo", "info")
         self.log_message("Listo para sincronizar", "info")
+
+    def get_tax_code(self, tax_percentage):
+        """Mapea porcentaje de impuesto a código de impuesto PostgreSQL"""
+        if tax_percentage >= 15:
+            return '01'  # IVA General 16%
+        elif tax_percentage >= 7:
+            return '03'  # IVA Reducido 8%
+        else:
+            return 'EX'  # Exento
+
+    def get_unit_id(self, product_code, pg_cursor):
+        """Obtiene el ID de unidad para un producto"""
+        if not product_code:
+            return 1
+        
+        sql = """
+        SELECT correlative 
+        FROM public.products_units 
+        WHERE product_code = %s AND main_unit = true
+        LIMIT 1
+        """
+        
+        try:
+            pg_cursor.execute(sql, (product_code,))
+            result = pg_cursor.fetchone()
+            return result[0] if result else 1
+        except:
+            return 1
         
     def setup_styles(self):
         """Configurar estilos personalizados"""
@@ -178,6 +206,8 @@ class CompleteSyncApp:
         self.pg_pass_var = tk.StringVar(value=self.postgresql_config['password'])
         ttk.Entry(pg_frame, textvariable=self.pg_pass_var, show="*", width=25).grid(row=3, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
+      
+        
         # Configuración MySQL (solo campos visibles - host y password ocultos)
         mysql_frame = ttk.LabelFrame(scrollable_frame, text="MySQL (Destino)", padding="10")
         mysql_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
@@ -233,6 +263,10 @@ class CompleteSyncApp:
         
         self.sync_sellers_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(options_frame, text="6. Sellers", variable=self.sync_sellers_var).grid(row=5, column=0, sticky=tk.W)
+          # Después de self.sync_sellers_var
+        self.sync_quotes_var = tk.BooleanVar(value=False)  # False por defecto
+        ttk.Checkbutton(options_frame, text="7. Quotes (Presupuestos)",
+        variable=self.sync_quotes_var).grid(row=6, column=0, sticky=tk.W)
         
         # Botones de control
         button_frame = ttk.LabelFrame(scrollable_frame, text="Controles", padding="10")
@@ -362,8 +396,8 @@ class CompleteSyncApp:
         # MySQL config: mantener valores fijos para host y password, actualizar solo los campos visibles
         #self.mysql_config = {
         #    'host': '91.238.160.176',  # Valor fijo
-        #    'database': self.mysql_db_var.get(),
-        #    'user': self.mysql_user_var.get(),
+        #    'database': 'chrystal_movil',
+        #    'user': 'chrystal_app',
         #    'password': 'muentes123.'  # Valor fijo
         #}
         
@@ -458,7 +492,8 @@ class CompleteSyncApp:
                 self.sync_products_var.get(),
                 self.sync_customers_var.get(),
                 self.sync_users_var.get(),
-                self.sync_sellers_var.get()
+                self.sync_sellers_var.get(),
+                self.sync_quotes_var.get()
             ])
             current_step = 0
             
@@ -513,6 +548,14 @@ class CompleteSyncApp:
                     return
                 self.status_var.set("Sincronizando Sellers...")
                 self.sync_sellers()
+                current_step += 1
+                self.progress_var.set((current_step / total_steps) * 100)
+                
+            if self.sync_quotes_var.get() and self.company_id:
+                if not self.sync_running:
+                    return
+                self.status_var.set("Sincronizando Quotes...")
+                self.sync_quotes()
                 current_step += 1
                 self.progress_var.set((current_step / total_steps) * 100)
             
@@ -1271,6 +1314,311 @@ class CompleteSyncApp:
         except Exception as e:
             self.log_message(f"Error sincronizando sellers: {str(e)}", "error")
             raise
+        
+    def sync_quotes(self):
+            """Sincronizar quotes desde MySQL a PostgreSQL"""
+            self.log_message("=== SINCRONIZANDO QUOTES (PRESUPUESTOS) ===", "info")
+            
+            try:
+                # Conectar a MySQL para obtener quotes
+                mysql_conn = mysql.connector.connect(**self.mysql_config)
+                mysql_cursor = mysql_conn.cursor(dictionary=True)
+                
+                # Query para obtener quotes de esta compañía
+                quotes_query = """
+                SELECT 
+                    a.id as idQuotes,
+                    a.quote_number,
+                    a.customer_id,
+                    a.company_id,
+                    a.user_seller_id,
+                    a.subtotal,
+                    a.tax,
+                    a.tax_amount,
+                    a.discount,
+                    a.discount_amount,
+                    a.total,
+                    a.bcv_rate,
+                    a.created_at,
+                    a.updated_at,
+                    b.name as customer_name,
+                    b.email as customer_email,
+                    b.phone as customer_phone,
+                    b.document_number as customer_doc,
+                    b.address as customer_address
+                FROM salesapi.quotes a
+                LEFT JOIN salesapi.customers b ON b.id = a.customer_id
+                WHERE a.company_id = %s
+                ORDER BY a.id
+                """
+                
+                mysql_cursor.execute(quotes_query, (self.company_id,))
+                quotes = mysql_cursor.fetchall()
+                
+                if not quotes:
+                    self.log_message(f"No se encontraron quotes para company_id {self.company_id}", "warning")
+                    mysql_cursor.close()
+                    mysql_conn.close()
+                    return
+                
+                self.log_message(f"Encontradas {len(quotes)} cotizaciones para migrar", "info")
+                
+                # Conectar a PostgreSQL
+                pg_conn = psycopg2.connect(**self.postgresql_config)
+                pg_conn.autocommit = False
+                
+                migrated_count = 0
+                error_count = 0
+                
+                for quote in quotes:
+                    if not self.sync_running:
+                        break
+                    
+                    try:
+                        quote_id = quote['idQuotes']
+                        
+                        # Obtener items de la cotización
+                        items_query = """
+                        SELECT 
+                            a.quote_id,
+                            a.description,
+                            a.subtotal,
+                            a.unit,
+                            a.unit_price,
+                            a.total,
+                            a.tax_amount,
+                            a.discount_amount,
+                            a.discount_percentage,
+                            a.quantity,
+                            a.item_type,
+                            a.product_id,
+                            c.code as product_code
+                        FROM salesapi.quote_items a
+                        LEFT JOIN salesapi.products c ON c.id = a.product_id
+                        WHERE a.quote_id = %s
+                        ORDER BY a.id
+                        """
+                        
+                        mysql_cursor.execute(items_query, (quote_id,))
+                        items = mysql_cursor.fetchall()
+                        
+                        if not items:
+                            self.log_message(f"Quote {quote_id} no tiene items, saltando...", "warning")
+                            continue
+                        
+                        # Migrar la cotización completa
+                        self.migrate_single_quote(pg_conn, quote, items)
+                        
+                        pg_conn.commit()
+                        migrated_count += 1
+                        
+                        if migrated_count % 10 == 0:
+                            self.log_message(f"Procesadas {migrated_count} cotizaciones...")
+                        
+                    except Exception as e:
+                        pg_conn.rollback()
+                        error_count += 1
+                        self.log_message(f"Error migrando quote {quote['idQuotes']}: {str(e)}", "error")
+                
+                self.log_message(f"Migración completada: {migrated_count} exitosas, {error_count} errores", "success")
+                
+                mysql_cursor.close()
+                mysql_conn.close()
+                pg_conn.close()
+                
+            except Exception as e:
+                self.log_message(f"Error sincronizando quotes: {str(e)}", "error")
+                raise
+
+    def migrate_single_quote(self, pg_conn, quote, items):
+            """Migra una cotización individual a PostgreSQL"""
+            pg_cursor = pg_conn.cursor()
+            
+            OFFSET_CORRELATIVO = 50000
+            correlativo = quote['idQuotes'] + OFFSET_CORRELATIVO
+            
+            # 1. Insertar sales_operation
+            emission_date = quote.get('created_at') or datetime.now()
+            
+            sql_operation = """
+            INSERT INTO public.sales_operation (
+                correlative, operation_type, document_no, control_no, 
+                emission_date, register_date, client_code, client_name, 
+                client_id, client_address, client_phone, seller, 
+                credit_days, expiration_date, description, store, locations, 
+                user_code, station, total_amount, total_net_details, 
+                total_tax_details, total_details, percent_discount, discount, 
+                total_net, total_tax, total, credit, cash, coin_code, 
+                canceled, pending
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                %s, %s, %s
+            )
+            """
+            
+            pg_cursor.execute(sql_operation, (
+                correlativo, 'COTIZACION',
+                quote['quote_number'] or f"COT-{correlativo:06d}",
+                f"CTRL-{correlativo:06d}",
+                emission_date, emission_date,
+                '00', quote['customer_name'] or 'Cliente Migrado',
+                quote['customer_doc'] or f"MIG-{quote['idQuotes']}",
+                quote['customer_address'] or 'Dirección migrada',
+                quote['customer_phone'] or 'S-N',
+                '00', 30, emission_date + timedelta(days=30),
+                'Cotización migrada desde MySQL',
+                '00', '00', '00', '00',
+                safe_float(quote['total']),
+                safe_float(quote['subtotal']),
+                safe_float(quote['tax_amount']),
+                safe_float(quote['total']),
+                safe_float(quote['discount']),
+                safe_float(quote['discount_amount']),
+                safe_float(quote['subtotal']) - safe_float(quote['discount_amount']),
+                safe_float(quote['tax_amount']),
+                safe_float(quote['total']),
+                safe_float(quote['total']),
+                0.0, '02', False, True
+            ))
+            
+            # 2. Insertar sales_operation_coins
+            bcv_rate = safe_float(quote.get('bcv_rate', 170))
+            
+            sql_coins = """
+            INSERT INTO public.sales_operation_coins (
+                main_correlative, coin_code, factor_type, buy_aliquot, 
+                sales_aliquot, total_net_details, total_tax_details, 
+                total_details, discount, freight, total_net, total_tax, 
+                total, credit, cash
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            pg_cursor.execute(sql_coins, (
+                correlativo, '02', 1, bcv_rate, bcv_rate,
+                safe_float(quote['subtotal']),
+                safe_float(quote['tax_amount']),
+                safe_float(quote['total']),
+                safe_float(quote['discount_amount']),
+                0.0,
+                safe_float(quote['subtotal']) - safe_float(quote['discount_amount']),
+                safe_float(quote['tax_amount']),
+                safe_float(quote['total']),
+                safe_float(quote['total']),
+                0.0
+            ))
+            
+            # 3. Insertar detalles
+            for item in items:
+                unit_id = self.get_unit_id(item.get('product_code'), pg_cursor)
+                tax_percent = safe_float(item.get('tax_amount', 0)) / safe_float(item.get('subtotal', 1)) * 100 if item.get('subtotal') else 0
+                
+                sql_detail = """
+                INSERT INTO public.sales_operation_details (
+                    main_correlative, code_product, description_product, 
+                    amount, store, locations, unit, conversion_factor, unit_type, 
+                    unitary_cost, sale_tax, sale_aliquot, price, 
+                    total_net_cost, total_tax_cost, total_cost, 
+                    total_net_gross, total_tax_gross, total_gross, 
+                    percent_discount, discount, total_net, total_tax, total, 
+                    coin_code
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                ) RETURNING line
+                """
+                
+                pg_cursor.execute(sql_detail, (
+                    correlativo,
+                    item.get('product_code') or f"MIG-{item['product_id']}",
+                    item['description'],
+                    safe_float(item['quantity']),
+                    '00', '00', unit_id, 1.0, 1,
+                    safe_float(item['unit_price']) * 0.8,
+                    self.get_tax_code(tax_percent),
+                    tax_percent,
+                    safe_float(item['unit_price']),
+                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8,
+                    safe_float(item['tax_amount']) * 0.8,
+                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8 + safe_float(item['tax_amount']) * 0.8,
+                    safe_float(item['subtotal']),
+                    safe_float(item['tax_amount']),
+                    safe_float(item['total']),
+                    safe_float(item.get('discount_percentage', 0)),
+                    safe_float(item.get('discount_amount', 0)),
+                    safe_float(item['subtotal']) - safe_float(item.get('discount_amount', 0)),
+                    safe_float(item['tax_amount']),
+                    safe_float(item['total']),
+                    '02'
+                ))
+                
+                line = pg_cursor.fetchone()[0]
+                
+                # Insertar detail_coins
+                sql_detail_coins = """
+                INSERT INTO public.sales_operation_details_coins (
+                    main_correlative, main_line, unitary_cost, price, 
+                    total_net_cost, total_tax_cost, total_cost, 
+                    total_net_gross, total_tax_gross, total_gross, 
+                    discount, total_net, total_tax, total, coin_code
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                pg_cursor.execute(sql_detail_coins, (
+                    correlativo, line,
+                    safe_float(item['unit_price']) * 0.8,
+                    safe_float(item['unit_price']),
+                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8,
+                    safe_float(item['tax_amount']) * 0.8,
+                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8 + safe_float(item['tax_amount']) * 0.8,
+                    safe_float(item['subtotal']),
+                    safe_float(item['tax_amount']),
+                    safe_float(item['total']),
+                    safe_float(item.get('discount_amount', 0)),
+                    safe_float(item['subtotal']) - safe_float(item.get('discount_amount', 0)),
+                    safe_float(item['tax_amount']),
+                    safe_float(item['total']),
+                    '02'
+                ))
+            
+            # 4. Insertar impuestos agrupados
+            taxes_dict = {}
+            for item in items:
+                tax_percent = safe_float(item.get('tax_amount', 0)) / safe_float(item.get('subtotal', 1)) * 100 if item.get('subtotal') else 0
+                tax_code = self.get_tax_code(tax_percent)
+                
+                if tax_code not in taxes_dict:
+                    taxes_dict[tax_code] = {'aliquot': tax_percent, 'taxable': 0.0, 'tax': 0.0}
+                
+                taxes_dict[tax_code]['taxable'] += safe_float(item['subtotal']) - safe_float(item.get('discount_amount', 0))
+                taxes_dict[tax_code]['tax'] += safe_float(item.get('tax_amount', 0))
+            
+            for tax_code, tax_data in taxes_dict.items():
+                if tax_data['tax'] == 0:
+                    continue
+                
+                sql_tax = """
+                INSERT INTO public.sales_operation_taxes (
+                    main_correlative, taxe_code, aliquot, taxable, tax, tax_type
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                
+                pg_cursor.execute(sql_tax, (
+                    correlativo, tax_code, tax_data['aliquot'],
+                    tax_data['taxable'], tax_data['tax'], 1
+                ))
+                
+                sql_tax_coins = """
+                INSERT INTO public.sales_operation_taxes_coins (
+                    main_correlative, main_taxe_code, taxable, tax, coin_code
+                ) VALUES (%s, %s, %s, %s, %s)
+                """
+                
+                pg_cursor.execute(sql_tax_coins, (
+                    correlativo, tax_code, tax_data['taxable'], tax_data['tax'], '02'
+                ))
+            
+            pg_cursor.close()
 
 def main():
     """Función principal"""
