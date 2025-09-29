@@ -394,19 +394,19 @@ class CompleteSyncApp:
         }
         
         # MySQL config: mantener valores fijos para host y password, actualizar solo los campos visibles
-        #self.mysql_config = {
-        #    'host': '91.238.160.176',  # Valor fijo
-        #    'database': 'chrystal_movil',
-        #    'user': 'chrystal_app',
-        #    'password': 'muentes123.'  # Valor fijo
-        #}
-        
         self.mysql_config = {
-            'host': 'localhost',  # Valor fijo
-            'database': 'salesapi',
-            'user': 'root',
-            'password': 'tiger'  # Valor fijo
+            'host': '91.238.160.176',  # Valor fijo
+            'database': 'chrystal_movil',
+            'user': 'chrystal_app',
+            'password': 'muentes123.'  # Valor fijo
         }
+        
+        #self.mysql_config = {
+        #    'host': 'localhost',  # Valor fijo
+        #    'database': 'salesapi',
+        #    'user': 'root',
+        #    'password': 'tiger'  # Valor fijo
+        #}
     
     def test_connections(self):
         """Probar conexiones a ambas bases de datos"""
@@ -630,9 +630,7 @@ class CompleteSyncApp:
                 COALESCE(e.account, c.email, '') as email
             FROM company c
             LEFT JOIN emails e ON c.email = e.account
-            WHERE LOWER(c.email) = LOWER(%s) AND (c.address IS NOT NULL 
-               OR c.phone IS NOT NULL 
-               OR c.description IS NOT NULL)
+            WHERE LOWER(c.email) = LOWER(%s)
             ORDER BY c.id
             LIMIT 1
             """
@@ -643,8 +641,9 @@ class CompleteSyncApp:
             mysql_conn = mysql.connector.connect(**self.mysql_config)
             mysql_cursor = mysql_conn.cursor()
             
-            mysql_cursor.execute("SELECT codigo, correo_electronico FROM acceso WHERE codigo = %s AND correo_electronico = %s", (company_rif, company_email))
+            mysql_cursor.execute("SELECT codigo, correo_electronico FROM acceso WHERE codigo = %s AND LOWER(correo_electronico) = LOWER(%s)", (company_rif, company_email))
             acceso = mysql_cursor.fetchone()
+            
             
             if acceso:
                 self.log_message("Datos adicionales obtenidos de mysql acceso", "info")                
@@ -1346,8 +1345,8 @@ class CompleteSyncApp:
                     b.phone as customer_phone,
                     b.document_number as customer_doc,
                     b.address as customer_address
-                FROM salesapi.quotes a
-                LEFT JOIN salesapi.customers b ON b.id = a.customer_id
+                FROM quotes a
+                LEFT JOIN customers b ON b.id = a.customer_id
                 WHERE a.company_id = %s
                 ORDER BY a.id
                 """
@@ -1393,8 +1392,8 @@ class CompleteSyncApp:
                             a.item_type,
                             a.product_id,
                             c.code as product_code
-                        FROM salesapi.quote_items a
-                        LEFT JOIN salesapi.products c ON c.id = a.product_id
+                        FROM quote_items a
+                        LEFT JOIN products c ON c.id = a.product_id
                         WHERE a.quote_id = %s
                         ORDER BY a.id
                         """
