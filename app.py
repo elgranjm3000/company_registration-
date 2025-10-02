@@ -12,6 +12,16 @@ import threading
 import bcrypt
 import json
 import base64
+import uuid
+
+def get_mac_address():
+    # Obtiene la MAC address como un entero
+    mac = uuid.getnode()
+    
+    # Convierte a formato legible (XX:XX:XX:XX:XX:XX)
+    mac_address = ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2))
+    
+    return mac_address
 
 def resource_path(relative_path):
     """Obtener ruta de recurso para PyInstaller"""
@@ -394,19 +404,19 @@ class CompleteSyncApp:
         }
         
         # MySQL config: mantener valores fijos para host y password, actualizar solo los campos visibles
-        self.mysql_config = {
-            'host': '91.238.160.176',  # Valor fijo
-            'database': 'chrystal_movil',
-            'user': 'chrystal_app',
-            'password': 'muentes123.'  # Valor fijo
-        }
-        
         #self.mysql_config = {
-        #    'host': 'localhost',  # Valor fijo
-        #    'database': 'salesapi',
-        #    'user': 'root',
-        #    'password': 'tiger'  # Valor fijo
+        #    'host': '91.238.160.176',  # Valor fijo
+        #    'database': 'chrystal_movil',
+        #    'user': 'chrystal_app',
+        #    'password': 'muentes123.'  # Valor fijo
         #}
+        
+        self.mysql_config = {
+            'host': 'localhost',  # Valor fijo
+            'database': 'salesapi',
+            'user': 'root',
+            'password': 'tiger'  # Valor fijo
+        }
     
     def test_connections(self):
         """Probar conexiones a ambas bases de datos"""
@@ -1381,6 +1391,7 @@ class CompleteSyncApp:
                         SELECT 
                             a.quote_id,
                             a.description,
+                            a.name,
                             a.subtotal,
                             a.unit,
                             a.unit_price,
@@ -1439,35 +1450,66 @@ class CompleteSyncApp:
             # 1. Insertar sales_operation
             emission_date = quote.get('created_at') or datetime.now()
             
+            mac = get_mac_address()
+            pg_cursor.execute("SELECT code FROM stations WHERE code = %s", (mac,))
+            existing_station = pg_cursor.fetchone()
+            
+            if not existing_station:
+                sql_insert_station = """
+                INSERT INTO stations (
+                    code, 
+                    description, 
+                    sale_point, 
+                    bio_sale_point,
+                    numeration_sales_bill,
+                    numeration_sales_point_bill,
+                    numeration_income
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s
+                )
+                ON CONFLICT (code) DO NOTHING;
+                """
+                
+                pg_cursor.execute(sql_insert_station, (
+                    mac,  # código = MAC address
+                    f"Estación {mac[:17]}",  # descripción
+                    '00',  # sale_point
+                    '00',  # bio_sale_point
+                    '00',  # numeration_sales_bill
+                    '00',  # numeration_sales_point_bill
+                    '00'   # numeration_income
+                ))
+
+            
             sql_operation = """
             INSERT INTO public.sales_operation (
-                correlative, operation_type, document_no, control_no, 
+                correlative, operation_type, document_no, 
                 emission_date, register_date, client_code, client_name, 
                 client_id, client_address, client_phone, seller, 
                 credit_days, expiration_date, description, store, locations, 
                 user_code, station, total_amount, total_net_details, 
                 total_tax_details, total_details, percent_discount, discount, 
                 total_net, total_tax, total, credit, cash, coin_code, 
-                canceled, pending
+                canceled, pending,wait,total_net_cost,total_tax_cost,total_cost,freight_tax,freight_aliquot,
+                document_no_internal                
             ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                %s, %s, %s
+                %s, %s, %s,%s,%s,%s,%s,%s,%s,%s
             )
             """
             
             pg_cursor.execute(sql_operation, (
-                correlativo, 'COTIZACION',
-                quote['quote_number'] or f"COT-{correlativo:06d}",
-                f"CTRL-{correlativo:06d}",
+                correlativo, 'BUDGET',
+                f"W-{correlativo:06d}",              
                 emission_date, emission_date,
-                '00', quote['customer_name'] or 'Cliente Migrado',
+                quote['customer_doc'], quote['customer_name'] or 'Cliente Migrado',
                 quote['customer_doc'] or f"MIG-{quote['idQuotes']}",
                 quote['customer_address'] or 'Dirección migrada',
                 quote['customer_phone'] or 'S-N',
-                '00', 30, emission_date + timedelta(days=30),
-                'Cotización migrada desde MySQL',
-                '00', '00', '00', '00',
+                '00', 1, emission_date + timedelta(days=1),
+                f"''",
+                '00', '00', '00', f"{mac}",
                 safe_float(quote['total']),
                 safe_float(quote['subtotal']),
                 safe_float(quote['tax_amount']),
@@ -1478,7 +1520,13 @@ class CompleteSyncApp:
                 safe_float(quote['tax_amount']),
                 safe_float(quote['total']),
                 safe_float(quote['total']),
-                0.0, '02', False, True
+                0.0, '02', False, True,False,
+                safe_float(quote['subtotal']),
+                safe_float(quote['tax_amount']),
+                safe_float(quote['total']),
+                "01",
+                16,
+                f"W-{correlativo:06d}",  
             ))
             
             # 2. Insertar sales_operation_coins
@@ -1530,7 +1578,7 @@ class CompleteSyncApp:
                 pg_cursor.execute(sql_detail, (
                     correlativo,
                     item.get('product_code') or f"MIG-{item['product_id']}",
-                    item['description'],
+                    item['name'],
                     safe_float(item['quantity']),
                     '00', '00', unit_id, 1.0, 1,
                     safe_float(item['unit_price']) * 0.8,
