@@ -1449,6 +1449,7 @@ class CompleteSyncApp:
             
             # 1. Insertar sales_operation
             emission_date = quote.get('created_at') or datetime.now()
+            register_hour = datetime.combine(emission_date.date(), datetime.min.time())
             
             mac = get_mac_address()
             pg_cursor.execute("SELECT code FROM stations WHERE code = %s", (mac,))
@@ -1481,52 +1482,99 @@ class CompleteSyncApp:
 
             
             sql_operation = """
-            INSERT INTO public.sales_operation (
-                correlative, operation_type, document_no, 
-                emission_date, register_date, client_code, client_name, 
-                client_id, client_address, client_phone, seller, 
-                credit_days, expiration_date, description, store, locations, 
-                user_code, station, total_amount, total_net_details, 
-                total_tax_details, total_details, percent_discount, discount, 
-                total_net, total_tax, total, credit, cash, coin_code, 
-                canceled, pending,wait,total_net_cost,total_tax_cost,total_cost,freight_tax,freight_aliquot,
-                document_no_internal                
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                %s, %s, %s,%s,%s,%s,%s,%s,%s,%s
-            )
-            """
-            
+                INSERT INTO public.sales_operation (
+                    correlative,           -- 1
+                    operation_type,        -- 2
+                    document_no,           -- 3
+                    emission_date,         -- 4
+                    register_date,         -- 5
+                    client_code,           -- 6
+                    client_name,           -- 7
+                    client_id,             -- 8
+                    client_address,        -- 9
+                    client_phone,          -- 10
+                    seller,                -- 11
+                    credit_days,           -- 12
+                    expiration_date,       -- 13
+                    description,           -- 14
+                    store,                 -- 15
+                    locations,             -- 16
+                    user_code,             -- 17
+                    station,               -- 18
+                    total_amount,          -- 19
+                    total_net_details,     -- 20
+                    total_tax_details,     -- 21
+                    total_details,         -- 22
+                    percent_discount,      -- 23
+                    discount,              -- 24
+                    total_net,             -- 25
+                    total_tax,             -- 26
+                    total,                 -- 27
+                    credit,                -- 28
+                    cash,                  -- 29
+                    coin_code,             -- 30
+                    canceled,              -- 31
+                    pending,               -- 32
+                    wait,                  -- 33
+                    total_net_cost,        -- 34
+                    total_tax_cost,        -- 35
+                    total_cost,            -- 36
+                    freight_tax,           -- 37
+                    freight_aliquot,       -- 38
+                    document_no_internal,  -- 39
+                    control_no,            -- 40 (nuevo - sin DEFAULT)
+                    operation_comments     -- 41 (nuevo - sin DEFAULT)
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                """
+
             pg_cursor.execute(sql_operation, (
-                correlativo, 'BUDGET',
-                f"W-{correlativo:06d}",              
-                emission_date, emission_date,
-                quote['customer_doc'], quote['customer_name'] or 'Cliente Migrado',
-                quote['customer_doc'] or f"MIG-{quote['idQuotes']}",
-                quote['customer_address'] or 'Dirección migrada',
-                quote['customer_phone'] or 'S-N',
-                '00', 1, emission_date + timedelta(days=1),
-                f"''",
-                '00', '00', '00', f"{mac}",
-                safe_float(quote['total']),
-                safe_float(quote['subtotal']),
-                safe_float(quote['tax_amount']),
-                safe_float(quote['total']),
-                safe_float(quote['discount']),
-                safe_float(quote['discount_amount']),
-                safe_float(quote['subtotal']) - safe_float(quote['discount_amount']),
-                safe_float(quote['tax_amount']),
-                safe_float(quote['total']),
-                safe_float(quote['total']),
-                0.0, '02', False, True,False,
-                safe_float(quote['subtotal']),
-                safe_float(quote['tax_amount']),
-                safe_float(quote['total']),
-                "01",
-                16,
-                f"W-{correlativo:06d}",  
-            ))
+                    correlativo,                                                    # 1  - correlative
+                    'BUDGET',                                                       # 2  - operation_type
+                    f"W{correlativo:010d}",                                        # 3  - document_no
+                    emission_date,                                                  # 4  - emission_date
+                    emission_date,                                                  # 5  - register_date
+                    quote['customer_doc'],                                         # 6  - client_code
+                    quote['customer_name'] or 'Cliente Migrado',                   # 7  - client_name
+                    quote['customer_doc'] or f"MIG-{quote['idQuotes']}",          # 8  - client_id
+                    quote['customer_address'] or 'Dirección migrada',              # 9  - client_address
+                    quote['customer_phone'] or 'S-N',                              # 10 - client_phone
+                    '00',                                                          # 11 - seller
+                    1,                                                             # 12 - credit_days
+                    emission_date + timedelta(days=1),                             # 13 - expiration_date
+                    '',                                                            # 14 - description (comilla simple)
+                    '00',                                                          # 15 - store
+                    '00',                                                          # 16 - locations
+                    '00',                                                          # 17 - user_code
+                    f"{mac}",                                                      # 18 - station
+                    safe_float(quote['total']),                                    # 19 - total_amount
+                    safe_float(quote['subtotal']),                                 # 20 - total_net_details
+                    safe_float(quote['tax_amount']),                               # 21 - total_tax_details
+                    safe_float(quote['total']),                                    # 22 - total_details
+                    safe_float(quote['discount']),                                 # 23 - percent_discount
+                    safe_float(quote['discount_amount']),                          # 24 - discount
+                    safe_float(quote['subtotal']) - safe_float(quote['discount_amount']), # 25 - total_net
+                    safe_float(quote['tax_amount']),                               # 26 - total_tax
+                    safe_float(quote['total']),                                    # 27 - total
+                    0.0,                                                           # 28 - credit
+                    0.0,                                                           # 29 - cash
+                    '02',                                                          # 30 - coin_code
+                    False,                                                         # 31 - canceled
+                    True,                                                          # 32 - pending
+                    False,                                                         # 33 - wait
+                    safe_float(quote['subtotal']),                                 # 34 - total_net_cost
+                    safe_float(quote['tax_amount']),                               # 35 - total_tax_cost
+                    safe_float(quote['total']),                                    # 36 - total_cost
+                    '01',                                                          # 37 - freight_tax
+                    16,                                                            # 38 - freight_aliquot
+                    f"W{correlativo:010d}",                                        # 39 - document_no_internal
+                    '',                                                            # 40 - control_no (comilla simple)
+                    ''                                                             # 41 - operation_comments (comilla simple)
+                ))
             
             # 2. Insertar sales_operation_coins
             bcv_rate = safe_float(quote.get('bcv_rate', 170))
@@ -1550,7 +1598,7 @@ class CompleteSyncApp:
                 safe_float(quote['subtotal']) - safe_float(quote['discount_amount']),
                 safe_float(quote['tax_amount']),
                 safe_float(quote['total']),
-                safe_float(quote['total']),
+                0.0,
                 0.0
             ))
             
@@ -1560,42 +1608,69 @@ class CompleteSyncApp:
                 tax_percent = safe_float(item.get('tax_amount', 0)) / safe_float(item.get('subtotal', 1)) * 100 if item.get('subtotal') else 0
                 
                 sql_detail = """
-                INSERT INTO public.sales_operation_details (
-                    main_correlative, code_product, description_product, 
-                    amount, store, locations, unit, conversion_factor, unit_type, 
-                    unitary_cost, sale_tax, sale_aliquot, price, 
-                    total_net_cost, total_tax_cost, total_cost, 
-                    total_net_gross, total_tax_gross, total_gross, 
-                    percent_discount, discount, total_net, total_tax, total, 
-                    coin_code
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                ) RETURNING line
-                """
-                
+                    INSERT INTO public.sales_operation_details (
+                        main_correlative,      -- 1
+                        code_product,          -- 2
+                        description_product,   -- 3
+                        amount,                -- 4
+                        store,                 -- 5
+                        locations,             -- 6
+                        unit,                  -- 7
+                        conversion_factor,     -- 8
+                        unit_type,             -- 9
+                        unitary_cost,          -- 10
+                        sale_tax,              -- 11
+                        sale_aliquot,          -- 12
+                        price,                 -- 13
+                        total_net_cost,        -- 14
+                        total_tax_cost,        -- 15
+                        total_cost,            -- 16
+                        total_net_gross,       -- 17
+                        total_tax_gross,       -- 18
+                        total_gross,           -- 19
+                        percent_discount,      -- 20
+                        discount,              -- 21
+                        total_net,             -- 22
+                        total_tax,             -- 23
+                        total,                 -- 24
+                        coin_code,             -- 25
+                        buy_aliquot,           -- 26
+                        buy_tax                -- 27                
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                        %s, %s, %s, %s, %s,%s, %s
+                    ) RETURNING line
+                    """
+
                 pg_cursor.execute(sql_detail, (
-                    correlativo,
-                    item.get('product_code') or f"MIG-{item['product_id']}",
-                    item['name'],
-                    safe_float(item['quantity']),
-                    '00', '00', unit_id, 1.0, 1,
-                    safe_float(item['unit_price']) * 0.8,
-                    self.get_tax_code(tax_percent),
-                    tax_percent,
-                    safe_float(item['unit_price']),
-                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8,
-                    safe_float(item['tax_amount']) * 0.8,
-                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8 + safe_float(item['tax_amount']) * 0.8,
-                    safe_float(item['subtotal']),
-                    safe_float(item['tax_amount']),
-                    safe_float(item['total']),
-                    safe_float(item.get('discount_percentage', 0)),
-                    safe_float(item.get('discount_amount', 0)),
-                    safe_float(item['subtotal']) - safe_float(item.get('discount_amount', 0)),
-                    safe_float(item['tax_amount']),
-                    safe_float(item['total']),
-                    '02'
+                    correlativo,                                                   # 1  - main_correlative
+                    item.get('product_code') or f"MIG-{item['product_id']}",     # 2  - code_product
+                    item['name'],                                                  # 3  - description_product
+                    safe_float(item['quantity']),                                  # 4  - amount
+                    '00',                                                          # 5  - store
+                    '00',                                                          # 6  - locations
+                    unit_id,                                                       # 7  - unit
+                    1.0,                                                           # 8  - conversion_factor
+                    1,                                                             # 9  - unit_type
+                    safe_float(item['unit_price']) * 0.8,                         # 10 - unitary_cost
+                    "01",                                                            # 11 - sale_tax
+                    tax_percent,                                                   # 12 - sale_aliquot
+                    safe_float(item['unit_price']),                               # 13 - price
+                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8,  # 14 - total_net_cost
+                    safe_float(item['tax_amount']) * 0.8,                         # 15 - total_tax_cost
+                    safe_float(item['quantity']) * safe_float(item['unit_price']) * 0.8 + safe_float(item['tax_amount']) * 0.8,  # 16 - total_cost
+                    safe_float(item['subtotal']),                                 # 17 - total_net_gross
+                    safe_float(item['tax_amount']),                               # 18 - total_tax_gross
+                    safe_float(item['total']),                                    # 19 - total_gross
+                    safe_float(item.get('discount_percentage', 0)),               # 20 - percent_discount
+                    safe_float(item.get('discount_amount', 0)),                   # 21 - discount
+                    safe_float(item['subtotal']) - safe_float(item.get('discount_amount', 0)),  # 22 - total_net
+                    safe_float(item['tax_amount']),                               # 23 - total_tax
+                    safe_float(item['total']),                                    # 24 - total
+                    '02',                                                          # 25 - coin_code
+                    16,                                                            # 26 - buy_aliquot
+                    "01"
                 ))
                 
                 line = pg_cursor.fetchone()[0]
