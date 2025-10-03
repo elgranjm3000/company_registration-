@@ -3,3 +3,4 @@ pyinstaller==6.1.0
 pillow==10.1.0
 psycopg2-binary==2.9.7
 bcrypt==4.3.0
+python-dotenv==1.0.0

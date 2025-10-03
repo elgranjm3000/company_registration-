@@ -13,6 +13,11 @@ import bcrypt
 import json
 import base64
 import uuid
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 def get_mac_address():
     # Obtiene la MAC address como un entero
@@ -74,18 +79,18 @@ class CompleteSyncApp:
         
         # Configuración de bases de datos
         self.postgresql_config = {
-            'host': 'localhost',
-            'database': 'pruebadb',
-            'user': 'postgres',
-            'password': 'muentes123.'
+            'host': os.getenv('DB_HOST'),
+            'database': os.getenv('DB_DATABASE'),
+            'user': os.getenv('DB_USER'),
+            'password': os.getenv('DB_PASSWORD')
         }
         
         # Configuración MySQL con valores fijos (ocultos al usuario)
         self.mysql_config = {
-            'host': '91.238.160.176',  # Valor fijo oculto
-            'database': 'chrystal_movil',
-            'user': 'chrystal_app',
-            'password': 'muentes123.'  # Valor fijo oculto
+            'host': os.getenv('DB_HOST_MYSQL'),  # Valor fijo oculto
+            'database': os.getenv('DB_PORT_DATABASE_MYSQL'),
+            'user': os.getenv('DB_USER_MYSQL'),
+            'password': os.getenv('DB_PASSWORD_MYSQL')  # Valor fijo oculto
         }
         #self.mysql_config = {
         #    'host': 'localhost',  # Valor fijo oculto
@@ -200,23 +205,9 @@ class CompleteSyncApp:
         pg_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         pg_frame.columnconfigure(1, weight=1)
         
-        ttk.Label(pg_frame, text="Host:").grid(row=0, column=0, sticky=tk.W)
-        self.pg_host_var = tk.StringVar(value=self.postgresql_config['host'])
-        ttk.Entry(pg_frame, textvariable=self.pg_host_var, width=25).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
-        
-        ttk.Label(pg_frame, text="Database:").grid(row=1, column=0, sticky=tk.W)
-        self.pg_db_var = tk.StringVar(value=self.postgresql_config['database'])
-        ttk.Entry(pg_frame, textvariable=self.pg_db_var, width=25).grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
-        
-        ttk.Label(pg_frame, text="Usuario:").grid(row=2, column=0, sticky=tk.W)
-        self.pg_user_var = tk.StringVar(value=self.postgresql_config['user'])
-        ttk.Entry(pg_frame, textvariable=self.pg_user_var, width=25).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
-        
-        ttk.Label(pg_frame, text="Password:").grid(row=3, column=0, sticky=tk.W)
-        self.pg_pass_var = tk.StringVar(value=self.postgresql_config['password'])
-        ttk.Entry(pg_frame, textvariable=self.pg_pass_var, show="*", width=25).grid(row=3, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
-        
-      
+        info_label = ttk.Label(pg_frame, text="Nota: Host y contraseña preconfigurados", 
+                              font=('Arial', 8), foreground='#666666')
+        info_label.grid(row=2, column=0, columnspan=2, pady=(5, 0))
         
         # Configuración MySQL (solo campos visibles - host y password ocultos)
         mysql_frame = ttk.LabelFrame(scrollable_frame, text="MySQL (Destino)", padding="10")
@@ -235,18 +226,18 @@ class CompleteSyncApp:
         company_frame.columnconfigure(1, weight=1)
         
         ttk.Label(company_frame, text="RIF:*").grid(row=0, column=0, sticky=tk.W)
-        self.company_rif_var = tk.StringVar(value="J502741283")
-        rif_entry = ttk.Entry(company_frame, textvariable=self.company_rif_var, width=25)
+        self.company_rif_var = tk.StringVar(value=os.getenv('RIF'))
+        rif_entry = ttk.Entry(company_frame, textvariable=self.company_rif_var, width=25,state='disabled')
         rif_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
         ttk.Label(company_frame, text="Email:*").grid(row=1, column=0, sticky=tk.W)
-        self.company_email_var = tk.StringVar(value="multiserviciosleblanc@gmail.com")
-        email_entry = ttk.Entry(company_frame, textvariable=self.company_email_var, width=25)
+        self.company_email_var = tk.StringVar(value=os.getenv('EMAIL'))
+        email_entry = ttk.Entry(company_frame, textvariable=self.company_email_var, width=25,state='disabled')
         email_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
         ttk.Label(company_frame, text="Nombre:*").grid(row=2, column=0, sticky=tk.W)
-        self.company_name_var = tk.StringVar(value="MULTISERVICIOS LEBLANC ON LINE, C.A")
-        name_entry = ttk.Entry(company_frame, textvariable=self.company_name_var, width=25)
+        self.company_name_var = tk.StringVar(value=os.getenv('COMPANY_NOMBRE'))
+        name_entry = ttk.Entry(company_frame, textvariable=self.company_name_var, width=25,state='disabled')
         name_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
         # Validación en tiempo real del RIF
@@ -397,26 +388,26 @@ class CompleteSyncApp:
     def update_config(self):
         """Actualizar configuración desde los campos"""
         self.postgresql_config = {
-            'host': self.pg_host_var.get(),
-            'database': self.pg_db_var.get(),
-            'user': self.pg_user_var.get(),
-            'password': self.pg_pass_var.get()
+            'host': os.getenv('DB_HOST'),  # Valor fijo oculto
+            'database': os.getenv('DB_DATABASE'),
+            'user': os.getenv('DB_USER'),
+            'password': os.getenv('DB_PASSWORD')  # Valor fijo oculto
         }
         
         # MySQL config: mantener valores fijos para host y password, actualizar solo los campos visibles
-        #self.mysql_config = {
-        #    'host': '91.238.160.176',  # Valor fijo
-        #    'database': 'chrystal_movil',
-        #    'user': 'chrystal_app',
-        #    'password': 'muentes123.'  # Valor fijo
-        #}
-        
         self.mysql_config = {
-            'host': 'localhost',  # Valor fijo
-            'database': 'salesapi',
-            'user': 'root',
-            'password': 'tiger'  # Valor fijo
+            'host': os.getenv('DB_HOST_MYSQL'),  # Valor fijo oculto
+            'database': os.getenv('DB_PORT_DATABASE_MYSQL'),
+            'user': os.getenv('DB_USER_MYSQL'),
+            'password': os.getenv('DB_PASSWORD_MYSQL')  # Valor fijo oculto
         }
+        
+        #self.mysql_config = {
+        #    'host': 'localhost',  # Valor fijo
+        #    'database': 'salesapi',
+        #    'user': 'root',
+        #    'password': 'tiger'  # Valor fijo
+        #}
     
     def test_connections(self):
         """Probar conexiones a ambas bases de datos"""
@@ -1054,7 +1045,8 @@ class CompleteSyncApp:
                 description,
                 address,
                 client_id,
-                email
+                email,
+                phone
             FROM clients 
             WHERE code IS NOT NULL 
               AND code != ''
@@ -1082,7 +1074,7 @@ class CompleteSyncApp:
                 if not self.sync_running:
                     break
                     
-                code, description, address, client_id, email = client_data
+                code, description, address, client_id, email, phone = client_data
                 customer_count += 1
                 # Verificar si el customer ya existe
                 check_query = "SELECT id, name FROM customers WHERE document_number = %s AND company_id = %s"
@@ -1099,10 +1091,10 @@ class CompleteSyncApp:
                     if existing_name != description:
                         update_query = """
                         UPDATE customers 
-                        SET name = %s, email = %s, address = %s, updated_at = NOW() 
+                        SET name = %s, email = %s, address = %s, phone = %s, updated_at = NOW() 
                         WHERE id = %s
                         """
-                        mysql_cursor.execute(update_query, (description, email, address, existing_id))
+                        mysql_cursor.execute(update_query, (description, email, address, phone, existing_id))
                         updated_count += 1
                     else:
                         # No hacer nada si no hay cambios
@@ -1111,11 +1103,19 @@ class CompleteSyncApp:
                     # INSERTAR nuevo
                     insert_query = """
                     INSERT INTO customers (
-                        company_id, name, email, document_number, address, status, created_at, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, 'active', NOW(), NOW())
+                        company_id, name, email, document_number, address, phone, status, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     mysql_cursor.execute(insert_query, (
-                        self.company_id, description, email, code, address if address else None
+                        self.company_id, 
+                        description, 
+                        email, 
+                        code, 
+                        address if address else None, 
+                        phone if phone else None,
+                        'active',
+                        datetime.now(),
+                        datetime.now()
                     ))
                     inserted_count += 1
                 
