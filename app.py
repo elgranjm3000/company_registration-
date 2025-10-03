@@ -1428,9 +1428,9 @@ class CompleteSyncApp:
                     except Exception as e:
                         pg_conn.rollback()
                         error_count += 1
-                        self.log_message(f"Error migrando quote {quote['idQuotes']}: {str(e)}", "error")
+                        ##self.log_message(f"Error migrando quote {quote['idQuotes']}: {str(e)}", "error")
                 
-                self.log_message(f"Migración completada: {migrated_count} exitosas, {error_count} errores", "success")
+                self.log_message(f"Migración completada: {migrated_count} exitosas, {error_count} encontrada", "success")
                 
                 mysql_cursor.close()
                 mysql_conn.close()
@@ -1466,8 +1466,7 @@ class CompleteSyncApp:
                     numeration_income
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s
-                )
-                ON CONFLICT (code) DO NOTHING;
+                )               
                 """
                 
                 pg_cursor.execute(sql_insert_station, (
@@ -1629,20 +1628,27 @@ class CompleteSyncApp:
                 ))
             
             # 4. Insertar impuestos agrupados
-            taxes_dict = {}
-            for item in items:
-                tax_percent = safe_float(item.get('tax_amount', 0)) / safe_float(item.get('subtotal', 1)) * 100 if item.get('subtotal') else 0
-                tax_code = self.get_tax_code(tax_percent)
+            quote_tax_amount = safe_float(quote.get('tax_amount', 0))
+            quote_subtotal = safe_float(quote.get('subtotal', 0))
+            quote_discount = safe_float(quote.get('discount_amount', 0))
+
+            # Solo insertar si hay impuestos
+            if quote_tax_amount > 0:
+                # Calcular la alícuota desde la cotización
+                quote_aliquot = (quote_tax_amount / quote_subtotal * 100) if quote_subtotal > 0 else 16.0
                 
-                if tax_code not in taxes_dict:
-                    taxes_dict[tax_code] = {'aliquot': tax_percent, 'taxable': 0.0, 'tax': 0.0}
+                # Base imponible (subtotal menos descuento)
+                taxable_amount = quote_subtotal - quote_discount
                 
-                taxes_dict[tax_code]['taxable'] += safe_float(item['subtotal']) - safe_float(item.get('discount_amount', 0))
-                taxes_dict[tax_code]['tax'] += safe_float(item.get('tax_amount', 0))
-            
-            for tax_code, tax_data in taxes_dict.items():
-                if tax_data['tax'] == 0:
-                    continue
+                tax_code = '01'
+                
+                print("Insertando impuesto:")
+                print("  Correlativo:", correlativo)
+                print("  Código de impuesto:", tax_code)
+                print("  Aliquota (%):", round(quote_aliquot, 2))
+                print("  Base imponible:", round(taxable_amount, 2))
+                print("  Monto de impuesto:", round(quote_tax_amount, 2))
+                print("  Tipo de impuesto:", 1)
                 
                 sql_tax = """
                 INSERT INTO public.sales_operation_taxes (
@@ -1651,8 +1657,8 @@ class CompleteSyncApp:
                 """
                 
                 pg_cursor.execute(sql_tax, (
-                    correlativo, tax_code, tax_data['aliquot'],
-                    tax_data['taxable'], tax_data['tax'], 1
+                    correlativo, tax_code, quote_aliquot,
+                    taxable_amount, quote_tax_amount, 1
                 ))
                 
                 sql_tax_coins = """
@@ -1662,7 +1668,7 @@ class CompleteSyncApp:
                 """
                 
                 pg_cursor.execute(sql_tax_coins, (
-                    correlativo, tax_code, tax_data['taxable'], tax_data['tax'], '02'
+                    correlativo, tax_code, taxable_amount, quote_tax_amount, '02'
                 ))
             
             pg_cursor.close()
