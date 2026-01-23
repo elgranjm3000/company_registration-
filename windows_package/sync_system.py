@@ -130,6 +130,26 @@ class SyncModule:
             'quotes': {'nuevos': 0, 'errores': 0}
         }
 
+    def log_message(self, mensaje: str, tipo: str = "info"):
+        """
+        Método compatible con SmartSyncComplete
+        Muestra logs en consola con formato
+        """
+        prefijos = {
+            'info': 'ℹ️ INFO',
+            'success': '✅ SUCCESS',
+            'warning': '⚠️ WARNING',
+            'error': '❌ ERROR',
+            'debug': '🔍 DEBUG'
+        }
+
+        prefijo = prefijos.get(tipo, 'ℹ️ INFO')
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] {prefijo}: {mensaje}")
+
+        # También guardar en archivo de log
+        log(mensaje, tipo.upper())
+
     def conectar_postgresql(self):
         """Conecta a PostgreSQL"""
         try:
@@ -684,6 +704,29 @@ class ManagerWindow:
         self.txt_logs.insert("end", f"[{timestamp}] {mensaje}\n")
         self.txt_logs.see("end")
         self.txt_logs.config(state="disabled")
+
+    def log_message(self, mensaje: str, tipo: str = "info"):
+        """
+        Método compatible con SmartSyncComplete
+        Muestra logs en tiempo real en la GUI
+        """
+        # Convertir tipos a colores/emojis
+        prefijos = {
+            'info': 'ℹ️',
+            'success': '✅',
+            'warning': '⚠️',
+            'error': '❌',
+            'debug': '🔍'
+        }
+
+        prefijo = prefijos.get(tipo, '•')
+        mensaje_formateado = f"{prefijo} {mensaje}"
+
+        # Agregar a la GUI
+        self.agregar_log(mensaje_formateado)
+
+        # Forzar actualización de la GUI para mostrar en tiempo real
+        self.root.update_idletasks()
 
 # ==============================================================================
 # MAIN - INICIO DEL SISTEMA
