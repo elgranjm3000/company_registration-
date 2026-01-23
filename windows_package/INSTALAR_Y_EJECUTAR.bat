@@ -29,21 +29,24 @@ python --version
 
 echo.
 REM [2/4] Instalar dependencias
-echo Instalando dependencias...
+echo Instalando dependencias basicas...
 pip install psycopg2-binary mysql-connector-python 2>nul
+
+echo Instalando dependencias para System Tray...
+pip install pystray Pillow 2>nul
 
 echo.
 REM [3/4] Verificar dependencias
 echo Verificando imports...
-python -c "import psycopg2; import mysql.connector; import tkinter; print('OK: Dependencias correctas')" 2>nul
+python -c "import psycopg2; import mysql.connector; import tkinter; import pystray; from PIL import Image; print('OK: Todas las dependencias correctas')" 2>nul
 if %errorlevel% neq 0 (
     echo.
-    echo ERROR: No se pudieron importar las dependencias
+    echo ERROR: No se pudieron importar todas las dependencias
     echo.
     echo Posibles soluciones:
     echo   1. Asegurate de tener Python 3.8+ instalado
     echo   2. Ejecuta: python -m pip install --upgrade pip
-    echo   3. Ejecuta: pip install --upgrade psycopg2-binary mysql-connector-python
+    echo   3. Ejecuta: pip install --upgrade psycopg2-binary mysql-connector-python pystray Pillow
     echo.
     pause
     exit /b 1
