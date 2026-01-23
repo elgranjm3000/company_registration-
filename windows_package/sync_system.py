@@ -499,12 +499,11 @@ class ConfigWindow:
         # Configuración
         config_nuevo['sync_interval_minutes'] = self.intervalo.get()
 
-        # Validar
+        # Validar (postgres_password puede ser blanco)
         if not all([
             config_nuevo.get('postgres_host'),
             config_nuevo.get('postgres_database'),
             config_nuevo.get('postgres_user'),
-            config_nuevo.get('postgres_password'),
             config_nuevo.get('mysql_host'),
             config_nuevo.get('mysql_database'),
             config_nuevo.get('mysql_user'),
