@@ -1192,10 +1192,12 @@ class SmartSyncComplete:
         self._log("Sincronizando changes de products a MySQL...", "info")
 
         try:
-            # Crear mapeo de categorías
+            # Crear mapeo de categorías existentes en MySQL
             self.mysql_cursor.execute("SELECT name, id FROM categories WHERE company_id = %s",
                                      (self.company_id,))
             category_mapping = dict(self.mysql_cursor.fetchall())
+
+            products_sin_categoria = 0
 
             # Nuevos
             for producto in cambios['nuevos']:
@@ -1203,7 +1205,15 @@ class SmartSyncComplete:
                     break
 
                 code = producto[0]
-                category_id = category_mapping.get(producto[3], 1)
+                category_name = producto[3]
+
+                # Verificar que la categoría existe en MySQL
+                if category_name not in category_mapping:
+                    self._log(f"  ⚠️ Product {code} omitido: categoría '{category_name}' no existe en MySQL", "warning")
+                    products_sin_categoria += 1
+                    continue
+
+                category_id = category_mapping[category_name]
 
                 insert_query = """
                 INSERT INTO products (
@@ -1239,7 +1249,15 @@ class SmartSyncComplete:
                     break
 
                 code = producto[0]
-                category_id = category_mapping.get(producto[3], 1)
+                category_name = producto[3]
+
+                # Verificar que la categoría existe en MySQL
+                if category_name not in category_mapping:
+                    self._log(f"  ⚠️ Product {code} omitido: categoría '{category_name}' no existe en MySQL", "warning")
+                    products_sin_categoria += 1
+                    continue
+
+                category_id = category_mapping[category_name]
 
                 update_query = """
                 UPDATE products SET
@@ -1257,6 +1275,10 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['products']['modificados'] += 1
+
+            # Reportar productos omitidos
+            if products_sin_categoria > 0:
+                self._log(f"  ⚠️ {products_sin_categoria} productos omitidos por categoría inexistente", "warning")
 
             # Eliminados (opcional - descomentar para activar)
             # for producto in cambios['eliminados']:
@@ -1433,10 +1455,21 @@ class SmartSyncComplete:
                 self._log("✨ No hay cambios que sincronizar", "success")
                 return True
 
-            # Sincronizar cambios a MySQL
-            self.sincronizar_products_mysql(cambios_products)
-            self.sincronizar_customers_mysql(cambios_customers)
+            # SINCRONIZAR EN ORDEN CORRECTO (dependencias primero)
+            # 1. Categories (requerido por products)
+            self._log("", "info")
+            self._log("📦 SINCRONIZANDO CATEGORIES...", "info")
             self.sincronizar_categories_mysql(cambios_categories)
+
+            # 2. Products (dependen de categories)
+            self._log("", "info")
+            self._log("📦 SINCRONIZANDO PRODUCTS...", "info")
+            self.sincronizar_products_mysql(cambios_products)
+
+            # 3. Customers (independiente)
+            self._log("", "info")
+            self._log("👥 SINCRONIZANDO CUSTOMERS...", "info")
+            self.sincronizar_customers_mysql(cambios_customers)
 
             # Sincronizar quotes a PostgreSQL (dirección opuesta)
             self.sincronizar_quotes_postgresql(cambios_quotes)

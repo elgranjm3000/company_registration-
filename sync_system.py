@@ -191,15 +191,32 @@ class SyncModule:
             sync_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(sync_module)
 
-            # Crear instancia y ejecutar
-            sync_system = sync_module.SmartSyncSystem(
-                pg_conn=self.pg_conn,
-                mysql_conn=self.mysql_conn,
-                company_rif=self.config['company_rif'],
-                company_email=self.config['company_email']
+            # Preparar configuraciones
+            postgresql_config = {
+                'host': self.config['postgres_host'],
+                'port': self.config['postgres_port'],
+                'database': self.config['postgres_database'],
+                'user': self.config['postgres_user'],
+                'password': self.config['postgres_password']
+            }
+
+            mysql_config = {
+                'host': self.config['mysql_host'],
+                'port': self.config['mysql_port'],
+                'database': self.config['mysql_database'],
+                'user': self.config['mysql_user'],
+                'password': self.config['mysql_password']
+            }
+
+            # Crear instancia y ejecutar (self es el 'app')
+            sync_system = sync_module.SmartSyncComplete(
+                app=self,
+                postgresql_config=postgresql_config,
+                mysql_config=mysql_config,
+                company_id=26  # Company ID para Multiservicios Leblanc
             )
 
-            resultado = sync_system.ejecutar_sincronizacion_completa()
+            resultado = sync_system.ejecutar_sync_completa()
 
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
             return resultado

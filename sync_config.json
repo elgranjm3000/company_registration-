@@ -1,0 +1,17 @@
+{
+  "postgres_host": "localhost",
+  "postgres_port": "5432",
+  "postgres_database": "dataaa",
+  "postgres_user": "postgres",
+  "postgres_password": "muentes123.",
+  "mysql_host": "91.238.160.176",
+  "mysql_port": "3306",
+  "mysql_database": "chrystal_movil",
+  "mysql_user": "chrystal_app",
+  "mysql_password": "muentes123.",
+  "company_rif": "J502741283",
+  "company_email": "multiserviciosleblanc@gmail.com",
+  "sync_interval_minutes": "30",
+  "configured": true,
+  "first_run": false
+}
