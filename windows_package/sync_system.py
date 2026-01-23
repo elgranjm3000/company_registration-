@@ -213,7 +213,8 @@ class SyncModule:
                 app=self,
                 postgresql_config=postgresql_config,
                 mysql_config=mysql_config,
-                company_id=27  # Company ID para Multiservicios Leblanc
+                company_rif=self.config['company_rif'],
+                company_email=self.config['company_email']
             )
 
             resultado = sync_system.ejecutar_sync_completa()

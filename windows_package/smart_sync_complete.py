@@ -47,12 +47,12 @@ class SmartSyncComplete:
     Módulo de sincronización inteligente con tabla de hashes
 
     Uso:
-        sync = SmartSyncComplete(app, postgresql_config, mysql_config, company_id)
+        sync = SmartSyncComplete(app, postgresql_config, mysql_config, company_rif, company_email)
         sync.inicializar_tabla_hashes()
         sync.ejecutar_sync_completa()
     """
 
-    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_id: int):
+    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str):
         """
         Inicializar módulo de sincronización
 
@@ -60,12 +60,15 @@ class SmartSyncComplete:
             app: Instancia de CompleteSyncApp o ServiceApp
             postgresql_config: Dict con configuración PostgreSQL
             mysql_config: Dict con configuración MySQL
-            company_id: ID de compañía
+            company_rif: RIF de la empresa
+            company_email: Email de la empresa
         """
         self.app = app
         self.postgresql_config = postgresql_config
         self.mysql_config = mysql_config
-        self.company_id = company_id
+        self.company_rif = company_rif
+        self.company_email = company_email
+        self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
 
         # Estadísticas
@@ -182,6 +185,46 @@ class SmartSyncComplete:
 
         except Exception as e:
             self._log(f"❌ Error conectando bases de datos: {str(e)}", "error")
+            return False
+
+    def _obtener_company_id(self) -> bool:
+        """
+        Obtener company_id desde MySQL basado en RIF y email
+        Compatible con app.py - busca la empresa por RIF y email
+
+        Returns:
+            True si se encontró el company_id, False si no
+        """
+        try:
+            if not self.mysql_cursor:
+                self._log("❌ No hay conexión a MySQL para obtener company_id", "error")
+                return False
+
+            self._log(f"🔍 Buscando empresa: RIF={self.company_rif}, Email={self.company_email}", "info")
+
+            # Buscar empresa por RIF y email (como en app.py línea 688)
+            query = """
+            SELECT id, name
+            FROM companies
+            WHERE rif = %s AND email = %s
+            LIMIT 1
+            """
+
+            self.mysql_cursor.execute(query, (self.company_rif, self.company_email))
+            result = self.mysql_cursor.fetchone()
+
+            if result:
+                self.company_id = result[0]
+                company_name = result[1]
+                self._log(f"✅ Empresa encontrada: {company_name} (ID: {self.company_id})", "success")
+                return True
+            else:
+                self._log(f"❌ No se encontró empresa con RIF={self.company_rif} y email={self.company_email}", "error")
+                self._log("   💡 Asegúrate de que la empresa esté registrada en MySQL (tabla 'companies')", "warning")
+                return False
+
+        except Exception as e:
+            self._log(f"❌ Error obteniendo company_id: {str(e)}", "error")
             return False
 
     def _cerrar_conexiones(self):
@@ -1603,6 +1646,11 @@ class SmartSyncComplete:
         try:
             # Conectar bases de datos
             if not self._conectar_bases_datos():
+                return False
+
+            # Obtener company_id desde MySQL
+            if not self._obtener_company_id():
+                self._log("❌ No se pudo obtener el company_id. Verifica RIF y email en la configuración.", "error")
                 return False
 
             # Detectar cambios en cada entidad
