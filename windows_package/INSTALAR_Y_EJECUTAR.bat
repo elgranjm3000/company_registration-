@@ -61,9 +61,10 @@ echo 1. Configurar sistema (primera vez - GUI)
 echo 2. Sincronizar ahora (consola)
 echo 3. Modo servicio (consola - continuo)
 echo 4. Administrador (GUI)
+echo 5. Modo System Tray (icono en barra de tareas - Transparente)
 echo.
 
-set /p opcion="Selecciona una opcion (1-4): "
+set /p opcion="Selecciona una opcion (1-5): "
 
 echo.
 
@@ -83,6 +84,10 @@ if "%opcion%"=="1" (
 ) else if "%opcion%"=="4" (
     echo Iniciando administrador GUI...
     python sync_system.py --mode manager
+) else if "%opcion%"=="5" (
+    echo Iniciando modo System Tray...
+    echo El icono aparecera en la barra de tareas (junto al reloj)
+    python sync_system.py --mode tray
 ) else (
     echo Opcion no valida: %opcion%
 )

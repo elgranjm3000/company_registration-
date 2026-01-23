@@ -729,13 +729,244 @@ class ManagerWindow:
         self.root.update_idletasks()
 
 # ==============================================================================
+# SYSTEM TRAY SERVICE (Modo transparente con icono en barra de tareas)
+# ==============================================================================
+
+class SystemTrayService:
+    """
+    Servicio en segundo plano con icono en la barra de tareas
+    El usuario no ve ventana, solo el icono
+    """
+
+    def __init__(self, config):
+        self.config = config
+        self.sync_running = True
+        self.last_sync_time = None
+        self.last_sync_status = "Esperando..."
+        self.root = None
+        self.icon = None
+
+    def crear_icono(self):
+        """Crea icono simple para la bandeja del sistema"""
+        try:
+            from PIL import Image, ImageDraw
+            # Crear imagen simple 64x64
+            image = Image.new('RGB', (64, 64), color='white')
+            draw = ImageDraw.Draw(image)
+
+            # Dibujar círculo azul (sincronización)
+            draw.ellipse([10, 10, 54, 54], fill='#3498db', outline='#2980b9', width=3)
+
+            # Dibujar flechas de sincronización
+            draw.polygon([(20, 32), (32, 20), (32, 28), (44, 28), (44, 20), (56, 32), (44, 44), (44, 36), (32, 36), (32, 44)], fill='white')
+
+            return image
+        except ImportError:
+            log("ERROR: PIL no está instalado. Ejecute: pip install Pillow", "ERROR")
+            return None
+        except Exception as e:
+            log(f"Error creando icono: {e}", "ERROR")
+            return None
+
+    def log_message(self, mensaje: str, tipo: str = "info"):
+        """Método compatible con SmartSyncComplete"""
+        # Guardar en log pero no mostrar nada (servicio transparente)
+        log(f"[TRAY] {mensaje}", tipo.upper())
+
+    def ejecutar_sincronizacion(self):
+        """Ejecuta una sincronización"""
+        try:
+            # Importar módulo de sincronización
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "smart_sync_complete",
+                os.path.join(BASE_DIR, "smart_sync_complete.py")
+            )
+            sync_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sync_module)
+
+            postgresql_config = {
+                'host': self.config['postgres_host'],
+                'port': self.config['postgres_port'],
+                'database': self.config['postgres_database'],
+                'user': self.config['postgres_user'],
+                'password': self.config['postgres_password']
+            }
+
+            mysql_config = {
+                'host': self.config['mysql_host'],
+                'port': self.config['mysql_port'],
+                'database': self.config['mysql_database'],
+                'user': self.config['mysql_user'],
+                'password': self.config['mysql_password']
+            }
+
+            sync_system = sync_module.SmartSyncComplete(
+                app=self,
+                postgresql_config=postgresql_config,
+                mysql_config=mysql_config,
+                company_rif=self.config['company_rif'],
+                company_email=self.config['company_email']
+            )
+
+            sync_system.inicializar_tabla_hashes()
+            resultado = sync_system.ejecutar_sync_completa()
+
+            if resultado:
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "✅ Exitosa"
+            else:
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "❌ Error"
+
+            self.actualizar_tooltip()
+
+        except Exception as e:
+            log(f"Error en sincronización: {e}", "ERROR")
+            self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.last_sync_status = f"❌ Error: {str(e)[:30]}"
+            self.actualizar_tooltip()
+
+    def actualizar_tooltip(self):
+        """Actualiza el tooltip del icono"""
+        if self.icon:
+            tooltip = f"""Sync System v2.0
+
+Estado: {'🔄 Sincronizando...' if self.sync_running else '⏸️ Pausado'}
+Última sync: {self.last_sync_time or '--'}
+Estado: {self.last_sync_status}
+
+RIF: {self.config['company_rif']}
+
+Clic izquierdo: Ver logs
+Clic derecho: Menú"""
+            self.icon.tooltip = tooltip
+
+    def ver_logs(self):
+        """Abre ventana de logs"""
+        log_window = tk.Toplevel()
+        log_window.title("Logs de Sincronización")
+        log_window.geometry("800x600")
+
+        txt = scrolledtext.ScrolledText(log_window, state="normal")
+        txt.pack(fill="both", expand=True)
+
+        # Cargar logs del archivo
+        try:
+            log_dir = os.path.join(BASE_DIR, "logs")
+            if os.path.exists(log_dir):
+                log_files = sorted([f for f in os.listdir(log_dir) if f.endswith('.txt')], reverse=True)
+                if log_files:
+                    with open(os.path.join(log_dir, log_files[0]), 'r', encoding='utf-8') as f:
+                        txt.insert("1.0", f.read())
+                else:
+                    txt.insert("1.0", "No hay archivos de log aún.")
+            else:
+                txt.insert("1.0", "No existe directorio de logs.")
+        except Exception as e:
+            txt.insert("1.0", f"Error leyendo logs: {e}")
+
+        txt.config(state="disabled")
+
+    def sincronizar_ahora(self):
+        """Sincronización manual desde el menú"""
+        import threading
+        thread = threading.Thread(target=self.ejecutar_sincronizacion)
+        thread.daemon = True
+        thread.start()
+
+    def salir(self):
+        """Salir del servicio"""
+        self.sync_running = False
+        if self.icon:
+            self.icon.stop()
+        sys.exit(0)
+
+    def iniciar(self):
+        """Inicia el servicio en la bandeja del sistema"""
+        try:
+            import pystray
+
+            # Crear icono
+            icon_image = self.crear_icono()
+            if not icon_image:
+                log("No se pudo crear el icono. Saliendo.", "ERROR")
+                return
+
+            # Crear menú contextual
+            menu = pystray.Menu(
+                pystray.MenuItem('📊 Ver Logs', self.ver_logs),
+                pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
+                pystray.MenuItem('⚙️ Configuración', lambda: self.abrir_config()),
+                pystray.MenuItem('❌ Salir', self.salir)
+            )
+
+            # Crear icono en la bandeja
+            self.icon = pystray.Icon("Sync System", icon_image, "Sync System - Iniciando...", menu)
+            self.actualizar_tooltip()
+
+            # Iniciar sincronización automática en thread
+            import threading
+            sync_thread = threading.Thread(target=self.bucle_sincronizacion)
+            sync_thread.daemon = True
+            sync_thread.start()
+
+            # Ejecutar icono (bloqueante)
+            log("✅ Servicio iniciado en la bandeja del sistema", "INFO")
+            log("💡 El icono está en la barra de tareas (junto al reloj)", "INFO")
+            self.icon.run()
+
+        except ImportError:
+            log("ERROR: pystray no está instalado", "ERROR")
+            log("Ejecute: pip install pystray Pillow", "ERROR")
+            log("", "INFO")
+            log("Instalación:", "INFO")
+            log("  pip install pystray Pillow", "INFO")
+        except Exception as e:
+            log(f"Error iniciando servicio: {e}", "ERROR")
+
+    def bucle_sincronizacion(self):
+        """Bucle de sincronización automática"""
+        intervalo_minutos = int(self.config.get('sync_interval_minutes', 30))
+        intervalo_segundos = intervalo_minutos * 60
+
+        log(f"Sincronización automática cada {intervalo_minutos} minutos", "INFO")
+
+        while self.sync_running:
+            try:
+                time.sleep(intervalo_segundos)
+
+                if self.sync_running:
+                    log(f"🔄 Iniciando sincronización programada...", "INFO")
+                    self.ejecutar_sincronizacion()
+
+            except Exception as e:
+                log(f"Error en bucle de sincronización: {e}", "ERROR")
+
+    def abrir_config(self):
+        """Abre ventana de configuración"""
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.title("Configuración")
+        app = ConfigWindow(root)
+        root.mainloop()
+
+        # Recargar configuración
+        self.config = cargar_config()
+
+        # Actualizar intervalo
+        log("Configuración actualizada", "INFO")
+
+# ==============================================================================
 # MAIN - INICIO DEL SISTEMA
 # ==============================================================================
 
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
-    parser.add_argument("--mode", choices=["config", "manager", "service", "sync"],
+    parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
                        default="auto", help="Modo de ejecución")
 
     args = parser.parse_args()
@@ -746,7 +977,7 @@ def main():
         if not config.get('configured') or config.get('first_run'):
             args.mode = "config"
         else:
-            args.mode = "manager"
+            args.mode = "tray"  # Por defecto: modo tray (icono en barra de tareas)
 
     # Ejecutar según modo
     if args.mode == "config":
@@ -760,6 +991,18 @@ def main():
         root = tk.Tk()
         app = ManagerWindow(root)
         root.mainloop()
+
+    elif args.mode == "tray":
+        # Modo System Tray (icono en barra de tareas)
+        print("=== MODO SYSTEM TRAY ===")
+        print("🔵 El icono está en la barra de tareas (junto al reloj)")
+        print("📊 Clic izquierdo: Ver logs")
+        print("⚙️  Clic derecho: Menú de opciones")
+        print("❌ Para salir: Clic derecho → Salir")
+        print("")
+
+        tray = SystemTrayService(config)
+        tray.iniciar()
 
     elif args.mode == "sync":
         # Modo sincronización única

@@ -57,8 +57,37 @@ El sistema crea automáticamente una carpeta `logs/` donde guarda un archivo `.t
 
 1. **Config** - Configuración inicial (GUI)
 2. **Sync** - Sincronización única
-3. **Service** - Modo servicio continuo
+3. **Service** - Modo servicio continuo (consola)
 4. **Manager** - Interfaz de administración
+5. **System Tray** ⭐ - Icono en barra de tareas (Transparente)
+
+## MODO SYSTEM TRAY (Recomendado para producción):
+
+**Características:**
+- 🔵 Icono en la barra de tareas (junto al reloj)
+- 👤 Usuario normal no ve ventanas (transparente)
+- 📊 Clic izquierdo: Ver logs de sincronización
+- ⚙️ Clic derecho: Menú de opciones
+  - Ver Logs
+  - Sincronizar Ahora
+  - Configuración
+  - Salir
+- 💡 Tooltip dinámico al pasar el mouse
+  - Estado actual
+  - Última sincronización
+  - RIF de la empresa
+
+**Instalación de dependencias:**
+```bash
+pip install pystray Pillow
+```
+
+**Uso:**
+```
+INSTALAR_Y_EJECUTAR.bat → Opción 5
+```
+
+El sistema se iniciará automáticamente y sincronizará según el intervalo configurado.
 
 ## QUÉ HACE EL SISTEMA:
 
