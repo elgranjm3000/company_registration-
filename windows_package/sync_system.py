@@ -217,6 +217,11 @@ class SyncModule:
                 company_email=self.config['company_email']
             )
 
+            # Inicializar tabla sync_hashes si no existe
+            if not sync_system.inicializar_tabla_hashes():
+                log("Error: No se pudo inicializar la tabla sync_hashes", "ERROR")
+                return False
+
             resultado = sync_system.ejecutar_sync_completa()
 
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
