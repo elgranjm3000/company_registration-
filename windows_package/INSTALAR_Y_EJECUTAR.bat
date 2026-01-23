@@ -1,0 +1,90 @@
+@echo off
+setlocal enabledelayedexpansion
+title Instalar Dependencias y Ejecutar
+
+cd /d "%~dp0"
+
+echo ========================================
+echo   INSTALAR DEPENDENCIAS Y EJECUTAR
+echo ========================================
+echo.
+
+REM [1/4] Verificar Python
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ERROR: Python no esta instalado
+    echo.
+    echo Pasos:
+    echo   1. Ve a https://www.python.org/downloads/
+    echo   2. Descarga Python 3.8 o superior
+    echo   3. IMPORTANTE: Marca "Add Python to PATH"
+    echo   4. Instala
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Python encontrado
+python --version
+
+echo.
+REM [2/4] Instalar dependencias
+echo Instalando dependencias...
+pip install psycopg2-binary mysql-connector-python 2>nul
+
+echo.
+REM [3/4] Verificar dependencias
+echo Verificando imports...
+python -c "import psycopg2; import mysql.connector; import tkinter; print('OK: Dependencias correctas')" 2>nul
+if %errorlevel% neq 0 (
+    echo.
+    echo ERROR: No se pudieron importar las dependencias
+    echo.
+    echo Posibles soluciones:
+    echo   1. Asegurate de tener Python 3.8+ instalado
+    echo   2. Ejecuta: python -m pip install --upgrade pip
+    echo   3. Ejecuta: pip install --upgrade psycopg2-binary mysql-connector-python
+    echo.
+    pause
+    exit /b 1
+)
+
+echo.
+REM [4/4] Menu de ejecucion
+echo ========================================
+echo   DEPENDENCIAS INSTALADAS CORRECTAMENTE
+echo ========================================
+echo.
+echo Selecciona modo de ejecucion:
+echo.
+echo 1. Configurar sistema (primera vez - GUI)
+echo 2. Sincronizar ahora (consola)
+echo 3. Modo servicio (consola - continuo)
+echo 4. Administrador (GUI)
+echo.
+
+set /p opcion="Selecciona una opcion (1-4): "
+
+echo.
+
+if "%opcion%"=="1" (
+    echo Iniciando configuracion GUI...
+    python sync_system.py --mode config
+) else if "%opcion%"=="2" (
+    echo Iniciando sincronizacion...
+    python sync_system.py --mode sync
+    echo.
+    echo Presiona cualquier tecla para ver resultados...
+    pause
+) else if "%opcion%"=="3" (
+    echo Iniciando modo servicio...
+    echo Presiona Ctrl+C para detener
+    python sync_system.py --mode service
+) else if "%opcion%"=="4" (
+    echo Iniciando administrador GUI...
+    python sync_system.py --mode manager
+) else (
+    echo Opcion no valida: %opcion%
+)
+
+echo.
