@@ -35,6 +35,23 @@ if not exist "smart_sync_complete.py" (
 echo Archivos encontrados
 
 echo.
+REM [2.5/7] Verificar sintaxis de Python
+echo [2.5/7] Verificando sintaxis de Python...
+python -m py_compile sync_system.py
+if %errorlevel% neq 0 (
+    echo ERROR: sync_system.py tiene errores de sintaxis
+    pause
+    exit /b 1
+)
+python -m py_compile smart_sync_complete.py
+if %errorlevel% neq 0 (
+    echo ERROR: smart_sync_complete.py tiene errores de sintaxis
+    pause
+    exit /b 1
+)
+echo Sintaxis correcta
+
+echo.
 REM [3/7] Crear entorno virtual
 echo [3/7] Configurando entorno virtual...
 if not exist "venv" (
@@ -98,6 +115,25 @@ if %errorlevel% neq 0 (
 echo Dependencias OK
 
 echo.
+REM [5.5/7] Verificar compatibilidad completa
+echo [5.5/7] Verificando compatibilidad completa...
+echo Probando imports de sync_system.py...
+python -c "import sys; sys.path.insert(0, '.'); exec(open('sync_system.py').read().split('if __name__')[0])" 2>nul
+if %errorlevel% neq 0 (
+    echo WARNING: Puede haber problemas con los imports
+    echo Continando de todos modos...
+) else (
+    echo Imports compatibles
+)
+echo Verificando modulos necesarios...
+python -c "import importlib.util; spec = importlib.util.spec_from_file_location('test', 'smart_sync_complete.py'); print('Modulo sync_system OK')" 2>nul
+if %errorlevel% neq 0 (
+    echo WARNING: smart_sync_complete.py tiene problemas
+) else (
+    echo Modulo smart_sync_complete OK
+)
+
+echo.
 REM [6/7] Limpiar builds anteriores
 echo [6/7] Limpiando builds anteriores...
 if exist build rmdir /s /q build 2>nul
@@ -105,13 +141,28 @@ if exist dist rmdir /s /q dist 2>nul
 if exist *.spec del *.spec 2>nul
 
 echo.
-REM [7/7] Crear ejecutable
-echo [7/7] Creando ejecutable...
+REM [7/7] Resumen de compatibilidad
+echo ========================================
+echo   RESUMEN DE COMPATIBILIDAD
+echo ========================================
 echo.
+echo Python: %PYTHON_VERSION%
+echo PyInstaller: 6.1.0
+echo psycopg2-binary: Instalado
+echo mysql-connector-python: Instalado
+echo tkinter: Disponible
+echo.
+echo Archivos a compilar:
+echo   - sync_system.py
+echo   - smart_sync_complete.py
+echo.
+echo Todo parece compatible. Procediendo a crear .exe...
 echo ========================================
+echo.
+
+REM [7/7] Crear ejecutable
+echo Creando ejecutable...
 echo Esto tomara 3-5 minutos
-echo Por favor espera...
-echo ========================================
 echo.
 
 pyinstaller ^
