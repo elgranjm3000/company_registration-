@@ -71,7 +71,7 @@ def crear_config_default():
     return {
         "postgres_host": "localhost",
         "postgres_port": "5432",
-        "postgres_database": "dataaa",
+        "postgres_database": "",
         "postgres_user": "postgres",
         "postgres_password": "",
 

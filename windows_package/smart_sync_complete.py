@@ -190,10 +190,16 @@ class SmartSyncComplete:
     def _obtener_company_id(self) -> bool:
         """
         Obtener company_id desde MySQL basado en RIF y email
-        Compatible con app.py - busca la empresa por RIF y email
+        Compatible con app.py - verifica acceso primero, luego companies
+
+        Flujo (igual que app.py sync_companies):
+        1. Verificar que existe en tabla 'acceso' (validación)
+        2. Si existe en acceso, buscar en 'companies'
+        3. Si existe en companies, usar ese ID
+        4. Si no existe en companies, crear nueva empresa
 
         Returns:
-            True si se encontró el company_id, False si no
+            True si se encontró o creó el company_id, False si no
         """
         try:
             if not self.mysql_cursor:
@@ -202,30 +208,135 @@ class SmartSyncComplete:
 
             self._log(f"🔍 Buscando empresa: RIF={self.company_rif}, Email={self.company_email}", "info")
 
-            # Buscar empresa por RIF y email (como en app.py línea 688)
-            query = """
+            # [PASO 1] Verificar que existe en tabla 'acceso' (como app.py línea 633)
+            self._log("  🔍 Verificando tabla 'acceso'...", "debug")
+            query_acceso = """
+            SELECT codigo, correo_electronico
+            FROM acceso
+            WHERE codigo = %s AND LOWER(correo_electronico) = LOWER(%s)
+            LIMIT 1
+            """
+
+            self.mysql_cursor.execute(query_acceso, (self.company_rif, self.company_email))
+            acceso = self.mysql_cursor.fetchone()
+
+            if not acceso:
+                # ❌ NO existe en acceso - DETENER proceso
+                self._log("", "error")
+                self._log("❌ ERROR: No se encontraron datos en tabla 'acceso'", "error")
+                self._log(f"   RIF: {self.company_rif}", "error")
+                self._log(f"   Email: {self.company_email}", "error")
+                self._log("", "error")
+                self._log("   💡 La empresa debe estar registrada en la tabla 'acceso' de MySQL", "warning")
+                self._log("   💡 Verifica que el RIF y email sean correctos", "warning")
+                return False
+
+            self._log("  ✅ Empresa encontrada en tabla 'acceso'", "success")
+
+            # [PASO 2] Buscar si ya existe en tabla 'companies' (como app.py línea 688)
+            self._log("  🔍 Buscando en tabla 'companies'...", "debug")
+            query_companies = """
             SELECT id, name
             FROM companies
             WHERE rif = %s AND email = %s
             LIMIT 1
             """
 
-            self.mysql_cursor.execute(query, (self.company_rif, self.company_email))
-            result = self.mysql_cursor.fetchone()
+            self.mysql_cursor.execute(query_companies, (self.company_rif, self.company_email))
+            company = self.mysql_cursor.fetchone()
 
-            if result:
-                self.company_id = result[0]
-                company_name = result[1]
+            if company:
+                # ✅ Existe en companies - usar ese ID
+                self.company_id = company[0]
+                company_name = company[1]
                 self._log(f"✅ Empresa encontrada: {company_name} (ID: {self.company_id})", "success")
                 return True
             else:
-                self._log(f"❌ No se encontró empresa con RIF={self.company_rif} y email={self.company_email}", "error")
-                self._log("   💡 Asegúrate de que la empresa esté registrada en MySQL (tabla 'companies')", "warning")
-                return False
+                # ⚠️ NO existe en companies - crear nueva empresa
+                self._log("  ⚠️ Empresa no encontrada en 'companies', creando registro...", "warning")
+                self._log("  💡 Si esto es un error, usa app.py para sincronizar la empresa primero", "info")
+
+                # Obtener datos adicionales de PostgreSQL para crear la empresa
+                pg_data = self._obtener_datos_postgres_para_empresa()
+
+                address = pg_data.get('address') if pg_data else None
+                phone = pg_data.get('phone') if pg_data else None
+                company_name = self.company_rif  # Usar RIF como nombre temporal si no hay datos de PG
+
+                if pg_data and pg_data.get('name'):
+                    company_name = pg_data['name']
+
+                # Insertar nueva empresa (como app.py líneas 718-737)
+                insert_query = """
+                INSERT INTO companies (
+                    address, phone, rif, email, name, key_system_items_id, status, created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, 1, 'active', NOW(), NOW()
+                )
+                """
+
+                self.mysql_cursor.execute(insert_query, (
+                    address,
+                    phone,
+                    self.company_rif,
+                    self.company_email.lower(),
+                    company_name
+                ))
+
+                self.mysql_conn.commit()
+                self.company_id = self.mysql_cursor.lastrowid
+
+                self._log(f"✅ Nueva empresa creada: {company_name} (ID: {self.company_id})", "success")
+                return True
 
         except Exception as e:
             self._log(f"❌ Error obteniendo company_id: {str(e)}", "error")
             return False
+
+    def _obtener_datos_postgres_para_empresa(self) -> Optional[dict]:
+        """
+        Obtener datos adicionales de PostgreSQL para la empresa
+        Igual que app.py líneas 607-628
+        """
+        try:
+            if not self.pg_cursor:
+                return None
+
+            query = """
+            SELECT
+                c.address,
+                c.phone,
+                COALESCE(
+                    CASE
+                        WHEN c.description IS NOT NULL AND c.description != ''
+                        THEN decode(c.description, 'base64')::text
+                        ELSE c.description
+                    END,
+                    ''
+                ) as rif_data,
+                COALESCE(e.account, c.email, '') as email
+            FROM company c
+            LEFT JOIN emails e ON c.email = e.account
+            WHERE LOWER(c.email) = LOWER(%s)
+            ORDER BY c.id
+            LIMIT 1
+            """
+
+            self.pg_cursor.execute(query, (self.company_email,))
+            result = self.pg_cursor.fetchone()
+
+            if result:
+                return {
+                    'address': result[0],
+                    'phone': result[1],
+                    'rif_data': result[2],
+                    'email': result[3]
+                }
+            return None
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error obteniendo datos de PostgreSQL: {str(e)}", "warning")
+            return None
 
     def _cerrar_conexiones(self):
         """Cerrar todas las conexiones"""
