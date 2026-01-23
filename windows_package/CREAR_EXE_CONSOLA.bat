@@ -22,6 +22,18 @@ if exist dist rmdir /s /q dist 2>nul
 if exist *.spec del *.spec 2>nul
 
 echo.
+echo Desinstalando psycopg2-binary si existe...
+pip uninstall -y psycopg2-binary 2>nul
+
+echo.
+echo Instalando psycopg2 (con wheels compiladas)...
+pip install psycopg2-binary
+
+echo.
+echo Buscando DLLs de psycopg2...
+echo (Esto tomara un momento)
+
+echo.
 echo Creando ejecutable CON CONSOLA...
 pyinstaller ^
     --onefile ^
@@ -30,10 +42,13 @@ pyinstaller ^
     --add-data "smart_sync_complete.py;." ^
     --hidden-import psycopg2 ^
     --hidden-import psycopg2.extensions ^
+    --hidden-import psycopg2._psycopg ^
     --hidden-import mysql.connector ^
     --hidden-import tkinter ^
     --hidden-import tkinter.ttk ^
     --hidden-import tkinter.scrolledtext ^
+    --collect-binaries psycopg2 ^
+    --collect-data psycopg2 ^
     sync_system.py
 
 if exist "dist\sync_system_console.exe" (
