@@ -1,9 +1,0 @@
-ERROR:root:Error sincronizando products a MySQL: 1452 (23000): Cannot add or update a child row: a foreign key constraint fails (`chrystal_movil`.`products`, CONSTRAINT `products_company_id_foreign` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE)
-ERROR:root:Error sincronizando customers a MySQL: 1452 (23000): Cannot add or update a child row: a foreign key constraint fails (`chrystal_movil`.`customers`, CONSTRAINT `customers_company_id_foreign` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE)
-ERROR:root:Error sincronizando categories a MySQL: 1452 (23000): Cannot add or update a child row: a foreign key constraint fails (`chrystal_movil`.`categories`, CONSTRAINT `categories_company_id_foreign` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE)
-WARNING:root:⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES
-=== SINCRONIZACIÓN ÚNICA ===
-[2026-01-23 13:22:22] [INFO] Conectado a PostgreSQL
-[2026-01-23 13:22:23] [INFO] Conectado a MySQL
-[2026-01-23 13:22:23] [INFO] === INICIANDO SINCRONIZACIÓN ===
-[2026-01-23 13:22:26] [INFO] === SINCRONIZACIÓN COMPLETADA ===

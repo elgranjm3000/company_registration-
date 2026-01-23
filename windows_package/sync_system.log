@@ -1,2 +1,0 @@
-[2026-01-23 13:19:46] [INFO] Conectado a PostgreSQL
-[2026-01-23 13:19:46] [ERROR] Error conectando MySQL: 2059 (HY000): Authentication plugin 'mysql_native_password' cannot be loaded: /usr/lib/mysql/plugin/mysql_native_password.so: cannot open shared object file: No such file or directory

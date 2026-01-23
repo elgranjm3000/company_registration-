@@ -1,87 +1,46 @@
 # Sistema de Sincronización PostgreSQL ↔ MySQL
 
-## Opciones de instalación:
+## INSTALACIÓN Y USO
 
-### Opción 1: Ejecutable simple (uso manual)
-- Solo ejecutas el .exe cuando quieras sincronizar
-- Ideal para testing o uso manual
-
-### Opción 2: Servicio de Windows (recomendado)
-- **Se inicia automáticamente** al prender la PC
-- Corre en segundo plano
-- Sincronización 24/7 sin intervención
-
-Ver instrucciones detalladas en: **INSTALACION_SERVICIO.md**
-
----
-
-## CREAR EL EJECUTABLE
-
-### Windows:
-1. Abre una terminal en la carpeta `windows_package`
-2. Ejecuta: `CREAR_EXE.bat`
-3. Espera 3-5 minutos
-4. El ejecutable estará en: `dist\sync_system.exe`
-
-### Linux:
-1. Abre una terminal en la carpeta `windows_package`
-2. Ejecuta: `chmod +x CREAR_EXE_LINUX.sh && ./CREAR_EXE_LINUX.sh`
-3. Espera 3-5 minutos
-4. El ejecutable estará en: `dist/sync_system`
-
----
-
-## MODO DE USO
-
-El ejecutable tiene 4 modos:
-
-- `--mode config` - Configuración inicial (GUI)
-- `--mode manager` - Interfaz de administración
-- `--mode sync` - Sincronización única
-- `--mode service` - Modo servicio (corre continuamente)
-
-Ejemplos:
-```bash
-# Windows
-sync_system.exe --mode config
-
-# Linux
-./sync_system --mode config
-```
-
----
-
-## INSTALAR COMO SERVICIO DE WINDOWS (Opción 2)
-
-1. **Crear ejecutable:** `CREAR_EXE.bat`
-2. **Configurar:** `dist\sync_system.exe --mode config`
-3. **Instalar servicio:** `INSTALAR_SERVICIO.bat` (como administrador)
-4. **Listo:** El servicio se inicia automáticamente
-
-Ver instrucciones completas en: **INSTALACION_SERVICIO.md**
-
----
-
-## REQUISITOS
-
-### Windows:
+### Requisitos:
 - Windows 7 o superior
 - Python 3.8+ instalado
-- Permisos de administrador (para servicio)
+- Internet para instalar dependencias
 
-### Linux:
-- Cualquier distribución moderna
-- Python 3.8+ instalado
-- python3-venv (`sudo apt install python3-venv`)
+### Pasos:
 
----
+1. **Ejecutar el instalador:**
+   ```
+   INSTALAR_Y_EJECUTAR.bat
+   ```
 
-## QUE HACE EL SISTEMA
+2. **Seleccionar opción 1** para configurar el sistema por primera vez
+   - Ingresa credenciales de PostgreSQL
+   - Ingresa credenciales de MySQL
+   - Configura intervalo de sincronización
+
+3. **Para sincronizar manualmente:**
+   - Ejecuta `INSTALAR_Y_EJECUTAR.bat` nuevamente
+   - Selecciona opción 2
+
+## ARCHIVOS INCLUIDOS:
+
+- `sync_system.py` - Ejecutable principal
+- `smart_sync_complete.py` - Módulo de sincronización
+- `INSTALAR_Y_EJECUTAR.bat` - Instala dependencias y ejecuta el sistema
+- `README.md` - Este archivo
+
+## MODOS DE EJECUCIÓN:
+
+1. **Config** - Configuración inicial (GUI)
+2. **Sync** - Sincronización única
+3. **Service** - Modo servicio continuo
+4. **Manager** - Interfaz de administración
+
+## QUÉ HACE EL SISTEMA:
 
 ✅ Detecta cambios automáticamente usando hashes
 ✅ Sincroniza PostgreSQL → MySQL (products, customers, categories)
 ✅ Sincroniza MySQL → PostgreSQL (quotes como sales_operation)
 ✅ Se ejecuta cada X minutos (configurable)
 ✅ Maneja errores y reintentos automáticos
-
-
