@@ -1557,7 +1557,10 @@ class SmartSyncComplete:
             products_sin_categoria = 0
 
             # Nuevos
-            for producto in cambios['nuevos']:
+            total_nuevos = len(cambios['nuevos'])
+            self._log(f"  📦 Insertando {total_nuevos} productos NUEVOS...", "info")
+
+            for idx, producto in enumerate(cambios['nuevos'], 1):
                 if not self.sync_running:
                     break
 
@@ -1635,8 +1638,22 @@ class SmartSyncComplete:
 
                 self.stats['products']['nuevos'] += 1
 
+                # Commit cada 50 productos para no acumular transacción enorme
+                if idx % 50 == 0:
+                    self.mysql_conn.commit()
+                    self._log(f"  ✅ Progreso: {idx}/{total_nuevos} productos insertados", "info")
+
+            # Commit final de los nuevos
+            if total_nuevos > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['products']['nuevos']}/{total_nuevos} productos nuevos insertados", "success")
+
             # Modificados
-            for producto in cambios['modificados']:
+            total_modificados = len(cambios['modificados'])
+            if total_modificados > 0:
+                self._log(f"  📦 Actualizando {total_modificados} productos MODIFICADOS...", "info")
+
+            for idx, producto in enumerate(cambios['modificados'], 1):
                 if not self.sync_running:
                     break
 
@@ -1713,6 +1730,16 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['products']['modificados'] += 1
+
+                # Commit cada 50 productos
+                if idx % 50 == 0:
+                    self.mysql_conn.commit()
+                    self._log(f"  ✅ Progreso: {idx}/{total_modificados} productos actualizados", "info")
+
+            # Commit final de los modificados
+            if total_modificados > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['products']['modificados']}/{total_modificados} productos modificados actualizados", "success")
 
             # Reportar productos omitidos
             if products_sin_categoria > 0:
