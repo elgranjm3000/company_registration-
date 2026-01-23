@@ -13,8 +13,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/3] Instalando PyInstaller...
-python -m pip install pyinstaller --quiet
+echo [2/3] Instalando PyInstaller 5.13.2 (compatible con Python 3.10)...
+python -m pip install pyinstaller==5.13.2 --quiet
 
 echo.
 echo [3/3] Compilando (puede tardar 3-5 minutos)...
@@ -23,11 +23,6 @@ python -m PyInstaller --onefile --noconsole --add-data "smart_sync_complete.py;.
 if errorlevel 1 (
     echo.
     echo ERROR COMPILANDO
-    echo.
-    echo Posibles soluciones:
-    echo 1. Borra las carpetas dist/ y build/
-    echo 2. Ejecuta este script nuevamente
-    echo.
     pause
     exit /b 1
 )
@@ -38,7 +33,5 @@ echo EXITO!
 echo ========================================
 echo.
 echo El ejecutable esta en: dist\sync_system.exe
-echo.
-echo Copia ese archivo a donde quieras usarlo
 echo.
 pause
