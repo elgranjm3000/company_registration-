@@ -191,15 +191,32 @@ class SyncModule:
             sync_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(sync_module)
 
-            # Crear instancia y ejecutar
-            sync_system = sync_module.SmartSyncSystem(
-                pg_conn=self.pg_conn,
-                mysql_conn=self.mysql_conn,
-                company_rif=self.config['company_rif'],
-                company_email=self.config['company_email']
+            # Preparar configuraciones
+            postgresql_config = {
+                'host': self.config['postgres_host'],
+                'port': self.config['postgres_port'],
+                'database': self.config['postgres_database'],
+                'user': self.config['postgres_user'],
+                'password': self.config['postgres_password']
+            }
+
+            mysql_config = {
+                'host': self.config['mysql_host'],
+                'port': self.config['mysql_port'],
+                'database': self.config['mysql_database'],
+                'user': self.config['mysql_user'],
+                'password': self.config['mysql_password']
+            }
+
+            # Crear instancia y ejecutar (self es el 'app')
+            sync_system = sync_module.SmartSyncComplete(
+                app=self,
+                postgresql_config=postgresql_config,
+                mysql_config=mysql_config,
+                company_id=27  # Company ID para Multiservicios Leblanc
             )
 
-            resultado = sync_system.ejecutar_sincronizacion_completa()
+            resultado = sync_system.ejecutar_sync_completa()
 
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
             return resultado
@@ -315,6 +332,16 @@ class ConfigWindow:
             entry.grid(row=i, column=1, pady=5, padx=5)
             self.entry_pg[key] = entry
 
+        # Botón de prueba de conexión
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=len(campos), column=0, columnspan=2, pady=10)
+
+        self.btn_test_pg = ttk.Button(btn_frame, text="🔍 Probar Conexión PostgreSQL", command=self.probar_postgresql)
+        self.btn_test_pg.pack()
+
+        self.lbl_status_pg = ttk.Label(btn_frame, text="", font=("Arial", 9))
+        self.lbl_status_pg.pack(pady=5)
+
     def crear_campos_mysql(self, parent):
         """Crea campos de MySQL"""
         campos = [
@@ -339,6 +366,16 @@ class ConfigWindow:
                 entry.config(show="*")
             entry.grid(row=i, column=1, pady=5, padx=5)
             self.entry_mysql[key] = entry
+
+        # Botón de prueba de conexión
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=len(campos), column=0, columnspan=2, pady=10)
+
+        self.btn_test_mysql = ttk.Button(btn_frame, text="🔍 Probar Conexión MySQL", command=self.probar_mysql)
+        self.btn_test_mysql.pack()
+
+        self.lbl_status_mysql = ttk.Label(btn_frame, text="", font=("Arial", 9))
+        self.lbl_status_mysql.pack(pady=5)
 
     def crear_campos_empresa(self, parent):
         """Crea campos de empresa"""
@@ -381,6 +418,66 @@ class ConfigWindow:
         info = tk.Label(frame, text="ℹ️ El sistema se sincronizará automáticamente cada X minutos",
                        fg="gray", justify="left")
         info.grid(row=1, column=0, columnspan=3, pady=10, padx=5, sticky="w")
+
+    def probar_postgresql(self):
+        """Prueba la conexión a PostgreSQL"""
+        self.lbl_status_pg.config(text="⏳ Probando...", foreground="orange")
+        self.root.update()
+
+        try:
+            import psycopg2
+
+            conn = psycopg2.connect(
+                host=self.entry_pg['postgres_host'].get().strip(),
+                port=self.entry_pg['postgres_port'].get().strip(),
+                database=self.entry_pg['postgres_database'].get().strip(),
+                user=self.entry_pg['postgres_user'].get().strip(),
+                password=self.entry_pg['postgres_password'].get().strip()
+            )
+
+            # Probar una query simple
+            cursor = conn.cursor()
+            cursor.execute("SELECT version()")
+            version = cursor.fetchone()[0]
+            cursor.close()
+            conn.close()
+
+            self.lbl_status_pg.config(text="✅ Conexión exitosa", foreground="green")
+            self.estado.config(text="PostgreSQL: Conexión establecida", fg="green")
+
+        except Exception as e:
+            self.lbl_status_pg.config(text=f"❌ Error: {str(e)}", foreground="red")
+            self.estado.config(text=f"PostgreSQL: Error de conexión", fg="red")
+
+    def probar_mysql(self):
+        """Prueba la conexión a MySQL"""
+        self.lbl_status_mysql.config(text="⏳ Probando...", foreground="orange")
+        self.root.update()
+
+        try:
+            import mysql.connector
+
+            conn = mysql.connector.connect(
+                host=self.entry_mysql['mysql_host'].get().strip(),
+                port=self.entry_mysql['mysql_port'].get().strip(),
+                database=self.entry_mysql['mysql_database'].get().strip(),
+                user=self.entry_mysql['mysql_user'].get().strip(),
+                password=self.entry_mysql['mysql_password'].get().strip()
+            )
+
+            # Probar una query simple
+            cursor = conn.cursor()
+            cursor.execute("SELECT VERSION()")
+            version = cursor.fetchone()[0]
+            cursor.close()
+            conn.close()
+
+            self.lbl_status_mysql.config(text="✅ Conexión exitosa", foreground="green")
+            self.estado.config(text="MySQL: Conexión establecida", fg="green")
+
+        except Exception as e:
+            self.lbl_status_mysql.config(text=f"❌ Error: {str(e)}", foreground="red")
+            self.estado.config(text=f"MySQL: Error de conexión", fg="red")
 
     def guardar(self):
         """Guarda la configuración"""
