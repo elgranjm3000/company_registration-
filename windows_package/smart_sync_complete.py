@@ -115,21 +115,20 @@ class SmartSyncComplete:
                 table_name VARCHAR(50) NOT NULL,
                 record_key VARCHAR(100) NOT NULL,
                 record_hash VARCHAR(32) NOT NULL,
-                last_sync_data JSONB,
+                last_sync_data TEXT,
                 synced_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 company_id INTEGER,
                 UNIQUE(table_name, record_key, company_id)
             );
-
-            CREATE INDEX IF NOT EXISTS idx_sync_hashes_lookup
-                ON sync_hashes(table_name, record_key, company_id);
-
-            CREATE INDEX IF NOT EXISTS idx_sync_hashes_table
-                ON sync_hashes(table_name, company_id);
             """
 
             self.pg_cursor.execute(create_table_query)
+
+            # Crear índices de forma compatible con PostgreSQL 9
+            # (PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS)
+            self._crear_indice_sync_hashes()
+
             self.pg_conn.commit()
 
             self._log("✅ Tabla sync_hashes lista", "success")
@@ -138,6 +137,28 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"❌ Error creando tabla sync_hashes: {str(e)}", "error")
             return False
+
+    def _crear_indice_sync_hashes(self):
+        """
+        Crear índices de sync_hashes de forma compatible con PostgreSQL 9
+        PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS
+        """
+        indices = [
+            ("idx_sync_hashes_lookup", "CREATE INDEX idx_sync_hashes_lookup ON sync_hashes(table_name, record_key, company_id)"),
+            ("idx_sync_hashes_table", "CREATE INDEX idx_sync_hashes_table ON sync_hashes(table_name, company_id)")
+        ]
+
+        for nombre_idx, query in indices:
+            try:
+                self.pg_cursor.execute(query)
+                self._log(f"  Índice '{nombre_idx}' creado", "debug")
+            except Exception as e:
+                # Si el índice ya existe, ignoramos el error
+                error_msg = str(e).lower()
+                if "already exists" in error_msg or "already exists" in error_msg:
+                    self._log(f"  Índice '{nombre_idx}' ya existe", "debug")
+                else:
+                    self._log(f"  ⚠️ Error creando índice '{nombre_idx}': {str(e)}", "warning")
 
     def _conectar_bases_datos(self) -> bool:
         """
@@ -272,6 +293,7 @@ class SmartSyncComplete:
                       record_hash: str, data: dict = None):
         """
         Guardar o actualizar hash en sync_hashes
+        Compatible con PostgreSQL 9 (no usa ON CONFLICT)
 
         Args:
             table_name: Nombre de tabla
@@ -286,17 +308,32 @@ class SmartSyncComplete:
             else:
                 data_json = None
 
-            query = """
-            INSERT INTO sync_hashes (table_name, record_key, record_hash, last_sync_data, company_id, updated_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
-            ON CONFLICT (table_name, record_key, company_id)
-            DO UPDATE SET
-                record_hash = EXCLUDED.record_hash,
-                last_sync_data = EXCLUDED.last_sync_data,
+            # Enfoque compatible con PostgreSQL 9:
+            # 1. Primero intentar UPDATE
+            # 2. Si no afecta ninguna fila, hacer INSERT
+
+            update_query = """
+            UPDATE sync_hashes
+            SET record_hash = %s,
+                last_sync_data = %s,
                 updated_at = NOW()
+            WHERE table_name = %s
+              AND record_key = %s
+              AND company_id = %s
             """
 
-            self.pg_cursor.execute(query, (table_name, record_key, record_hash, data_json, self.company_id))
+            self.pg_cursor.execute(update_query,
+                                 (record_hash, data_json, table_name, record_key, self.company_id))
+
+            # Si el UPDATE no afectó ninguna fila, hacer INSERT
+            if self.pg_cursor.rowcount == 0:
+                insert_query = """
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, last_sync_data, company_id, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                """
+                self.pg_cursor.execute(insert_query,
+                                     (table_name, record_key, record_hash, data_json, self.company_id))
+
         except Exception as e:
             self._log(f"Error guardando hash: {str(e)}", "error")
 
