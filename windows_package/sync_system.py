@@ -565,8 +565,8 @@ class ManagerWindow:
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Panel de estado
-        status_frame = tk.LabelFrame(main_frame, text="📊 Estado del Sistema", font=("Arial", 12, "bold"), padding=10)
-        status_frame.pack(fill="x", pady=5)
+        status_frame = tk.LabelFrame(main_frame, text="📊 Estado del Sistema", font=("Arial", 12, "bold"))
+        status_frame.pack(fill="x", pady=5, padx=5)
 
         self.lbl_estado = tk.Label(status_frame, text="🟢 ACTIVO", font=("Arial", 14), fg="green")
         self.lbl_estado.pack()
@@ -575,8 +575,8 @@ class ManagerWindow:
         self.lbl_ultima_sync.pack(pady=5)
 
         # Panel de estadísticas
-        stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"), padding=10)
-        stats_frame.pack(fill="x", pady=5)
+        stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"))
+        stats_frame.pack(fill="x", pady=5, padx=5)
 
         self.lbl_stats = tk.Label(stats_frame, text="Products: 0 | Customers: 0 | Categories: 0 | Quotes: 0",
                                  font=("Arial", 10))
@@ -592,8 +592,8 @@ class ManagerWindow:
         ttk.Button(btn_frame, text="❌ Salir", command=self.root.quit, width=20).pack(side="right", padx=5)
 
         # Logs
-        log_frame = tk.LabelFrame(main_frame, text="📝 Logs en Tiempo Real", font=("Arial", 12, "bold"), padding=10)
-        log_frame.pack(fill="both", expand=True, pady=5)
+        log_frame = tk.LabelFrame(main_frame, text="📝 Logs en Tiempo Real", font=("Arial", 12, "bold"))
+        log_frame.pack(fill="both", expand=True, pady=5, padx=5)
 
         self.txt_logs = scrolledtext.ScrolledText(log_frame, height=10, state="disabled")
         self.txt_logs.pack(fill="both", expand=True)
