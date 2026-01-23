@@ -29,6 +29,29 @@
 - `smart_sync_complete.py` - Módulo de sincronización
 - `INSTALAR_Y_EJECUTAR.bat` - Instala dependencias y ejecuta el sistema
 - `README.md` - Este archivo
+- `logs/` - Carpeta donde se guardan los logs de sincronización
+
+## CARPETA DE LOGS:
+
+El sistema crea automáticamente una carpeta `logs/` donde guarda un archivo `.txt` por cada ejecución:
+
+**Formato del archivo:** `logs/sync_YYYYMMDD_HHMMSS.txt`
+
+**Contenido del log:**
+- 📅 Fecha y hora de inicio y fin
+- 🏢 Datos de la empresa (RIF, email)
+- ✅ Éxitos y ⚠️ Advertencias
+- ❌ Errores detallados
+- 📊 Estadísticas finales (cuántos registros se sincronizaron)
+
+**Ejemplo:**
+```
+[2025-01-23 10:30:45] ✅ SUCCESS: Conectado a PostgreSQL
+[2025-01-23 10:30:46] ✅ SUCCESS: Empresa encontrada: Mi Empresa (ID: 27)
+[2025-01-23 10:30:47] ℹ️  INFO: Detectando cambios en products...
+[2025-01-23 10:31:15] ✅ SUCCESS: 595 productos sincronizados
+...
+```
 
 ## MODOS DE EJECUCIÓN:
 
@@ -44,3 +67,4 @@
 ✅ Sincroniza MySQL → PostgreSQL (quotes como sales_operation)
 ✅ Se ejecuta cada X minutos (configurable)
 ✅ Maneja errores y reintentos automáticos
+✅ **Guarda todos los logs en archivos .txt para auditoría**

@@ -86,14 +86,117 @@ class SmartSyncComplete:
         self.mysql_conn = None
         self.mysql_cursor = None
 
+        # Configurar logging a archivo
+        self.log_file = None
+        self._setup_file_logging()
+
+    def _setup_file_logging(self):
+        """
+        Configurar logging a archivo
+        Crea directorio 'logs' si no existe
+        Archivo: logs/sync_YYYYMMDD_HHMMSS.txt
+        """
+        try:
+            # Crear directorio de logs si no existe
+            log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+                self._print_to_console(f"Directorio de logs creado: {log_dir}")
+
+            # Crear nombre de archivo con timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_filename = f"sync_{timestamp}.txt"
+            log_path = os.path.join(log_dir, log_filename)
+
+            # Abrir archivo de log
+            self.log_file = open(log_path, 'a', encoding='utf-8')
+
+            # Escribir cabecera del archivo
+            self._write_to_log_file("=" * 70)
+            self._write_to_log_file(f"SINCRONIZACIÓN PostgreSQL ↔ MySQL")
+            self._write_to_log_file(f"Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self._write_to_log_file(f"Empresa RIF: {self.company_rif}")
+            self._write_to_log_file(f"Empresa Email: {self.company_email}")
+            self._write_to_log_file("=" * 70)
+            self._write_to_log_file("")
+
+            self._print_to_console(f"📝 Log archivo: {log_path}")
+
+        except Exception as e:
+            self._print_to_console(f"⚠️ Error creando archivo de log: {str(e)}")
+
+    def _write_to_log_file(self, mensaje: str):
+        """Escribir mensaje al archivo de log"""
+        if self.log_file:
+            try:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.log_file.write(f"[{timestamp}] {mensaje}\n")
+                self.log_file.flush()  # Forzar escritura inmediata
+            except Exception as e:
+                self._print_to_console(f"⚠️ Error escribiendo log: {str(e)}")
+
+    def _print_to_console(self, mensaje: str):
+        """Imprimir a consola (fallback)"""
+        print(mensaje)
+
+    def _close_log_file(self):
+        """Cerrar archivo de log y escribir resumen final"""
+        if self.log_file:
+            try:
+                # Escribir resumen final
+                self._write_to_log_file("")
+                self._write_to_log_file("=" * 70)
+                self._write_to_log_file("FIN DE SINCRONIZACIÓN")
+                self._write_to_log_file(f"Fin: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+                # Escribir estadísticas si existen
+                if hasattr(self, 'stats') and self.stats:
+                    self._write_to_log_file("")
+                    self._write_to_log_file("ESTADÍSTICAS FINALES:")
+                    for entidad, stats in self.stats.items():
+                        if stats.get('nuevos') or stats.get('modificados') or stats.get('errores'):
+                            self._write_to_log_file(
+                                f"  {entidad.capitalize()}: "
+                                f"{stats.get('nuevos', 0)} nuevos, "
+                                f"{stats.get('modificados', 0)} modificados, "
+                                f"{stats.get('errores', 0)} errores"
+                            )
+
+                self._write_to_log_file("=" * 70)
+                self._write_to_log_file("")
+
+                # Cerrar archivo
+                self.log_file.close()
+                self.log_file = None
+                self._print_to_console("📝 Archivo de log cerrado")
+            except Exception as e:
+                self._print_to_console(f"⚠️ Error cerrando archivo de log: {str(e)}")
+
     def _log(self, mensaje: str, tipo: str = 'info'):
-        """Enviar log a través de la app"""
+        """
+        Enviar log a través de la app y al archivo
+
+        Args:
+            mensaje: Mensaje a loggear
+            tipo: Tipo de log (info, success, warning, error, debug)
+        """
+        # Enviar a la interfaz gráfica (si existe)
         if hasattr(self.app, 'log_message'):
             self.app.log_message(mensaje, tipo)
         else:
             # Fallback para uso sin interfaz gráfica
-            log_func = getattr(logging, tipo.lower(), logging.info)
-            log_func(mensaje)
+            self._print_to_console(f"[{tipo.upper()}] {mensaje}")
+
+        # SIEMPRE escribir al archivo de log
+        log_prefix = {
+            'info': 'ℹ️  INFO',
+            'success': '✅ SUCCESS',
+            'warning': '⚠️  WARNING',
+            'error': '❌ ERROR',
+            'debug': '🔍 DEBUG'
+        }.get(tipo, 'INFO')
+
+        self._write_to_log_file(f"{log_prefix}: {mensaje}")
 
     # ====================================================================
     # INICIALIZACIÓN
@@ -1833,6 +1936,7 @@ class SmartSyncComplete:
 
         finally:
             self._cerrar_conexiones()
+            self._close_log_file()  # Cerrar archivo de log
 
 
 # ====================================================================
