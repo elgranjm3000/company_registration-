@@ -36,7 +36,8 @@ echo Archivos encontrados
 echo.
 REM [3/9] Crear requirements
 echo [3/9] Creando requirements.txt...
-echo pyinstaller==5.13.2> requirements.txt
+REM Usar PyInstaller 6.10.0 para Python 3.13 o superior
+echo pyinstaller==6.10.0> requirements.txt
 echo psycopg2-binary==2.9.7>> requirements.txt
 echo mysql-connector-python==8.2.0>> requirements.txt
 

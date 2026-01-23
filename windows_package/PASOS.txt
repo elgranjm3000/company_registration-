@@ -3,7 +3,7 @@ COMO COMPILAR EN WINDOWS - PASOS CLAROS
 ====================================
 
 REQUISITOS:
-- Python 3.8+ instalado
+- Python 3.8+ instalado (compatible con 3.13)
 - Este archivo: COMPILAR.bat
 
 PASOS:
