@@ -28,7 +28,11 @@ if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS
 else:
     # Si está en desarrollo, usar el directorio del script
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        # Si __file__ no está definido (ej: exec()), usar directorio actual
+        BASE_DIR = os.path.abspath('.')
 
 # Importar dependencias con manejo de errores
 try:

@@ -1,0 +1,42 @@
+====================================
+COMO COMPILAR EN WINDOWS - PASOS CLAROS
+====================================
+
+REQUISITOS:
+- Python 3.8+ instalado
+- Este archivo: COMPILAR.bat
+
+PASOS:
+
+1. ABRE CMD en esta carpeta
+   - Click derecho + Shift -> "Abrir ventana de comandos aquí"
+   - O escribe cmd en la barra de direcciones
+
+2. EJECUTA:
+   COMPILAR.bat
+
+3. ESPERA 3-5 minutos
+   - Veras mensajes de progreso
+   - Espera a que diga "EXITO!"
+
+4. EL EJECUTABLE ESTA EN:
+   dist\sync_system.exe
+
+5. COPIA sync_system.exe a donde quieras usarlo
+
+====================================
+SI HAY ERRORES:
+====================================
+
+ERROR: "Python no encontrado"
+-> Instala Python 3.8+ y marca "Add to PATH"
+
+ERROR: "IndexError"
+-> Borra carpetas dist/ y build/
+-> Ejecuta COMPILAR.bat nuevamente
+
+ERROR: "No module named xxx"
+-> Ejecuta: pip install psycopg2-binary mysql-connector-python
+-> Ejecuta COMPILAR.bat nuevamente
+
+====================================
