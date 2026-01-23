@@ -30,14 +30,13 @@ else:
     # Si está en desarrollo, usar el directorio del script
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Intentar importar dependencias con manejo de errores
+# Importar dependencias con manejo de errores
 try:
-    from dotenv import load_dotenv
     import psycopg2
     import mysql.connector
 except ImportError as e:
     print(f"Error: Falta dependencia: {e}")
-    print("Ejecute: pip install -r requirements.txt")
+    print("Ejecute: pip install psycopg2-binary mysql-connector-python")
     sys.exit(1)
 
 # ==============================================================================

@@ -15,6 +15,7 @@ import base64
 import uuid
 import os
 from dotenv import load_dotenv
+from smart_sellers_sync_module import SmartSellersSyncModule
 
 load_dotenv()
 
@@ -92,12 +93,6 @@ class CompleteSyncApp:
             'user': os.getenv('DB_USER_MYSQL'),
             'password': os.getenv('DB_PASSWORD_MYSQL')  # Valor fijo oculto
         }
-        #self.mysql_config = {
-        #    'host': 'localhost',  # Valor fijo oculto
-        #    'database': 'salesapi',
-        #    'user': 'root',
-        #    'password': 'tiger.'  # Valor fijo oculto
-        #}
         
         # Variable global para company_id
         self.company_id = None
@@ -401,13 +396,6 @@ class CompleteSyncApp:
             'user': os.getenv('DB_USER_MYSQL'),
             'password': os.getenv('DB_PASSWORD_MYSQL')  # Valor fijo oculto
         }
-        
-        #self.mysql_config = {
-        #    'host': 'localhost',  # Valor fijo
-        #    'database': 'salesapi',
-        #    'user': 'root',
-        #    'password': 'tiger'  # Valor fijo
-        #}
     
     def test_connections(self):
         """Probar conexiones a ambas bases de datos"""
@@ -840,9 +828,6 @@ class CompleteSyncApp:
             self.log_message(f"Error sincronizando categories: {str(e)}", "error")
             raise
     
-    
-    
-   
     def sync_products(self):
         """Sincronizar products con JOINs completos"""
         self.log_message("=== SINCRONIZANDO PRODUCTS ===", "info")
@@ -853,7 +838,7 @@ class CompleteSyncApp:
             pg_cursor = pg_conn.cursor()
             
             query = """
-            SELECT                 
+            SELECT DISTINCT ON (a.code)                   
                 a.code,    
                 a.description,
                 a.short_name,				
@@ -882,11 +867,14 @@ class CompleteSyncApp:
                 END as min_stock,
                 CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END as status,
                 d.image_type,
-	            d.product_image                
+	            d.product_image,
+				a.sale_tax,
+				e.aliquot
             FROM products a
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
             LEFT JOIN products_stock c ON a.code = c.product_code
             LEFT JOIN products_image d ON  d.main_code = a.code
+			LEFT JOIN taxes e ON e.code = a.sale_tax
             WHERE a.code IS NOT NULL 
             AND a.code != ''             
             AND a.status = '01'
@@ -913,11 +901,7 @@ class CompleteSyncApp:
                 if not self.sync_running:
                     break
                     
-                # CORREGIDO: Variables en el MISMO ORDEN que el SELECT
-                #code, description, short_name, department, stock, product_type, price, cost, min_stock, status, image_type,product_image,higher_price = product_data
-                #  1       2           3           4          5       6            7      8       9         10
-                
-                code, description, short_name, department, stock, product_type, price, cost, higher_price, min_stock, status, image_type, product_image = product_data
+                code, description, short_name, department, stock, product_type, price, cost, higher_price, min_stock, status, image_type, product_image, sale_tax, aliquot = product_data
 
                 product_count += 1
                 
@@ -941,10 +925,12 @@ class CompleteSyncApp:
                     product_type,
                     images,
                     higher_price,
+                    sale_tax,
+                    aliquot,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -958,6 +944,8 @@ class CompleteSyncApp:
                     product_type = VALUES(product_type),
                     images = VALUES(images),
                     higher_price = VALUES(higher_price),
+                    sale_tax = VALUES(sale_tax),
+                    aliquot = VALUES(aliquot),
                     updated_at = NOW()
                 """
                 
@@ -974,21 +962,10 @@ class CompleteSyncApp:
                     status,  # Usar el status calculado del SELECT
                     product_type,
                     image_json,
-                    higher_price
+                    higher_price,
+                    sale_tax,
+                    aliquot
                 ))
-                
-                # Debug opcional
-                if product_count <= 5:  # Solo mostrar los primeros 5 para debug
-                    print(f"Producto {product_count}:")
-                    print(f"  Code: {code}")
-                    print(f"  Name: {short_name}")
-                    print(f"  Description: {description}")
-                    print(f"  Department: {department}")
-                    print(f"  Price: {price}")
-                    print(f"  Cost: {cost}")
-                    print(f"  Stock: {stock}")
-                    print(f"  Status: {status}")
-                    print("---")
                 
                 if product_count % 100 == 0:
                     self.log_message(f"Procesados {product_count} products...")
@@ -1080,7 +1057,7 @@ class CompleteSyncApp:
             customer_count = 0
             inserted_count = 0
             updated_count = 0
-            skipped_count = 0  # Si usas la versión con control
+            skipped_count = 0
             for client_data in clients:
                 if not self.sync_running:
                     break
@@ -1200,12 +1177,12 @@ class CompleteSyncApp:
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, 'seller', 'inactive', %s, NOW(), NOW()
+                    %s, %s, 'seller', 'active', %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
                     role = 'seller',
-                    status = 'inactive',
+                    status = 'active',
                     updated_at = NOW()
                 """
 
@@ -1233,6 +1210,11 @@ class CompleteSyncApp:
     def sync_sellers(self):
         """Sincronizar sellers con relación user_id"""
         self.log_message("=== SINCRONIZANDO SELLERS ===", "info")
+        sync_module = SmartSellersSyncModule(self)
+        resultado = sync_module.ejecutar_sync()
+        if not resultado:
+            self.log_message("Sincronización de sellers completada con errores", "warning")
+        return resultado
         
         try:
             # Conectar PostgreSQL
@@ -1303,12 +1285,12 @@ class CompleteSyncApp:
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, 'inactive', 0.0, 0.0, 0, %s, 0.0, 0.0, 0.0, 'inactive', NOW(), NOW()
+                    %s, %s, %s, %s, 'active', 0.0, 0.0, 0, %s, 0.0, 0.0, 0.0, 'active', NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     description = VALUES(description),
                     status = VALUES(status),
-                    seller_status = 'inactive',
+                    seller_status = 'active',
                     user_code = VALUES(user_code),
                     updated_at = NOW()
                 """
@@ -1335,15 +1317,9 @@ class CompleteSyncApp:
         except Exception as e:
             self.log_message(f"Error sincronizando sellers: {str(e)}", "error")
             raise
-        
-    """
-    MIGRACIÓN DE COTIZACIONES: MySQL → PostgreSQL
-    Sincroniza datos desde quotes (MySQL) a sales_operation (PostgreSQL)
-    Basado en estructura CHRYSTAL - Sales Operations
-    """
 
     def sync_quotes(self):
-        """Sincronizar quotes desde MySQL a PostgreSQL"""
+        """Sincronizar quotes desde MySQL a PostgreSQL y actualizar estados"""
         self.log_message("=== SINCRONIZANDO QUOTES (PRESUPUESTOS) ===", "info")
         
         try:
@@ -1451,12 +1427,124 @@ class CompleteSyncApp:
             
             self.log_message(f"Migración completada: {migrated_count} exitosas, {error_count} con errores", "success")
             
+            # SINCRONIZAR ESTADOS: Recorrer sales_operation y actualizar status en quotes
+            self.sync_quotes_status(mysql_conn, pg_conn)
+            
             mysql_cursor.close()
             mysql_conn.close()
             pg_conn.close()
             
         except Exception as e:
             self.log_message(f"Error sincronizando quotes: {str(e)}", "error")
+            raise
+    
+    def sync_quotes_status(self, mysql_conn, pg_conn):
+        """Sincronizar el estado de quotes existentes en MySQL con PostgreSQL"""
+        self.log_message("=== SINCRONIZANDO ESTADOS DE QUOTES ===", "info")
+        
+        try:
+            pg_cursor = pg_conn.cursor()
+            mysql_cursor = mysql_conn.cursor(dictionary=True)
+            
+            # PASO 1: Obtener SOLO los presupuestos que ya existen en MySQL para esta compañía
+            query_mysql_quotes = """
+            SELECT 
+                id,
+                quote_number,
+                company_id
+            FROM quotes
+            WHERE company_id = %s
+            ORDER BY id
+            """
+            
+            self.log_message(f"Buscando presupuestos en MySQL para company_id: {self.company_id}", "info")
+            mysql_cursor.execute(query_mysql_quotes, (self.company_id,))
+            quotes = mysql_cursor.fetchall()
+            
+            if not quotes:
+                self.log_message(f"No se encontraron presupuestos en MySQL para company_id {self.company_id}", "warning")
+                pg_cursor.close()
+                mysql_cursor.close()
+                return
+            
+            self.log_message(f"Encontrados {len(quotes)} presupuestos en MySQL para verificar estado", "info")
+            
+            updated_count = 0
+            not_found_in_pg = 0
+            
+            # PASO 2: Procesar cada presupuesto
+            for quote in quotes:
+                if not self.sync_running:
+                    break
+                
+                try:
+                    quote_id = quote['id']
+                    quote_number = quote['quote_number']
+                    
+                    self.log_message(f"Procesando presupuesto #{quote_number} (ID: {quote_id})...", "info")
+                    
+                    # PASO 3: Buscar la operación correspondiente en PostgreSQL
+                    query_find_operation = """
+                    SELECT 
+                        correlative,
+                        pending
+                    FROM public.sales_operation
+                    WHERE document_no = %s
+                    AND operation_type = 'BUDGET'
+                    LIMIT 1
+                    """
+                    
+                    pg_cursor.execute(query_find_operation, (quote_number,))
+                    operation_result = pg_cursor.fetchone()
+                    
+                    if not operation_result:
+                        self.log_message(f"Presupuesto #{quote_number} (ID: {quote_id}) no encontrado en PostgreSQL", "warning")
+                        not_found_in_pg += 1
+                        continue
+                    
+                    correlative, pending = operation_result
+                    
+                    # PASO 4: Determinar el estado basado en pending
+                    # pending = false → status = 'approved'
+                    # pending = true → status = 'rejected'
+                    new_status = 'rejected' if pending else 'approved'
+                    
+                    self.log_message(f"Presupuesto #{quote_number} (correlativo {correlative}): " +
+                                f"pending={pending} → status='{new_status}'", "info")
+                    
+                    # PASO 5: Actualizar el status en MySQL
+                    query_update_quote = """
+                    UPDATE quotes 
+                    SET status = %s, updated_at = NOW() 
+                    WHERE id = %s
+                    """
+                    
+                    mysql_cursor.execute(query_update_quote, (new_status, quote_id))
+                    mysql_conn.commit()
+                    
+                    updated_count += 1
+                    
+                    self.log_message(f"Presupuesto #{quote_number} actualizado a '{new_status}'", "success")
+                    
+                    if updated_count % 10 == 0:
+                        self.log_message(f"Estados verificados y actualizados: {updated_count}...", "info")
+                    
+                except Exception as e:
+                    self.log_message(f"Error verificando presupuesto {quote_number}: {str(e)}", "error")
+            
+            # RESUMEN FINAL
+            self.log_message("" , "info")
+            self.log_message("=== RESUMEN DE VERIFICACIÓN ===", "info")
+            self.log_message(f"Total procesados: {len(quotes)}", "info")
+            self.log_message(f"Actualizados: {updated_count}", "success")
+            self.log_message(f"No encontrados en PostgreSQL: {not_found_in_pg}", "warning")
+            self.log_message(f"Verificación de estados completada", "success")
+            
+            pg_cursor.close()
+            mysql_cursor.close()
+            
+        except Exception as e:
+            self.log_message(f"Error en sincronización de estados: {str(e)}", "error")
             raise
 
 
@@ -1539,8 +1627,8 @@ class CompleteSyncApp:
 
 
     def _insert_sales_operation(self, pg_cursor, correlativo, quote, emission_date, mac):
-        """Insertar registro principal en sales_operation"""
         
+        """Insertar registro principal en sales_operation"""        
         sql_operation = """
         INSERT INTO public.sales_operation (
             correlative, operation_type, document_no, emission_date, 
@@ -1561,45 +1649,45 @@ class CompleteSyncApp:
         )
         """
         
-        document_no = f"W{correlativo:010d}"
+        document_no = quote.get('quote_number')
         
         pg_cursor.execute(sql_operation, (
-            correlativo,                                               # correlative
-            'BUDGET',                                                  # operation_type
+            correlativo,                                              # correlative
+            'BUDGET',                                                 # operation_type
             document_no,                                              # document_no
             emission_date,                                            # emission_date
             emission_date,                                            # register_date
-            quote.get('customer_doc', 'ND'),                         # client_code
-            quote.get('customer_name') or 'Cliente Migrado',         # client_name
-            quote.get('customer_doc') or f"MIG-{quote['idQuotes']}", # client_id
-            quote.get('customer_address') or 'Dirección migrada',    # client_address
-            quote.get('customer_phone') or 'S-N',                    # client_phone
+            quote.get('customer_doc', 'ND'),                          # client_code
+            quote.get('customer_name') or 'Cliente Migrado',          # client_name
+            quote.get('customer_doc') or f"MIG-{quote['idQuotes']}",  # client_id
+            quote.get('customer_address') or 'Dirección migrada',     # client_address
+            quote.get('customer_phone') or 'S-N',                     # client_phone
             '00',                                                     # seller
             1,                                                        # credit_days
-            emission_date + timedelta(days=1),                       # expiration_date
+            emission_date + timedelta(days=1),                        # expiration_date
             '',                                                       # description
             '00',                                                     # store
             '00',                                                     # locations
             '00',                                                     # user_code
             mac,                                                      # station
-            safe_float(quote.get('total', 0)),                       # total_amount
-            safe_float(quote.get('subtotal', 0)),                    # total_net_details
-            safe_float(quote.get('tax_amount', 0)),                  # total_tax_details
-            safe_float(quote.get('total', 0)),                       # total_details
-            safe_float(quote.get('discount', 0)),                    # percent_discount
-            safe_float(quote.get('discount_amount', 0)),             # discount
+            safe_float(quote.get('total', 0)),                        # total_amount
+            safe_float(quote.get('subtotal', 0)),                     # total_net_details
+            safe_float(quote.get('tax_amount', 0)),                   # total_tax_details
+            safe_float(quote.get('total', 0)),                        # total_details
+            safe_float(quote.get('discount', 0)),                     # percent_discount
+            safe_float(quote.get('discount_amount', 0)),              # discount
             safe_float(quote.get('subtotal', 0)) - safe_float(quote.get('discount_amount', 0)), # total_net
-            safe_float(quote.get('tax_amount', 0)),                  # total_tax
-            safe_float(quote.get('total', 0)),                       # total
+            safe_float(quote.get('tax_amount', 0)),                   # total_tax
+            safe_float(quote.get('total', 0)),                        # total
             0.0,                                                      # credit
             0.0,                                                      # cash
             '02',                                                     # coin_code (Dólar)
             False,                                                    # canceled
             True,                                                     # pending
             False,                                                    # wait
-            safe_float(quote.get('subtotal', 0)),                    # total_net_cost
-            safe_float(quote.get('tax_amount', 0)),                  # total_tax_cost
-            safe_float(quote.get('total', 0)),                       # total_cost
+            safe_float(quote.get('subtotal', 0)),                     # total_net_cost
+            safe_float(quote.get('tax_amount', 0)),                   # total_tax_cost
+            safe_float(quote.get('total', 0)),                        # total_cost
             '01',                                                     # freight_tax
             16,                                                       # freight_aliquot
             document_no,                                              # document_no_internal
@@ -1679,11 +1767,11 @@ class CompleteSyncApp:
             sale_tax, sale_aliquot, price, total_net_cost, total_tax_cost, 
             total_cost, total_net_gross, total_tax_gross, total_gross, 
             percent_discount, discount, total_net, total_tax, total, 
-            coin_code, buy_aliquot, buy_tax
+            coin_code, buy_aliquot, buy_tax,pending_amount
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-            %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING line
         """
         
@@ -1717,7 +1805,8 @@ class CompleteSyncApp:
             safe_float(item.get('total', 0)),                        # total
             '02',                                                     # coin_code
             16,                                                       # buy_aliquot
-            '01'                                                      # buy_tax
+            '01',                                                      # buy_tax
+            quantity
         ))
         
         line = pg_cursor.fetchone()[0]

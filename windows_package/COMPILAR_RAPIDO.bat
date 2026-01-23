@@ -14,8 +14,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo Paso 1: Instalando PyInstaller...
-python -m pip install pyinstaller pywin32
+echo Paso 1: Instalando dependencias...
+python -m pip install pyinstaller pywin32 psycopg2-binary mysql-connector-python pillow bcrypt
 
 echo.
 echo Paso 2: Compilando (puede tardar 5-10 minutos)...
