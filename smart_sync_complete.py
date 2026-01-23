@@ -313,6 +313,45 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"Error eliminando hash: {str(e)}", "error")
 
+    def _create_image_json(self, image_type, product_image):
+        """
+        Crear JSON para el campo images
+        Copiado de app.py
+        """
+        import base64
+        try:
+            # Si no hay imagen, retornar None o JSON vacío
+            if not product_image and not image_type:
+                return None
+
+            # Procesar product_image según su tipo
+            processed_image = None
+            if product_image:
+                if isinstance(product_image, memoryview):
+                    # Convertir memoryview a bytes, luego a base64
+                    image_bytes = product_image.tobytes()
+                    processed_image = base64.b64encode(image_bytes).decode('utf-8')
+                elif isinstance(product_image, bytes):
+                    # Convertir bytes directamente a base64
+                    processed_image = base64.b64encode(product_image).decode('utf-8')
+                else:
+                    # Si ya es string u otro tipo, usarlo directamente
+                    processed_image = str(product_image)
+
+            # Crear el diccionario JSON
+            image_data = {
+                "type": image_type if image_type else None,
+                "product_image": processed_image,
+                "description": "products"
+            }
+
+            # Convertir a JSON string
+            return json.dumps(image_data, ensure_ascii=False)
+
+        except Exception as e:
+            self._log(f"Error creando JSON de imagen: {str(e)}", "warning")
+            return None
+
     # ====================================================================
     # DETECCIÓN DE CAMBIOS - PRODUCTS
     # ====================================================================
@@ -329,7 +368,7 @@ class SmartSyncComplete:
         cambios = {'nuevos': [], 'modificados': [], 'eliminados': []}
 
         try:
-            # Obtener todos los productos de PostgreSQL
+            # Query exacto de app.py para obtener productos de PostgreSQL
             query = """
             SELECT DISTINCT ON (a.code)
                 a.code,
@@ -338,15 +377,39 @@ class SmartSyncComplete:
                 a.department,
                 c.stock,
                 a.product_type,
-                COALESCE(b.maximum_price, 0) as price,
-                COALESCE(b.offer_price, 0) as cost,
-                COALESCE(b.higher_price, 0) as higher_price,
-                COALESCE(a.minimal_stock, 0) as min_stock,
-                CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END as status
+                CASE
+                    WHEN b.maximum_price IS NULL OR b.maximum_price < 0 OR b.maximum_price > 99999999
+                    THEN 0
+                    ELSE b.maximum_price
+                END as price,
+                CASE
+                    WHEN b.offer_price IS NULL OR b.offer_price < 0 OR b.offer_price > 99999999
+                    THEN 0
+                    ELSE b.offer_price
+                END as cost,
+                CASE
+                    WHEN b.higher_price IS NULL OR b.higher_price < 0 OR b.higher_price > 99999999
+                    THEN 0
+                    ELSE b.higher_price
+                END as higher_price,
+                CASE
+                    WHEN a.minimal_stock IS NULL OR a.minimal_stock < 0 OR a.minimal_stock > 2147483647
+                    THEN 0
+                    ELSE a.minimal_stock
+                END as min_stock,
+                CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END as status,
+                d.image_type,
+                d.product_image,
+                a.sale_tax,
+                e.aliquot
             FROM products a
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
             LEFT JOIN products_stock c ON a.code = c.product_code
-            WHERE a.code IS NOT NULL AND a.code != ''
+            LEFT JOIN products_image d ON d.main_code = a.code
+            LEFT JOIN taxes e ON e.code = a.sale_tax
+            WHERE a.code IS NOT NULL
+            AND a.code != ''
+            AND a.status = '01'
             ORDER BY a.code
             """
 
@@ -1204,23 +1267,43 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                code = producto[0]
-                category_name = producto[3]
+                # Desempaquetar con todos los campos del query de app.py
+                code, description, short_name, department, stock, product_type, price, cost, higher_price, min_stock, status, image_type, product_image, sale_tax, aliquot = producto
 
                 # Verificar que la categoría existe en MySQL
-                if category_name not in category_mapping:
-                    self._log(f"  ⚠️ Product {code} omitido: categoría '{category_name}' no existe en MySQL", "warning")
+                if department not in category_mapping:
+                    self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
                     products_sin_categoria += 1
                     continue
 
-                category_id = category_mapping[category_name]
+                category_id = category_mapping[department]
 
+                # Crear JSON de imagen
+                image_json = self._create_image_json(image_type, product_image)
+
+                # INSERT exacto de app.py
                 insert_query = """
                 INSERT INTO products (
-                    company_id, code, name, description, price, cost, stock,
-                    min_stock, category_id, status, product_type,
-                    created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    company_id,
+                    code,
+                    name,
+                    description,
+                    price,
+                    cost,
+                    stock,
+                    min_stock,
+                    category_id,
+                    status,
+                    product_type,
+                    images,
+                    higher_price,
+                    sale_tax,
+                    aliquot,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
                     description = VALUES(description),
@@ -1230,15 +1313,30 @@ class SmartSyncComplete:
                     min_stock = VALUES(min_stock),
                     category_id = VALUES(category_id),
                     status = VALUES(status),
+                    product_type = VALUES(product_type),
+                    images = VALUES(images),
+                    higher_price = VALUES(higher_price),
+                    sale_tax = VALUES(sale_tax),
+                    aliquot = VALUES(aliquot),
                     updated_at = NOW()
                 """
 
                 self.mysql_cursor.execute(insert_query, (
-                    self.company_id, code, producto[2], producto[1],
-                    safe_float(producto[6]), safe_float(producto[7]),
-                    producto[4] if producto[4] else 0,
-                    int(producto[9]) if producto[9] else 0,
-                    category_id, producto[10], producto[5]
+                    self.company_id,
+                    code,
+                    short_name,  # El nombre del producto es short_name
+                    description if description else None,
+                    safe_float(price),
+                    safe_float(cost),
+                    stock if stock else 0,
+                    int(min_stock) if min_stock else 0,
+                    category_id,
+                    status,  # Usar el status calculado del SELECT
+                    product_type,
+                    image_json,
+                    safe_float(higher_price),
+                    sale_tax,
+                    aliquot
                 ))
 
                 self.stats['products']['nuevos'] += 1
@@ -1248,30 +1346,76 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                code = producto[0]
-                category_name = producto[3]
+                # Desempaquetar con todos los campos
+                code, description, short_name, department, stock, product_type, price, cost, higher_price, min_stock, status, image_type, product_image, sale_tax, aliquot = producto
 
                 # Verificar que la categoría existe en MySQL
-                if category_name not in category_mapping:
-                    self._log(f"  ⚠️ Product {code} omitido: categoría '{category_name}' no existe en MySQL", "warning")
+                if department not in category_mapping:
+                    self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
                     products_sin_categoria += 1
                     continue
 
-                category_id = category_mapping[category_name]
+                category_id = category_mapping[department]
 
+                # Crear JSON de imagen
+                image_json = self._create_image_json(image_type, product_image)
+
+                # UPDATE de app.py (no usa UPDATE separado, solo ON DUPLICATE KEY UPDATE)
                 update_query = """
-                UPDATE products SET
-                    name = %s, description = %s, price = %s, cost = %s,
-                    stock = %s, min_stock = %s, category_id = %s, status = %s,
+                INSERT INTO products (
+                    company_id,
+                    code,
+                    name,
+                    description,
+                    price,
+                    cost,
+                    stock,
+                    min_stock,
+                    category_id,
+                    status,
+                    product_type,
+                    images,
+                    higher_price,
+                    sale_tax,
+                    aliquot,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                )
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    description = VALUES(description),
+                    price = VALUES(price),
+                    cost = VALUES(cost),
+                    stock = VALUES(stock),
+                    min_stock = VALUES(min_stock),
+                    category_id = VALUES(category_id),
+                    status = VALUES(status),
+                    product_type = VALUES(product_type),
+                    images = VALUES(images),
+                    higher_price = VALUES(higher_price),
+                    sale_tax = VALUES(sale_tax),
+                    aliquot = VALUES(aliquot),
                     updated_at = NOW()
-                WHERE company_id = %s AND code = %s
                 """
 
                 self.mysql_cursor.execute(update_query, (
-                    producto[2], producto[1], safe_float(producto[6]),
-                    safe_float(producto[7]), producto[4] if producto[4] else 0,
-                    int(producto[9]) if producto[9] else 0, category_id,
-                    producto[10], self.company_id, code
+                    self.company_id,
+                    code,
+                    short_name,
+                    description if description else None,
+                    safe_float(price),
+                    safe_float(cost),
+                    stock if stock else 0,
+                    int(min_stock) if min_stock else 0,
+                    category_id,
+                    status,
+                    product_type,
+                    image_json,
+                    safe_float(higher_price),
+                    sale_tax,
+                    aliquot
                 ))
 
                 self.stats['products']['modificados'] += 1
@@ -1279,17 +1423,6 @@ class SmartSyncComplete:
             # Reportar productos omitidos
             if products_sin_categoria > 0:
                 self._log(f"  ⚠️ {products_sin_categoria} productos omitidos por categoría inexistente", "warning")
-
-            # Eliminados (opcional - descomentar para activar)
-            # for producto in cambios['eliminados']:
-            #     if not self.sync_running:
-            #         break
-            #     code = producto['code']
-            #     self.mysql_cursor.execute(
-            #         "DELETE FROM products WHERE company_id = %s AND code = %s",
-            #         (self.company_id, code)
-            #     )
-            #     self.stats['products']['eliminados'] += 1
 
             self.mysql_conn.commit()
             self._log(f"✅ Products sincronizados: {self.stats['products']['nuevos']} nuevos, "
