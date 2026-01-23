@@ -81,8 +81,8 @@ echo [5/7] Instalando dependencias...
 echo Esto puede tomar un minuto...
 python -m pip install --upgrade pip --quiet 2>nul
 
-echo Instalando PyInstaller 5.13.1...
-pip install pyinstaller==5.13.1 --quiet
+echo Instalando PyInstaller 4.10...
+pip install pyinstaller==4.10 --quiet
 if %errorlevel% neq 0 (
     echo ERROR instalando PyInstaller
     pause
@@ -147,7 +147,7 @@ echo   RESUMEN DE COMPATIBILIDAD
 echo ========================================
 echo.
 echo Python: %PYTHON_VERSION%
-echo PyInstaller: 5.13.1
+echo PyInstaller: 4.10
 echo psycopg2-binary: Instalado
 echo mysql-connector-python: Instalado
 echo tkinter: Disponible
