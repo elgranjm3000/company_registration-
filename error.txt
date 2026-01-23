@@ -1,153 +1,135 @@
-Creando ejecutable...
-Esto tomara 3-5 minutos
-
-187 INFO: PyInstaller: 6.1.0
-187 INFO: Python: 3.10.0
-203 INFO: Platform: Windows-10-10.0.19045-SP0
-203 INFO: wrote C:\Users\Janeth\Desktop\windows_package\sync_system.spec
-203 INFO: Extending PYTHONPATH with paths
-['C:\\Users\\Janeth\\Desktop\\windows_package']
-359 INFO: Appending 'datas' from .spec
-359 INFO: checking Analysis
-359 INFO: Building Analysis because Analysis-00.toc is non existent
-359 INFO: Initializing module dependency graph...
-374 INFO: Caching module graph hooks...
-390 INFO: Analyzing base_library.zip ...
-999 INFO: Loading module hook 'hook-heapq.py' from 'C:\\Users\\Janeth\\Desktop\\windows_package\\venv\\lib\\site-packages\\PyInstaller\\hooks'...
-1077 INFO: Loading module hook 'hook-encodings.py' from 'C:\\Users\\Janeth\\Desktop\\windows_package\\venv\\lib\\site-packages\\PyInstaller\\hooks'...
-2280 INFO: Loading module hook 'hook-pickle.py' from 'C:\\Users\\Janeth\\Desktop\\windows_package\\venv\\lib\\site-packages\\PyInstaller\\hooks'...
-3405 INFO: Caching module dependency graph...
-3608 INFO: Running Analysis Analysis-00.toc
-3608 INFO: Looking for Python shared library...
-3671 INFO: Using Python shared library: C:\Users\Janeth\AppData\Local\Programs\Python\Python310\python310.dll
-3671 INFO: Analyzing C:\Users\Janeth\Desktop\windows_package\sync_system.py
-3842 INFO: Loading module hook 'hook-psycopg2.py' from 'C:\\Users\\Janeth\\Desktop\\windows_package\\venv\\lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'...
-3967 INFO: Loading module hook 'hook-platform.py' from 'C:\\Users\\Janeth\\Desktop\\windows_package\\venv\\lib\\site-packages\\PyInstaller\\hooks'...
+4311 INFO: Caching module dependency graph...
+5779 INFO: running Analysis Analysis-00.toc
+5779 INFO: Adding Microsoft.Windows.Common-Controls to dependent assemblies of final executable
+  required by C:\Users\Janeth\AppData\Local\Programs\Python\Python310\python.exe
+7201 INFO: Analyzing C:\Users\Janeth\Desktop\windows_package\sync_system.py
+7388 INFO: Loading module hook 'hook-psycopg2.py' from 'C:\\Users\\Janeth\\Desktop\\windows_package\\venv\\lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'...
+7529 INFO: Loading module hook 'hook-platform.py' from 'C:\\Users\\Janeth\\Desktop\\windows_package\\venv\\lib\\site-packages\\PyInstaller\\hooks'...
 Traceback (most recent call last):
   File "C:\Users\Janeth\AppData\Local\Programs\Python\Python310\lib\runpy.py", line 196, in _run_module_as_main
     return _run_code(code, main_globals, None,
   File "C:\Users\Janeth\AppData\Local\Programs\Python\Python310\lib\runpy.py", line 86, in _run_code
     exec(code, run_globals)
   File "C:\Users\Janeth\Desktop\windows_package\venv\Scripts\pyinstaller.exe\__main__.py", line 6, in <module>
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\__main__.py", line 205, in _console_script_run
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\__main__.py", line 194, in _console_script_run
     run()
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\__main__.py", line 189, in run
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\__main__.py", line 180, in run
     run_build(pyi_config, spec_file, **vars(args))
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\__main__.py", line 61, in run_build
     PyInstaller.building.build_main.main(pyi_config, spec_file, **kwargs)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 1042, in main
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 1019, in main
     build(specfile, distpath, workpath, clean_build)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 982, in build
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 944, in build
     exec(code, spec_namespace)
-  File "C:\Users\Janeth\Desktop\windows_package\sync_system.spec", line 4, in <module>
+  File "C:\Users\Janeth\Desktop\windows_package\sync_system.spec", line 7, in <module>
     a = Analysis(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 468, in __init__
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 429, in __init__
     self.__postinit__()
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\datastruct.py", line 184, in __postinit__
     self.assemble()
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 606, in assemble
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\building\build_main.py", line 590, in assemble
     priority_scripts.append(self.graph.add_script(script))
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 268, in add_script
     self._top_script_node = super().add_script(pathname)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1260, in add_script
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1359, in add_script
     self._process_imports(n)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2704, in _process_imports
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2811, in _process_imports
     target_modules = self._safe_import_hook(*import_info, **kwargs)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 432, in _safe_import_hook
     return super()._safe_import_hook(target_module_partname, source_module, target_attr_names, level, edge_attr)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2161, in _safe_import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2262, in _safe_import_hook
     target_modules = self.import_hook(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1345, in import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1444, in import_hook
     submodule = self._safe_import_module(head, mname, submodule)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 479, in _safe_import_module
     return super()._safe_import_module(module_basename, module_name, parent_package)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1893, in _safe_import_module
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1992, in _safe_import_module
     self._process_imports(n)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2704, in _process_imports
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2811, in _process_imports
     target_modules = self._safe_import_hook(*import_info, **kwargs)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 432, in _safe_import_hook
     return super()._safe_import_hook(target_module_partname, source_module, target_attr_names, level, edge_attr)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2161, in _safe_import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2262, in _safe_import_hook
     target_modules = self.import_hook(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1332, in import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1431, in import_hook
     target_package, target_module_partname = self._find_head_package(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1511, in _find_head_package
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1610, in _find_head_package
     target_package = self._safe_import_module(
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 479, in _safe_import_module
     return super()._safe_import_module(module_basename, module_name, parent_package)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1893, in _safe_import_module
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1992, in _safe_import_module
     self._process_imports(n)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2704, in _process_imports
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2811, in _process_imports
     target_modules = self._safe_import_hook(*import_info, **kwargs)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 432, in _safe_import_hook
     return super()._safe_import_hook(target_module_partname, source_module, target_attr_names, level, edge_attr)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2161, in _safe_import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2262, in _safe_import_hook
     target_modules = self.import_hook(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1332, in import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1431, in import_hook
     target_package, target_module_partname = self._find_head_package(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1511, in _find_head_package
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1610, in _find_head_package
     target_package = self._safe_import_module(
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 479, in _safe_import_module
     return super()._safe_import_module(module_basename, module_name, parent_package)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1893, in _safe_import_module
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1992, in _safe_import_module
     self._process_imports(n)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2704, in _process_imports
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2811, in _process_imports
     target_modules = self._safe_import_hook(*import_info, **kwargs)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 432, in _safe_import_hook
     return super()._safe_import_hook(target_module_partname, source_module, target_attr_names, level, edge_attr)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2161, in _safe_import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2262, in _safe_import_hook
     target_modules = self.import_hook(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1332, in import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1431, in import_hook
     target_package, target_module_partname = self._find_head_package(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1511, in _find_head_package
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1610, in _find_head_package
     target_package = self._safe_import_module(
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 479, in _safe_import_module
     return super()._safe_import_module(module_basename, module_name, parent_package)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1893, in _safe_import_module
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1992, in _safe_import_module
     self._process_imports(n)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2704, in _process_imports
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2811, in _process_imports
     target_modules = self._safe_import_hook(*import_info, **kwargs)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 432, in _safe_import_hook
     return super()._safe_import_hook(target_module_partname, source_module, target_attr_names, level, edge_attr)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2161, in _safe_import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2262, in _safe_import_hook
     target_modules = self.import_hook(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1332, in import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1431, in import_hook
     target_package, target_module_partname = self._find_head_package(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1511, in _find_head_package
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1610, in _find_head_package
     target_package = self._safe_import_module(
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 479, in _safe_import_module
     return super()._safe_import_module(module_basename, module_name, parent_package)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1893, in _safe_import_module
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1992, in _safe_import_module
     self._process_imports(n)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2704, in _process_imports
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2811, in _process_imports
     target_modules = self._safe_import_hook(*import_info, **kwargs)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 432, in _safe_import_hook
     return super()._safe_import_hook(target_module_partname, source_module, target_attr_names, level, edge_attr)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2161, in _safe_import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2262, in _safe_import_hook
     target_modules = self.import_hook(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1332, in import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1431, in import_hook
     target_package, target_module_partname = self._find_head_package(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1511, in _find_head_package
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1610, in _find_head_package
     target_package = self._safe_import_module(
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 479, in _safe_import_module
     return super()._safe_import_module(module_basename, module_name, parent_package)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1893, in _safe_import_module
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1992, in _safe_import_module
     self._process_imports(n)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2704, in _process_imports
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2811, in _process_imports
     target_modules = self._safe_import_hook(*import_info, **kwargs)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 432, in _safe_import_hook
     return super()._safe_import_hook(target_module_partname, source_module, target_attr_names, level, edge_attr)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2161, in _safe_import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2262, in _safe_import_hook
     target_modules = self.import_hook(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1345, in import_hook
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1444, in import_hook
     submodule = self._safe_import_module(head, mname, submodule)
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\depend\analysis.py", line 479, in _safe_import_module
     return super()._safe_import_module(module_basename, module_name, parent_package)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1892, in _safe_import_module
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 1991, in _safe_import_module
     n = self._scan_code(module, co, co_ast)
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2499, in _scan_code
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2606, in _scan_code
     self._scan_bytecode(
-  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2603, in _scan_bytecode
+  File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\modulegraph.py", line 2710, in _scan_bytecode
     for inst in util.iterate_instructions(module_code_object):
   File "C:\Users\Janeth\Desktop\windows_package\venv\lib\site-packages\PyInstaller\lib\modulegraph\util.py", line 44, in iterate_instructions
     yield from iterate_instructions(constant)
@@ -164,3 +146,4 @@ IndexError: cannot fit 'int' into an index-sized integer
 ========================================
   ERROR: NO SE PUDO CREAR EJECUTABLE
 ========================================
+Presione una tecla para continuar . . .
