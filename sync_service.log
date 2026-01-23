@@ -4882,3 +4882,21 @@ LINE 1: SELECT code FROM stations WHERE mac = '8B:48:4E:C3:F1:93' LI...
 2026-01-23 02:01:22,198 - INFO - [2026-01-23 02:01:22] ℹ️ INFO: Duración:   4.16 segundos
 2026-01-23 02:01:22,198 - INFO - [2026-01-23 02:01:22] ℹ️ INFO: 
 2026-01-23 02:01:22,198 - WARNING - [2026-01-23 02:01:22] ⚠️ ADVERTENCIA: ⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES
+2026-01-23 02:42:03,869 - INFO - [2026-01-23 02:42:03] ℹ️ INFO: Verificando/creando tabla sync_hashes...
+2026-01-23 02:42:03,880 - INFO - [2026-01-23 02:42:03] ✅ ÉXITO: ✅ Tabla sync_hashes lista
+2026-01-23 02:42:03,880 - INFO - [2026-01-23 02:42:03] ℹ️ INFO: 
+2026-01-23 02:42:03,880 - INFO - [2026-01-23 02:42:03] ℹ️ INFO: ╔════════════════════════════════════════════════════════════════╗
+2026-01-23 02:42:03,880 - INFO - [2026-01-23 02:42:03] ℹ️ INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+2026-01-23 02:42:03,881 - INFO - [2026-01-23 02:42:03] ℹ️ INFO: ╚════════════════════════════════════════════════════════════════╝
+2026-01-23 02:42:03,881 - INFO - [2026-01-23 02:42:03] ℹ️ INFO: 
+2026-01-23 02:42:03,889 - INFO - [2026-01-23 02:42:03] ✅ ÉXITO: ✅ Conectado a PostgreSQL
+2026-01-23 02:42:04,851 - INFO - [2026-01-23 02:42:04] ✅ ÉXITO: ✅ Conectado a MySQL
+2026-01-23 02:42:04,852 - INFO - [2026-01-23 02:42:04] ℹ️ INFO: Detectando cambios en products...
+2026-01-23 02:42:05,269 - INFO - [2026-01-23 02:42:05] ℹ️ INFO: Products: 0 nuevos, 0 modificados, 0 eliminados
+2026-01-23 02:42:05,269 - INFO - [2026-01-23 02:42:05] ℹ️ INFO: Detectando cambios en customers...
+2026-01-23 02:42:05,954 - INFO - [2026-01-23 02:42:05] ℹ️ INFO: Customers: 0 nuevos, 0 modificados, 0 eliminados
+2026-01-23 02:42:05,955 - INFO - [2026-01-23 02:42:05] ℹ️ INFO: Detectando cambios en categories...
+2026-01-23 02:42:05,968 - INFO - [2026-01-23 02:42:05] ℹ️ INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+2026-01-23 02:42:05,969 - INFO - [2026-01-23 02:42:05] ℹ️ INFO: Detectando cambios en quotes (MySQL → PostgreSQL)...
+2026-01-23 02:42:06,126 - INFO - [2026-01-23 02:42:06] ℹ️ INFO: Quotes: 0 nuevos, 0 modificados
+2026-01-23 02:42:06,126 - INFO - [2026-01-23 02:42:06] ✅ ÉXITO: ✨ No hay cambios que sincronizar
