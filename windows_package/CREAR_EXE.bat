@@ -1,26 +1,27 @@
 @echo off
 setlocal enabledelayedexpansion
-title Compilador Sync System
+title Crear Ejecutable - Sync System
 
 echo ========================================
-echo   CREACION DE EJECUTABLE SYNC SYSTEM
+echo   CREAR EJECUTABLE SYNC SYSTEM
 echo ========================================
 echo.
 
-REM [1/9] Verificar Python
-echo [1/9] Verificando Python...
+REM [1/7] Verificar Python
+echo [1/7] Verificando Python...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo ERROR: Python no esta instalado
+    echo Descarga desde: https://www.python.org/downloads/
     pause
     exit /b 1
 )
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
-echo Python %PYTHON_VERSION% encontrado!
+echo Python %PYTHON_VERSION% encontrado
 
 echo.
-REM [2/9] Verificar archivos
-echo [2/9] Verificando archivos...
+REM [2/7] Verificar archivos
+echo [2/7] Verificando archivos...
 if not exist "sync_system.py" (
     echo ERROR: sync_system.py no encontrado
     pause
@@ -34,33 +35,60 @@ if not exist "smart_sync_complete.py" (
 echo Archivos encontrados
 
 echo.
-REM [3/9] Crear requirements
-echo [3/9] Creando requirements.txt...
-REM Usar versiones recientes con binarios precompilados
-echo pyinstaller==6.10.0> requirements.txt
-echo psycopg2-binary>> requirements.txt
-echo mysql-connector-python>> requirements.txt
+REM [3/7] Crear entorno virtual
+echo [3/7] Configurando entorno virtual...
+if not exist "venv" (
+    echo Creando entorno virtual...
+    python -m venv venv
+    if %errorlevel% neq 0 (
+        echo ERROR: No se pudo crear entorno virtual
+        pause
+        exit /b 1
+    )
+)
+echo Entorno virtual listo
 
 echo.
-REM [4/9] Limpiar anteriores
-echo [4/9] Limpiando builds anteriores...
-if exist build rmdir /s /q build 2>nul
-if exist dist rmdir /s /q dist 2>nul
-if exist *.spec del *.spec 2>nul
-
-echo.
-REM [5/9] Instalar dependencias
-echo [5/9] Instalando dependencias...
-pip install -r requirements.txt
+REM [4/7] Activar entorno virtual
+echo [4/7] Activando entorno virtual...
+call venv\Scripts\activate
 if %errorlevel% neq 0 (
-    echo ERROR instalando dependencias
+    echo ERROR: No se pudo activar entorno virtual
     pause
     exit /b 1
 )
 
 echo.
-REM [6/9] Verificar dependencias
-echo [6/9] Verificando dependencias...
+REM [5/7] Instalar dependencias
+echo [5/7] Instalando dependencias...
+echo Esto puede tomar un minuto...
+python -m pip install --upgrade pip --quiet 2>nul
+
+echo Instalando PyInstaller 6.1.0...
+pip install pyinstaller==6.1.0 --quiet
+if %errorlevel% neq 0 (
+    echo ERROR instalando PyInstaller
+    pause
+    exit /b 1
+)
+
+echo Instalando psycopg2-binary...
+pip install psycopg2-binary --quiet
+if %errorlevel% neq 0 (
+    echo ERROR instalando psycopg2-binary
+    pause
+    exit /b 1
+)
+
+echo Instalando mysql-connector-python...
+pip install mysql-connector-python --quiet
+if %errorlevel% neq 0 (
+    echo ERROR instalando mysql-connector-python
+    pause
+    exit /b 1
+)
+
+echo Verificando dependencias...
 python -c "import psycopg2; import mysql.connector; import tkinter; print('OK')" 2>nul
 if %errorlevel% neq 0 (
     echo ERROR: Dependencias no instaladas correctamente
@@ -70,11 +98,20 @@ if %errorlevel% neq 0 (
 echo Dependencias OK
 
 echo.
-REM [7/9] Crear ejecutable
-echo [7/9] Creando ejecutable...
+REM [6/7] Limpiar builds anteriores
+echo [6/7] Limpiando builds anteriores...
+if exist build rmdir /s /q build 2>nul
+if exist dist rmdir /s /q dist 2>nul
+if exist *.spec del *.spec 2>nul
+
 echo.
-echo Esto puede tomar 3-5 minutos...
+REM [7/7] Crear ejecutable
+echo [7/7] Creando ejecutable...
+echo.
+echo ========================================
+echo Esto tomara 3-5 minutos
 echo Por favor espera...
+echo ========================================
 echo.
 
 pyinstaller ^
@@ -103,7 +140,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-REM [8/9] Verificar creacion
+REM Verificar resultado
 if exist "dist\sync_system.exe" (
     echo.
     echo ========================================
@@ -118,12 +155,11 @@ if exist "dist\sync_system.exe" (
     )
 
     echo.
-    echo Para usarlo:
-    echo   1. Copia sync_system.exe a donde quieras
-    echo   2. Ejecuta con doble clic
-    echo   3. Configura en primera ejecucion
+    echo COMO USAR:
+    echo   1. Ve a la carpeta dist
+    echo   2. Copia sync_system.exe donde quieras
+    echo   3. Ejecuta con doble clic
     echo.
-    echo PROCESO COMPLETADO!
 
 ) else (
     echo.
