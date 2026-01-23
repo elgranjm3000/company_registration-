@@ -22,6 +22,14 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 
+# Detectar si estamos corriendo en PyInstaller
+if getattr(sys, 'frozen', False):
+    # Si está empaquetado, usar el directorio temporal de PyInstaller
+    BASE_DIR = sys._MEIPASS
+else:
+    # Si está en desarrollo, usar el directorio del script
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Intentar importar dependencias con manejo de errores
 try:
     from dotenv import load_dotenv
@@ -175,7 +183,7 @@ class SyncModule:
             import importlib.util
             spec = importlib.util.spec_from_file_location(
                 "smart_sync_complete",
-                os.path.join(os.path.dirname(__file__), "smart_sync_complete.py")
+                os.path.join(BASE_DIR, "smart_sync_complete.py")
             )
             sync_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(sync_module)
