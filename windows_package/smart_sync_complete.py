@@ -706,8 +706,6 @@ class SmartSyncComplete:
             import uuid
             mac = ':'.join(('%012X' % uuid.getnode())[i:i+2] for i in range(0, 12, 2))
 
-            OFFSET_CORRELATIVO = 50000
-
             # Procesar quotes nuevos y modificados
             quotes_a_procesar = cambios.get('nuevos', []) + cambios.get('modificados', [])
 
@@ -718,7 +716,6 @@ class SmartSyncComplete:
                 # Iniciar transacción individual para cada quote
                 try:
                     quote_id = quote['id']
-                    correlativo = quote_id + OFFSET_CORRELATIVO
 
                     self._log(f"  Procesando quote #{quote_id}...", "debug")
 
@@ -736,7 +733,14 @@ class SmartSyncComplete:
                         continue
 
                     # Es nuevo, insertar completamente
-                    self._insertar_quote_postgresql(quote, correlativo, mac)
+                    correlativo = self._insertar_quote_postgresql(quote, mac)
+
+                    # Guardar el correlative en el hash para futuras referencias
+                    if correlativo:
+                        quote_con_correlative = quote.copy()
+                        quote_con_correlative['_postgres_correlative'] = correlativo
+                        hash_nuevo = self._generar_hash_quote(quote)
+                        self._guardar_hash('quotes', str(quote_id), hash_nuevo, quote_con_correlative)
 
                     # Commit exitoso de este quote
                     self.pg_conn.commit()
@@ -754,8 +758,17 @@ class SmartSyncComplete:
             self._log(f"Error sincronizando quotes a PostgreSQL: {str(e)}", "error")
             self.stats['quotes']['errores'] += 1
 
-    def _insertar_quote_postgresql(self, quote: dict, correlativo: int, mac: str):
-        """Insertar un quote completo en PostgreSQL"""
+    def _insertar_quote_postgresql(self, quote: dict, mac: str) -> int:
+        """
+        Insertar un quote completo en PostgreSQL
+
+        Args:
+            quote: Datos del quote desde MySQL
+            mac: MAC address (no usado, para compatibilidad)
+
+        Returns:
+            El correlative generado por PostgreSQL, o None si falló
+        """
         from datetime import datetime, timedelta
 
         # Verificar/obtener station válida
@@ -784,10 +797,10 @@ class SmartSyncComplete:
             customer_doc = f"MIG-{quote['customer_id']}"
             customer_address = ""
 
-        # Insertar sales_operation
+        # Insertar sales_operation (SIN correlative - dejar que PostgreSQL lo genere)
         sql_operation = """
         INSERT INTO public.sales_operation (
-            correlative, operation_type, document_no, emission_date,
+            operation_type, document_no, emission_date,
             register_date, client_code, client_name, client_id,
             client_address, client_phone, seller, credit_days,
             expiration_date, description, store, locations, user_code,
@@ -801,8 +814,9 @@ class SmartSyncComplete:
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
+        RETURNING correlative
         """
 
         document_no = str(quote['quote_number'])
@@ -811,7 +825,6 @@ class SmartSyncComplete:
             bcv_rate = 170  # Valor default
 
         self.pg_cursor.execute(sql_operation, (
-            correlativo,                                           # correlative
             'BUDGET',                                              # operation_type
             document_no,                                           # document_no
             emission_date,                                         # emission_date
@@ -854,14 +867,26 @@ class SmartSyncComplete:
             ''                                                     # operation_comments
         ))
 
-        # Insertar monedas (sales_operation_coins)
-        self._insertar_quote_monedas(correlativo, quote, bcv_rate)
+        # Recuperar el correlative generado por PostgreSQL
+        result = self.pg_cursor.fetchone()
+        if result and result[0]:
+            correlativo = result[0]
+            self._log(f"  Quote #{quote['id']} insertado con correlative={correlativo} (auto-generado)", "debug")
 
-        # Insertar items del quote
-        self._insertar_quote_items(correlativo, quote, bcv_rate)
+            # Insertar monedas (sales_operation_coins)
+            self._insertar_quote_monedas(correlativo, quote, bcv_rate)
 
-        # Insertar impuestos
-        self._insertar_quote_taxes(correlativo, quote, bcv_rate)
+            # Insertar items del quote
+            self._insertar_quote_items(correlativo, quote, bcv_rate)
+
+            # Insertar impuestos
+            self._insertar_quote_taxes(correlativo, quote, bcv_rate)
+        else:
+            self._log(f"  WARNING: No se pudo obtener correlative para quote #{quote['id']}", "warning")
+            correlativo = None
+
+        # Retornar el correlative generado
+        return correlativo
 
     def _obtener_station_valida(self, mac: str) -> str:
         """
