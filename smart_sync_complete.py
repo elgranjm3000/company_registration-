@@ -1246,8 +1246,10 @@ class SmartSyncComplete:
                         self._log(f"  ℹ️ Quote #{quote_id} ya existe en PostgreSQL (omitiendo)", "debug")
                         self.pg_conn.rollback()
                     else:
-                        # Otro error, registrar y continuar
+                        # Otro error, registrar con traceback completo
+                        import traceback
                         self._log(f"Error procesando quote {quote.get('id')}: {str(e)}", "error")
+                        self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
                         self.pg_conn.rollback()  # Rollback para que no afecte siguientes quotes
                         self.stats['quotes']['errores'] += 1
 
@@ -1365,7 +1367,7 @@ class SmartSyncComplete:
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         RETURNING correlative
         """
@@ -1561,21 +1563,23 @@ class SmartSyncComplete:
                 product_code = f"MIG-{product_id}"
                 product_cost = 0
 
-            # Obtener correlative de unit desde products_units
+            # Obtener correlative Y unit_type desde products_units
             self.pg_cursor.execute(
-                "SELECT correlative FROM products_units WHERE product_code = %s LIMIT 1",
+                "SELECT correlative, unit_type FROM products_units WHERE product_code = %s LIMIT 1",
                 (product_code,)
             )
             unit_result = self.pg_cursor.fetchone()
             if unit_result:
-                product_unit = unit_result[0]
+                product_unit = unit_result[0]  # correlative
+                product_unit_type = unit_result[1]  # unit_type
             else:
                 # Si no existe, buscar cualquier unit genérica
                 self.pg_cursor.execute(
-                    "SELECT correlative FROM products_units ORDER BY correlative LIMIT 1"
+                    "SELECT correlative, unit_type FROM products_units ORDER BY correlative LIMIT 1"
                 )
                 generic_unit = self.pg_cursor.fetchone()
-                product_unit = generic_unit[0] if generic_unit else 304  # fallback
+                product_unit = generic_unit[0] if generic_unit else 304  # fallback correlative
+                product_unit_type = generic_unit[1] if generic_unit else 0  # fallback unit_type
 
             # Calcular todos los valores ANTES del execute
             qty = safe_float(quantity)
@@ -1626,9 +1630,9 @@ class SmartSyncComplete:
                 qty,
                 '00',
                 '00',
-                product_unit,  # unit (correlative de products_units)
-                1.0,      # conversion_factor
-                1,        # unit_type
+                product_unit,       # unit (correlative de products_units)
+                1.0,                # conversion_factor
+                product_unit_type,  # unit_type (desde products_units)
                 unitary_cost,
                 '01',     # sale_tax
                 tax_percent,

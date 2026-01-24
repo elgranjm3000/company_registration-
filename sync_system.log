@@ -1,0 +1,52 @@
+[2026-01-24 13:09:56] [ERROR] Error conectando PostgreSQL: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+[2026-01-24 13:10:36] [ERROR] Error conectando PostgreSQL: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+[2026-01-24 13:10:47] [ERROR] Error conectando PostgreSQL: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+[2026-01-24 13:11:13] [ERROR] Error conectando PostgreSQL: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+[2026-01-24 13:11:48] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:11:49] [ERROR] Error conectando MySQL: 1045 (28000): Access denied for user 'root'@'172.19.0.1' (using password: NO)
+[2026-01-24 13:12:20] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:12:21] [INFO] Conectado a MySQL
+[2026-01-24 13:12:21] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:12:23] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:13:12] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:13:13] [INFO] Conectado a MySQL
+[2026-01-24 13:13:13] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:13:16] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:37:00] [INFO] === INICIANDO CICLO DE SINCRONIZACIÓN ===
+[2026-01-24 13:37:00] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:37:01] [INFO] Conectado a MySQL
+[2026-01-24 13:37:01] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:37:03] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:37:03] [INFO] Próxima sync en 30 minutos
+[2026-01-24 13:37:03] [INFO] === CICLO COMPLETADO ===
+
+[2026-01-24 13:37:13] [INFO] 
+=== SERVICIO DETENIDO ===
+[2026-01-24 13:37:22] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:37:23] [INFO] Conectado a MySQL
+[2026-01-24 13:37:23] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:37:26] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:38:30] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:38:31] [INFO] Conectado a MySQL
+[2026-01-24 13:38:31] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:38:34] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:41:30] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:41:30] [INFO] Conectado a MySQL
+[2026-01-24 13:41:30] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:41:34] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:41:49] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:41:50] [INFO] Conectado a MySQL
+[2026-01-24 13:41:50] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:41:53] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:49:46] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:49:47] [INFO] Conectado a MySQL
+[2026-01-24 13:49:47] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:49:51] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-01-24 13:54:26] [INFO] Conectado a PostgreSQL
+[2026-01-24 13:54:27] [INFO] Conectado a MySQL
+[2026-01-24 13:54:27] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-01-24 13:54:27] [ERROR] Error en sincronización: __init__() got an unexpected keyword argument 'company_id'

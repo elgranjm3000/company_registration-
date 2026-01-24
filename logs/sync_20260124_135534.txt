@@ -1,0 +1,46 @@
+[2026-01-24 13:55:34] ======================================================================
+[2026-01-24 13:55:34] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-01-24 13:55:34] Inicio: 2026-01-24 13:55:34
+[2026-01-24 13:55:34] Empresa RIF: J502741283
+[2026-01-24 13:55:34] Empresa Email: multiserviciosleblanc@gmail.com
+[2026-01-24 13:55:34] ======================================================================
+[2026-01-24 13:55:34] 
+[2026-01-24 13:55:34] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-01-24 13:55:34] ℹ️  INFO: Verificando/creando tabla sync_hashes...
+[2026-01-24 13:55:34] ⚠️  WARNING:   ⚠️ Error creando índice 'idx_sync_hashes_lookup': la relación «idx_sync_hashes_lookup» ya existe
+
+[2026-01-24 13:55:34] ⚠️  WARNING:   ⚠️ Error creando índice 'idx_sync_hashes_table': la relación «idx_sync_hashes_table» ya existe
+
+[2026-01-24 13:55:34] ✅ SUCCESS: ✅ Tabla sync_hashes lista
+[2026-01-24 13:55:34] ℹ️  INFO: 
+[2026-01-24 13:55:34] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-01-24 13:55:34] ℹ️  INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-01-24 13:55:34] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-01-24 13:55:34] ℹ️  INFO: 
+[2026-01-24 13:55:34] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-01-24 13:55:34] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-01-24 13:55:34] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-01-24 13:55:34] 🔍 DEBUG:    Port: 3306
+[2026-01-24 13:55:34] 🔍 DEBUG:    Database: chrystal_movil
+[2026-01-24 13:55:34] ℹ️  INFO: 🔍 Buscando empresa: RIF=J502741283, Email=multiserviciosleblanc@gmail.com
+[2026-01-24 13:55:34] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-01-24 13:55:34] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-01-24 13:55:34] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-01-24 13:55:35] ✅ SUCCESS: ✅ Empresa encontrada: Multiservicios Leblanc C.A. (ID: 27)
+[2026-01-24 13:55:35] ℹ️  INFO: Detectando cambios en products...
+[2026-01-24 13:55:35] ℹ️  INFO: Products: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 13:55:35] ℹ️  INFO: Detectando cambios en customers...
+[2026-01-24 13:55:36] ℹ️  INFO: Customers: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 13:55:36] ℹ️  INFO: Detectando cambios en categories...
+[2026-01-24 13:55:36] ℹ️  INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 13:55:36] ℹ️  INFO: Detectando cambios en quotes (MySQL → PostgreSQL)...
+[2026-01-24 13:55:36] ℹ️  INFO: Quotes: 0 nuevos, 0 modificados
+[2026-01-24 13:55:36] ✅ SUCCESS: ✨ No hay cambios que sincronizar
+[2026-01-24 13:55:36] 
+[2026-01-24 13:55:36] ======================================================================
+[2026-01-24 13:55:36] FIN DE SINCRONIZACIÓN
+[2026-01-24 13:55:36] Fin: 2026-01-24 13:55:36
+[2026-01-24 13:55:36] 
+[2026-01-24 13:55:36] ESTADÍSTICAS FINALES:
+[2026-01-24 13:55:36] ======================================================================
+[2026-01-24 13:55:36] 

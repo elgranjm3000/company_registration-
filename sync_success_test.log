@@ -1,0 +1,122 @@
+=== SINCRONIZACIÓN ÚNICA ===
+[2026-01-24 14:07:24] [INFO] Conectado a PostgreSQL
+[2026-01-24 14:07:25] [INFO] Conectado a MySQL
+[2026-01-24 14:07:25] [INFO] === INICIANDO SINCRONIZACIÓN ===
+📝 Log archivo: /home/muentes/company_registration/logs/sync_20260124_140725.txt
+[14:07:25] ⚠️ WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-01-24 14:07:25] [WARNING] Sistema de notificaciones no disponible (pip install win10toast)
+[14:07:25] ℹ️ INFO: Verificando/creando tabla sync_hashes...
+[2026-01-24 14:07:25] [INFO] Verificando/creando tabla sync_hashes...
+[14:07:25] ⚠️ WARNING:   ⚠️ Error creando índice 'idx_sync_hashes_lookup': la relación «idx_sync_hashes_lookup» ya existe
+
+[2026-01-24 14:07:25] [WARNING]   ⚠️ Error creando índice 'idx_sync_hashes_lookup': la relación «idx_sync_hashes_lookup» ya existe
+[14:07:25] ⚠️ WARNING:   ⚠️ Error creando índice 'idx_sync_hashes_table': la relación «idx_sync_hashes_table» ya existe
+
+[2026-01-24 14:07:25] [WARNING]   ⚠️ Error creando índice 'idx_sync_hashes_table': la relación «idx_sync_hashes_table» ya existe
+[14:07:25] ✅ SUCCESS: ✅ Tabla sync_hashes lista
+[2026-01-24 14:07:25] [SUCCESS] ✅ Tabla sync_hashes lista
+[14:07:25] ℹ️ INFO: 
+[2026-01-24 14:07:25] [INFO]
+[14:07:25] ℹ️ INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-01-24 14:07:25] [INFO] ╔════════════════════════════════════════════════════════════════╗
+[14:07:25] ℹ️ INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-01-24 14:07:25] [INFO] ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[14:07:25] ℹ️ INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-01-24 14:07:25] [INFO] ╚════════════════════════════════════════════════════════════════╝
+[14:07:25] ℹ️ INFO: 
+[2026-01-24 14:07:25] [INFO]
+[14:07:25] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-01-24 14:07:25] [SUCCESS] ✅ Conectado a PostgreSQL
+[14:07:25] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-01-24 14:07:25] [SUCCESS] ✅ Conectado a MySQL (pymysql)
+[14:07:25] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-01-24 14:07:25] [DEBUG]    Host: 91.238.160.176
+[14:07:25] 🔍 DEBUG:    Port: 3306
+[2026-01-24 14:07:25] [DEBUG]    Port: 3306
+[14:07:25] 🔍 DEBUG:    Database: chrystal_movil
+[2026-01-24 14:07:25] [DEBUG]    Database: chrystal_movil
+[14:07:25] ℹ️ INFO: 🔍 Buscando empresa: RIF=J502741283, Email=multiserviciosleblanc@gmail.com
+[2026-01-24 14:07:25] [INFO] 🔍 Buscando empresa: RIF=J502741283, Email=multiserviciosleblanc@gmail.com
+[14:07:25] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-01-24 14:07:25] [DEBUG]   🔍 Verificando tabla 'acceso'...
+[14:07:26] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-01-24 14:07:26] [SUCCESS]   ✅ Empresa encontrada en tabla 'acceso'
+[14:07:26] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-01-24 14:07:26] [DEBUG]   🔍 Buscando en tabla 'companies'...
+[14:07:26] ✅ SUCCESS: ✅ Empresa encontrada: Multiservicios Leblanc C.A. (ID: 27)
+[2026-01-24 14:07:26] [SUCCESS] ✅ Empresa encontrada: Multiservicios Leblanc C.A. (ID: 27)
+[14:07:26] ℹ️ INFO: Detectando cambios en products...
+[2026-01-24 14:07:26] [INFO] Detectando cambios en products...
+[14:07:26] ℹ️ INFO: Products: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 14:07:26] [INFO] Products: 0 nuevos, 0 modificados, 0 eliminados
+[14:07:26] ℹ️ INFO: Detectando cambios en customers...
+[2026-01-24 14:07:26] [INFO] Detectando cambios en customers...
+[14:07:27] ℹ️ INFO: Customers: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 14:07:27] [INFO] Customers: 0 nuevos, 0 modificados, 0 eliminados
+[14:07:27] ℹ️ INFO: Detectando cambios en categories...
+[2026-01-24 14:07:27] [INFO] Detectando cambios en categories...
+[14:07:27] ℹ️ INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 14:07:27] [INFO] Categories: 0 nuevos, 0 modificados, 0 eliminados
+[14:07:27] ℹ️ INFO: Detectando cambios en quotes (MySQL → PostgreSQL)...
+[2026-01-24 14:07:27] [INFO] Detectando cambios en quotes (MySQL → PostgreSQL)...
+[14:07:27] 🔍 DEBUG:   ✨ NUEVO: Quote #116 (W0000000003)
+[2026-01-24 14:07:27] [DEBUG]   ✨ NUEVO: Quote #116 (W0000000003)
+[14:07:27] ℹ️ INFO: Quotes: 1 nuevos, 0 modificados
+[2026-01-24 14:07:27] [INFO] Quotes: 1 nuevos, 0 modificados
+[14:07:27] ℹ️ INFO: 
+[2026-01-24 14:07:27] [INFO]
+[14:07:27] ℹ️ INFO: 📦 SINCRONIZANDO CATEGORIES...
+[2026-01-24 14:07:27] [INFO] 📦 SINCRONIZANDO CATEGORIES...
+[14:07:27] ℹ️ INFO: 
+[2026-01-24 14:07:27] [INFO]
+[14:07:27] ℹ️ INFO: 📦 SINCRONIZANDO PRODUCTS...
+[2026-01-24 14:07:27] [INFO] 📦 SINCRONIZANDO PRODUCTS...
+[14:07:27] ℹ️ INFO: 
+[2026-01-24 14:07:27] [INFO]
+[14:07:27] ℹ️ INFO: 👥 SINCRONIZANDO CUSTOMERS...
+[2026-01-24 14:07:27] [INFO] 👥 SINCRONIZANDO CUSTOMERS...
+[14:07:27] ℹ️ INFO: Sincronizando quotes a PostgreSQL...
+[2026-01-24 14:07:27] [INFO] Sincronizando quotes a PostgreSQL...
+[14:07:27] 🔍 DEBUG:   Procesando quote #116...
+[2026-01-24 14:07:27] [DEBUG]   Procesando quote #116...
+[14:07:27] 🔍 DEBUG:   ℹ️ Usando station: 00
+[2026-01-24 14:07:27] [DEBUG]   ℹ️ Usando station: 00
+[14:07:27] 🔍 DEBUG:   Quote #116 insertado con correlative=30220 (auto-generado)
+[2026-01-24 14:07:27] [DEBUG]   Quote #116 insertado con correlative=30220 (auto-generado)
+[14:07:27] 🔍 DEBUG:   🔍 DEBUG: Ejecutando INSERT detail con 28 parámetros
+[2026-01-24 14:07:27] [DEBUG]   🔍 DEBUG: Ejecutando INSERT detail con 28 parámetros
+[14:07:27] 🔍 DEBUG:   🔍 DEBUG: description_product='9AM DIVE UNISEX'
+[2026-01-24 14:07:27] [DEBUG]   🔍 DEBUG: description_product='9AM DIVE UNISEX'
+[14:07:27] 🔍 DEBUG:   🔍 DEBUG: product_code='6290171072836'
+[2026-01-24 14:07:27] [DEBUG]   🔍 DEBUG: product_code='6290171072836'
+[14:07:27] ❌ ERROR: Error procesando quote 116: inserción o actualización en la tabla «sales_operation_details» viola la llave foránea «sales_operation_details_unit_fkey»
+DETAIL:  La llave (unit)=(1) no está presente en la tabla «products_units».
+
+[2026-01-24 14:07:27] [ERROR] Error procesando quote 116: inserción o actualización en la tabla «sales_operation_details» viola la llave foránea «sales_operation_details_unit_fkey»
+DETAIL:  La llave (unit)=(1) no está presente en la tabla «products_units».
+[14:07:27] ✅ SUCCESS: ✅ Quotes sincronizados a PostgreSQL: 0 nuevos
+[2026-01-24 14:07:27] [SUCCESS] ✅ Quotes sincronizados a PostgreSQL: 0 nuevos
+[14:07:27] ℹ️ INFO: 
+[2026-01-24 14:07:27] [INFO]
+[14:07:27] ℹ️ INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-01-24 14:07:27] [INFO] ╔════════════════════════════════════════════════════════════════╗
+[14:07:27] ℹ️ INFO: ║                    RESUMEN DE SINCRONIZACIÓN                    ║
+[2026-01-24 14:07:27] [INFO] ║                    RESUMEN DE SINCRONIZACIÓN                    ║
+[14:07:27] ℹ️ INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-01-24 14:07:27] [INFO] ╚════════════════════════════════════════════════════════════════╝
+[14:07:27] ✅ SUCCESS: Products:   0 nuevos, 0 modificados
+[2026-01-24 14:07:27] [SUCCESS] Products:   0 nuevos, 0 modificados
+[14:07:27] ✅ SUCCESS: Customers:  0 nuevos, 0 modificados
+[2026-01-24 14:07:27] [SUCCESS] Customers:  0 nuevos, 0 modificados
+[14:07:27] ✅ SUCCESS: Categories: 0 nuevos, 0 modificados
+[2026-01-24 14:07:27] [SUCCESS] Categories: 0 nuevos, 0 modificados
+[14:07:27] ✅ SUCCESS: Quotes:     0 nuevos (MySQL→PG), 0 estados actualizados
+[2026-01-24 14:07:27] [SUCCESS] Quotes:     0 nuevos (MySQL→PG), 0 estados actualizados
+[14:07:27] ℹ️ INFO: Duración:   2.63 segundos
+[2026-01-24 14:07:27] [INFO] Duración:   2.63 segundos
+[14:07:27] ℹ️ INFO: 
+[2026-01-24 14:07:27] [INFO]
+[14:07:27] ⚠️ WARNING: ⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES
+[2026-01-24 14:07:27] [WARNING] ⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES
+📝 Archivo de log cerrado
+[2026-01-24 14:07:27] [INFO] === SINCRONIZACIÓN COMPLETADA ===

@@ -1,0 +1,40 @@
+[2026-01-24 18:55:44] ======================================================================
+[2026-01-24 18:55:44] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-01-24 18:55:44] Inicio: 2026-01-24 18:55:44
+[2026-01-24 18:55:44] Empresa RIF: J502741283
+[2026-01-24 18:55:44] Empresa Email: multiserviciosleblanc@gmail.com
+[2026-01-24 18:55:44] ======================================================================
+[2026-01-24 18:55:44] 
+[2026-01-24 18:55:44] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-01-24 18:55:44] ℹ️  INFO: 
+[2026-01-24 18:55:44] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-01-24 18:55:44] ℹ️  INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-01-24 18:55:44] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-01-24 18:55:44] ℹ️  INFO: 
+[2026-01-24 18:55:44] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-01-24 18:55:45] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-01-24 18:55:45] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-01-24 18:55:45] 🔍 DEBUG:    Port: None
+[2026-01-24 18:55:45] 🔍 DEBUG:    Database: chrystal_movil
+[2026-01-24 18:55:45] ℹ️  INFO: 🔍 Buscando empresa: RIF=J502741283, Email=multiserviciosleblanc@gmail.com
+[2026-01-24 18:55:45] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-01-24 18:55:45] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-01-24 18:55:45] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-01-24 18:55:45] ✅ SUCCESS: ✅ Empresa encontrada: Multiservicios Leblanc C.A. (ID: 27)
+[2026-01-24 18:55:45] ℹ️  INFO: Detectando cambios en products...
+[2026-01-24 18:55:46] ℹ️  INFO: Products: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 18:55:46] ℹ️  INFO: Detectando cambios en customers...
+[2026-01-24 18:55:46] ℹ️  INFO: Customers: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 18:55:46] ℹ️  INFO: Detectando cambios en categories...
+[2026-01-24 18:55:46] ℹ️  INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+[2026-01-24 18:55:46] ℹ️  INFO: Detectando cambios en quotes (MySQL → PostgreSQL)...
+[2026-01-24 18:55:47] ℹ️  INFO: Quotes: 0 nuevos, 0 modificados
+[2026-01-24 18:55:47] ✅ SUCCESS: ✨ No hay cambios que sincronizar
+[2026-01-24 18:55:47] 
+[2026-01-24 18:55:47] ======================================================================
+[2026-01-24 18:55:47] FIN DE SINCRONIZACIÓN
+[2026-01-24 18:55:47] Fin: 2026-01-24 18:55:47
+[2026-01-24 18:55:47] 
+[2026-01-24 18:55:47] ESTADÍSTICAS FINALES:
+[2026-01-24 18:55:47] ======================================================================
+[2026-01-24 18:55:47] 
