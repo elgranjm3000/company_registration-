@@ -1300,6 +1300,14 @@ class SmartSyncComplete:
             customer_doc = f"MIG-{quote['customer_id']}"
             customer_address = ""
 
+        # Calcular la suma total de cantidades (quantity) de los items
+        self.mysql_cursor.execute(
+            "SELECT SUM(quantity) FROM quote_items WHERE quote_id = %s",
+            (quote['id'],)
+        )
+        total_quantity_result = self.mysql_cursor.fetchone()
+        total_quantity = safe_float(total_quantity_result[0]) if total_quantity_result and total_quantity_result[0] else 0
+
         # Insertar sales_operation (SIN correlative - dejar que PostgreSQL lo genere)
         sql_operation = """
         INSERT INTO public.sales_operation (
@@ -1362,7 +1370,7 @@ class SmartSyncComplete:
             '00',                      # locations
             '00',                      # user_code
             station,                   # station (válida)
-            quote_total,               # total_amount
+            total_quantity,            # total_amount (suma de cantidades de items)
             quote_subtotal,            # total_net_details
             quote_tax_amount,          # total_tax_details
             quote_total,               # total_details
