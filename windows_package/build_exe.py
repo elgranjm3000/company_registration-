@@ -48,7 +48,24 @@ def build_exe():
         '--noconfirm',
 
         # Mostrar progreso
-        '--log-level=INFO'
+        '--log-level=INFO',
+
+        # ===== IMPORTANTE: Hidden imports para mysql-connector =====
+        # mysql-connector-python no se detecta automáticamente
+        '--hidden-import=mysql.connector',
+        '--hidden-import=mysql.connector.dns',
+        '--hidden-import=mysql.connector.locales',
+        '--hidden-import=psycopg2',
+        '--hidden-import=psycopg2.extensions',
+        '--hidden-import=pystray',
+        '--hidden-import=PIL',
+        '--hidden-import=win10toast',
+
+        # Incluir paquetes completos
+        '--collect-all=mysql.connector',
+        '--collect-all=psycopg2',
+        '--collect-all=pystray',
+        '--collect-all=Pillow',
     ]
 
     print("Opciones de PyInstaller:")
