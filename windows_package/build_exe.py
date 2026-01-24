@@ -55,17 +55,31 @@ def build_exe():
         '--hidden-import=mysql.connector',
         '--hidden-import=mysql.connector.dns',
         '--hidden-import=mysql.connector.locales',
+        '--hidden-import=mysql.connector.connection',
+        '--hidden-import=mysql.connector.cursor',
+        '--hidden-import=mysql.connector.abstracts',
+        '--hidden-import=mysql.connector.protocol',
+        '--hidden-import=mysql.connector.constants',
+        '--hidden-import=mysql.connector.authentication',
+        '--hidden-import=mysql.connector.version',
         '--hidden-import=psycopg2',
         '--hidden-import=psycopg2.extensions',
+        '--hidden-import=psycopg2.pool',
         '--hidden-import=pystray',
         '--hidden-import=PIL',
+        '--hidden-import=PIL.Image',
         '--hidden-import=win10toast',
+        '--hidden-import=tkinter',
+        '--hidden-import=tkinter.scrolledtext',
 
         # Incluir paquetes completos
         '--collect-all=mysql.connector',
         '--collect-all=psycopg2',
         '--collect-all=pystray',
         '--collect-all=Pillow',
+
+        # Copiar metadatos necesarios para mysql-connector
+        '--copy-metadata=mysql-connector-python',
     ]
 
     print("Opciones de PyInstaller:")
