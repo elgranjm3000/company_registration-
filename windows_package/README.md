@@ -16,8 +16,9 @@
 
 2. **Seleccionar opción 1** para configurar el sistema por primera vez
    - Ingresa credenciales de PostgreSQL
-   - Ingresa credenciales de MySQL
+   - Ingresa RIF y email de la empresa
    - Configura intervalo de sincronización
+   - **NOTA:** MySQL está preconfigurado (oculto para el usuario)
 
 3. **Para sincronizar manualmente:**
    - Ejecuta `INSTALAR_Y_EJECUTAR.bat` nuevamente

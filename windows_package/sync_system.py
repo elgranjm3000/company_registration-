@@ -69,25 +69,43 @@ def log(mensaje="", nivel="INFO"):
 def crear_config_default():
     """Crea configuración por defecto"""
     return {
+        # PostgreSQL (configurable por el usuario)
         "postgres_host": "localhost",
         "postgres_port": "5432",
         "postgres_database": "",
         "postgres_user": "postgres",
         "postgres_password": "",
 
-        "mysql_host": "",
+        # MySQL (HARDCODED - oculto para el usuario)
+        "mysql_host": "91.238.160.176",
         "mysql_port": "3306",
-        "mysql_database": "",
-        "mysql_user": "",
-        "mysql_password": "",
+        "mysql_database": "chrystal_movil",
+        "mysql_user": "chrystal_app",
+        "mysql_password": "muentes123.",
 
+        # Empresa (configurable por el usuario)
         "company_rif": "",
         "company_email": "",
 
+        # Sincronización (configurable por el usuario)
         "sync_interval_minutes": "30",
 
+        # Estado
         "configured": False,
         "first_run": True
+    }
+
+def obtener_config_mysql():
+    """
+    Retorna la configuración de MySQL harcodeada
+    Estas credenciales están ocultas para el usuario
+    """
+    return {
+        'host': "91.238.160.176",
+        'port': "3306",
+        'database': "chrystal_movil",
+        'user': "chrystal_app",
+        'password': "muentes123."
     }
 
 def cargar_config():
@@ -304,11 +322,10 @@ class ConfigWindow:
 
         self.crear_campos_postgresql(frame_pg)
 
-        # Pestaña MySQL
-        frame_mysql = ttk.Frame(notebook)
-        notebook.add(frame_mysql, text="🐬 MySQL")
-
-        self.crear_campos_mysql(frame_mysql)
+        # Pestaña MySQL (OCULTA - credenciales harcodeadas)
+        # frame_mysql = ttk.Frame(notebook)
+        # notebook.add(frame_mysql, text="🐬 MySQL")
+        # self.crear_campos_mysql(frame_mysql)
 
         # Pestaña Empresa
         frame_empresa = ttk.Frame(notebook)
@@ -510,34 +527,34 @@ class ConfigWindow:
         # Obtener valores
         config_nuevo = {}
 
-        # PostgreSQL
+        # PostgreSQL (configurable por el usuario)
         for key, entry in self.entry_pg.items():
             config_nuevo[key] = entry.get().strip()
 
-        # MySQL
-        for key, entry in self.entry_mysql.items():
-            config_nuevo[key] = entry.get().strip()
+        # MySQL (HARDCODED - oculto para el usuario)
+        mysql_config = obtener_config_mysql()
+        config_nuevo['mysql_host'] = mysql_config['host']
+        config_nuevo['mysql_port'] = mysql_config['port']
+        config_nuevo['mysql_database'] = mysql_config['database']
+        config_nuevo['mysql_user'] = mysql_config['user']
+        config_nuevo['mysql_password'] = mysql_config['password']
 
-        # Empresa
+        # Empresa (configurable por el usuario)
         config_nuevo['company_rif'] = self.entry_rif.get().strip()
         config_nuevo['company_email'] = self.entry_email.get().strip()
 
         # Configuración
         config_nuevo['sync_interval_minutes'] = self.intervalo.get()
 
-        # Validar (postgres_password puede ser blanco)
+        # Validar (solo PostgreSQL y Empresa)
         if not all([
             config_nuevo.get('postgres_host'),
             config_nuevo.get('postgres_database'),
             config_nuevo.get('postgres_user'),
-            config_nuevo.get('mysql_host'),
-            config_nuevo.get('mysql_database'),
-            config_nuevo.get('mysql_user'),
-            config_nuevo.get('mysql_password'),
             config_nuevo.get('company_rif'),
             config_nuevo.get('company_email')
         ]):
-            messagebox.showerror("Error", "Por favor complete todos los campos")
+            messagebox.showerror("Error", "Por favor complete todos los campos requeridos")
             return
 
         # Guardar
