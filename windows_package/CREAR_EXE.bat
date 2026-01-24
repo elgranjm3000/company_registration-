@@ -66,7 +66,7 @@ if %errorlevel% equ 0 (
     echo ========================================
     echo.
     echo Verifica que todas las dependencias esten instaladas:
-    echo   pip install psycopg2-binary mysql-connector-python pystray Pillow pyinstaller win10toast
+    echo   pip install psycopg2-binary pymysql pystray Pillow pyinstaller win10toast
     echo.
 )
 

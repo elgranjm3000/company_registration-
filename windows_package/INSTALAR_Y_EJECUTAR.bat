@@ -30,7 +30,7 @@ python --version
 echo.
 REM [2/4] Instalar dependencias
 echo Instalando dependencias basicas...
-pip install psycopg2-binary mysql-connector-python 2>nul
+pip install psycopg2-binary pymysql 2>nul
 
 echo Instalando dependencias para System Tray...
 pip install pystray Pillow 2>nul
@@ -41,7 +41,7 @@ pip install win10toast 2>nul
 echo.
 REM [3/4] Verificar dependencias
 echo Verificando imports...
-python -c "import psycopg2; import mysql.connector; import tkinter; import pystray; from PIL import Image; from win10toast import ToastNotifier; print('OK: Todas las dependencias correctas')" 2>nul
+python -c "import psycopg2; import pymysql; import tkinter; import pystray; from PIL import Image; from win10toast import ToastNotifier; print('OK: Todas las dependencias correctas')" 2>nul
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: No se pudieron importar todas las dependencias
@@ -49,7 +49,7 @@ if %errorlevel% neq 0 (
     echo Posibles soluciones:
     echo   1. Asegurate de tener Python 3.8+ instalado
     echo   2. Ejecuta: python -m pip install --upgrade pip
-    echo   3. Ejecuta: pip install --upgrade psycopg2-binary mysql-connector-python pystray Pillow win10toast
+    echo   3. Ejecuta: pip install --upgrade psycopg2-binary pymysql pystray Pillow win10toast
     echo.
     pause
     exit /b 1

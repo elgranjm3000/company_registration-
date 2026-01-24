@@ -50,18 +50,11 @@ def build_exe():
         # Mostrar progreso
         '--log-level=INFO',
 
-        # ===== IMPORTANTE: Hidden imports para mysql-connector =====
-        # mysql-connector-python no se detecta automáticamente
-        '--hidden-import=mysql.connector',
-        '--hidden-import=mysql.connector.dns',
-        '--hidden-import=mysql.connector.locales',
-        '--hidden-import=mysql.connector.connection',
-        '--hidden-import=mysql.connector.cursor',
-        '--hidden-import=mysql.connector.abstracts',
-        '--hidden-import=mysql.connector.protocol',
-        '--hidden-import=mysql.connector.constants',
-        '--hidden-import=mysql.connector.authentication',
-        '--hidden-import=mysql.connector.version',
+        # ===== IMPORTANTE: Hidden imports para pymysql =====
+        # pymysql es 100% Python puro - funciona perfectamente con PyInstaller
+        '--hidden-import=pymysql',
+        '--hidden-import=pymysql.connections',
+        '--hidden-import=pymysql.cursors',
         '--hidden-import=psycopg2',
         '--hidden-import=psycopg2.extensions',
         '--hidden-import=psycopg2.pool',
@@ -73,13 +66,9 @@ def build_exe():
         '--hidden-import=tkinter.scrolledtext',
 
         # Incluir paquetes completos
-        '--collect-all=mysql.connector',
         '--collect-all=psycopg2',
         '--collect-all=pystray',
         '--collect-all=Pillow',
-
-        # Copiar metadatos necesarios para mysql-connector
-        '--copy-metadata=mysql-connector-python',
     ]
 
     print("Opciones de PyInstaller:")

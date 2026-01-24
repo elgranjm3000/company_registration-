@@ -9,7 +9,7 @@ Versión: 1.0
 """
 
 import psycopg2
-import mysql.connector
+import pymysql  # Cambiado de mysql.connector a pymysql (100% Python puro)
 import hashlib
 import json
 import logging
@@ -339,12 +339,20 @@ class SmartSyncComplete:
                 self._log(f"   User: {self.postgresql_config.get('user')}", "debug")
                 return False
 
-            # Conectar MySQL
+            # Conectar MySQL (usando pymysql - 100% Python puro)
             try:
-                self.mysql_conn = mysql.connector.connect(**self.mysql_config)
+                self.mysql_conn = pymysql.connect(
+                    host=self.mysql_config['host'],
+                    port=int(self.mysql_config.get('port', 3306)),
+                    user=self.mysql_config['user'],
+                    password=self.mysql_config['password'],
+                    database=self.mysql_config['database'],
+                    charset='utf8mb4'
+                )
                 self.mysql_cursor = self.mysql_conn.cursor()
-                self._log("✅ Conectado a MySQL", "success")
+                self._log("✅ Conectado a MySQL (pymysql)", "success")
                 self._log(f"   Host: {self.mysql_config.get('host')}", "debug")
+                self._log(f"   Port: {self.mysql_config.get('port')}", "debug")
                 self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
             except Exception as e:
                 self._log(f"❌ Error conectando MySQL: {type(e).__name__}: {str(e)}", "error")
@@ -353,11 +361,9 @@ class SmartSyncComplete:
                 self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
                 self._log(f"   User: {self.mysql_config.get('user')}", "debug")
 
-                # Mostrar error detallado de mysql.connector
-                if hasattr(e, 'errno') and e.errno:
-                    self._log(f"   MySQL Error Code: {e.errno}", "error")
-                if hasattr(e, 'sqlstate'):
-                    self._log(f"   SQL State: {e.sqlstate}", "error")
+                # Mostrar error detallado de pymysql
+                if hasattr(e, 'args') and e.args:
+                    self._log(f"   Error: {e.args[0] if e.args else str(e)}", "error")
 
                 return False
 
@@ -472,15 +478,9 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"❌ Error obteniendo company_id: {type(e).__name__}: {str(e)}", "error")
 
-            # Mostrar detalles del error si es de MySQL
-            if hasattr(e, 'errno') and e.errno:
-                self._log(f"   MySQL Error Code: {e.errno}", "error")
-            if hasattr(e, 'sqlstate'):
-                self._log(f"   SQL State: {e.sqlstate}", "error")
-
-            # Mostrar la consulta que falló si está disponible
-            if hasattr(e, 'msg') and e.msg:
-                self._log(f"   Message: {e.msg}", "error")
+            # Mostrar detalles del error si es de MySQL (pymysql)
+            if hasattr(e, 'args') and e.args:
+                self._log(f"   Error: {e.args[0]}", "error")
 
             return False
 
