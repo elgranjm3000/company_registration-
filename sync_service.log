@@ -3026,3 +3026,50 @@ TypeError: not all arguments converted during string formatting
 2026-01-24 19:25:50,217 - INFO - [2026-01-24 19:25:50] ℹ️ INFO: Duración:   3.19 segundos
 2026-01-24 19:25:50,217 - INFO - [2026-01-24 19:25:50] ℹ️ INFO: 
 2026-01-24 19:25:50,217 - INFO - [2026-01-24 19:25:50] ✅ ÉXITO: ✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO
+2026-01-24 19:29:47,487 - WARNING - [2026-01-24 19:29:47] ⚠️ ADVERTENCIA: Sistema de notificaciones no disponible (pip install win10toast)
+2026-01-24 19:29:47,487 - INFO - [2026-01-24 19:29:47] ℹ️ INFO: 
+2026-01-24 19:29:47,487 - INFO - [2026-01-24 19:29:47] ℹ️ INFO: ╔════════════════════════════════════════════════════════════════╗
+2026-01-24 19:29:47,487 - INFO - [2026-01-24 19:29:47] ℹ️ INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+2026-01-24 19:29:47,488 - INFO - [2026-01-24 19:29:47] ℹ️ INFO: ╚════════════════════════════════════════════════════════════════╝
+2026-01-24 19:29:47,488 - INFO - [2026-01-24 19:29:47] ℹ️ INFO: 
+2026-01-24 19:29:47,496 - INFO - [2026-01-24 19:29:47] ✅ ÉXITO: ✅ Conectado a PostgreSQL
+2026-01-24 19:29:48,184 - INFO - [2026-01-24 19:29:48] ✅ ÉXITO: ✅ Conectado a MySQL (pymysql)
+2026-01-24 19:29:48,185 - INFO - [2026-01-24 19:29:48] 🔍 DEBUG:    Host: 91.238.160.176
+2026-01-24 19:29:48,185 - INFO - [2026-01-24 19:29:48] 🔍 DEBUG:    Port: None
+2026-01-24 19:29:48,185 - INFO - [2026-01-24 19:29:48] 🔍 DEBUG:    Database: chrystal_movil
+2026-01-24 19:29:48,185 - INFO - [2026-01-24 19:29:48] ℹ️ INFO: 🔍 Buscando empresa: RIF=J502741283, Email=multiserviciosleblanc@gmail.com
+2026-01-24 19:29:48,185 - INFO - [2026-01-24 19:29:48] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+2026-01-24 19:29:48,323 - INFO - [2026-01-24 19:29:48] ✅ ÉXITO:   ✅ Empresa encontrada en tabla 'acceso'
+2026-01-24 19:29:48,323 - INFO - [2026-01-24 19:29:48] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+2026-01-24 19:29:48,460 - INFO - [2026-01-24 19:29:48] ✅ ÉXITO: ✅ Empresa encontrada: Multiservicios Leblanc C.A. (ID: 27)
+2026-01-24 19:29:48,461 - INFO - [2026-01-24 19:29:48] ℹ️ INFO: Detectando cambios en products...
+2026-01-24 19:29:49,003 - INFO - [2026-01-24 19:29:49] ℹ️ INFO: Products: 0 nuevos, 0 modificados, 0 eliminados
+2026-01-24 19:29:49,004 - INFO - [2026-01-24 19:29:49] ℹ️ INFO: Detectando cambios en customers...
+2026-01-24 19:29:50,047 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: Customers: 0 nuevos, 0 modificados, 0 eliminados
+2026-01-24 19:29:50,048 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: Detectando cambios en categories...
+2026-01-24 19:29:50,076 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+2026-01-24 19:29:50,076 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: Detectando cambios en quotes (MySQL → PostgreSQL)...
+2026-01-24 19:29:50,217 - INFO - [2026-01-24 19:29:50] 🔍 DEBUG:   ✨ NUEVO: Quote #116 (W0000000003)
+2026-01-24 19:29:50,248 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: Quotes: 1 nuevos, 0 modificados
+2026-01-24 19:29:50,248 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: 
+2026-01-24 19:29:50,248 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: 📦 SINCRONIZANDO CATEGORIES...
+2026-01-24 19:29:50,248 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: 
+2026-01-24 19:29:50,248 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: 📦 SINCRONIZANDO PRODUCTS...
+2026-01-24 19:29:50,248 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: 
+2026-01-24 19:29:50,248 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: 👥 SINCRONIZANDO CUSTOMERS...
+2026-01-24 19:29:50,249 - INFO - [2026-01-24 19:29:50] ℹ️ INFO: Sincronizando quotes a PostgreSQL...
+2026-01-24 19:29:50,254 - INFO - [2026-01-24 19:29:50] 🔍 DEBUG:   Procesando quote #116...
+2026-01-24 19:29:50,255 - INFO - [2026-01-24 19:29:50] 🔍 DEBUG:   ℹ️ Usando station: 00
+2026-01-24 19:29:50,814 - INFO - [2026-01-24 19:29:50] 🔍 DEBUG:   Quote #116 insertado con correlative=30226 (auto-generado)
+2026-01-24 19:29:51,137 - INFO - [2026-01-24 19:29:51] ✅ ÉXITO: ✅ Quotes sincronizados a PostgreSQL: 1 nuevos
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ℹ️ INFO: 
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ℹ️ INFO: ╔════════════════════════════════════════════════════════════════╗
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ℹ️ INFO: ║                    RESUMEN DE SINCRONIZACIÓN                    ║
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ℹ️ INFO: ╚════════════════════════════════════════════════════════════════╝
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ✅ ÉXITO: Products:   0 nuevos, 0 modificados, 0 inactivados
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ✅ ÉXITO: Customers:  0 nuevos, 0 modificados
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ✅ ÉXITO: Categories: 0 nuevos, 0 modificados
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ✅ ÉXITO: Quotes:     1 nuevos (MySQL→PG), 0 estados actualizados
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ℹ️ INFO: Duración:   3.65 segundos
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ℹ️ INFO: 
+2026-01-24 19:29:51,138 - INFO - [2026-01-24 19:29:51] ✅ ÉXITO: ✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO
