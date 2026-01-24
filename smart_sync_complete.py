@@ -1550,7 +1550,7 @@ class SmartSyncComplete:
              tax_amount, discount_amount, discount_percentage, quantity,
              product_id) = item
 
-            # Obtener código de producto Y COSTO
+            # Obtener código de producto, COSTO y sale_tax desde PostgreSQL
             self.mysql_cursor.execute(
                 "SELECT code, cost FROM products WHERE id = %s",
                 (product_id,)
@@ -1562,6 +1562,25 @@ class SmartSyncComplete:
             else:
                 product_code = f"MIG-{product_id}"
                 product_cost = 0
+
+            # Obtener sale_tax desde PostgreSQL (tabla products)
+            self.pg_cursor.execute(
+                "SELECT sale_tax FROM products WHERE code = %s",
+                (product_code,)
+            )
+            pg_product = self.pg_cursor.fetchone()
+            if pg_product and pg_product[0]:
+                product_sale_tax = pg_product[0]
+                # Calcular sale_aliquot basado en sale_tax
+                if product_sale_tax == '01':
+                    product_sale_aliquot = 16  # IVA 16%
+                elif product_sale_tax == 'EX':
+                    product_sale_aliquot = 0   # Exento
+                else:
+                    product_sale_aliquot = 0   # Otro caso
+            else:
+                product_sale_tax = '01'  # Default
+                product_sale_aliquot = 16
 
             # Obtener correlative Y unit_type desde products_units
             self.pg_cursor.execute(
@@ -1634,8 +1653,8 @@ class SmartSyncComplete:
                 1.0,                # conversion_factor
                 product_unit_type,  # unit_type (desde products_units)
                 unitary_cost,
-                '01',     # sale_tax
-                tax_percent,
+                product_sale_tax,       # sale_tax (desde products)
+                product_sale_aliquot,   # sale_aliquot (16 para '01', 0 para 'EX')
                 up,
                 total_net_cost,
                 total_tax_cost,
