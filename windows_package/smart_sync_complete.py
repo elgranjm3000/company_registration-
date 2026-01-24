@@ -90,6 +90,10 @@ class SmartSyncComplete:
         self.log_file = None
         self._setup_file_logging()
 
+        # Sistema de notificaciones
+        self.notificaciones_habilitadas = True
+        self._verificar_sistema_notificaciones()
+
     def _setup_file_logging(self):
         """
         Configurar logging a archivo
@@ -138,6 +142,52 @@ class SmartSyncComplete:
     def _print_to_console(self, mensaje: str):
         """Imprimir a consola (fallback)"""
         print(mensaje)
+
+    def _verificar_sistema_notificaciones(self):
+        """Verifica si el sistema de notificaciones está disponible"""
+        try:
+            from win10toast import ToastNotifier
+            self.toast = ToastNotifier()
+            self._log("Sistema de notificaciones disponible", "info")
+        except ImportError:
+            self.toast = None
+            self.notificaciones_habilitadas = False
+            self._log("Sistema de notificaciones no disponible (pip install win10toast)", "warning")
+        except Exception as e:
+            self.toast = None
+            self.notificaciones_habilitadas = False
+            self._log(f"Sistema de notificaciones no disponible: {str(e)}", "warning")
+
+    def _mostrar_notificacion(self, titulo: str, mensaje: str, duracion: int = 5):
+        """
+        Muestra notificación de Windows
+
+        Args:
+            titulo: Título de la notificación
+            mensaje: Mensaje de la notificación
+            duracion: Duración en segundos (por defecto 5)
+        """
+        if not self.notificaciones_habilitadas or not self.toast:
+            return
+
+        try:
+            self.toast.show_toast(
+                title=titulo,
+                message=mensaje,
+                duration=duracion,
+                threaded=True  # No bloquear el hilo principal
+            )
+        except Exception as e:
+            self._log(f"Error mostrando notificación: {str(e)}", "warning")
+
+    def _notificar_nuevos_presupuestos(self, cantidad: int):
+        """Notifica cuando hay nuevos presupuestos"""
+        if cantidad > 0:
+            self._mostrar_notificacion(
+                titulo="🔄 Sync System - Nuevos Presupuestos",
+                mensaje=f"Tienes {cantidad} nuevo(s) presupuesto(s) de MySQL sincronizados",
+                duracion=10
+            )
 
     def _close_log_file(self):
         """Cerrar archivo de log y escribir resumen final"""
@@ -1110,6 +1160,10 @@ class SmartSyncComplete:
                     self.stats['quotes']['errores'] += 1
 
             self._log(f"✅ Quotes sincronizados a PostgreSQL: {self.stats['quotes']['nuevos']} nuevos", "success")
+
+            # Notificar si hay nuevos presupuestos
+            if self.stats['quotes']['nuevos'] > 0:
+                self._notificar_nuevos_presupuestos(self.stats['quotes']['nuevos'])
 
         except Exception as e:
             self._log(f"Error sincronizando quotes a PostgreSQL: {str(e)}", "error")
