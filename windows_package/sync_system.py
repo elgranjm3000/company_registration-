@@ -864,53 +864,179 @@ RIF: {self.config['company_rif']}
 
 Clic izquierdo: Ver logs
 Clic derecho: Menú"""
-            self.icon.tooltip = tooltip
+            # pystray no permite cambiar tooltip directamente,
+            # pero podemos usar update() para forzar actualización
+            self.icon.title = tooltip
+            self.icon._update_menu()
 
     def ver_logs(self):
-        """Abre ventana de logs"""
+        """Abre ventana de logs en tiempo real"""
         import tkinter as tk
         from tkinter import scrolledtext
+        import threading
+        import time
 
         # Crear ventana raíz ya que no hay una
         root = tk.Tk()
         root.withdraw()  # Ocultar ventana principal
 
         log_window = tk.Toplevel(root)
-        log_window.title("Logs de Sincronización")
-        log_window.geometry("800x600")
+        log_window.title("📊 Logs de Sincronización - Tiempo Real")
+        log_window.geometry("900x700")
 
-        # Frame para el texto y botón
-        frame = tk.Frame(log_window)
-        frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Frame principal
+        main_frame = tk.Frame(log_window)
+        main_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-        txt = scrolledtext.ScrolledText(frame, state="normal", font=("Consolas", 9))
-        txt.pack(fill="both", expand=True)
+        # Frame de información
+        info_frame = tk.Frame(main_frame)
+        info_frame.pack(fill="x", pady=(0, 5))
 
-        # Cargar logs del archivo
-        try:
-            log_dir = os.path.join(BASE_DIR, "logs")
-            if os.path.exists(log_dir):
+        lbl_info = tk.Label(
+            info_frame,
+            text="📁 Logs: windows_package/logs/  |  🔄 Actualización automática cada 2 segundos",
+            font=("Arial", 9),
+            anchor="w"
+        )
+        lbl_info.pack(fill="x")
+
+        # Frame de botones
+        btn_frame = tk.Frame(main_frame)
+        btn_frame.pack(fill="x", pady=(0, 5))
+
+        # Variables de control
+        log_running = [True]  # Usar lista para mutable en closure
+        current_log_file = [None]
+
+        def buscar_log_mas_reciente():
+            """Busca el archivo de log más reciente"""
+            try:
+                log_dir = os.path.join(BASE_DIR, "logs")
+                if not os.path.exists(log_dir):
+                    return None
+
                 log_files = sorted([f for f in os.listdir(log_dir) if f.endswith('.txt')], reverse=True)
                 if log_files:
-                    with open(os.path.join(log_dir, log_files[0]), 'r', encoding='utf-8') as f:
+                    return os.path.join(log_dir, log_files[0])
+                return None
+            except Exception:
+                return None
+
+        def actualizar_logs():
+            """Actualiza el contenido de logs periódicamente"""
+            last_size = [0]  # Tamaño del archivo la última vez
+
+            def update_loop():
+                while log_running[0]:
+                    try:
+                        log_file = buscar_log_mas_reciente()
+
+                        if log_file:
+                            if current_log_file[0] != log_file:
+                                # Nuevo archivo de log
+                                current_log_file[0] = log_file
+                                last_size[0] = 0
+                                txt.config(state="normal")
+                                txt.delete("1.0", "end")
+                                txt.insert("1.0", f"📄 Archivo: {os.path.basename(log_file)}\n" + "="*80 + "\n\n")
+                                last_size[0] = os.path.getsize(log_file)
+
+                            # Leer solo el contenido nuevo
+                            try:
+                                current_size = os.path.getsize(log_file)
+                                if current_size > last_size[0]:
+                                    with open(log_file, 'r', encoding='utf-8') as f:
+                                        f.seek(last_size[0])
+                                        new_content = f.read()
+                                        if new_content:
+                                            txt.config(state="normal")
+                                            txt.insert("end", new_content)
+                                            txt.see("end")  # Auto-scroll al final
+                                            txt.config(state="disabled")
+                                    last_size[0] = current_size
+                            except Exception:
+                                pass
+
+                        lbl_status.config(text=f"📄 {os.path.basename(current_log_file[0]) if current_log_file[0] else 'Esperando logs...'} | {'🔄 Monitoreando' if log_running[0] else '⏸️ Pausado'}")
+
+                        time.sleep(2)  # Actualizar cada 2 segundos
+
+                    except Exception:
+                        time.sleep(2)
+
+            # Iniciar thread de actualización
+            thread = threading.Thread(target=update_loop, daemon=True)
+            thread.start()
+
+        # Área de texto
+        txt = scrolledtext.ScrolledText(main_frame, state="normal", font=("Consolas", 9))
+        txt.pack(fill="both", expand=True)
+
+        # Etiqueta de estado
+        lbl_status = tk.Label(main_frame, text="🔄 Iniciando...", font=("Arial", 9), anchor="w")
+        lbl_status.pack(fill="x", pady=(5, 0))
+
+        # Botones
+        btn_cerrar = tk.Button(btn_frame, text="❌ Cerrar", command=lambda: cerrar_ventana(), bg="#ff6b6b", fg="white")
+        btn_cerrar.pack(side="right", padx=5)
+
+        btn_limpiar = tk.Button(btn_frame, text="🧹 Limpiar Vista", command=lambda: limpiar_vista())
+        btn_limpiar.pack(side="right", padx=5)
+
+        btn_refresh = tk.Button(btn_frame, text="🔄 Forzar Refresh", command=lambda: force_refresh())
+        btn_refresh.pack(side="right", padx=5)
+
+        def limpiar_vista():
+            """Limpia la vista pero sigue monitoreando"""
+            txt.config(state="normal")
+            txt.delete("1.0", "end")
+            txt.insert("1.0", "📋 Vista limpiada. Monitoreando...\n" + "="*80 + "\n\n")
+            txt.config(state="disabled")
+
+        def force_refresh():
+            """Fuerza la recarga completa del archivo"""
+            if current_log_file[0]:
+                try:
+                    with open(current_log_file[0], 'r', encoding='utf-8') as f:
                         content = f.read()
-                        txt.insert("1.0", content)
-                        log(f"Mostrando log: {log_files[0]}", "INFO")
-                else:
-                    txt.insert("1.0", "No hay archivos de log aún.")
-            else:
-                txt.insert("1.0", "No existe directorio de logs.")
-        except Exception as e:
-            txt.insert("1.0", f"Error leyendo logs: {e}")
+                        txt.config(state="normal")
+                        txt.delete("1.0", "end")
+                        txt.insert("1.0", f"📄 Archivo: {os.path.basename(current_log_file[0])}\n" + "="*80 + "\n\n")
+                        txt.insert("end", content)
+                        txt.see("end")
+                        txt.config(state="disabled")
+                except Exception as e:
+                    txt.config(state="normal")
+                    txt.insert("end", f"\n❌ Error: {e}\n")
+                    txt.config(state="disabled")
+
+        def cerrar_ventana():
+            """Cierra la ventana y detiene el monitoreo"""
+            log_running[0] = False
+            root.destroy()
+
+        # Iniciar actualización automática
+        actualizar_logs()
+
+        # Cargar contenido inicial
+        log_file = buscar_log_mas_reciente()
+        if log_file:
+            current_log_file[0] = log_file
+            try:
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    txt.insert("1.0", f"📄 Archivo: {os.path.basename(log_file)}\n" + "="*80 + "\n\n")
+                    txt.insert("end", content)
+                    txt.see("end")
+            except Exception as e:
+                txt.insert("1.0", f"❌ Error cargando log: {e}")
+        else:
+            txt.insert("1.0", "⏳ Esperando logs...\n\nLa primera sincronización creará el archivo de log.")
 
         txt.config(state="disabled")
 
-        # Botón cerrar
-        btn_cerrar = tk.Button(log_window, text="Cerrar", command=lambda: root.destroy())
-        btn_cerrar.pack(pady=5)
-
         # Manejar cierre de ventana
-        log_window.protocol("WM_DELETE_WINDOW", lambda: root.destroy())
+        log_window.protocol("WM_DELETE_WINDOW", cerrar_ventana)
 
         # Ejecutar
         root.mainloop()
@@ -979,6 +1105,12 @@ Clic derecho: Menú"""
 
         log(f"Sincronización automática cada {intervalo_minutos} minutos", "INFO")
 
+        # Primera sincronización inmediata al iniciar
+        if self.sync_running:
+            log("🔄 Ejecutando primera sincronización al inicio...", "INFO")
+            self.ejecutar_sincronizacion()
+
+        # Bucle de sincronización periódica
         while self.sync_running:
             try:
                 time.sleep(intervalo_segundos)
