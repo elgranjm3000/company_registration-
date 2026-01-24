@@ -44,11 +44,11 @@ def build_exe():
         # Limpiar archivos temporales
         '--clean',
 
-        # Sobrescribir sin preguntar
-        '--y',
+        # Confirmación automática
+        '--noconfirm',
 
-        # Nombre de la aplicación
-        '--appname=Sync System'
+        # Mostrar progreso
+        '--log-level=INFO'
     ]
 
     print("Opciones de PyInstaller:")
