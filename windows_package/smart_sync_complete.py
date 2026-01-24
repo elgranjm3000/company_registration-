@@ -1267,47 +1267,64 @@ class SmartSyncComplete:
         if bcv_rate == 0:
             bcv_rate = 170  # Valor default
 
+        # Calcular todos los valores ANTES de pasarlos al execute
+        # para evitar problemas de formateo de strings con símbolos %
+        client_code = customer_doc or 'ND'
+        client_id = customer_doc or f"MIG-{quote['id']}"
+        client_address_final = customer_address or 'Dirección migrada'
+        client_phone_final = customer_phone or 'S-N'
+
+        quote_total = safe_float(quote.get('total', 0))
+        quote_subtotal = safe_float(quote.get('subtotal', 0))
+        quote_tax_amount = safe_float(quote.get('tax_amount', 0))
+        quote_discount = safe_float(quote.get('discount', 0))
+        quote_discount_amount = safe_float(quote.get('discount_amount', 0))
+
+        total_net = quote_subtotal - quote_discount_amount
+        expiration = emission_date + timedelta(days=1)
+
+        # Ejecutar query con todos los valores pre-calculados
         self.pg_cursor.execute(sql_operation, (
-            'BUDGET',                                              # operation_type
-            document_no,                                           # document_no
-            emission_date,                                         # emission_date
-            emission_date,                                         # register_date
-            customer_doc or 'ND',                                  # client_code
-            customer_name,                                         # client_name
-            customer_doc or f"MIG-{quote['id']}",                  # client_id
-            customer_address or 'Dirección migrada',               # client_address
-            customer_phone or 'S-N',                               # client_phone
-            '00',                                                  # seller
-            1,                                                     # credit_days
-            emission_date + timedelta(days=1),                     # expiration_date
-            '',                                                    # description
-            '00',                                                  # store
-            '00',                                                  # locations
-            '00',                                                  # user_code
-            station,                                               # station (válida)
-            safe_float(quote.get('total', 0)),                     # total_amount
-            safe_float(quote.get('subtotal', 0)),                  # total_net_details
-            safe_float(quote.get('tax_amount', 0)),                # total_tax_details
-            safe_float(quote.get('total', 0)),                     # total_details
-            safe_float(quote.get('discount', 0)),                  # percent_discount
-            safe_float(quote.get('discount_amount', 0)),           # discount
-            safe_float(quote.get('subtotal', 0)) - safe_float(quote.get('discount_amount', 0)),  # total_net
-            safe_float(quote.get('tax_amount', 0)),                # total_tax
-            safe_float(quote.get('total', 0)),                     # total
-            0.0,                                                   # credit
-            0.0,                                                   # cash
-            '02',                                                  # coin_code (Dólar)
-            False,                                                 # canceled
-            True,                                                  # pending
-            False,                                                 # wait
-            safe_float(quote.get('subtotal', 0)),                  # total_net_cost
-            safe_float(quote.get('tax_amount', 0)),                # total_tax_cost
-            safe_float(quote.get('total', 0)),                     # total_cost
-            '01',                                                  # freight_tax
-            16,                                                    # freight_aliquot
-            document_no,                                           # document_no_internal
-            '',                                                    # control_no
-            ''                                                     # operation_comments
+            'BUDGET',                  # operation_type
+            document_no,               # document_no
+            emission_date,             # emission_date
+            emission_date,             # register_date
+            client_code,               # client_code
+            customer_name,             # client_name
+            client_id,                 # client_id
+            client_address_final,      # client_address
+            client_phone_final,        # client_phone
+            '00',                      # seller
+            1,                         # credit_days
+            expiration,                # expiration_date
+            '',                        # description
+            '00',                      # store
+            '00',                      # locations
+            '00',                      # user_code
+            station,                   # station (válida)
+            quote_total,               # total_amount
+            quote_subtotal,            # total_net_details
+            quote_tax_amount,          # total_tax_details
+            quote_total,               # total_details
+            quote_discount,            # percent_discount
+            quote_discount_amount,     # discount
+            total_net,                 # total_net
+            quote_tax_amount,          # total_tax
+            quote_total,               # total
+            0.0,                       # credit
+            0.0,                       # cash
+            '02',                      # coin_code (Dólar)
+            False,                     # canceled
+            True,                      # pending
+            False,                     # wait
+            quote_subtotal,            # total_net_cost
+            quote_tax_amount,          # total_tax_cost
+            quote_total,               # total_cost
+            '01',                      # freight_tax
+            16,                        # freight_aliquot
+            document_no,               # document_no_internal
+            '',                        # control_no
+            ''                         # operation_comments
         ))
 
         # Recuperar el correlative generado por PostgreSQL
