@@ -1310,7 +1310,7 @@ class SmartSyncComplete:
 
         # Calcular costos reales desde los productos (NO usar precio)
         self.mysql_cursor.execute("""
-            SELECT qi.quantity, p.cost, qi.tax_amount
+            SELECT qi.quantity, p.cost, qi.product_id, p.code
             FROM quote_items qi
             JOIN products p ON p.id = qi.product_id
             WHERE qi.quote_id = %s
@@ -1322,14 +1322,32 @@ class SmartSyncComplete:
         total_net_cost = 0
         total_tax_cost = 0
 
-        for quantity, cost, tax_amount in items_costos:
+        for quantity, cost, product_id, product_code in items_costos:
             qty = safe_float(quantity)
             prod_cost = safe_float(cost if cost else 0)
-            prod_tax = safe_float(tax_amount)
 
-            # Calcular costo del item
+            # Calcular costo neto del item
             item_net_cost = qty * prod_cost
-            item_tax_cost = prod_tax * 0.8  # 80% del impuesto (según modelo)
+
+            # Obtener sale_tax desde PostgreSQL para calcular tax_cost
+            self.pg_cursor.execute(
+                "SELECT sale_tax FROM products WHERE code = %s",
+                (product_code,)
+            )
+            pg_product = self.pg_cursor.fetchone()
+
+            # Calcular tax_cost basado en sale_tax (16% para gravados, 0 para exentos)
+            if pg_product and pg_product[0]:
+                product_sale_tax = pg_product[0]
+                if product_sale_tax == '01':
+                    # Producto gravado: tax_cost = 16% del net_cost
+                    item_tax_cost = item_net_cost * 0.16
+                else:
+                    # Producto exento u otro: tax_cost = 0
+                    item_tax_cost = 0
+            else:
+                # Si no encuentra el producto, asumir gravado
+                item_tax_cost = item_net_cost * 0.16
 
             total_net_cost += item_net_cost
             total_tax_cost += item_tax_cost
@@ -1442,8 +1460,10 @@ class SmartSyncComplete:
             correlativo = result[0]
             self._log(f"  Quote #{quote['id']} insertado con correlative={correlativo} (auto-generado)", "debug")
 
-            # Insertar monedas (sales_operation_coins)
-            self._insertar_quote_monedas(correlativo, quote, bcv_rate)
+            # Insertar monedas (sales_operation_coins) - pasando costos y exempt
+            self._insertar_quote_monedas(correlativo, quote, bcv_rate,
+                                          total_net_cost, total_tax_cost,
+                                          total_cost_calculado, total_exempt)
 
             # Insertar items del quote
             self._insertar_quote_items(correlativo, quote, bcv_rate)
@@ -1487,7 +1507,9 @@ class SmartSyncComplete:
             self._log(f"Error obteniendo station: {str(e)}, usando '00'", "warning")
             return '00'
 
-    def _insertar_quote_monedas(self, correlativo: int, quote: dict, bcv_rate: float):
+    def _insertar_quote_monedas(self, correlativo: int, quote: dict, bcv_rate: float,
+                                total_net_cost: float = 0, total_tax_cost: float = 0,
+                                total_cost: float = 0, total_exempt: float = 0):
         """Insertar monedas del quote (sales_operation_coins)"""
         subtotal = safe_float(quote.get('subtotal', 0))
         tax_amount = safe_float(quote.get('tax_amount', 0))
@@ -1504,27 +1526,36 @@ class SmartSyncComplete:
         total_net_usd = subtotal - discount_amount
         total_net_bcv = subtotal_bcv - discount_amount_bcv
 
+        # Calcular costos en bolívares
+        total_net_cost_bcv = total_net_cost * bcv_rate
+        total_tax_cost_bcv = total_tax_cost * bcv_rate
+        total_cost_bcv = total_cost * bcv_rate
+        total_exempt_bcv = total_exempt * bcv_rate
+
         sql_coins = """
         INSERT INTO public.sales_operation_coins (
             main_correlative, coin_code, factor_type, buy_aliquot,
             sales_aliquot, total_net_details, total_tax_details,
             total_details, discount, freight, total_net, total_tax,
-            total, credit, cash
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total, credit, cash, total_net_cost, total_tax_cost,
+            total_cost, total_exempt, total_operation
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        # Moneda dólar (02)
+        # Moneda dólar (02) - factor_type=1, aliquot=tasa BCV
         self.pg_cursor.execute(sql_coins, (
             correlativo, '02', 1, bcv_rate, bcv_rate,
             subtotal, tax_amount, total, discount_amount, 0.0,
-            total_net_usd, tax_amount, total, 0.0, 0.0
+            total_net_usd, tax_amount, total, 0.0, 0.0,
+            total_net_cost, total_tax_cost, total_cost, total_exempt, 0.0
         ))
 
-        # Moneda bolívar (01)
+        # Moneda bolívar (01) - factor_type=0 (moneda base), aliquot=1.0
         self.pg_cursor.execute(sql_coins, (
-            correlativo, '01', 1, bcv_rate, bcv_rate,
+            correlativo, '01', 0, 1.0, 1.0,
             subtotal_bcv, tax_amount_bcv, total_bcv, discount_amount_bcv, 0.0,
-            total_net_bcv, tax_amount_bcv, total_bcv, 0.0, 0.0
+            total_net_bcv, tax_amount_bcv, total_bcv, 0.0, 0.0,
+            total_net_cost_bcv, total_tax_cost_bcv, total_cost_bcv, total_exempt_bcv, 0.0
         ))
 
     def _insertar_quote_items(self, correlativo: int, quote: dict, bcv_rate: float):
