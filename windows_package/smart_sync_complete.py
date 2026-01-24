@@ -1336,6 +1336,18 @@ class SmartSyncComplete:
 
         total_cost_calculado = total_net_cost + total_tax_cost
 
+        # Calcular total_exempt (suma de precios de productos exentos)
+        self.mysql_cursor.execute("""
+            SELECT qi.subtotal
+            FROM quote_items qi
+            JOIN products p ON p.id = qi.product_id
+            WHERE qi.quote_id = %s
+            AND (p.sale_tax IS NULL OR p.sale_tax = '' OR p.sale_tax = 'EX')
+        """, (quote['id'],))
+
+        exempt_items = self.mysql_cursor.fetchall()
+        total_exempt = safe_float(sum(item[0] for item in exempt_items)) if exempt_items else 0
+
         # Insertar sales_operation (SIN correlative - dejar que PostgreSQL lo genere)
         sql_operation = """
         INSERT INTO public.sales_operation (
@@ -1344,7 +1356,7 @@ class SmartSyncComplete:
             client_address, client_phone, seller, credit_days,
             expiration_date, description, store, locations, user_code,
             station, total_amount, total_net_details, total_tax_details,
-            total_details, percent_discount, discount, total_net,
+            total_details, total_exempt, percent_discount, discount, total_net,
             total_tax, total, credit, cash, coin_code, canceled,
             pending, wait, total_net_cost, total_tax_cost, total_cost,
             freight_tax, freight_aliquot, document_no_internal,
@@ -1402,6 +1414,7 @@ class SmartSyncComplete:
             quote_subtotal,            # total_net_details
             quote_tax_amount,          # total_tax_details
             quote_total,               # total_details
+            total_exempt,              # total_exempt (suma de precios de productos exentos)
             quote_discount,            # percent_discount
             quote_discount_amount,     # discount
             total_net,                 # total_net
