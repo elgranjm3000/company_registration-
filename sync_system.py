@@ -459,7 +459,7 @@ class ConfigWindow:
         ttk.Label(frame, text="Intervalo de sincronización:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
 
         self.intervalo = tk.StringVar(value=self.config.get('sync_interval_minutes', '30'))
-        intervalos = ["5", "15", "30", "60"]
+        intervalos = ["2", "5", "15", "30", "60"]
         combo = ttk.Combobox(frame, textvariable=self.intervalo, values=intervalos, state="readonly", width=37)
         combo.grid(row=0, column=1, pady=5, padx=5)
 
@@ -1148,11 +1148,6 @@ Clic derecho → Ver Logs (tiempo real)"""
 
     def bucle_sincronizacion(self):
         """Bucle de sincronización automática"""
-        intervalo_minutos = int(self.config.get('sync_interval_minutes', 30))
-        intervalo_segundos = intervalo_minutos * 60
-
-        log(f"Sincronización automática cada {intervalo_minutos} minutos", "INFO")
-
         # Primera sincronización inmediata al iniciar
         if self.sync_running:
             log("🔄 Ejecutando primera sincronización al inicio...", "INFO")
@@ -1161,6 +1156,14 @@ Clic derecho → Ver Logs (tiempo real)"""
         # Bucle de sincronización periódica
         while self.sync_running:
             try:
+                # Recargar configuración al inicio de cada ciclo
+                self.config = cargar_config()
+                intervalo_minutos = int(self.config.get('sync_interval_minutes', 30))
+                intervalo_segundos = intervalo_minutos * 60
+
+                log(f"Sincronización automática cada {intervalo_minutos} minutos", "INFO")
+                log(f"Próxima sincronización en {intervalo_minutos} minutos...", "INFO")
+
                 time.sleep(intervalo_segundos)
 
                 if self.sync_running:
