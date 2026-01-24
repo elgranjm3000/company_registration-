@@ -825,11 +825,11 @@ class SmartSyncComplete:
                 # Guardar hash actualizado
                 self._guardar_hash('products', code, hash_actual)
 
-            # Detectar eliminados
+            # Detectar productos inactivos (eliminados del query pero con hash guardado)
             if claves_actuales:
                 placeholders = ','.join(['%s'] * len(claves_actuales))
                 query_eliminados = f"""
-                SELECT record_key
+                SELECT record_key, last_sync_data
                 FROM sync_hashes
                 WHERE table_name = 'products'
                   AND company_id = %s
@@ -839,10 +839,33 @@ class SmartSyncComplete:
                 self.pg_cursor.execute(query_eliminados, [self.company_id] + claves_actuales)
                 eliminados = self.pg_cursor.fetchall()
 
-                for (eliminado,) in eliminados:
-                    cambios['eliminados'].append({'code': eliminado})
-                    self._log(f"  ❌ ELIMINADO: {eliminado}", "warning")
-                    self._eliminar_hash('products', eliminado)
+                for (code, last_sync_data) in eliminados:
+                    # Verificar si ya estaba marcado como inactivo
+                    data_parseado = {}
+                    if last_sync_data:
+                        try:
+                            data_parseado = json.loads(last_sync_data) if isinstance(last_sync_data, str) else last_sync_data
+                        except:
+                            data_parseado = {}
+
+                    ya_estaba_inactivo = data_parseado.get('status') == 'inactive'
+
+                    # Marcar como inactivo en sync_hashes (MANTENER el registro)
+                    info_inactividad = {
+                        'status': 'inactive',
+                        'inactive_since': data_parseado.get('inactive_since', datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+                        'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+
+                    # Usar hash especial para productos inactivos
+                    hash_inactivo = hashlib.md5(f"INACTIVE_{code}".encode()).hexdigest()
+                    self._guardar_hash('products', code, hash_inactivo, info_inactividad)
+
+                    cambios['eliminados'].append({'code': code})
+                    if ya_estaba_inactivo:
+                        self._log(f"  🔄 Permanece INACTIVO: {code}", "debug")
+                    else:
+                        self._log(f"  📴 Marcar como INACTIVO: {code}", "info")
 
             # Commit hashes
             self.pg_conn.commit()
