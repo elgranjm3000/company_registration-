@@ -810,20 +810,57 @@ class SmartSyncComplete:
                 # Generar hash actual
                 hash_actual = self._generar_hash_product(producto)
 
-                # Buscar hash guardado
-                hash_guardado = self._obtener_hash_guardado('products', code)
+                # Buscar hash guardado CON last_sync_data (para detectar reactivaciones)
+                query_hash = """
+                SELECT record_hash, last_sync_data
+                FROM sync_hashes
+                WHERE table_name = 'products'
+                  AND record_key = %s
+                  AND company_id = %s
+                """
+                self.pg_cursor.execute(query_hash, (code, self.company_id))
+                hash_guardado_full = self.pg_cursor.fetchone()
+
+                hash_guardado = hash_guardado_full[0] if hash_guardado_full else None
+                last_sync_data = hash_guardado_full[1] if hash_guardado_full else None
+
+                # Verificar si estaba inactivo (reactivación)
+                data_parseado = {}
+                if last_sync_data:
+                    try:
+                        data_parseado = json.loads(last_sync_data) if isinstance(last_sync_data, str) else last_sync_data
+                    except:
+                        data_parseado = {}
+
+                estaba_inactivo = data_parseado.get('status') == 'inactive'
+                inactive_since = data_parseado.get('inactive_since')
 
                 if hash_guardado is None:
-                    # Nuevo producto
+                    # Nuevo producto (nunca sincronizado)
                     cambios['nuevos'].append(producto)
                     self._log(f"  ✨ NUEVO: {code}", "debug")
-                elif hash_guardado[0] != hash_actual:
-                    # Producto modificado
+                    self._guardar_hash('products', code, hash_actual)
+                elif estaba_inactivo:
+                    # Producto REACTIVADO
+                    self._log(f"  ✅ REACTIVADO: {code} (inactivo desde {inactive_since})", "info")
+
+                    # Guardar historial de reactivación en last_sync_data
+                    info_reactivacion = {
+                        'status': 'active',
+                        'inactive_since': inactive_since,
+                        'reactivated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    self._guardar_hash('products', code, hash_actual, info_reactivacion)
+                    cambios['modificados'].append(producto)  # Sincronizar a MySQL
+                elif hash_guardado != hash_actual:
+                    # Producto modificado (sin cambio de status)
                     cambios['modificados'].append(producto)
                     self._log(f"  🔄 MODIFICADO: {code}", "debug")
-
-                # Guardar hash actualizado
-                self._guardar_hash('products', code, hash_actual)
+                    self._guardar_hash('products', code, hash_actual)
+                else:
+                    # Sin cambios, solo actualizar timestamp
+                    self._guardar_hash('products', code, hash_actual)
 
             # Detectar productos inactivos (eliminados del query pero con hash guardado)
             if claves_actuales:
