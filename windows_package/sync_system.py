@@ -794,7 +794,6 @@ class SystemTrayService:
     def ejecutar_sincronizacion(self):
         """Ejecuta una sincronización"""
         self.is_syncing = True
-        self.actualizar_tooltip()
 
         try:
             # Importar módulo de sincronización
@@ -836,38 +835,42 @@ class SystemTrayService:
             if resultado:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "✅ Exitosa"
+                self._mostrar_notificacion_windows("Sincronización Exitosa", f"Última sync: {self.last_sync_time}")
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error"
-
-            self.actualizar_tooltip()
+                self._mostrar_notificacion_windows("Error en Sincronización", "Revisa los logs para más detalles")
 
         except Exception as e:
             log(f"Error en sincronización: {e}", "ERROR")
             self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.last_sync_status = f"❌ Error: {str(e)[:30]}"
-            self.actualizar_tooltip()
+            self._mostrar_notificacion_windows("Error en Sincronización", str(e)[:50])
         finally:
             self.is_syncing = False
-            self.actualizar_tooltip()
+
+    def _mostrar_notificacion_windows(self, titulo: str, mensaje: str):
+        """Muestra notificación de Windows"""
+        try:
+            from win10toast import ToastNotifier
+            toast = ToastNotifier()
+            toast.show_toast(
+                title=f"🔄 {titulo}",
+                message=mensaje,
+                duration=5,
+                threaded=True
+            )
+        except Exception:
+            pass  # Si falla la notificación, continuar sin problema
 
     def actualizar_tooltip(self):
         """Actualiza el tooltip del icono"""
-        if self.icon:
-            tooltip = f"""Sync System v2.0
-
-Estado: {'🔄 Sincronizando...' if self.is_syncing else '✅ Listo'}
-Última sync: {self.last_sync_time or '--'}
-Resultado: {self.last_sync_status}
-
-RIF: {self.config['company_rif']}
-
-Clic izquierdo: Ver logs
-Clic derecho: Menú"""
-            # pystray no permite cambiar tooltip directamente,
-            # pero podemos usar update() para forzar actualización
-            self.icon.title = tooltip
-            self.icon._update_menu()
+        # pystray NO permite cambiar el tooltip dinámicamente
+        # El tooltip se establece al crear el icono y no se puede modificar
+        # En su lugar, mostramos el estado en:
+        # - Notificaciones de Windows
+        # - Ventana de logs en tiempo real
+        pass
 
     def ver_logs(self):
         """Abre ventana de logs en tiempo real"""
@@ -1075,8 +1078,12 @@ Clic derecho: Menú"""
             )
 
             # Crear icono en la bandeja
-            self.icon = pystray.Icon("Sync System", icon_image, "Sync System - Iniciando...", menu)
-            self.actualizar_tooltip()
+            # Nota: El tooltip no se puede cambiar dinámicamente en pystray
+            tooltip_text = f"""Sync System v2.0
+RIF: {self.config['company_rif']}
+
+Clic derecho → Ver Logs (tiempo real)"""
+            self.icon = pystray.Icon("Sync System", icon_image, tooltip_text, menu)
 
             # Iniciar sincronización automática en thread
             import threading
