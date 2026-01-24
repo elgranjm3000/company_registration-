@@ -1164,20 +1164,8 @@ class SmartSyncComplete:
 
                     self._log(f"  Procesando quote #{quote_id}...", "debug")
 
-                    # Verificar si ya existe en PostgreSQL
-                    self.pg_cursor.execute(
-                        "SELECT correlative FROM sales_operation WHERE document_no = %s LIMIT 1",
-                        (str(quote['quote_number']),)
-                    )
-                    existe = self.pg_cursor.fetchone()
-
-                    if existe:
-                        # Ya existe, verificar si hay que actualizar status
-                        self._actualizar_status_quote_postgresql(quote)
-                        self.pg_conn.commit()  # Commit individual
-                        continue
-
-                    # Es nuevo, insertar completamente
+                    # Insertar directamente en PostgreSQL (sin verificar si existe)
+                    # El sistema de hashes sync_hashes detectará duplicados
                     correlativo = self._insertar_quote_postgresql(quote, mac)
 
                     # Guardar el correlative en el hash para futuras referencias
@@ -1192,10 +1180,16 @@ class SmartSyncComplete:
                     self.stats['quotes']['nuevos'] += 1
 
                 except Exception as e:
-                    # Rollback de este quote y continuar con el siguiente
-                    self._log(f"Error procesando quote {quote.get('id')}: {str(e)}", "error")
-                    self.pg_conn.rollback()  # Rollback para que no afecte siguientes quotes
-                    self.stats['quotes']['errores'] += 1
+                    # Si es error de duplicado (unique constraint), ignorar silenciosamente
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        self._log(f"  ℹ️ Quote #{quote_id} ya existe en PostgreSQL (omitiendo)", "debug")
+                        self.pg_conn.rollback()
+                    else:
+                        # Otro error, registrar y continuar
+                        self._log(f"Error procesando quote {quote.get('id')}: {str(e)}", "error")
+                        self.pg_conn.rollback()  # Rollback para que no afecte siguientes quotes
+                        self.stats['quotes']['errores'] += 1
 
             self._log(f"✅ Quotes sincronizados a PostgreSQL: {self.stats['quotes']['nuevos']} nuevos", "success")
 
