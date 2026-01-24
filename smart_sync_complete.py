@@ -1308,6 +1308,34 @@ class SmartSyncComplete:
         total_quantity_result = self.mysql_cursor.fetchone()
         total_quantity = safe_float(total_quantity_result[0]) if total_quantity_result and total_quantity_result[0] else 0
 
+        # Calcular costos reales desde los productos (NO usar precio)
+        self.mysql_cursor.execute("""
+            SELECT qi.quantity, p.cost, qi.tax_amount
+            FROM quote_items qi
+            JOIN products p ON p.id = qi.product_id
+            WHERE qi.quote_id = %s
+        """, (quote['id'],))
+
+        items_costos = self.mysql_cursor.fetchall()
+
+        # Calcular totales basados en el COSTO (no en el precio)
+        total_net_cost = 0
+        total_tax_cost = 0
+
+        for quantity, cost, tax_amount in items_costos:
+            qty = safe_float(quantity)
+            prod_cost = safe_float(cost if cost else 0)
+            prod_tax = safe_float(tax_amount)
+
+            # Calcular costo del item
+            item_net_cost = qty * prod_cost
+            item_tax_cost = prod_tax * 0.8  # 80% del impuesto (según modelo)
+
+            total_net_cost += item_net_cost
+            total_tax_cost += item_tax_cost
+
+        total_cost_calculado = total_net_cost + total_tax_cost
+
         # Insertar sales_operation (SIN correlative - dejar que PostgreSQL lo genere)
         sql_operation = """
         INSERT INTO public.sales_operation (
@@ -1385,9 +1413,9 @@ class SmartSyncComplete:
             False,                     # canceled
             True,                      # pending
             False,                     # wait
-            quote_subtotal,            # total_net_cost
-            quote_tax_amount,          # total_tax_cost
-            quote_total,               # total_cost
+            total_net_cost,            # total_net_cost (COSTO real de productos)
+            total_tax_cost,            # total_tax_cost (Impuesto sobre COSTO)
+            total_cost_calculado,      # total_cost (Costo total + impuestos)
             '01',                      # freight_tax
             16,                        # freight_aliquot
             document_no,               # document_no_internal
@@ -1507,16 +1535,18 @@ class SmartSyncComplete:
              tax_amount, discount_amount, discount_percentage, quantity,
              product_id) = item
 
-            # Obtener código de producto
+            # Obtener código de producto Y COSTO
             self.mysql_cursor.execute(
-                "SELECT code FROM products WHERE id = %s",
+                "SELECT code, cost FROM products WHERE id = %s",
                 (product_id,)
             )
             product_result = self.mysql_cursor.fetchone()
             if product_result and product_result[0]:
                 product_code = product_result[0]
+                product_cost = safe_float(product_result[1]) if product_result[1] else 0
             else:
                 product_code = f"MIG-{product_id}"
+                product_cost = 0
 
             # Obtener correlative de unit desde products_units
             self.pg_cursor.execute(
@@ -1549,12 +1579,12 @@ class SmartSyncComplete:
             else:
                 tax_percent = 0
 
-            # Calcular costos (80% del precio como costo)
-            unitary_cost = up * 0.8
-            total_net_cost = qty * up * 0.8
-            total_tax_cost = ta * 0.8
-            total_cost = total_net_cost + total_tax_cost
-            total_net = sub - disc_amt
+            # Calcular costos usando COSTO REAL del producto (no 80% del precio)
+            unitary_cost = product_cost  # COSTO real del producto
+            total_net_cost = qty * product_cost  # Costo neto = cantidad × costo
+            total_tax_cost = ta * 0.8  # 80% del impuesto (según modelo)
+            total_cost = total_net_cost + total_tax_cost  # Costo total
+            total_net = sub - disc_amt  # Precio neto (para ventas)
 
             # Pre-calcular descripción (evitar inline 'or')
             description_product = name if name else 'Producto migrado'
@@ -1609,10 +1639,10 @@ class SmartSyncComplete:
 
             line = self.pg_cursor.fetchone()[0]
 
-            # Insertar monedas del detalle
-            self._insertar_item_monedas(correlativo, line, item, bcv_rate)
+            # Insertar monedas del detalle (pasando product_cost)
+            self._insertar_item_monedas(correlativo, line, item, bcv_rate, product_cost)
 
-    def _insertar_item_monedas(self, correlativo: int, line: int, item: tuple, bcv_rate: float):
+    def _insertar_item_monedas(self, correlativo: int, line: int, item: tuple, bcv_rate: float, product_cost: float):
         """Insertar monedas de un item"""
         (description, name, subtotal, unit, unit_price, total,
          tax_amount, discount_amount, discount_percentage, quantity,
@@ -1626,10 +1656,10 @@ class SmartSyncComplete:
         tot = safe_float(total)
         disc = safe_float(discount_amount)
 
-        # Dólares
-        unitary_cost = unit_price_f * 0.8
-        total_net_cost = quantity_f * unit_price_f * 0.8
-        total_tax_cost = ta * 0.8
+        # Dólares - Usar COSTO REAL (no 80% del precio)
+        unitary_cost = product_cost  # COSTO real
+        total_net_cost = quantity_f * product_cost  # Cantidad × costo
+        total_tax_cost = ta * 0.8  # 80% del impuesto
         total_cost = total_net_cost + total_tax_cost
         total_net = sub - disc
 
