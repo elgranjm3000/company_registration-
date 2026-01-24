@@ -37,10 +37,10 @@ else:
 # Importar dependencias con manejo de errores
 try:
     import psycopg2
-    import mysql.connector
+    import pymysql
 except ImportError as e:
     print(f"Error: Falta dependencia: {e}")
-    print("Ejecute: pip install psycopg2-binary mysql-connector-python")
+    print("Ejecute: pip install psycopg2-binary pymysql")
     sys.exit(1)
 
 # ==============================================================================
@@ -48,7 +48,15 @@ except ImportError as e:
 # ==============================================================================
 
 CONFIG_FILE = "sync_config.json"
-LOG_FILE = "sync_system.log"
+
+# Crear directorio de logs
+import os
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
+# Archivo de log principal (en carpeta logs/)
+LOG_FILE = os.path.join(LOGS_DIR, "sync_system.log")
 
 # ==============================================================================
 # UTILIDADES
@@ -187,7 +195,7 @@ class SyncModule:
     def conectar_mysql(self):
         """Conecta a MySQL"""
         try:
-            self.mysql_conn = mysql.connector.connect(
+            self.mysql_conn = pymysql.connect(
                 host=self.config['mysql_host'],
                 port=int(self.config['mysql_port']),
                 database=self.config['mysql_database'],
@@ -498,11 +506,11 @@ class ConfigWindow:
         self.root.update()
 
         try:
-            import mysql.connector
+            import pymysql
 
-            conn = mysql.connector.connect(
+            conn = pymysql.connect(
                 host=self.entry_mysql['mysql_host'].get().strip(),
-                port=self.entry_mysql['mysql_port'].get().strip(),
+                port=int(self.entry_mysql['mysql_port'].get().strip()),
                 database=self.entry_mysql['mysql_database'].get().strip(),
                 user=self.entry_mysql['mysql_user'].get().strip(),
                 password=self.entry_mysql['mysql_password'].get().strip()
@@ -918,9 +926,19 @@ class SystemTrayService:
                 if not os.path.exists(log_dir):
                     return None
 
-                log_files = sorted([f for f in os.listdir(log_dir) if f.endswith('.txt')], reverse=True)
-                if log_files:
-                    return os.path.join(log_dir, log_files[0])
+                # Buscar todos los archivos de log (.txt y .log)
+                all_files = []
+                for f in os.listdir(log_dir):
+                    if f.endswith('.txt') or f.endswith('.log'):
+                        full_path = os.path.join(log_dir, f)
+                        # Obtener fecha de modificación
+                        mtime = os.path.getmtime(full_path)
+                        all_files.append((mtime, full_path))
+
+                if all_files:
+                    # Ordenar por fecha de modificación (más reciente primero)
+                    all_files.sort(reverse=True)
+                    return all_files[0][1]  # Retornar el archivo más reciente
                 return None
             except Exception:
                 return None
@@ -1034,7 +1052,16 @@ class SystemTrayService:
             except Exception as e:
                 txt.insert("1.0", f"❌ Error cargando log: {e}")
         else:
-            txt.insert("1.0", "⏳ Esperando logs...\n\nLa primera sincronización creará el archivo de log.")
+            txt.insert("1.0", "⏳ Esperando logs...\n\n")
+            txt.insert("end", "El sistema creará logs en:\n")
+            txt.insert("end", f"  {LOGS_DIR}\n\n")
+            txt.insert("end", "Logs que se crearán:\n")
+            txt.insert("end", "  • sync_system.log - Logs del sistema (arranque, errores)\n")
+            txt.insert("end", "  • sync_YYYYMMDD_HHMMSS.txt - Logs de sincronización\n\n")
+            txt.insert("end", "💡 Si el icono está en la barra de tareas, la sincronización\n")
+            txt.insert("end", "   se ejecutará automáticamente en segundo plano.\n\n")
+            txt.insert("end", "💡 Puedes forzar una sincronización desde:\n")
+            txt.insert("end", "   Clic derecho en el icono → Sincronizar Ahora\n")
 
         txt.config(state="disabled")
 
@@ -1061,13 +1088,24 @@ class SystemTrayService:
     def iniciar(self):
         """Inicia el servicio en la bandeja del sistema"""
         try:
+            log("=" * 70, "INFO")
+            log("INICIANDO SYSTEM TRAY SERVICE", "INFO")
+            log("=" * 70, "INFO")
+            log(f"RIF: {self.config['company_rif']}", "INFO")
+            log(f"Email: {self.config['company_email']}", "INFO")
+            log(f"Intervalo: {self.config.get('sync_interval_minutes', 30)} minutos", "INFO")
+            log("", "INFO")
+
             import pystray
 
             # Crear icono
+            log("Creando icono de la bandeja del sistema...", "INFO")
             icon_image = self.crear_icono()
             if not icon_image:
                 log("No se pudo crear el icono. Saliendo.", "ERROR")
                 return
+
+            log("✅ Icono creado correctamente", "SUCCESS")
 
             # Crear menú contextual
             menu = pystray.Menu(
@@ -1086,6 +1124,7 @@ Clic derecho → Ver Logs (tiempo real)"""
             self.icon = pystray.Icon("Sync System", icon_image, tooltip_text, menu)
 
             # Iniciar sincronización automática en thread
+            log("Iniciando thread de sincronización automática...", "INFO")
             import threading
             sync_thread = threading.Thread(target=self.bucle_sincronizacion)
             sync_thread.daemon = True
@@ -1094,6 +1133,8 @@ Clic derecho → Ver Logs (tiempo real)"""
             # Ejecutar icono (bloqueante)
             log("✅ Servicio iniciado en la bandeja del sistema", "INFO")
             log("💡 El icono está en la barra de tareas (junto al reloj)", "INFO")
+            log("💡 Clic derecho para ver opciones", "INFO")
+            log("", "INFO")
             self.icon.run()
 
         except ImportError:
