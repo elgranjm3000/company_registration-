@@ -307,14 +307,17 @@ class SmartSyncComplete:
         for nombre_idx, query in indices:
             try:
                 self.pg_cursor.execute(query)
+                self.pg_conn.commit()  # Commit después de crear índice
                 self._log(f"  Índice '{nombre_idx}' creado", "debug")
             except Exception as e:
                 # Si el índice ya existe, ignoramos el error
                 error_msg = str(e).lower()
-                if "already exists" in error_msg or "already exists" in error_msg:
+                if "already exists" in error_msg:
                     self._log(f"  Índice '{nombre_idx}' ya existe", "debug")
+                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
                 else:
                     self._log(f"  ⚠️ Error creando índice '{nombre_idx}': {str(e)}", "warning")
+                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
 
     def _conectar_bases_datos(self) -> bool:
         """
@@ -325,19 +328,43 @@ class SmartSyncComplete:
         """
         try:
             # Conectar PostgreSQL
-            self.pg_conn = psycopg2.connect(**self.postgresql_config)
-            self.pg_cursor = self.pg_conn.cursor()
-            self._log("✅ Conectado a PostgreSQL", "success")
+            try:
+                self.pg_conn = psycopg2.connect(**self.postgresql_config)
+                self.pg_cursor = self.pg_conn.cursor()
+                self._log("✅ Conectado a PostgreSQL", "success")
+            except Exception as e:
+                self._log(f"❌ Error conectando PostgreSQL: {type(e).__name__}: {str(e)}", "error")
+                self._log(f"   Host: {self.postgresql_config.get('host')}", "debug")
+                self._log(f"   Database: {self.postgresql_config.get('database')}", "debug")
+                self._log(f"   User: {self.postgresql_config.get('user')}", "debug")
+                return False
 
             # Conectar MySQL
-            self.mysql_conn = mysql.connector.connect(**self.mysql_config)
-            self.mysql_cursor = self.mysql_conn.cursor()
-            self._log("✅ Conectado a MySQL", "success")
+            try:
+                self.mysql_conn = mysql.connector.connect(**self.mysql_config)
+                self.mysql_cursor = self.mysql_conn.cursor()
+                self._log("✅ Conectado a MySQL", "success")
+                self._log(f"   Host: {self.mysql_config.get('host')}", "debug")
+                self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
+            except Exception as e:
+                self._log(f"❌ Error conectando MySQL: {type(e).__name__}: {str(e)}", "error")
+                self._log(f"   Host: {self.mysql_config.get('host')}", "debug")
+                self._log(f"   Port: {self.mysql_config.get('port')}", "debug")
+                self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
+                self._log(f"   User: {self.mysql_config.get('user')}", "debug")
+
+                # Mostrar error detallado de mysql.connector
+                if hasattr(e, 'errno') and e.errno:
+                    self._log(f"   MySQL Error Code: {e.errno}", "error")
+                if hasattr(e, 'sqlstate'):
+                    self._log(f"   SQL State: {e.sqlstate}", "error")
+
+                return False
 
             return True
 
         except Exception as e:
-            self._log(f"❌ Error conectando bases de datos: {str(e)}", "error")
+            self._log(f"❌ Error general conectando bases de datos: {type(e).__name__}: {str(e)}", "error")
             return False
 
     def _obtener_company_id(self) -> bool:
@@ -443,7 +470,18 @@ class SmartSyncComplete:
                 return True
 
         except Exception as e:
-            self._log(f"❌ Error obteniendo company_id: {str(e)}", "error")
+            self._log(f"❌ Error obteniendo company_id: {type(e).__name__}: {str(e)}", "error")
+
+            # Mostrar detalles del error si es de MySQL
+            if hasattr(e, 'errno') and e.errno:
+                self._log(f"   MySQL Error Code: {e.errno}", "error")
+            if hasattr(e, 'sqlstate'):
+                self._log(f"   SQL State: {e.sqlstate}", "error")
+
+            # Mostrar la consulta que falló si está disponible
+            if hasattr(e, 'msg') and e.msg:
+                self._log(f"   Message: {e.msg}", "error")
+
             return False
 
     def _obtener_datos_postgres_para_empresa(self) -> Optional[dict]:
