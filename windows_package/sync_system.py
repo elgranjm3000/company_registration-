@@ -758,6 +758,7 @@ class SystemTrayService:
     def __init__(self, config):
         self.config = config
         self.sync_running = True
+        self.is_syncing = False  # Nuevo flag para saber si está sincronizando ahora
         self.last_sync_time = None
         self.last_sync_status = "Esperando..."
         self.root = None
@@ -792,6 +793,9 @@ class SystemTrayService:
 
     def ejecutar_sincronizacion(self):
         """Ejecuta una sincronización"""
+        self.is_syncing = True
+        self.actualizar_tooltip()
+
         try:
             # Importar módulo de sincronización
             import importlib.util
@@ -843,15 +847,18 @@ class SystemTrayService:
             self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.last_sync_status = f"❌ Error: {str(e)[:30]}"
             self.actualizar_tooltip()
+        finally:
+            self.is_syncing = False
+            self.actualizar_tooltip()
 
     def actualizar_tooltip(self):
         """Actualiza el tooltip del icono"""
         if self.icon:
             tooltip = f"""Sync System v2.0
 
-Estado: {'🔄 Sincronizando...' if self.sync_running else '⏸️ Pausado'}
+Estado: {'🔄 Sincronizando...' if self.is_syncing else '✅ Listo'}
 Última sync: {self.last_sync_time or '--'}
-Estado: {self.last_sync_status}
+Resultado: {self.last_sync_status}
 
 RIF: {self.config['company_rif']}
 
@@ -861,11 +868,22 @@ Clic derecho: Menú"""
 
     def ver_logs(self):
         """Abre ventana de logs"""
-        log_window = tk.Toplevel()
+        import tkinter as tk
+        from tkinter import scrolledtext
+
+        # Crear ventana raíz ya que no hay una
+        root = tk.Tk()
+        root.withdraw()  # Ocultar ventana principal
+
+        log_window = tk.Toplevel(root)
         log_window.title("Logs de Sincronización")
         log_window.geometry("800x600")
 
-        txt = scrolledtext.ScrolledText(log_window, state="normal")
+        # Frame para el texto y botón
+        frame = tk.Frame(log_window)
+        frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        txt = scrolledtext.ScrolledText(frame, state="normal", font=("Consolas", 9))
         txt.pack(fill="both", expand=True)
 
         # Cargar logs del archivo
@@ -875,7 +893,9 @@ Clic derecho: Menú"""
                 log_files = sorted([f for f in os.listdir(log_dir) if f.endswith('.txt')], reverse=True)
                 if log_files:
                     with open(os.path.join(log_dir, log_files[0]), 'r', encoding='utf-8') as f:
-                        txt.insert("1.0", f.read())
+                        content = f.read()
+                        txt.insert("1.0", content)
+                        log(f"Mostrando log: {log_files[0]}", "INFO")
                 else:
                     txt.insert("1.0", "No hay archivos de log aún.")
             else:
@@ -884,6 +904,16 @@ Clic derecho: Menú"""
             txt.insert("1.0", f"Error leyendo logs: {e}")
 
         txt.config(state="disabled")
+
+        # Botón cerrar
+        btn_cerrar = tk.Button(log_window, text="Cerrar", command=lambda: root.destroy())
+        btn_cerrar.pack(pady=5)
+
+        # Manejar cierre de ventana
+        log_window.protocol("WM_DELETE_WINDOW", lambda: root.destroy())
+
+        # Ejecutar
+        root.mainloop()
 
     def sincronizar_ahora(self):
         """Sincronización manual desde el menú"""
