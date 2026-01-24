@@ -1914,9 +1914,49 @@ class SmartSyncComplete:
             self._log(f"✅ Products sincronizados: {self.stats['products']['nuevos']} nuevos, "
                       f"{self.stats['products']['modificados']} modificados", "success")
 
+            # Sincronizar productos inactivos/reactivados
+            self._sincronizar_status_products_mysql(cambios['eliminados'])
+
         except Exception as e:
             self._log(f"Error sincronizando products a MySQL: {str(e)}", "error")
             self.stats['products']['errores'] += 1
+
+    def _sincronizar_status_products_mysql(self, productos_inactivos: List[Dict]):
+        """
+        Sincroniza cambios de status (active/inactive) de products a MySQL
+
+        Args:
+            productos_inactivos: Lista de productos inactivos detectados
+        """
+        if not productos_inactivos:
+            return
+
+        self._log(f"Sincronizando {len(productos_inactivos)} productos inactivos/reactivados a MySQL...", "info")
+
+        try:
+            for producto in productos_inactivos:
+                code = producto['code']
+
+                # Actualizar status a 'inactive' en MySQL
+                update_query = """
+                UPDATE products
+                SET status = 'inactive',
+                    updated_at = NOW()
+                WHERE company_id = %s
+                  AND code = %s
+                """
+
+                self.mysql_cursor.execute(update_query, (self.company_id, code))
+
+                if self.mysql_cursor.rowcount > 0:
+                    self._log(f"  🔄 Status actualizado: {code} → inactive", "debug")
+                    self.stats['products']['eliminados'] += 1
+
+            self.mysql_conn.commit()
+            self._log(f"✅ Status sincronizados: {len(productos_inactivos)} productos", "success")
+
+        except Exception as e:
+            self._log(f"Error sincronizando status de products: {str(e)}", "error")
 
     def sincronizar_customers_mysql(self, cambios: Dict[str, List]):
         """Sincronizar cambios de customers a MySQL"""
@@ -2105,7 +2145,8 @@ class SmartSyncComplete:
             self._log("║                    RESUMEN DE SINCRONIZACIÓN                    ║", "info")
             self._log("╚════════════════════════════════════════════════════════════════╝", "info")
             self._log(f"Products:   {self.stats['products']['nuevos']} nuevos, "
-                      f"{self.stats['products']['modificados']} modificados", "success")
+                      f"{self.stats['products']['modificados']} modificados, "
+                      f"{self.stats['products']['eliminados']} inactivados", "success")
             self._log(f"Customers:  {self.stats['customers']['nuevos']} nuevos, "
                       f"{self.stats['customers']['modificados']} modificados", "success")
             self._log(f"Categories: {self.stats['categories']['nuevos']} nuevos, "
