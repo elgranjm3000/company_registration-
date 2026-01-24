@@ -27,7 +27,9 @@
 
 - `sync_system.py` - Ejecutable principal
 - `smart_sync_complete.py` - Módulo de sincronización
-- `INSTALAR_Y_EJECUTAR.bat` - Instala dependencias y ejecuta el sistema
+- `INSTALAR_Y_EJECUTAR.bat` - Instala dependencias y menú de ejecución
+- `INICIAR_SYSTEM_TRAY.bat` - Inicia el modo System Tray directamente
+- `CONFIGURAR_INICIO_AUTOMATICO.bat` - Configura inicio automático al prender la PC
 - `README.md` - Este archivo
 - `logs/` - Carpeta donde se guardan los logs de sincronización
 
@@ -87,7 +89,44 @@ pip install pystray Pillow
 INSTALAR_Y_EJECUTAR.bat → Opción 5
 ```
 
-El sistema se iniciará automáticamente y sincronizará según el intervalo configurado.
+El sistema se iniciará y se ejecutará en segundo plano.
+
+## INICIO AUTOMÁTICO AL PRENDER LA PC:
+
+⚠️ **Importante:** Al apagar la PC, el sistema se cierra. Necesitas configurar el inicio automático.
+
+### **Método automático (Recomendado):**
+
+1. **Ejecuta:** `CONFIGURAR_INICIO_AUTOMATICO.bat`
+2. **Listo:** El sistema se iniciará automáticamente al prender la PC
+
+### **Método manual:**
+
+1. Presiona `Win + R`
+2. Escribe: `shell:startup`
+3. Copia `INICIAR_SYSTEM_TRAY.bat` en esa carpeta
+
+### **Para desactivar:**
+
+1. Presiona `Win + R`
+2. Escribe: `shell:startup`
+3. Elimina `Sync System Tray.lnk`
+
+---
+
+## ¿QUÉ PASA AL APAGAR LA PC?
+
+```
+PC encendida  →  System Tray activo  →  Sincronizando cada X minutos
+     ↓
+Apagas PC     →  Windows cierra TODO →  System Tray se cierra
+     ↓
+PC apagada    →  Nada funciona       →  No hay sincronización
+     ↓
+Prendes PC    →  System Tray se inicia automáticamente (si configuraste)
+     ↓
+System Tray activo nuevamente  →  Continúa sincronizando
+```
 
 ## QUÉ HACE EL SISTEMA:
 
