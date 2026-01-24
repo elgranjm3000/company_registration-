@@ -1391,6 +1391,10 @@ class SmartSyncComplete:
         total_bcv = total * bcv_rate
         discount_amount_bcv = discount_amount * bcv_rate
 
+        # Calcular totales netos ANTES del execute
+        total_net_usd = subtotal - discount_amount
+        total_net_bcv = subtotal_bcv - discount_amount_bcv
+
         sql_coins = """
         INSERT INTO public.sales_operation_coins (
             main_correlative, coin_code, factor_type, buy_aliquot,
@@ -1404,14 +1408,14 @@ class SmartSyncComplete:
         self.pg_cursor.execute(sql_coins, (
             correlativo, '02', 1, bcv_rate, bcv_rate,
             subtotal, tax_amount, total, discount_amount, 0.0,
-            subtotal - discount_amount, tax_amount, total, 0.0, 0.0
+            total_net_usd, tax_amount, total, 0.0, 0.0
         ))
 
         # Moneda bolívar (01)
         self.pg_cursor.execute(sql_coins, (
             correlativo, '01', 1, bcv_rate, bcv_rate,
             subtotal_bcv, tax_amount_bcv, total_bcv, discount_amount_bcv, 0.0,
-            subtotal_bcv - discount_amount_bcv, tax_amount_bcv, total_bcv, 0.0, 0.0
+            total_net_bcv, tax_amount_bcv, total_bcv, 0.0, 0.0
         ))
 
     def _insertar_quote_items(self, correlativo: int, quote: dict, bcv_rate: float):
@@ -1441,13 +1445,32 @@ class SmartSyncComplete:
                 (product_id,)
             )
             product_result = self.mysql_cursor.fetchone()
-            product_code = product_result[0] if product_result else f"MIG-{product_id}"
+            if product_result and product_result[0]:
+                product_code = product_result[0]
+            else:
+                product_code = f"MIG-{product_id}"
+
+            # Calcular todos los valores ANTES del execute
+            qty = safe_float(quantity)
+            up = safe_float(unit_price)
+            ta = safe_float(tax_amount)
+            sub = safe_float(subtotal)
+            disc_amt = safe_float(discount_amount)
+            disc_pct = safe_float(discount_percentage)
+            tot = safe_float(total)
 
             # Calcular tax percent
-            if subtotal > 0:
-                tax_percent = (tax_amount / subtotal * 100)
+            if sub > 0:
+                tax_percent = (ta / sub * 100)
             else:
                 tax_percent = 0
+
+            # Calcular costos (80% del precio como costo)
+            unitary_cost = up * 0.8
+            total_net_cost = qty * up * 0.8
+            total_tax_cost = ta * 0.8
+            total_cost = total_net_cost + total_tax_cost
+            total_net = sub - disc_amt
 
             # Insertar detalle
             sql_detail = """
@@ -1469,31 +1492,31 @@ class SmartSyncComplete:
                 correlativo,
                 product_code,
                 name or 'Producto migrado',
-                safe_float(quantity),
+                qty,
                 '00',
                 '00',
-                1,  # unit
-                1.0,  # conversion_factor
-                1,    # unit_type
-                safe_float(unit_price) * 0.8,  # unitary_cost (80% del precio)
-                '01',  # sale_tax
+                1,        # unit
+                1.0,      # conversion_factor
+                1,        # unit_type
+                unitary_cost,
+                '01',     # sale_tax
                 tax_percent,
-                safe_float(unit_price),
-                safe_float(quantity) * safe_float(unit_price) * 0.8,
-                safe_float(tax_amount) * 0.8,
-                safe_float(quantity) * safe_float(unit_price) * 0.8 + safe_float(tax_amount) * 0.8,
-                safe_float(subtotal),
-                safe_float(tax_amount),
-                safe_float(total),
-                safe_float(discount_percentage),
-                safe_float(discount_amount),
-                safe_float(subtotal) - safe_float(discount_amount),
-                safe_float(tax_amount),
-                safe_float(total),
-                '02',  # coin_code (dólar)
-                16,    # buy_aliquot
-                '01',  # buy_tax
-                safe_float(quantity)
+                up,
+                total_net_cost,
+                total_tax_cost,
+                total_cost,
+                sub,
+                ta,
+                tot,
+                disc_pct,
+                disc_amt,
+                total_net,
+                ta,
+                tot,
+                '02',     # coin_code (dólar)
+                16,       # buy_aliquot
+                '01',     # buy_tax
+                qty
             ))
 
             line = self.pg_cursor.fetchone()[0]
@@ -1507,10 +1530,21 @@ class SmartSyncComplete:
          tax_amount, discount_amount, discount_percentage, quantity,
          product_id) = item
 
+        # Calcular todos los valores ANTES del execute
         unit_price_f = safe_float(unit_price)
         quantity_f = safe_float(quantity)
+        sub = safe_float(subtotal)
+        ta = safe_float(tax_amount)
+        tot = safe_float(total)
+        disc = safe_float(discount_amount)
 
         # Dólares
+        unitary_cost = unit_price_f * 0.8
+        total_net_cost = quantity_f * unit_price_f * 0.8
+        total_tax_cost = ta * 0.8
+        total_cost = total_net_cost + total_tax_cost
+        total_net = sub - disc
+
         sql_detail_coins = """
         INSERT INTO public.sales_operation_details_coins (
             main_correlative, main_line, unitary_cost, price,
@@ -1522,39 +1556,47 @@ class SmartSyncComplete:
 
         self.pg_cursor.execute(sql_detail_coins, (
             correlativo, line,
-            unit_price_f * 0.8,
+            unitary_cost,
             unit_price_f,
-            quantity_f * unit_price_f * 0.8,
-            safe_float(tax_amount) * 0.8,
-            quantity_f * unit_price_f * 0.8 + safe_float(tax_amount) * 0.8,
-            safe_float(subtotal),
-            safe_float(tax_amount),
-            safe_float(total),
-            safe_float(discount_amount),
-            safe_float(subtotal) - safe_float(discount_amount),
-            safe_float(tax_amount),
-            safe_float(total),
+            total_net_cost,
+            total_tax_cost,
+            total_cost,
+            sub,
+            ta,
+            tot,
+            disc,
+            total_net,
+            ta,
+            tot,
             '02'  # dólar
         ))
 
         # Bolívares
-        subtotal_bcv = safe_float(subtotal) * bcv_rate
-        tax_amount_bcv = safe_float(tax_amount) * bcv_rate
-        total_bcv = safe_float(total) * bcv_rate
-        discount_amount_bcv = safe_float(discount_amount) * bcv_rate
+        subtotal_bcv = sub * bcv_rate
+        tax_amount_bcv = ta * bcv_rate
+        total_bcv = tot * bcv_rate
+        discount_amount_bcv = disc * bcv_rate
+
+        # Calcular valores en bolívares
+        unitary_cost_bcv = unit_price_f * 0.8 * bcv_rate
+        price_bcv = unit_price_f * bcv_rate
+        total_net_cost_bcv = quantity_f * unit_price_f * 0.8 * bcv_rate
+        total_tax_cost_bcv = tax_amount_bcv * 0.8
+        total_cost_bcv = total_net_cost_bcv + total_tax_cost_bcv
+        total_net_bcv = subtotal_bcv - discount_amount_bcv
 
         self.pg_cursor.execute(sql_detail_coins, (
             correlativo, line,
-            unit_price_f * 0.8 * bcv_rate,
-            unit_price_f * bcv_rate,
-            quantity_f * unit_price_f * 0.8 * bcv_rate,
-            tax_amount_bcv * 0.8,
-            quantity_f * unit_price_f * 0.8 * bcv_rate + tax_amount_bcv * 0.8,
+            unitary_cost_bcv,
+            price_bcv,
+            total_net_cost_bcv,
+            total_tax_cost_bcv,
+            total_cost_bcv,
             subtotal_bcv,
             tax_amount_bcv,
             total_bcv,
             discount_amount_bcv,
-            subtotal_bcv - discount_amount_bcv,
+            total_net_bcv,
             tax_amount_bcv,
             total_bcv,
             '01'  # bolívar
