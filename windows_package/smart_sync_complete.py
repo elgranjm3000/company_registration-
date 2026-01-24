@@ -1450,6 +1450,22 @@ class SmartSyncComplete:
             else:
                 product_code = f"MIG-{product_id}"
 
+            # Obtener correlative de unit desde products_units
+            self.pg_cursor.execute(
+                "SELECT correlative FROM products_units WHERE product_code = %s LIMIT 1",
+                (product_code,)
+            )
+            unit_result = self.pg_cursor.fetchone()
+            if unit_result:
+                product_unit = unit_result[0]
+            else:
+                # Si no existe, buscar cualquier unit genérica
+                self.pg_cursor.execute(
+                    "SELECT correlative FROM products_units ORDER BY correlative LIMIT 1"
+                )
+                generic_unit = self.pg_cursor.fetchone()
+                product_unit = generic_unit[0] if generic_unit else 304  # fallback
+
             # Calcular todos los valores ANTES del execute
             qty = safe_float(quantity)
             up = safe_float(unit_price)
@@ -1472,6 +1488,9 @@ class SmartSyncComplete:
             total_cost = total_net_cost + total_tax_cost
             total_net = sub - disc_amt
 
+            # Pre-calcular descripción (evitar inline 'or')
+            description_product = name if name else 'Producto migrado'
+
             # Insertar detalle
             sql_detail = """
             INSERT INTO public.sales_operation_details (
@@ -1484,18 +1503,19 @@ class SmartSyncComplete:
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING line
             """
 
+            # Ejecutar INSERT con todos los valores pre-calculados
             self.pg_cursor.execute(sql_detail, (
                 correlativo,
                 product_code,
-                name or 'Producto migrado',
+                description_product,
                 qty,
                 '00',
                 '00',
-                1,        # unit
+                product_unit,  # unit (correlative de products_units)
                 1.0,      # conversion_factor
                 1,        # unit_type
                 unitary_cost,

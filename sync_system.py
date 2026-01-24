@@ -37,10 +37,10 @@ else:
 # Importar dependencias con manejo de errores
 try:
     import psycopg2
-    import mysql.connector
+    import pymysql
 except ImportError as e:
     print(f"Error: Falta dependencia: {e}")
-    print("Ejecute: pip install psycopg2-binary mysql-connector-python")
+    print("Ejecute: pip install psycopg2-binary pymysql")
     sys.exit(1)
 
 # ==============================================================================
@@ -48,7 +48,15 @@ except ImportError as e:
 # ==============================================================================
 
 CONFIG_FILE = "sync_config.json"
-LOG_FILE = "sync_system.log"
+
+# Crear directorio de logs
+import os
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
+# Archivo de log principal (en carpeta logs/)
+LOG_FILE = os.path.join(LOGS_DIR, "sync_system.log")
 
 # ==============================================================================
 # UTILIDADES
@@ -69,25 +77,43 @@ def log(mensaje="", nivel="INFO"):
 def crear_config_default():
     """Crea configuración por defecto"""
     return {
+        # PostgreSQL (configurable por el usuario)
         "postgres_host": "localhost",
         "postgres_port": "5432",
-        "postgres_database": "dataaa",
+        "postgres_database": "",
         "postgres_user": "postgres",
         "postgres_password": "",
 
-        "mysql_host": "",
+        # MySQL (HARDCODED - oculto para el usuario)
+        "mysql_host": "91.238.160.176",
         "mysql_port": "3306",
-        "mysql_database": "",
-        "mysql_user": "",
-        "mysql_password": "",
+        "mysql_database": "chrystal_movil",
+        "mysql_user": "chrystal_app",
+        "mysql_password": "muentes123.",
 
+        # Empresa (configurable por el usuario)
         "company_rif": "",
         "company_email": "",
 
+        # Sincronización (configurable por el usuario)
         "sync_interval_minutes": "30",
 
+        # Estado
         "configured": False,
         "first_run": True
+    }
+
+def obtener_config_mysql():
+    """
+    Retorna la configuración de MySQL harcodeada
+    Estas credenciales están ocultas para el usuario
+    """
+    return {
+        'host': "91.238.160.176",
+        'port': "3306",
+        'database': "chrystal_movil",
+        'user': "chrystal_app",
+        'password': "muentes123."
     }
 
 def cargar_config():
@@ -130,6 +156,26 @@ class SyncModule:
             'quotes': {'nuevos': 0, 'errores': 0}
         }
 
+    def log_message(self, mensaje: str, tipo: str = "info"):
+        """
+        Método compatible con SmartSyncComplete
+        Muestra logs en consola con formato
+        """
+        prefijos = {
+            'info': 'ℹ️ INFO',
+            'success': '✅ SUCCESS',
+            'warning': '⚠️ WARNING',
+            'error': '❌ ERROR',
+            'debug': '🔍 DEBUG'
+        }
+
+        prefijo = prefijos.get(tipo, 'ℹ️ INFO')
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] {prefijo}: {mensaje}")
+
+        # También guardar en archivo de log
+        log(mensaje, tipo.upper())
+
     def conectar_postgresql(self):
         """Conecta a PostgreSQL"""
         try:
@@ -149,7 +195,7 @@ class SyncModule:
     def conectar_mysql(self):
         """Conecta a MySQL"""
         try:
-            self.mysql_conn = mysql.connector.connect(
+            self.mysql_conn = pymysql.connect(
                 host=self.config['mysql_host'],
                 port=int(self.config['mysql_port']),
                 database=self.config['mysql_database'],
@@ -213,8 +259,14 @@ class SyncModule:
                 app=self,
                 postgresql_config=postgresql_config,
                 mysql_config=mysql_config,
-                company_id=27  # Company ID para Multiservicios Leblanc
+                company_rif=self.config['company_rif'],
+                company_email=self.config['company_email']
             )
+
+            # Inicializar tabla sync_hashes si no existe
+            if not sync_system.inicializar_tabla_hashes():
+                log("Error: No se pudo inicializar la tabla sync_hashes", "ERROR")
+                return False
 
             resultado = sync_system.ejecutar_sync_completa()
 
@@ -278,11 +330,10 @@ class ConfigWindow:
 
         self.crear_campos_postgresql(frame_pg)
 
-        # Pestaña MySQL
-        frame_mysql = ttk.Frame(notebook)
-        notebook.add(frame_mysql, text="🐬 MySQL")
-
-        self.crear_campos_mysql(frame_mysql)
+        # Pestaña MySQL (OCULTA - credenciales harcodeadas)
+        # frame_mysql = ttk.Frame(notebook)
+        # notebook.add(frame_mysql, text="🐬 MySQL")
+        # self.crear_campos_mysql(frame_mysql)
 
         # Pestaña Empresa
         frame_empresa = ttk.Frame(notebook)
@@ -455,11 +506,11 @@ class ConfigWindow:
         self.root.update()
 
         try:
-            import mysql.connector
+            import pymysql
 
-            conn = mysql.connector.connect(
+            conn = pymysql.connect(
                 host=self.entry_mysql['mysql_host'].get().strip(),
-                port=self.entry_mysql['mysql_port'].get().strip(),
+                port=int(self.entry_mysql['mysql_port'].get().strip()),
                 database=self.entry_mysql['mysql_database'].get().strip(),
                 user=self.entry_mysql['mysql_user'].get().strip(),
                 password=self.entry_mysql['mysql_password'].get().strip()
@@ -484,35 +535,34 @@ class ConfigWindow:
         # Obtener valores
         config_nuevo = {}
 
-        # PostgreSQL
+        # PostgreSQL (configurable por el usuario)
         for key, entry in self.entry_pg.items():
             config_nuevo[key] = entry.get().strip()
 
-        # MySQL
-        for key, entry in self.entry_mysql.items():
-            config_nuevo[key] = entry.get().strip()
+        # MySQL (HARDCODED - oculto para el usuario)
+        mysql_config = obtener_config_mysql()
+        config_nuevo['mysql_host'] = mysql_config['host']
+        config_nuevo['mysql_port'] = mysql_config['port']
+        config_nuevo['mysql_database'] = mysql_config['database']
+        config_nuevo['mysql_user'] = mysql_config['user']
+        config_nuevo['mysql_password'] = mysql_config['password']
 
-        # Empresa
+        # Empresa (configurable por el usuario)
         config_nuevo['company_rif'] = self.entry_rif.get().strip()
         config_nuevo['company_email'] = self.entry_email.get().strip()
 
         # Configuración
         config_nuevo['sync_interval_minutes'] = self.intervalo.get()
 
-        # Validar
+        # Validar (solo PostgreSQL y Empresa)
         if not all([
             config_nuevo.get('postgres_host'),
             config_nuevo.get('postgres_database'),
             config_nuevo.get('postgres_user'),
-            config_nuevo.get('postgres_password'),
-            config_nuevo.get('mysql_host'),
-            config_nuevo.get('mysql_database'),
-            config_nuevo.get('mysql_user'),
-            config_nuevo.get('mysql_password'),
             config_nuevo.get('company_rif'),
             config_nuevo.get('company_email')
         ]):
-            messagebox.showerror("Error", "Por favor complete todos los campos")
+            messagebox.showerror("Error", "Por favor complete todos los campos requeridos")
             return
 
         # Guardar
@@ -566,8 +616,8 @@ class ManagerWindow:
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Panel de estado
-        status_frame = tk.LabelFrame(main_frame, text="📊 Estado del Sistema", font=("Arial", 12, "bold"), padding=10)
-        status_frame.pack(fill="x", pady=5)
+        status_frame = tk.LabelFrame(main_frame, text="📊 Estado del Sistema", font=("Arial", 12, "bold"))
+        status_frame.pack(fill="x", pady=5, padx=5)
 
         self.lbl_estado = tk.Label(status_frame, text="🟢 ACTIVO", font=("Arial", 14), fg="green")
         self.lbl_estado.pack()
@@ -576,8 +626,8 @@ class ManagerWindow:
         self.lbl_ultima_sync.pack(pady=5)
 
         # Panel de estadísticas
-        stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"), padding=10)
-        stats_frame.pack(fill="x", pady=5)
+        stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"))
+        stats_frame.pack(fill="x", pady=5, padx=5)
 
         self.lbl_stats = tk.Label(stats_frame, text="Products: 0 | Customers: 0 | Categories: 0 | Quotes: 0",
                                  font=("Arial", 10))
@@ -593,8 +643,8 @@ class ManagerWindow:
         ttk.Button(btn_frame, text="❌ Salir", command=self.root.quit, width=20).pack(side="right", padx=5)
 
         # Logs
-        log_frame = tk.LabelFrame(main_frame, text="📝 Logs en Tiempo Real", font=("Arial", 12, "bold"), padding=10)
-        log_frame.pack(fill="both", expand=True, pady=5)
+        log_frame = tk.LabelFrame(main_frame, text="📝 Logs en Tiempo Real", font=("Arial", 12, "bold"))
+        log_frame.pack(fill="both", expand=True, pady=5, padx=5)
 
         self.txt_logs = scrolledtext.ScrolledText(log_frame, height=10, state="disabled")
         self.txt_logs.pack(fill="both", expand=True)
@@ -680,6 +730,462 @@ class ManagerWindow:
         self.txt_logs.see("end")
         self.txt_logs.config(state="disabled")
 
+    def log_message(self, mensaje: str, tipo: str = "info"):
+        """
+        Método compatible con SmartSyncComplete
+        Muestra logs en tiempo real en la GUI
+        """
+        # Convertir tipos a colores/emojis
+        prefijos = {
+            'info': 'ℹ️',
+            'success': '✅',
+            'warning': '⚠️',
+            'error': '❌',
+            'debug': '🔍'
+        }
+
+        prefijo = prefijos.get(tipo, '•')
+        mensaje_formateado = f"{prefijo} {mensaje}"
+
+        # Agregar a la GUI
+        self.agregar_log(mensaje_formateado)
+
+        # Forzar actualización de la GUI para mostrar en tiempo real
+        self.root.update_idletasks()
+
+# ==============================================================================
+# SYSTEM TRAY SERVICE (Modo transparente con icono en barra de tareas)
+# ==============================================================================
+
+class SystemTrayService:
+    """
+    Servicio en segundo plano con icono en la barra de tareas
+    El usuario no ve ventana, solo el icono
+    """
+
+    def __init__(self, config):
+        self.config = config
+        self.sync_running = True
+        self.is_syncing = False  # Nuevo flag para saber si está sincronizando ahora
+        self.last_sync_time = None
+        self.last_sync_status = "Esperando..."
+        self.root = None
+        self.icon = None
+
+    def crear_icono(self):
+        """Crea icono simple para la bandeja del sistema"""
+        try:
+            from PIL import Image, ImageDraw
+            # Crear imagen simple 64x64
+            image = Image.new('RGB', (64, 64), color='white')
+            draw = ImageDraw.Draw(image)
+
+            # Dibujar círculo azul (sincronización)
+            draw.ellipse([10, 10, 54, 54], fill='#3498db', outline='#2980b9', width=3)
+
+            # Dibujar flechas de sincronización
+            draw.polygon([(20, 32), (32, 20), (32, 28), (44, 28), (44, 20), (56, 32), (44, 44), (44, 36), (32, 36), (32, 44)], fill='white')
+
+            return image
+        except ImportError:
+            log("ERROR: PIL no está instalado. Ejecute: pip install Pillow", "ERROR")
+            return None
+        except Exception as e:
+            log(f"Error creando icono: {e}", "ERROR")
+            return None
+
+    def log_message(self, mensaje: str, tipo: str = "info"):
+        """Método compatible con SmartSyncComplete"""
+        # Guardar en log pero no mostrar nada (servicio transparente)
+        log(f"[TRAY] {mensaje}", tipo.upper())
+
+    def ejecutar_sincronizacion(self):
+        """Ejecuta una sincronización"""
+        self.is_syncing = True
+
+        try:
+            # Importar módulo de sincronización
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "smart_sync_complete",
+                os.path.join(BASE_DIR, "smart_sync_complete.py")
+            )
+            sync_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sync_module)
+
+            postgresql_config = {
+                'host': self.config['postgres_host'],
+                'port': self.config['postgres_port'],
+                'database': self.config['postgres_database'],
+                'user': self.config['postgres_user'],
+                'password': self.config['postgres_password']
+            }
+
+            mysql_config = {
+                'host': self.config['mysql_host'],
+                'port': self.config['mysql_port'],
+                'database': self.config['mysql_database'],
+                'user': self.config['mysql_user'],
+                'password': self.config['mysql_password']
+            }
+
+            sync_system = sync_module.SmartSyncComplete(
+                app=self,
+                postgresql_config=postgresql_config,
+                mysql_config=mysql_config,
+                company_rif=self.config['company_rif'],
+                company_email=self.config['company_email']
+            )
+
+            sync_system.inicializar_tabla_hashes()
+            resultado = sync_system.ejecutar_sync_completa()
+
+            if resultado:
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "✅ Exitosa"
+                self._mostrar_notificacion_windows("Sincronización Exitosa", f"Última sync: {self.last_sync_time}")
+            else:
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "❌ Error"
+                self._mostrar_notificacion_windows("Error en Sincronización", "Revisa los logs para más detalles")
+
+        except Exception as e:
+            log(f"Error en sincronización: {e}", "ERROR")
+            self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.last_sync_status = f"❌ Error: {str(e)[:30]}"
+            self._mostrar_notificacion_windows("Error en Sincronización", str(e)[:50])
+        finally:
+            self.is_syncing = False
+
+    def _mostrar_notificacion_windows(self, titulo: str, mensaje: str):
+        """Muestra notificación de Windows"""
+        try:
+            from win10toast import ToastNotifier
+            toast = ToastNotifier()
+            toast.show_toast(
+                title=f"🔄 {titulo}",
+                message=mensaje,
+                duration=5,
+                threaded=True
+            )
+        except Exception:
+            pass  # Si falla la notificación, continuar sin problema
+
+    def actualizar_tooltip(self):
+        """Actualiza el tooltip del icono"""
+        # pystray NO permite cambiar el tooltip dinámicamente
+        # El tooltip se establece al crear el icono y no se puede modificar
+        # En su lugar, mostramos el estado en:
+        # - Notificaciones de Windows
+        # - Ventana de logs en tiempo real
+        pass
+
+    def ver_logs(self):
+        """Abre ventana de logs en tiempo real"""
+        import tkinter as tk
+        from tkinter import scrolledtext
+        import threading
+        import time
+
+        # Crear ventana raíz ya que no hay una
+        root = tk.Tk()
+        root.withdraw()  # Ocultar ventana principal
+
+        log_window = tk.Toplevel(root)
+        log_window.title("📊 Logs de Sincronización - Tiempo Real")
+        log_window.geometry("900x700")
+
+        # Frame principal
+        main_frame = tk.Frame(log_window)
+        main_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Frame de información
+        info_frame = tk.Frame(main_frame)
+        info_frame.pack(fill="x", pady=(0, 5))
+
+        lbl_info = tk.Label(
+            info_frame,
+            text="📁 Logs: windows_package/logs/  |  🔄 Actualización automática cada 2 segundos",
+            font=("Arial", 9),
+            anchor="w"
+        )
+        lbl_info.pack(fill="x")
+
+        # Frame de botones
+        btn_frame = tk.Frame(main_frame)
+        btn_frame.pack(fill="x", pady=(0, 5))
+
+        # Variables de control
+        log_running = [True]  # Usar lista para mutable en closure
+        current_log_file = [None]
+
+        def buscar_log_mas_reciente():
+            """Busca el archivo de log más reciente"""
+            try:
+                log_dir = os.path.join(BASE_DIR, "logs")
+                if not os.path.exists(log_dir):
+                    return None
+
+                # Buscar todos los archivos de log (.txt y .log)
+                all_files = []
+                for f in os.listdir(log_dir):
+                    if f.endswith('.txt') or f.endswith('.log'):
+                        full_path = os.path.join(log_dir, f)
+                        # Obtener fecha de modificación
+                        mtime = os.path.getmtime(full_path)
+                        all_files.append((mtime, full_path))
+
+                if all_files:
+                    # Ordenar por fecha de modificación (más reciente primero)
+                    all_files.sort(reverse=True)
+                    return all_files[0][1]  # Retornar el archivo más reciente
+                return None
+            except Exception:
+                return None
+
+        def actualizar_logs():
+            """Actualiza el contenido de logs periódicamente"""
+            last_size = [0]  # Tamaño del archivo la última vez
+
+            def update_loop():
+                while log_running[0]:
+                    try:
+                        log_file = buscar_log_mas_reciente()
+
+                        if log_file:
+                            if current_log_file[0] != log_file:
+                                # Nuevo archivo de log
+                                current_log_file[0] = log_file
+                                last_size[0] = 0
+                                txt.config(state="normal")
+                                txt.delete("1.0", "end")
+                                txt.insert("1.0", f"📄 Archivo: {os.path.basename(log_file)}\n" + "="*80 + "\n\n")
+                                last_size[0] = os.path.getsize(log_file)
+
+                            # Leer solo el contenido nuevo
+                            try:
+                                current_size = os.path.getsize(log_file)
+                                if current_size > last_size[0]:
+                                    with open(log_file, 'r', encoding='utf-8') as f:
+                                        f.seek(last_size[0])
+                                        new_content = f.read()
+                                        if new_content:
+                                            txt.config(state="normal")
+                                            txt.insert("end", new_content)
+                                            txt.see("end")  # Auto-scroll al final
+                                            txt.config(state="disabled")
+                                    last_size[0] = current_size
+                            except Exception:
+                                pass
+
+                        lbl_status.config(text=f"📄 {os.path.basename(current_log_file[0]) if current_log_file[0] else 'Esperando logs...'} | {'🔄 Monitoreando' if log_running[0] else '⏸️ Pausado'}")
+
+                        time.sleep(2)  # Actualizar cada 2 segundos
+
+                    except Exception:
+                        time.sleep(2)
+
+            # Iniciar thread de actualización
+            thread = threading.Thread(target=update_loop, daemon=True)
+            thread.start()
+
+        # Área de texto
+        txt = scrolledtext.ScrolledText(main_frame, state="normal", font=("Consolas", 9))
+        txt.pack(fill="both", expand=True)
+
+        # Etiqueta de estado
+        lbl_status = tk.Label(main_frame, text="🔄 Iniciando...", font=("Arial", 9), anchor="w")
+        lbl_status.pack(fill="x", pady=(5, 0))
+
+        # Botones
+        btn_cerrar = tk.Button(btn_frame, text="❌ Cerrar", command=lambda: cerrar_ventana(), bg="#ff6b6b", fg="white")
+        btn_cerrar.pack(side="right", padx=5)
+
+        btn_limpiar = tk.Button(btn_frame, text="🧹 Limpiar Vista", command=lambda: limpiar_vista())
+        btn_limpiar.pack(side="right", padx=5)
+
+        btn_refresh = tk.Button(btn_frame, text="🔄 Forzar Refresh", command=lambda: force_refresh())
+        btn_refresh.pack(side="right", padx=5)
+
+        def limpiar_vista():
+            """Limpia la vista pero sigue monitoreando"""
+            txt.config(state="normal")
+            txt.delete("1.0", "end")
+            txt.insert("1.0", "📋 Vista limpiada. Monitoreando...\n" + "="*80 + "\n\n")
+            txt.config(state="disabled")
+
+        def force_refresh():
+            """Fuerza la recarga completa del archivo"""
+            if current_log_file[0]:
+                try:
+                    with open(current_log_file[0], 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        txt.config(state="normal")
+                        txt.delete("1.0", "end")
+                        txt.insert("1.0", f"📄 Archivo: {os.path.basename(current_log_file[0])}\n" + "="*80 + "\n\n")
+                        txt.insert("end", content)
+                        txt.see("end")
+                        txt.config(state="disabled")
+                except Exception as e:
+                    txt.config(state="normal")
+                    txt.insert("end", f"\n❌ Error: {e}\n")
+                    txt.config(state="disabled")
+
+        def cerrar_ventana():
+            """Cierra la ventana y detiene el monitoreo"""
+            log_running[0] = False
+            root.destroy()
+
+        # Iniciar actualización automática
+        actualizar_logs()
+
+        # Cargar contenido inicial
+        log_file = buscar_log_mas_reciente()
+        if log_file:
+            current_log_file[0] = log_file
+            try:
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    txt.insert("1.0", f"📄 Archivo: {os.path.basename(log_file)}\n" + "="*80 + "\n\n")
+                    txt.insert("end", content)
+                    txt.see("end")
+            except Exception as e:
+                txt.insert("1.0", f"❌ Error cargando log: {e}")
+        else:
+            txt.insert("1.0", "⏳ Esperando logs...\n\n")
+            txt.insert("end", "El sistema creará logs en:\n")
+            txt.insert("end", f"  {LOGS_DIR}\n\n")
+            txt.insert("end", "Logs que se crearán:\n")
+            txt.insert("end", "  • sync_system.log - Logs del sistema (arranque, errores)\n")
+            txt.insert("end", "  • sync_YYYYMMDD_HHMMSS.txt - Logs de sincronización\n\n")
+            txt.insert("end", "💡 Si el icono está en la barra de tareas, la sincronización\n")
+            txt.insert("end", "   se ejecutará automáticamente en segundo plano.\n\n")
+            txt.insert("end", "💡 Puedes forzar una sincronización desde:\n")
+            txt.insert("end", "   Clic derecho en el icono → Sincronizar Ahora\n")
+
+        txt.config(state="disabled")
+
+        # Manejar cierre de ventana
+        log_window.protocol("WM_DELETE_WINDOW", cerrar_ventana)
+
+        # Ejecutar
+        root.mainloop()
+
+    def sincronizar_ahora(self):
+        """Sincronización manual desde el menú"""
+        import threading
+        thread = threading.Thread(target=self.ejecutar_sincronizacion)
+        thread.daemon = True
+        thread.start()
+
+    def salir(self):
+        """Salir del servicio"""
+        self.sync_running = False
+        if self.icon:
+            self.icon.stop()
+        sys.exit(0)
+
+    def iniciar(self):
+        """Inicia el servicio en la bandeja del sistema"""
+        try:
+            log("=" * 70, "INFO")
+            log("INICIANDO SYSTEM TRAY SERVICE", "INFO")
+            log("=" * 70, "INFO")
+            log(f"RIF: {self.config['company_rif']}", "INFO")
+            log(f"Email: {self.config['company_email']}", "INFO")
+            log(f"Intervalo: {self.config.get('sync_interval_minutes', 30)} minutos", "INFO")
+            log("", "INFO")
+
+            import pystray
+
+            # Crear icono
+            log("Creando icono de la bandeja del sistema...", "INFO")
+            icon_image = self.crear_icono()
+            if not icon_image:
+                log("No se pudo crear el icono. Saliendo.", "ERROR")
+                return
+
+            log("✅ Icono creado correctamente", "SUCCESS")
+
+            # Crear menú contextual
+            menu = pystray.Menu(
+                pystray.MenuItem('📊 Ver Logs', self.ver_logs),
+                pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
+                pystray.MenuItem('⚙️ Configuración', lambda: self.abrir_config()),
+                pystray.MenuItem('❌ Salir', self.salir)
+            )
+
+            # Crear icono en la bandeja
+            # Nota: El tooltip no se puede cambiar dinámicamente en pystray
+            tooltip_text = f"""Sync System v2.0
+RIF: {self.config['company_rif']}
+
+Clic derecho → Ver Logs (tiempo real)"""
+            self.icon = pystray.Icon("Sync System", icon_image, tooltip_text, menu)
+
+            # Iniciar sincronización automática en thread
+            log("Iniciando thread de sincronización automática...", "INFO")
+            import threading
+            sync_thread = threading.Thread(target=self.bucle_sincronizacion)
+            sync_thread.daemon = True
+            sync_thread.start()
+
+            # Ejecutar icono (bloqueante)
+            log("✅ Servicio iniciado en la bandeja del sistema", "INFO")
+            log("💡 El icono está en la barra de tareas (junto al reloj)", "INFO")
+            log("💡 Clic derecho para ver opciones", "INFO")
+            log("", "INFO")
+            self.icon.run()
+
+        except ImportError:
+            log("ERROR: pystray no está instalado", "ERROR")
+            log("Ejecute: pip install pystray Pillow", "ERROR")
+            log("", "INFO")
+            log("Instalación:", "INFO")
+            log("  pip install pystray Pillow", "INFO")
+        except Exception as e:
+            log(f"Error iniciando servicio: {e}", "ERROR")
+
+    def bucle_sincronizacion(self):
+        """Bucle de sincronización automática"""
+        intervalo_minutos = int(self.config.get('sync_interval_minutes', 30))
+        intervalo_segundos = intervalo_minutos * 60
+
+        log(f"Sincronización automática cada {intervalo_minutos} minutos", "INFO")
+
+        # Primera sincronización inmediata al iniciar
+        if self.sync_running:
+            log("🔄 Ejecutando primera sincronización al inicio...", "INFO")
+            self.ejecutar_sincronizacion()
+
+        # Bucle de sincronización periódica
+        while self.sync_running:
+            try:
+                time.sleep(intervalo_segundos)
+
+                if self.sync_running:
+                    log(f"🔄 Iniciando sincronización programada...", "INFO")
+                    self.ejecutar_sincronizacion()
+
+            except Exception as e:
+                log(f"Error en bucle de sincronización: {e}", "ERROR")
+
+    def abrir_config(self):
+        """Abre ventana de configuración"""
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.title("Configuración")
+        app = ConfigWindow(root)
+        root.mainloop()
+
+        # Recargar configuración
+        self.config = cargar_config()
+
+        # Actualizar intervalo
+        log("Configuración actualizada", "INFO")
+
 # ==============================================================================
 # MAIN - INICIO DEL SISTEMA
 # ==============================================================================
@@ -687,7 +1193,7 @@ class ManagerWindow:
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
-    parser.add_argument("--mode", choices=["config", "manager", "service", "sync"],
+    parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
                        default="auto", help="Modo de ejecución")
 
     args = parser.parse_args()
@@ -698,7 +1204,7 @@ def main():
         if not config.get('configured') or config.get('first_run'):
             args.mode = "config"
         else:
-            args.mode = "manager"
+            args.mode = "tray"  # Por defecto: modo tray (icono en barra de tareas)
 
     # Ejecutar según modo
     if args.mode == "config":
@@ -712,6 +1218,18 @@ def main():
         root = tk.Tk()
         app = ManagerWindow(root)
         root.mainloop()
+
+    elif args.mode == "tray":
+        # Modo System Tray (icono en barra de tareas)
+        print("=== MODO SYSTEM TRAY ===")
+        print("🔵 El icono está en la barra de tareas (junto al reloj)")
+        print("📊 Clic izquierdo: Ver logs")
+        print("⚙️  Clic derecho: Menú de opciones")
+        print("❌ Para salir: Clic derecho → Salir")
+        print("")
+
+        tray = SystemTrayService(config)
+        tray.iniciar()
 
     elif args.mode == "sync":
         # Modo sincronización única

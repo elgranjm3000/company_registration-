@@ -9,7 +9,7 @@ Versión: 1.0
 """
 
 import psycopg2
-import mysql.connector
+import pymysql  # Cambiado de mysql.connector a pymysql (100% Python puro)
 import hashlib
 import json
 import logging
@@ -47,12 +47,12 @@ class SmartSyncComplete:
     Módulo de sincronización inteligente con tabla de hashes
 
     Uso:
-        sync = SmartSyncComplete(app, postgresql_config, mysql_config, company_id)
+        sync = SmartSyncComplete(app, postgresql_config, mysql_config, company_rif, company_email)
         sync.inicializar_tabla_hashes()
         sync.ejecutar_sync_completa()
     """
 
-    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_id: int):
+    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str):
         """
         Inicializar módulo de sincronización
 
@@ -60,12 +60,15 @@ class SmartSyncComplete:
             app: Instancia de CompleteSyncApp o ServiceApp
             postgresql_config: Dict con configuración PostgreSQL
             mysql_config: Dict con configuración MySQL
-            company_id: ID de compañía
+            company_rif: RIF de la empresa
+            company_email: Email de la empresa
         """
         self.app = app
         self.postgresql_config = postgresql_config
         self.mysql_config = mysql_config
-        self.company_id = company_id
+        self.company_rif = company_rif
+        self.company_email = company_email
+        self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
 
         # Estadísticas
@@ -83,14 +86,167 @@ class SmartSyncComplete:
         self.mysql_conn = None
         self.mysql_cursor = None
 
+        # Configurar logging a archivo
+        self.log_file = None
+        self._setup_file_logging()
+
+        # Sistema de notificaciones
+        self.notificaciones_habilitadas = True
+        self._verificar_sistema_notificaciones()
+
+    def _setup_file_logging(self):
+        """
+        Configurar logging a archivo
+        Crea directorio 'logs' si no existe
+        Archivo: logs/sync_YYYYMMDD_HHMMSS.txt
+        """
+        try:
+            # Crear directorio de logs si no existe
+            log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+                self._print_to_console(f"Directorio de logs creado: {log_dir}")
+
+            # Crear nombre de archivo con timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_filename = f"sync_{timestamp}.txt"
+            log_path = os.path.join(log_dir, log_filename)
+
+            # Abrir archivo de log
+            self.log_file = open(log_path, 'a', encoding='utf-8')
+
+            # Escribir cabecera del archivo
+            self._write_to_log_file("=" * 70)
+            self._write_to_log_file(f"SINCRONIZACIÓN PostgreSQL ↔ MySQL")
+            self._write_to_log_file(f"Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self._write_to_log_file(f"Empresa RIF: {self.company_rif}")
+            self._write_to_log_file(f"Empresa Email: {self.company_email}")
+            self._write_to_log_file("=" * 70)
+            self._write_to_log_file("")
+
+            self._print_to_console(f"📝 Log archivo: {log_path}")
+
+        except Exception as e:
+            self._print_to_console(f"⚠️ Error creando archivo de log: {str(e)}")
+
+    def _write_to_log_file(self, mensaje: str):
+        """Escribir mensaje al archivo de log"""
+        if self.log_file:
+            try:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.log_file.write(f"[{timestamp}] {mensaje}\n")
+                self.log_file.flush()  # Forzar escritura inmediata
+            except Exception as e:
+                self._print_to_console(f"⚠️ Error escribiendo log: {str(e)}")
+
+    def _print_to_console(self, mensaje: str):
+        """Imprimir a consola (fallback)"""
+        print(mensaje)
+
+    def _verificar_sistema_notificaciones(self):
+        """Verifica si el sistema de notificaciones está disponible"""
+        try:
+            from win10toast import ToastNotifier
+            self.toast = ToastNotifier()
+            self._log("Sistema de notificaciones disponible", "info")
+        except ImportError:
+            self.toast = None
+            self.notificaciones_habilitadas = False
+            self._log("Sistema de notificaciones no disponible (pip install win10toast)", "warning")
+        except Exception as e:
+            self.toast = None
+            self.notificaciones_habilitadas = False
+            self._log(f"Sistema de notificaciones no disponible: {str(e)}", "warning")
+
+    def _mostrar_notificacion(self, titulo: str, mensaje: str, duracion: int = 5):
+        """
+        Muestra notificación de Windows
+
+        Args:
+            titulo: Título de la notificación
+            mensaje: Mensaje de la notificación
+            duracion: Duración en segundos (por defecto 5)
+        """
+        if not self.notificaciones_habilitadas or not self.toast:
+            return
+
+        try:
+            self.toast.show_toast(
+                title=titulo,
+                message=mensaje,
+                duration=duracion,
+                threaded=True  # No bloquear el hilo principal
+            )
+        except Exception as e:
+            self._log(f"Error mostrando notificación: {str(e)}", "warning")
+
+    def _notificar_nuevos_presupuestos(self, cantidad: int):
+        """Notifica cuando hay nuevos presupuestos"""
+        if cantidad > 0:
+            self._mostrar_notificacion(
+                titulo="🔄 Sync System - Nuevos Presupuestos",
+                mensaje=f"Tienes {cantidad} nuevo(s) presupuesto(s) de MySQL sincronizados",
+                duracion=10
+            )
+
+    def _close_log_file(self):
+        """Cerrar archivo de log y escribir resumen final"""
+        if self.log_file:
+            try:
+                # Escribir resumen final
+                self._write_to_log_file("")
+                self._write_to_log_file("=" * 70)
+                self._write_to_log_file("FIN DE SINCRONIZACIÓN")
+                self._write_to_log_file(f"Fin: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+                # Escribir estadísticas si existen
+                if hasattr(self, 'stats') and self.stats:
+                    self._write_to_log_file("")
+                    self._write_to_log_file("ESTADÍSTICAS FINALES:")
+                    for entidad, stats in self.stats.items():
+                        if stats.get('nuevos') or stats.get('modificados') or stats.get('errores'):
+                            self._write_to_log_file(
+                                f"  {entidad.capitalize()}: "
+                                f"{stats.get('nuevos', 0)} nuevos, "
+                                f"{stats.get('modificados', 0)} modificados, "
+                                f"{stats.get('errores', 0)} errores"
+                            )
+
+                self._write_to_log_file("=" * 70)
+                self._write_to_log_file("")
+
+                # Cerrar archivo
+                self.log_file.close()
+                self.log_file = None
+                self._print_to_console("📝 Archivo de log cerrado")
+            except Exception as e:
+                self._print_to_console(f"⚠️ Error cerrando archivo de log: {str(e)}")
+
     def _log(self, mensaje: str, tipo: str = 'info'):
-        """Enviar log a través de la app"""
+        """
+        Enviar log a través de la app y al archivo
+
+        Args:
+            mensaje: Mensaje a loggear
+            tipo: Tipo de log (info, success, warning, error, debug)
+        """
+        # Enviar a la interfaz gráfica (si existe)
         if hasattr(self.app, 'log_message'):
             self.app.log_message(mensaje, tipo)
         else:
             # Fallback para uso sin interfaz gráfica
-            log_func = getattr(logging, tipo.lower(), logging.info)
-            log_func(mensaje)
+            self._print_to_console(f"[{tipo.upper()}] {mensaje}")
+
+        # SIEMPRE escribir al archivo de log
+        log_prefix = {
+            'info': 'ℹ️  INFO',
+            'success': '✅ SUCCESS',
+            'warning': '⚠️  WARNING',
+            'error': '❌ ERROR',
+            'debug': '🔍 DEBUG'
+        }.get(tipo, 'INFO')
+
+        self._write_to_log_file(f"{log_prefix}: {mensaje}")
 
     # ====================================================================
     # INICIALIZACIÓN
@@ -115,21 +271,20 @@ class SmartSyncComplete:
                 table_name VARCHAR(50) NOT NULL,
                 record_key VARCHAR(100) NOT NULL,
                 record_hash VARCHAR(32) NOT NULL,
-                last_sync_data JSONB,
+                last_sync_data TEXT,
                 synced_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 company_id INTEGER,
                 UNIQUE(table_name, record_key, company_id)
             );
-
-            CREATE INDEX IF NOT EXISTS idx_sync_hashes_lookup
-                ON sync_hashes(table_name, record_key, company_id);
-
-            CREATE INDEX IF NOT EXISTS idx_sync_hashes_table
-                ON sync_hashes(table_name, company_id);
             """
 
             self.pg_cursor.execute(create_table_query)
+
+            # Crear índices de forma compatible con PostgreSQL 9
+            # (PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS)
+            self._crear_indice_sync_hashes()
+
             self.pg_conn.commit()
 
             self._log("✅ Tabla sync_hashes lista", "success")
@@ -138,6 +293,31 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"❌ Error creando tabla sync_hashes: {str(e)}", "error")
             return False
+
+    def _crear_indice_sync_hashes(self):
+        """
+        Crear índices de sync_hashes de forma compatible con PostgreSQL 9
+        PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS
+        """
+        indices = [
+            ("idx_sync_hashes_lookup", "CREATE INDEX idx_sync_hashes_lookup ON sync_hashes(table_name, record_key, company_id)"),
+            ("idx_sync_hashes_table", "CREATE INDEX idx_sync_hashes_table ON sync_hashes(table_name, company_id)")
+        ]
+
+        for nombre_idx, query in indices:
+            try:
+                self.pg_cursor.execute(query)
+                self.pg_conn.commit()  # Commit después de crear índice
+                self._log(f"  Índice '{nombre_idx}' creado", "debug")
+            except Exception as e:
+                # Si el índice ya existe, ignoramos el error
+                error_msg = str(e).lower()
+                if "already exists" in error_msg:
+                    self._log(f"  Índice '{nombre_idx}' ya existe", "debug")
+                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
+                else:
+                    self._log(f"  ⚠️ Error creando índice '{nombre_idx}': {str(e)}", "warning")
+                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
 
     def _conectar_bases_datos(self) -> bool:
         """
@@ -148,20 +328,206 @@ class SmartSyncComplete:
         """
         try:
             # Conectar PostgreSQL
-            self.pg_conn = psycopg2.connect(**self.postgresql_config)
-            self.pg_cursor = self.pg_conn.cursor()
-            self._log("✅ Conectado a PostgreSQL", "success")
+            try:
+                self.pg_conn = psycopg2.connect(**self.postgresql_config)
+                self.pg_cursor = self.pg_conn.cursor()
+                self._log("✅ Conectado a PostgreSQL", "success")
+            except Exception as e:
+                self._log(f"❌ Error conectando PostgreSQL: {type(e).__name__}: {str(e)}", "error")
+                self._log(f"   Host: {self.postgresql_config.get('host')}", "debug")
+                self._log(f"   Database: {self.postgresql_config.get('database')}", "debug")
+                self._log(f"   User: {self.postgresql_config.get('user')}", "debug")
+                return False
 
-            # Conectar MySQL
-            self.mysql_conn = mysql.connector.connect(**self.mysql_config)
-            self.mysql_cursor = self.mysql_conn.cursor()
-            self._log("✅ Conectado a MySQL", "success")
+            # Conectar MySQL (usando pymysql - 100% Python puro)
+            try:
+                self.mysql_conn = pymysql.connect(
+                    host=self.mysql_config['host'],
+                    port=int(self.mysql_config.get('port', 3306)),
+                    user=self.mysql_config['user'],
+                    password=self.mysql_config['password'],
+                    database=self.mysql_config['database'],
+                    charset='utf8mb4'
+                )
+                self.mysql_cursor = self.mysql_conn.cursor()
+                self._log("✅ Conectado a MySQL (pymysql)", "success")
+                self._log(f"   Host: {self.mysql_config.get('host')}", "debug")
+                self._log(f"   Port: {self.mysql_config.get('port')}", "debug")
+                self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
+            except Exception as e:
+                self._log(f"❌ Error conectando MySQL: {type(e).__name__}: {str(e)}", "error")
+                self._log(f"   Host: {self.mysql_config.get('host')}", "debug")
+                self._log(f"   Port: {self.mysql_config.get('port')}", "debug")
+                self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
+                self._log(f"   User: {self.mysql_config.get('user')}", "debug")
+
+                # Mostrar error detallado de pymysql
+                if hasattr(e, 'args') and e.args:
+                    self._log(f"   Error: {e.args[0] if e.args else str(e)}", "error")
+
+                return False
 
             return True
 
         except Exception as e:
-            self._log(f"❌ Error conectando bases de datos: {str(e)}", "error")
+            self._log(f"❌ Error general conectando bases de datos: {type(e).__name__}: {str(e)}", "error")
             return False
+
+    def _obtener_company_id(self) -> bool:
+        """
+        Obtener company_id desde MySQL basado en RIF y email
+        Compatible con app.py - verifica acceso primero, luego companies
+
+        Flujo (igual que app.py sync_companies):
+        1. Verificar que existe en tabla 'acceso' (validación)
+        2. Si existe en acceso, buscar en 'companies'
+        3. Si existe en companies, usar ese ID
+        4. Si no existe en companies, crear nueva empresa
+
+        Returns:
+            True si se encontró o creó el company_id, False si no
+        """
+        try:
+            if not self.mysql_cursor:
+                self._log("❌ No hay conexión a MySQL para obtener company_id", "error")
+                return False
+
+            self._log(f"🔍 Buscando empresa: RIF={self.company_rif}, Email={self.company_email}", "info")
+
+            # [PASO 1] Verificar que existe en tabla 'acceso' (como app.py línea 633)
+            self._log("  🔍 Verificando tabla 'acceso'...", "debug")
+            query_acceso = """
+            SELECT codigo, correo_electronico
+            FROM acceso
+            WHERE codigo = %s AND LOWER(correo_electronico) = LOWER(%s)
+            LIMIT 1
+            """
+
+            self.mysql_cursor.execute(query_acceso, (self.company_rif, self.company_email))
+            acceso = self.mysql_cursor.fetchone()
+
+            if not acceso:
+                # ❌ NO existe en acceso - DETENER proceso
+                self._log("", "error")
+                self._log("❌ ERROR: No se encontraron datos en tabla 'acceso'", "error")
+                self._log(f"   RIF: {self.company_rif}", "error")
+                self._log(f"   Email: {self.company_email}", "error")
+                self._log("", "error")
+                self._log("   💡 La empresa debe estar registrada en la tabla 'acceso' de MySQL", "warning")
+                self._log("   💡 Verifica que el RIF y email sean correctos", "warning")
+                return False
+
+            self._log("  ✅ Empresa encontrada en tabla 'acceso'", "success")
+
+            # [PASO 2] Buscar si ya existe en tabla 'companies' (como app.py línea 688)
+            self._log("  🔍 Buscando en tabla 'companies'...", "debug")
+            query_companies = """
+            SELECT id, name
+            FROM companies
+            WHERE rif = %s AND email = %s
+            LIMIT 1
+            """
+
+            self.mysql_cursor.execute(query_companies, (self.company_rif, self.company_email))
+            company = self.mysql_cursor.fetchone()
+
+            if company:
+                # ✅ Existe en companies - usar ese ID
+                self.company_id = company[0]
+                company_name = company[1]
+                self._log(f"✅ Empresa encontrada: {company_name} (ID: {self.company_id})", "success")
+                return True
+            else:
+                # ⚠️ NO existe en companies - crear nueva empresa
+                self._log("  ⚠️ Empresa no encontrada en 'companies', creando registro...", "warning")
+                self._log("  💡 Si esto es un error, usa app.py para sincronizar la empresa primero", "info")
+
+                # Obtener datos adicionales de PostgreSQL para crear la empresa
+                pg_data = self._obtener_datos_postgres_para_empresa()
+
+                address = pg_data.get('address') if pg_data else None
+                phone = pg_data.get('phone') if pg_data else None
+                company_name = self.company_rif  # Usar RIF como nombre temporal si no hay datos de PG
+
+                if pg_data and pg_data.get('name'):
+                    company_name = pg_data['name']
+
+                # Insertar nueva empresa (como app.py líneas 718-737)
+                insert_query = """
+                INSERT INTO companies (
+                    address, phone, rif, email, name, key_system_items_id, status, created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, 1, 'active', NOW(), NOW()
+                )
+                """
+
+                self.mysql_cursor.execute(insert_query, (
+                    address,
+                    phone,
+                    self.company_rif,
+                    self.company_email.lower(),
+                    company_name
+                ))
+
+                self.mysql_conn.commit()
+                self.company_id = self.mysql_cursor.lastrowid
+
+                self._log(f"✅ Nueva empresa creada: {company_name} (ID: {self.company_id})", "success")
+                return True
+
+        except Exception as e:
+            self._log(f"❌ Error obteniendo company_id: {type(e).__name__}: {str(e)}", "error")
+
+            # Mostrar detalles del error si es de MySQL (pymysql)
+            if hasattr(e, 'args') and e.args:
+                self._log(f"   Error: {e.args[0]}", "error")
+
+            return False
+
+    def _obtener_datos_postgres_para_empresa(self) -> Optional[dict]:
+        """
+        Obtener datos adicionales de PostgreSQL para la empresa
+        Igual que app.py líneas 607-628
+        """
+        try:
+            if not self.pg_cursor:
+                return None
+
+            query = """
+            SELECT
+                c.address,
+                c.phone,
+                COALESCE(
+                    CASE
+                        WHEN c.description IS NOT NULL AND c.description != ''
+                        THEN decode(c.description, 'base64')::text
+                        ELSE c.description
+                    END,
+                    ''
+                ) as rif_data,
+                COALESCE(e.account, c.email, '') as email
+            FROM company c
+            LEFT JOIN emails e ON c.email = e.account
+            WHERE LOWER(c.email) = LOWER(%s)
+            ORDER BY c.id
+            LIMIT 1
+            """
+
+            self.pg_cursor.execute(query, (self.company_email,))
+            result = self.pg_cursor.fetchone()
+
+            if result:
+                return {
+                    'address': result[0],
+                    'phone': result[1],
+                    'rif_data': result[2],
+                    'email': result[3]
+                }
+            return None
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error obteniendo datos de PostgreSQL: {str(e)}", "warning")
+            return None
 
     def _cerrar_conexiones(self):
         """Cerrar todas las conexiones"""
@@ -272,6 +638,7 @@ class SmartSyncComplete:
                       record_hash: str, data: dict = None):
         """
         Guardar o actualizar hash en sync_hashes
+        Compatible con PostgreSQL 9 (no usa ON CONFLICT)
 
         Args:
             table_name: Nombre de tabla
@@ -286,17 +653,32 @@ class SmartSyncComplete:
             else:
                 data_json = None
 
-            query = """
-            INSERT INTO sync_hashes (table_name, record_key, record_hash, last_sync_data, company_id, updated_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
-            ON CONFLICT (table_name, record_key, company_id)
-            DO UPDATE SET
-                record_hash = EXCLUDED.record_hash,
-                last_sync_data = EXCLUDED.last_sync_data,
+            # Enfoque compatible con PostgreSQL 9:
+            # 1. Primero intentar UPDATE
+            # 2. Si no afecta ninguna fila, hacer INSERT
+
+            update_query = """
+            UPDATE sync_hashes
+            SET record_hash = %s,
+                last_sync_data = %s,
                 updated_at = NOW()
+            WHERE table_name = %s
+              AND record_key = %s
+              AND company_id = %s
             """
 
-            self.pg_cursor.execute(query, (table_name, record_key, record_hash, data_json, self.company_id))
+            self.pg_cursor.execute(update_query,
+                                 (record_hash, data_json, table_name, record_key, self.company_id))
+
+            # Si el UPDATE no afectó ninguna fila, hacer INSERT
+            if self.pg_cursor.rowcount == 0:
+                insert_query = """
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, last_sync_data, company_id, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                """
+                self.pg_cursor.execute(insert_query,
+                                     (table_name, record_key, record_hash, data_json, self.company_id))
+
         except Exception as e:
             self._log(f"Error guardando hash: {str(e)}", "error")
 
@@ -782,20 +1164,8 @@ class SmartSyncComplete:
 
                     self._log(f"  Procesando quote #{quote_id}...", "debug")
 
-                    # Verificar si ya existe en PostgreSQL
-                    self.pg_cursor.execute(
-                        "SELECT correlative FROM sales_operation WHERE document_no = %s LIMIT 1",
-                        (str(quote['quote_number']),)
-                    )
-                    existe = self.pg_cursor.fetchone()
-
-                    if existe:
-                        # Ya existe, verificar si hay que actualizar status
-                        self._actualizar_status_quote_postgresql(quote)
-                        self.pg_conn.commit()  # Commit individual
-                        continue
-
-                    # Es nuevo, insertar completamente
+                    # Insertar directamente en PostgreSQL (sin verificar si existe)
+                    # El sistema de hashes sync_hashes detectará duplicados
                     correlativo = self._insertar_quote_postgresql(quote, mac)
 
                     # Guardar el correlative en el hash para futuras referencias
@@ -810,12 +1180,22 @@ class SmartSyncComplete:
                     self.stats['quotes']['nuevos'] += 1
 
                 except Exception as e:
-                    # Rollback de este quote y continuar con el siguiente
-                    self._log(f"Error procesando quote {quote.get('id')}: {str(e)}", "error")
-                    self.pg_conn.rollback()  # Rollback para que no afecte siguientes quotes
-                    self.stats['quotes']['errores'] += 1
+                    # Si es error de duplicado (unique constraint), ignorar silenciosamente
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        self._log(f"  ℹ️ Quote #{quote_id} ya existe en PostgreSQL (omitiendo)", "debug")
+                        self.pg_conn.rollback()
+                    else:
+                        # Otro error, registrar y continuar
+                        self._log(f"Error procesando quote {quote.get('id')}: {str(e)}", "error")
+                        self.pg_conn.rollback()  # Rollback para que no afecte siguientes quotes
+                        self.stats['quotes']['errores'] += 1
 
             self._log(f"✅ Quotes sincronizados a PostgreSQL: {self.stats['quotes']['nuevos']} nuevos", "success")
+
+            # Notificar si hay nuevos presupuestos
+            if self.stats['quotes']['nuevos'] > 0:
+                self._notificar_nuevos_presupuestos(self.stats['quotes']['nuevos'])
 
         except Exception as e:
             self._log(f"Error sincronizando quotes a PostgreSQL: {str(e)}", "error")
@@ -887,47 +1267,64 @@ class SmartSyncComplete:
         if bcv_rate == 0:
             bcv_rate = 170  # Valor default
 
+        # Calcular todos los valores ANTES de pasarlos al execute
+        # para evitar problemas de formateo de strings con símbolos %
+        client_code = customer_doc or 'ND'
+        client_id = customer_doc or f"MIG-{quote['id']}"
+        client_address_final = customer_address or 'Dirección migrada'
+        client_phone_final = customer_phone or 'S-N'
+
+        quote_total = safe_float(quote.get('total', 0))
+        quote_subtotal = safe_float(quote.get('subtotal', 0))
+        quote_tax_amount = safe_float(quote.get('tax_amount', 0))
+        quote_discount = safe_float(quote.get('discount', 0))
+        quote_discount_amount = safe_float(quote.get('discount_amount', 0))
+
+        total_net = quote_subtotal - quote_discount_amount
+        expiration = emission_date + timedelta(days=1)
+
+        # Ejecutar query con todos los valores pre-calculados
         self.pg_cursor.execute(sql_operation, (
-            'BUDGET',                                              # operation_type
-            document_no,                                           # document_no
-            emission_date,                                         # emission_date
-            emission_date,                                         # register_date
-            customer_doc or 'ND',                                  # client_code
-            customer_name,                                         # client_name
-            customer_doc or f"MIG-{quote['id']}",                  # client_id
-            customer_address or 'Dirección migrada',               # client_address
-            customer_phone or 'S-N',                               # client_phone
-            '00',                                                  # seller
-            1,                                                     # credit_days
-            emission_date + timedelta(days=1),                     # expiration_date
-            '',                                                    # description
-            '00',                                                  # store
-            '00',                                                  # locations
-            '00',                                                  # user_code
-            station,                                               # station (válida)
-            safe_float(quote.get('total', 0)),                     # total_amount
-            safe_float(quote.get('subtotal', 0)),                  # total_net_details
-            safe_float(quote.get('tax_amount', 0)),                # total_tax_details
-            safe_float(quote.get('total', 0)),                     # total_details
-            safe_float(quote.get('discount', 0)),                  # percent_discount
-            safe_float(quote.get('discount_amount', 0)),           # discount
-            safe_float(quote.get('subtotal', 0)) - safe_float(quote.get('discount_amount', 0)),  # total_net
-            safe_float(quote.get('tax_amount', 0)),                # total_tax
-            safe_float(quote.get('total', 0)),                     # total
-            0.0,                                                   # credit
-            0.0,                                                   # cash
-            '02',                                                  # coin_code (Dólar)
-            False,                                                 # canceled
-            True,                                                  # pending
-            False,                                                 # wait
-            safe_float(quote.get('subtotal', 0)),                  # total_net_cost
-            safe_float(quote.get('tax_amount', 0)),                # total_tax_cost
-            safe_float(quote.get('total', 0)),                     # total_cost
-            '01',                                                  # freight_tax
-            16,                                                    # freight_aliquot
-            document_no,                                           # document_no_internal
-            '',                                                    # control_no
-            ''                                                     # operation_comments
+            'BUDGET',                  # operation_type
+            document_no,               # document_no
+            emission_date,             # emission_date
+            emission_date,             # register_date
+            client_code,               # client_code
+            customer_name,             # client_name
+            client_id,                 # client_id
+            client_address_final,      # client_address
+            client_phone_final,        # client_phone
+            '00',                      # seller
+            1,                         # credit_days
+            expiration,                # expiration_date
+            '',                        # description
+            '00',                      # store
+            '00',                      # locations
+            '00',                      # user_code
+            station,                   # station (válida)
+            quote_total,               # total_amount
+            quote_subtotal,            # total_net_details
+            quote_tax_amount,          # total_tax_details
+            quote_total,               # total_details
+            quote_discount,            # percent_discount
+            quote_discount_amount,     # discount
+            total_net,                 # total_net
+            quote_tax_amount,          # total_tax
+            quote_total,               # total
+            0.0,                       # credit
+            0.0,                       # cash
+            '02',                      # coin_code (Dólar)
+            False,                     # canceled
+            True,                      # pending
+            False,                     # wait
+            quote_subtotal,            # total_net_cost
+            quote_tax_amount,          # total_tax_cost
+            quote_total,               # total_cost
+            '01',                      # freight_tax
+            16,                        # freight_aliquot
+            document_no,               # document_no_internal
+            '',                        # control_no
+            ''                         # operation_comments
         ))
 
         # Recuperar el correlative generado por PostgreSQL
@@ -994,6 +1391,10 @@ class SmartSyncComplete:
         total_bcv = total * bcv_rate
         discount_amount_bcv = discount_amount * bcv_rate
 
+        # Calcular totales netos ANTES del execute
+        total_net_usd = subtotal - discount_amount
+        total_net_bcv = subtotal_bcv - discount_amount_bcv
+
         sql_coins = """
         INSERT INTO public.sales_operation_coins (
             main_correlative, coin_code, factor_type, buy_aliquot,
@@ -1007,14 +1408,14 @@ class SmartSyncComplete:
         self.pg_cursor.execute(sql_coins, (
             correlativo, '02', 1, bcv_rate, bcv_rate,
             subtotal, tax_amount, total, discount_amount, 0.0,
-            subtotal - discount_amount, tax_amount, total, 0.0, 0.0
+            total_net_usd, tax_amount, total, 0.0, 0.0
         ))
 
         # Moneda bolívar (01)
         self.pg_cursor.execute(sql_coins, (
             correlativo, '01', 1, bcv_rate, bcv_rate,
             subtotal_bcv, tax_amount_bcv, total_bcv, discount_amount_bcv, 0.0,
-            subtotal_bcv - discount_amount_bcv, tax_amount_bcv, total_bcv, 0.0, 0.0
+            total_net_bcv, tax_amount_bcv, total_bcv, 0.0, 0.0
         ))
 
     def _insertar_quote_items(self, correlativo: int, quote: dict, bcv_rate: float):
@@ -1044,13 +1445,51 @@ class SmartSyncComplete:
                 (product_id,)
             )
             product_result = self.mysql_cursor.fetchone()
-            product_code = product_result[0] if product_result else f"MIG-{product_id}"
+            if product_result and product_result[0]:
+                product_code = product_result[0]
+            else:
+                product_code = f"MIG-{product_id}"
+
+            # Obtener correlative de unit desde products_units
+            self.pg_cursor.execute(
+                "SELECT correlative FROM products_units WHERE product_code = %s LIMIT 1",
+                (product_code,)
+            )
+            unit_result = self.pg_cursor.fetchone()
+            if unit_result:
+                product_unit = unit_result[0]
+            else:
+                # Si no existe, buscar cualquier unit genérica
+                self.pg_cursor.execute(
+                    "SELECT correlative FROM products_units ORDER BY correlative LIMIT 1"
+                )
+                generic_unit = self.pg_cursor.fetchone()
+                product_unit = generic_unit[0] if generic_unit else 304  # fallback
+
+            # Calcular todos los valores ANTES del execute
+            qty = safe_float(quantity)
+            up = safe_float(unit_price)
+            ta = safe_float(tax_amount)
+            sub = safe_float(subtotal)
+            disc_amt = safe_float(discount_amount)
+            disc_pct = safe_float(discount_percentage)
+            tot = safe_float(total)
 
             # Calcular tax percent
-            if subtotal > 0:
-                tax_percent = (tax_amount / subtotal * 100)
+            if sub > 0:
+                tax_percent = (ta / sub * 100)
             else:
                 tax_percent = 0
+
+            # Calcular costos (80% del precio como costo)
+            unitary_cost = up * 0.8
+            total_net_cost = qty * up * 0.8
+            total_tax_cost = ta * 0.8
+            total_cost = total_net_cost + total_tax_cost
+            total_net = sub - disc_amt
+
+            # Pre-calcular descripción (evitar inline 'or')
+            description_product = name if name else 'Producto migrado'
 
             # Insertar detalle
             sql_detail = """
@@ -1064,39 +1503,40 @@ class SmartSyncComplete:
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING line
             """
 
+            # Ejecutar INSERT con todos los valores pre-calculados
             self.pg_cursor.execute(sql_detail, (
                 correlativo,
                 product_code,
-                name or 'Producto migrado',
-                safe_float(quantity),
+                description_product,
+                qty,
                 '00',
                 '00',
-                1,  # unit
-                1.0,  # conversion_factor
-                1,    # unit_type
-                safe_float(unit_price) * 0.8,  # unitary_cost (80% del precio)
-                '01',  # sale_tax
+                product_unit,  # unit (correlative de products_units)
+                1.0,      # conversion_factor
+                1,        # unit_type
+                unitary_cost,
+                '01',     # sale_tax
                 tax_percent,
-                safe_float(unit_price),
-                safe_float(quantity) * safe_float(unit_price) * 0.8,
-                safe_float(tax_amount) * 0.8,
-                safe_float(quantity) * safe_float(unit_price) * 0.8 + safe_float(tax_amount) * 0.8,
-                safe_float(subtotal),
-                safe_float(tax_amount),
-                safe_float(total),
-                safe_float(discount_percentage),
-                safe_float(discount_amount),
-                safe_float(subtotal) - safe_float(discount_amount),
-                safe_float(tax_amount),
-                safe_float(total),
-                '02',  # coin_code (dólar)
-                16,    # buy_aliquot
-                '01',  # buy_tax
-                safe_float(quantity)
+                up,
+                total_net_cost,
+                total_tax_cost,
+                total_cost,
+                sub,
+                ta,
+                tot,
+                disc_pct,
+                disc_amt,
+                total_net,
+                ta,
+                tot,
+                '02',     # coin_code (dólar)
+                16,       # buy_aliquot
+                '01',     # buy_tax
+                qty
             ))
 
             line = self.pg_cursor.fetchone()[0]
@@ -1110,10 +1550,21 @@ class SmartSyncComplete:
          tax_amount, discount_amount, discount_percentage, quantity,
          product_id) = item
 
+        # Calcular todos los valores ANTES del execute
         unit_price_f = safe_float(unit_price)
         quantity_f = safe_float(quantity)
+        sub = safe_float(subtotal)
+        ta = safe_float(tax_amount)
+        tot = safe_float(total)
+        disc = safe_float(discount_amount)
 
         # Dólares
+        unitary_cost = unit_price_f * 0.8
+        total_net_cost = quantity_f * unit_price_f * 0.8
+        total_tax_cost = ta * 0.8
+        total_cost = total_net_cost + total_tax_cost
+        total_net = sub - disc
+
         sql_detail_coins = """
         INSERT INTO public.sales_operation_details_coins (
             main_correlative, main_line, unitary_cost, price,
@@ -1125,39 +1576,47 @@ class SmartSyncComplete:
 
         self.pg_cursor.execute(sql_detail_coins, (
             correlativo, line,
-            unit_price_f * 0.8,
+            unitary_cost,
             unit_price_f,
-            quantity_f * unit_price_f * 0.8,
-            safe_float(tax_amount) * 0.8,
-            quantity_f * unit_price_f * 0.8 + safe_float(tax_amount) * 0.8,
-            safe_float(subtotal),
-            safe_float(tax_amount),
-            safe_float(total),
-            safe_float(discount_amount),
-            safe_float(subtotal) - safe_float(discount_amount),
-            safe_float(tax_amount),
-            safe_float(total),
+            total_net_cost,
+            total_tax_cost,
+            total_cost,
+            sub,
+            ta,
+            tot,
+            disc,
+            total_net,
+            ta,
+            tot,
             '02'  # dólar
         ))
 
         # Bolívares
-        subtotal_bcv = safe_float(subtotal) * bcv_rate
-        tax_amount_bcv = safe_float(tax_amount) * bcv_rate
-        total_bcv = safe_float(total) * bcv_rate
-        discount_amount_bcv = safe_float(discount_amount) * bcv_rate
+        subtotal_bcv = sub * bcv_rate
+        tax_amount_bcv = ta * bcv_rate
+        total_bcv = tot * bcv_rate
+        discount_amount_bcv = disc * bcv_rate
+
+        # Calcular valores en bolívares
+        unitary_cost_bcv = unit_price_f * 0.8 * bcv_rate
+        price_bcv = unit_price_f * bcv_rate
+        total_net_cost_bcv = quantity_f * unit_price_f * 0.8 * bcv_rate
+        total_tax_cost_bcv = tax_amount_bcv * 0.8
+        total_cost_bcv = total_net_cost_bcv + total_tax_cost_bcv
+        total_net_bcv = subtotal_bcv - discount_amount_bcv
 
         self.pg_cursor.execute(sql_detail_coins, (
             correlativo, line,
-            unit_price_f * 0.8 * bcv_rate,
-            unit_price_f * bcv_rate,
-            quantity_f * unit_price_f * 0.8 * bcv_rate,
-            tax_amount_bcv * 0.8,
-            quantity_f * unit_price_f * 0.8 * bcv_rate + tax_amount_bcv * 0.8,
+            unitary_cost_bcv,
+            price_bcv,
+            total_net_cost_bcv,
+            total_tax_cost_bcv,
+            total_cost_bcv,
             subtotal_bcv,
             tax_amount_bcv,
             total_bcv,
             discount_amount_bcv,
-            subtotal_bcv - discount_amount_bcv,
+            total_net_bcv,
             tax_amount_bcv,
             total_bcv,
             '01'  # bolívar
@@ -1263,7 +1722,10 @@ class SmartSyncComplete:
             products_sin_categoria = 0
 
             # Nuevos
-            for producto in cambios['nuevos']:
+            total_nuevos = len(cambios['nuevos'])
+            self._log(f"  📦 Insertando {total_nuevos} productos NUEVOS...", "info")
+
+            for idx, producto in enumerate(cambios['nuevos'], 1):
                 if not self.sync_running:
                     break
 
@@ -1341,8 +1803,22 @@ class SmartSyncComplete:
 
                 self.stats['products']['nuevos'] += 1
 
+                # Commit cada 50 productos para no acumular transacción enorme
+                if idx % 50 == 0:
+                    self.mysql_conn.commit()
+                    self._log(f"  ✅ Progreso: {idx}/{total_nuevos} productos insertados", "info")
+
+            # Commit final de los nuevos
+            if total_nuevos > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['products']['nuevos']}/{total_nuevos} productos nuevos insertados", "success")
+
             # Modificados
-            for producto in cambios['modificados']:
+            total_modificados = len(cambios['modificados'])
+            if total_modificados > 0:
+                self._log(f"  📦 Actualizando {total_modificados} productos MODIFICADOS...", "info")
+
+            for idx, producto in enumerate(cambios['modificados'], 1):
                 if not self.sync_running:
                     break
 
@@ -1419,6 +1895,16 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['products']['modificados'] += 1
+
+                # Commit cada 50 productos
+                if idx % 50 == 0:
+                    self.mysql_conn.commit()
+                    self._log(f"  ✅ Progreso: {idx}/{total_modificados} productos actualizados", "info")
+
+            # Commit final de los modificados
+            if total_modificados > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['products']['modificados']}/{total_modificados} productos modificados actualizados", "success")
 
             # Reportar productos omitidos
             if products_sin_categoria > 0:
@@ -1568,6 +2054,11 @@ class SmartSyncComplete:
             if not self._conectar_bases_datos():
                 return False
 
+            # Obtener company_id desde MySQL
+            if not self._obtener_company_id():
+                self._log("❌ No se pudo obtener el company_id. Verifica RIF y email en la configuración.", "error")
+                return False
+
             # Detectar cambios en cada entidad
             cambios_products = self.detectar_cambios_products()
             cambios_customers = self.detectar_cambios_customers()
@@ -1637,6 +2128,7 @@ class SmartSyncComplete:
 
         finally:
             self._cerrar_conexiones()
+            self._close_log_file()  # Cerrar archivo de log
 
 
 # ====================================================================
