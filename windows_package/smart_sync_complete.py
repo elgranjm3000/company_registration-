@@ -1657,16 +1657,16 @@ class SmartSyncComplete:
             # Insertar detalle
             sql_detail = """
             INSERT INTO public.sales_operation_details (
-                main_correlative, code_product, description_product, amount,
+                main_correlative, code_product, description, description_product, amount,
                 store, locations, unit, conversion_factor, unit_type, unitary_cost,
                 sale_tax, sale_aliquot, price, total_net_cost, total_tax_cost,
                 total_cost, total_net_gross, total_tax_gross, total_gross,
                 percent_discount, discount, total_net, total_tax, total,
                 coin_code, buy_aliquot, buy_tax, pending_amount
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING line
             """
 
@@ -1674,6 +1674,7 @@ class SmartSyncComplete:
             self.pg_cursor.execute(sql_detail, (
                 correlativo,
                 product_code,
+                '',                 # description (vacío '')
                 description_product,
                 qty,
                 '00',
