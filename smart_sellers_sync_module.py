@@ -66,30 +66,23 @@ class SmartSellersSyncModule:
         try:
             self.log("=== SINCRONIZANDO SELLERS ===", "info")
 
-            # Obtener sellers desde PostgreSQL
+            # Obtener sellers desde PostgreSQL (solo campos que existen)
             self.pg_cursor.execute("""
                 SELECT
                     s.code as seller_code,
-                    u.description as user_name,
-                    u.email,
-                    u.code as user_code,
+                    s.description,
                     s.status,
                     s.percent_sales,
                     s.percent_receivable,
                     s.inkeeper,
+                    s.user_code,
                     s.percent_gerencial_debit_note,
                     s.percent_gerencial_credit_note,
-                    s.percent_gerencial_free_invoice,
-                    s.route_code,
-                    s.coin_code,
-                    s.supervisor,
-                    s.branchoffice_code,
-                    s.percent_cash_discount,
-                    s.percent_credit_card_discount,
-                    s.percent_transfer_discount
+                    s.percent_returned_check,
+                    u.email
                 FROM sellers s
-                JOIN users u ON s.user_code = u.code
-                WHERE u.email IS NOT NULL AND u.email != ''
+                LEFT JOIN users u ON s.user_code = u.code
+                WHERE s.user_code IS NOT NULL
                 ORDER BY s.code
             """)
 
@@ -107,12 +100,10 @@ class SmartSellersSyncModule:
 
             for seller in sellers:
                 try:
-                    (seller_code, user_name, email, user_code, status, percent_sales,
-                     percent_receivable, inkeeper, percent_gerencial_debit_note,
-                     percent_gerencial_credit_note, percent_gerencial_free_invoice,
-                     route_code, coin_code, supervisor, branchoffice_code,
-                     percent_cash_discount, percent_credit_card_discount,
-                     percent_transfer_discount) = seller
+                    (seller_code, description, status, percent_sales,
+                     percent_receivable, inkeeper, user_code,
+                     percent_gerencial_debit_note, percent_gerencial_credit_note,
+                     percent_returned_check, email) = seller
 
                     # Buscar si ya existe en MySQL
                     self.mysql_cursor.execute(
@@ -134,24 +125,17 @@ class SmartSellersSyncModule:
                                 percent_sales = %s,
                                 percent_receivable = %s,
                                 inkeeper = %s,
+                                user_code = %s,
                                 percent_gerencial_debit_note = %s,
                                 percent_gerencial_credit_note = %s,
-                                percent_gerencial_free_invoice = %s,
-                                route_code = %s,
-                                coin_code = %s,
-                                supervisor = %s,
-                                branchoffice_code = %s,
-                                percent_cash_discount = %s,
-                                percent_credit_card_discount = %s,
-                                percent_transfer_discount = %s,
+                                percent_returned_check = %s,
                                 updated_at = NOW()
                             WHERE id = %s
                         """, (
-                            user_name, status, percent_sales, percent_receivable,
-                            inkeeper, percent_gerencial_debit_note, percent_gerencial_credit_note,
-                            percent_gerencial_free_invoice, route_code, coin_code, supervisor,
-                            branchoffice_code, percent_cash_discount, percent_credit_card_discount,
-                            percent_transfer_discount, seller_id
+                            description, status, percent_sales, percent_receivable,
+                            inkeeper, user_code, percent_gerencial_debit_note,
+                            percent_gerencial_credit_note, percent_returned_check,
+                            seller_id
                         ))
                         sellers_actualizados += 1
                     else:
@@ -174,27 +158,19 @@ class SmartSellersSyncModule:
                             INSERT INTO sellers (
                                 user_id, company_id, code, description, status,
                                 percent_sales, percent_receivable, inkeeper,
-                                percent_gerencial_debit_note, percent_gerencial_credit_note,
-                                percent_gerencial_free_invoice, route_code, coin_code,
-                                supervisor, branchoffice_code, percent_cash_discount,
-                                percent_credit_card_discount, percent_transfer_discount,
-                                created_at, updated_at
+                                user_code, percent_gerencial_debit_note, percent_gerencial_credit_note,
+                                percent_returned_check, created_at, updated_at
                             ) VALUES (
                                 %s, %s, %s, %s, %s,
                                 %s, %s, %s,
-                                %s, %s,
                                 %s, %s, %s,
-                                %s, %s, %s,
-                                %s, %s,
-                                NOW(), NOW()
+                                %s, NOW(), NOW()
                             )
                         """, (
-                            user_id, company_id, seller_code, user_name, status,
+                            user_id, company_id, seller_code, description, status,
                             percent_sales, percent_receivable, inkeeper,
-                            percent_gerencial_debit_note, percent_gerencial_credit_note,
-                            percent_gerencial_free_invoice, route_code, coin_code,
-                            supervisor, branchoffice_code, percent_cash_discount,
-                            percent_credit_card_discount, percent_transfer_discount
+                            user_code, percent_gerencial_debit_note, percent_gerencial_credit_note,
+                            percent_returned_check
                         ))
                         sellers_importados += 1
 
