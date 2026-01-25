@@ -1390,7 +1390,7 @@ class SmartSyncComplete:
         RETURNING correlative
         """
 
-        document_no = str(quote['quote_number'])
+        document_no = '*00' + str(quote['quote_number'])  # Presupuesto en espera
         bcv_rate = safe_float(quote.get('bcv_rate', 0))
         if bcv_rate == 0:
             bcv_rate = 170  # Valor default
@@ -1445,7 +1445,7 @@ class SmartSyncComplete:
             '02',                      # coin_code (Dólar)
             False,                     # canceled
             True,                      # pending
-            False,                     # wait
+            True,                      # wait (presupuesto en espera)
             total_net_cost,            # total_net_cost (COSTO real de productos)
             total_tax_cost,            # total_tax_cost (Impuesto sobre COSTO)
             total_cost_calculado,      # total_cost (Costo total + impuestos)
