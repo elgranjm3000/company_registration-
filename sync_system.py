@@ -854,6 +854,9 @@ class SystemTrayService:
         self.root = None
         self.icon = None
 
+        # Configurar auto-inicio al encender el equipo
+        self.configurar_auto_inicio()
+
     def crear_icono(self):
         """Crea icono simple para la bandeja del sistema"""
         try:
@@ -875,6 +878,39 @@ class SystemTrayService:
         except Exception as e:
             log(f"Error creando icono: {e}", "ERROR")
             return None
+
+    def configurar_auto_inicio(self):
+        """
+        Configura el sistema para que inicie automáticamente al encender el equipo
+        """
+        try:
+            import winreg
+
+            # Ruta del ejecutable o script actual
+            if getattr(sys, 'frozen', False):
+                # Si está empaquetado como exe
+                app_path = sys.executable
+            else:
+                # Si es script Python
+                app_path = f'"{sys.executable}" "{os.path.abspath(__file__)}}" --mode tray'
+
+            # Registry key para auto-inicio
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key_name = "SyncSystemTray"
+
+            # Abrir registry key
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+
+            # Establecer el valor
+            winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, app_path)
+            winreg.CloseKey(key)
+
+            log("✅ Auto-inicio configurado correctamente", "SUCCESS")
+            log(f"   Ruta: {app_path}", "INFO")
+        except ImportError:
+            log("⚠️ winreg no disponible (solo Windows)", "WARNING")
+        except Exception as e:
+            log(f"⚠️ No se pudo configurar auto-inicio: {e}", "WARNING")
 
     def log_message(self, mensaje: str, tipo: str = "info"):
         """Método compatible con SmartSyncComplete"""
