@@ -1796,8 +1796,8 @@ class SmartSyncComplete:
             bcv = 170
 
         if tax_amount > 0 and subtotal > 0:
-            # Calcular alícuota
-            aliquot = (tax_amount / subtotal * 100)
+            # Calcular alícuota redondeada a 2 decimales
+            aliquot = round(tax_amount / subtotal * 100, 2)
 
             # Base imponible
             taxable_amount = subtotal - discount_amount
