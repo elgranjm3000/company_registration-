@@ -1390,7 +1390,7 @@ class SmartSyncComplete:
         RETURNING correlative
         """
 
-        document_no = '*00' + str(quote['quote_number'])  # Presupuesto en espera
+        document_no = str(quote['quote_number'])
         bcv_rate = safe_float(quote.get('bcv_rate', 0))
         if bcv_rate == 0:
             bcv_rate = 170  # Valor default
