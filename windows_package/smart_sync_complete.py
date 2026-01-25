@@ -2368,11 +2368,13 @@ class SmartSyncComplete:
             if not sellers_sync.conectar_postgresql(postgresql_config):
                 self._log("❌ No se pudo conectar a PostgreSQL para sellers", "error")
                 self.stats['sellers']['errores'] += 1
+                sellers_sync.cerrar()
                 return
 
             if not sellers_sync.conectar_mysql(mysql_config):
                 self._log("❌ No se pudo conectar a MySQL para sellers", "error")
                 self.stats['sellers']['errores'] += 1
+                sellers_sync.cerrar()
                 return
 
             # Ejecutar sincronización y obtener estadísticas
@@ -2381,15 +2383,16 @@ class SmartSyncComplete:
             # Cerrar conexiones
             sellers_sync.cerrar()
 
-            # Actualizar estadísticas
-            self.stats['sellers']['nuevos'] = resultado.get('nuevos', 0)
-            self.stats['sellers']['modificados'] = resultado.get('actualizados', 0)
-            self.stats['sellers']['errores'] = resultado.get('errores', 0)
+            # Actualizar estadísticas (solo si resultado es un dict)
+            if isinstance(resultado, dict):
+                self.stats['sellers']['nuevos'] = resultado.get('nuevos', 0)
+                self.stats['sellers']['modificados'] = resultado.get('actualizados', 0)
+                self.stats['sellers']['errores'] = resultado.get('errores', 0)
 
-            if resultado.get('exito', False):
-                self._log("✅ Sellers sincronizados correctamente", "success")
-            else:
-                self._log("⚠️  Sincronización de sellers completada con errores", "warning")
+                if resultado.get('exito', False):
+                    self._log("✅ Sellers sincronizados correctamente", "success")
+                else:
+                    self._log("⚠️  Sincronización de sellers completada con errores", "warning")
 
         except ImportError:
             self._log("❌ Módulo smart_sellers_sync_module no encontrado", "error")
