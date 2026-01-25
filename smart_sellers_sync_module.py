@@ -56,12 +56,12 @@ class SmartSellersSyncModule:
             self.log(f"❌ Error conectando MySQL: {e}", "error")
             return False
 
-    def ejecutar_sync(self) -> bool:
+    def ejecutar_sync(self) -> dict:
         """
         Ejecutar sincronización de sellers
 
         Returns:
-            True si exitoso, False si hubo errores
+            Dict con estadísticas: {'nuevos': int, 'actualizados': int, 'errores': int, 'exito': bool}
         """
         try:
             self.log("=== SINCRONIZANDO SELLERS ===", "info")
@@ -216,11 +216,21 @@ class SmartSellersSyncModule:
                 self.log(f"❌ Errores: {errores}", "error")
             self.log("=== SINCRONIZACIÓN DE SELLERS COMPLETADA ===", "info")
 
-            return errores == 0
+            return {
+                'nuevos': sellers_importados,
+                'actualizados': sellers_actualizados,
+                'errores': errores,
+                'exito': errores == 0
+            }
 
         except Exception as e:
             self.log(f"❌ Error en sincronización de sellers: {e}", "error")
-            return False
+            return {
+                'nuevos': 0,
+                'actualizados': 0,
+                'errores': 1,
+                'exito': False
+            }
 
     def cerrar(self):
         """Cerrar conexiones"""

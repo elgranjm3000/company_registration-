@@ -2360,25 +2360,33 @@ class SmartSyncComplete:
             # Conectar
             if not sellers_sync.conectar_postgresql(postgresql_config):
                 self._log("❌ No se pudo conectar a PostgreSQL para sellers", "error")
+                self.stats['sellers']['errores'] += 1
                 return
 
             if not sellers_sync.conectar_mysql(mysql_config):
                 self._log("❌ No se pudo conectar a MySQL para sellers", "error")
+                self.stats['sellers']['errores'] += 1
                 return
 
-            # Ejecutar sincronización
+            # Ejecutar sincronización y obtener estadísticas
             resultado = sellers_sync.ejecutar_sync()
 
             # Cerrar conexiones
             sellers_sync.cerrar()
 
-            if resultado:
+            # Actualizar estadísticas
+            self.stats['sellers']['nuevos'] = resultado.get('nuevos', 0)
+            self.stats['sellers']['modificados'] = resultado.get('actualizados', 0)
+            self.stats['sellers']['errores'] = resultado.get('errores', 0)
+
+            if resultado.get('exito', False):
                 self._log("✅ Sellers sincronizados correctamente", "success")
             else:
                 self._log("⚠️  Sincronización de sellers completada con errores", "warning")
 
         except ImportError:
             self._log("❌ Módulo smart_sellers_sync_module no encontrado", "error")
+            self.stats['sellers']['errores'] += 1
         except Exception as e:
             self._log(f"❌ Error sincronizando sellers: {str(e)}", "error")
             self.stats['sellers']['errores'] += 1
@@ -2474,6 +2482,8 @@ class SmartSyncComplete:
                       f"{self.stats['customers']['modificados']} modificados", "success")
             self._log(f"Categories: {self.stats['categories']['nuevos']} nuevos, "
                       f"{self.stats['categories']['modificados']} modificados", "success")
+            self._log(f"Sellers:    {self.stats['sellers']['nuevos']} nuevos, "
+                      f"{self.stats['sellers']['modificados']} actualizados", "success")
             self._log(f"Quotes:     {self.stats['quotes']['nuevos']} nuevos (MySQL→PG), "
                       f"{self.stats['quotes']['estados_actualizados']} estados actualizados", "success")
             self._log(f"Duración:   {duracion:.2f} segundos", "info")
