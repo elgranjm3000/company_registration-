@@ -624,21 +624,83 @@ class ConfigWindow:
         if guardar_config(config_nuevo):
             self.estado.config(text="✅ Configuración guardada exitosamente", fg="green")
 
-            # Ejecutar primera sincronización
-            self.estado.config(text="⏳ Ejecutando primera sincronización...", fg="blue")
-            self.root.update()
+            # Crear ventana de progreso
+            progreso = tk.Toplevel(self.root)
+            progreso.title("Sincronizando...")
+            progreso.geometry("500x300")
+            progreso.resizable(False, False)
+
+            # Centrar ventana
+            progreso.update_idletasks()
+            width = progreso.winfo_width()
+            height = progreso.winfo_height()
+            x = (progreso.winfo_screenwidth() // 2) - (width // 2)
+            y = (progreso.winfo_screenheight() // 2) - (height // 2)
+            progreso.geometry(f'{width}x{height}+{x}+{y}')
+
+            # Hacer modal
+            progreso.transient(self.root)
+            progreso.grab_set()
+
+            # Contenido
+            frame = ttk.Frame(progreso, padding=20)
+            frame.pack(fill="both", expand=True)
+
+            # Icono de carga
+            ttk.Label(frame, text="⏳", font=("Arial", 48)).pack(pady=10)
+
+            # Título
+            ttk.Label(frame, text="Sincronizando datos...", font=("Arial", 14, "bold")).pack(pady=10)
+
+            # Barra de progreso
+            progress_bar = ttk.Progressbar(frame, mode='indeterminate', length=400)
+            progress_bar.pack(pady=20)
+            progress_bar.start(10)
+
+            # Etiqueta de estado
+            estado_label = ttk.Label(frame, text="Iniciando...", font=("Arial", 10))
+            estado_label.pack(pady=10)
+
+            # Detalles
+            detalles_label = ttk.Label(frame, text="", font=("Arial", 9), foreground="gray")
+            detalles_label.pack(pady=5)
+
+            progreso.update()
+
+            def actualizar_estado(mensaje, detalles=""):
+                estado_label.config(text=mensaje)
+                if detalles:
+                    detalles_label.config(text=detalles)
+                progreso.update()
 
             try:
+                # Ejecutar primera sincronización
+                actualizar_estado("🔌 Verificando conexiones...", "Conectando a bases de datos")
+
                 # SyncModule está definido en este mismo archivo
                 sync = SyncModule(config_nuevo)
+
                 if sync.verificar_conexiones():
+                    actualizar_estado("🔄 Sincronizando...", "Products, Customers, Categories, Quotes")
                     sync.sincronizar()
                     sync.cerrar()
+
+                    actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
+                    progress_bar.stop()
+
                     mensaje = "Configuración guardada correctamente\n\n✅ Primera sincronización completada\n\nEl sistema continuará sincronizando en segundo plano."
                 else:
+                    actualizar_estado("❌ Error", "No se pudo conectar")
+                    progress_bar.stop()
                     mensaje = "Configuración guardada\n\n⚠️ No se pudo conectar a las bases de datos\n\nVerifique la configuración y las credenciales."
             except Exception as e:
+                actualizar_estado("❌ Error", str(e))
+                progress_bar.stop()
                 mensaje = f"Configuración guardada\n\n⚠️ Error en sincronización: {str(e)}"
+
+            # Cerrar ventana de progreso
+            progreso.after(1500, progreso.destroy)
+            progreso.wait_window()
 
             messagebox.showinfo("Éxito", mensaje)
 
