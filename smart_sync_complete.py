@@ -2335,6 +2335,13 @@ class SmartSyncComplete:
         Usa SmartSellersSyncModule para la sincronización
         """
         try:
+            # Agregar directorio actual al sys.path para encontrar el módulo
+            import sys
+            import os
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.insert(0, current_dir)
+
             from smart_sellers_sync_module import SmartSellersSyncModule
 
             # Preparar configuraciones
