@@ -40,14 +40,20 @@ def enable_autostart():
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
         key_name = "SyncSystemTray"
 
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, app_path)
-        winreg.CloseKey(key)
+        # Verificar que el archivo existe
+        if os.path.exists(sys.executable):
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, app_path)
+            winreg.CloseKey(key)
 
-        print("✅ Auto-inicio HABILITADO correctamente")
-        print(f"   Ruta: {app_path}")
-        print(f"   Registry: HKCU\\{key_path}\\{key_name}")
-        return True
+            print("✅ Auto-inicio HABILITADO correctamente")
+            print(f"   Ruta: {app_path}")
+            print(f"   Registry: HKCU\\{key_path}\\{key_name}")
+            return True
+        else:
+            print(f"❌ Error: El archivo no existe: {sys.executable}")
+            print("   No se puede configurar auto-inicio para un archivo inexistente")
+            return False
     except Exception as e:
         print(f"❌ Error habilitando auto-inicio: {e}")
         return False

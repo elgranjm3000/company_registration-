@@ -882,6 +882,7 @@ class SystemTrayService:
     def configurar_auto_inicio(self):
         """
         Configura el sistema para que inicie automáticamente al encender el equipo
+        Verifica que el archivo exista antes de crear el registro
         """
         try:
             import winreg
@@ -893,6 +894,13 @@ class SystemTrayService:
             else:
                 # Si es script Python
                 app_path = f'"{sys.executable}" "{os.path.abspath(__file__)}}" --mode tray'
+
+            # Verificar que el archivo exista
+            if not os.path.exists(sys.executable):
+                log(f"⚠️ El archivo no existe: {sys.executable}", "WARNING")
+                log("   Limpiando registro de auto-inicio...", "INFO")
+                self.limpiar_auto_inicio()
+                return
 
             # Registry key para auto-inicio
             key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -911,6 +919,27 @@ class SystemTrayService:
             log("⚠️ winreg no disponible (solo Windows)", "WARNING")
         except Exception as e:
             log(f"⚠️ No se pudo configurar auto-inicio: {e}", "WARNING")
+
+    def limpiar_auto_inicio(self):
+        """
+        Limpia el registro de auto-inicio
+        Se llama automáticamente si el archivo no existe
+        """
+        try:
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key_name = "SyncSystemTray"
+
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            try:
+                winreg.DeleteValue(key, key_name)
+                log("✅ Registro de auto-inicio limpiado", "SUCCESS")
+            except FileNotFoundError:
+                # No existe, no hay problema
+                pass
+            winreg.CloseKey(key)
+        except Exception as e:
+            log(f"⚠️ No se pudo limpiar registro: {e}", "WARNING")
 
     def log_message(self, mensaje: str, tipo: str = "info"):
         """Método compatible con SmartSyncComplete"""
