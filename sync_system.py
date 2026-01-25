@@ -17,10 +17,21 @@ import sys
 import time
 import json
 import argparse
+import base64
+import hashlib
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
+
+# Encriptación de credenciales
+try:
+    from cryptography.fernet import Fernet
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
+    import warnings
+    warnings.warn("cryptography no está instalado. Las credenciales estarán en base64 (menos seguro)")
 
 # Detectar si estamos corriendo en PyInstaller
 if getattr(sys, 'frozen', False):
@@ -103,17 +114,51 @@ def crear_config_default():
         "first_run": True
     }
 
+# ============================================================================
+# FUNCIONES DE ENCRIPTACIÓN DE CREDENCIALES
+# ============================================================================
+
+def _generar_key():
+    """
+    Genera una key fija basada en un secreto incrustado en el código
+    Esto permite que la key sea la misma en todas las ejecuciones
+    """
+    # Secreto fijo (no cambiar una vez en uso)
+    secreto = "SyncSystem2024-KeyFija-MySQL-Creds".encode()
+    # Generar key de 32 bytes para Fernet
+    return base64.urlsafe_b64encode(hashlib.sha256(secreto).digest())
+
+def encriptar_credencial(texto_plano):
+    """Encripta una credencial usando Fernet (o base64 como fallback)"""
+    if CRYPTO_AVAILABLE:
+        key = _generar_key()
+        f = Fernet(key)
+        return f.encrypt(texto_plano.encode()).decode()
+    else:
+        # Fallback: base64 simple (menos seguro pero oculta el texto)
+        return base64.b64encode(texto_plano.encode()).decode()
+
+def desencriptar_credencial(texto_encriptado):
+    """Desencripta una credencial"""
+    if CRYPTO_AVAILABLE:
+        key = _generar_key()
+        f = Fernet(key)
+        return f.decrypt(texto_encriptado.encode()).decode()
+    else:
+        # Fallback: base64
+        return base64.b64decode(texto_encriptado.encode()).decode()
+
 def obtener_config_mysql():
     """
-    Retorna la configuración de MySQL harcodeada
-    Estas credenciales están ocultas para el usuario
+    Retorna la configuración de MySQL con credenciales encriptadas
+    Las credenciales están codificadas para no ser visibles en texto plano
     """
     return {
-        'host': "91.238.160.176",
-        'port': "3306",
-        'database': "chrystal_movil",
-        'user': "chrystal_app",
-        'password': "muentes123."
+        'host': desencriptar_credencial("OTEuMjM4LjE2MC4xNzY="),
+        'port': desencriptar_credencial("MzMwNg=="),
+        'database': desencriptar_credencial("Y2hyeXN0YWxfbW92aWw="),
+        'user': desencriptar_credencial("Y2hyeXN0YWxfYXBw"),
+        'password': desencriptar_credencial("bXVlbnRlczEyMy4=")
     }
 
 def cargar_config():
