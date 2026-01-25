@@ -1244,8 +1244,16 @@ class SystemTrayService:
         def cerrar_ventana():
             """Cierra la ventana pero mantiene el system tray activo"""
             log_running[0] = False
-            root.withdraw()  # Ocultar ventana en lugar de destruirla
-            # El system tray sigue activo y la app continúa ejecutándose
+            # Destruir la ventana de logs inmediatamente
+            try:
+                log_window.destroy()
+            except:
+                pass
+            # Ocultar ventana raíz pero mantener el system tray activo
+            try:
+                root.withdraw()
+            except:
+                pass
 
         # Iniciar actualización automática
         actualizar_logs()
