@@ -893,7 +893,8 @@ class SystemTrayService:
                 app_path = sys.executable
             else:
                 # Si es script Python
-                app_path = f'"{sys.executable}" "{os.path.abspath(__file__)}}" --mode tray'
+                script_path = os.path.abspath(__file__)
+                app_path = f'"{sys.executable}" "{script_path}" --mode tray'
 
             # Verificar que el archivo exista
             if not os.path.exists(sys.executable):
