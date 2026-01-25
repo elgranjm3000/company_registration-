@@ -629,7 +629,7 @@ class ConfigWindow:
             self.root.update()
 
             try:
-                from sync_module import SyncModule
+                # SyncModule está definido en este mismo archivo
                 sync = SyncModule(config_nuevo)
                 if sync.verificar_conexiones():
                     sync.sincronizar()
