@@ -1444,8 +1444,8 @@ class SmartSyncComplete:
             0.0,                       # cash
             '02',                      # coin_code (Dólar)
             False,                     # canceled
-            True,                      # pending
-            True,                      # wait (presupuesto en espera)
+            False,                     # pending
+            False,                     # wait (presupuesto NO en espera)
             total_net_cost,            # total_net_cost (COSTO real de productos)
             total_tax_cost,            # total_tax_cost (Impuesto sobre COSTO)
             total_cost_calculado,      # total_cost (Costo total + impuestos)
