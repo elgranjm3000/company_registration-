@@ -1884,6 +1884,79 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"Error actualizando status del quote: {str(e)}", "error")
 
+    def _sincronizar_estados_quotes_mysql(self):
+        """
+        Sincronizar estados de PostgreSQL → MySQL
+        Actualiza el campo 'status' en MySQL basado en 'pending' de PostgreSQL
+
+        PostgreSQL pending → MySQL status
+        pending = false → status = 'approved'
+        pending = true → status = 'rejected'
+        """
+        try:
+            self._log("Sincronizando estados de quotes (PostgreSQL → MySQL)...", "info")
+
+            # Obtener todos los sales_operation tipo BUDGET de PostgreSQL
+            query_pg = """
+            SELECT
+                so.document_no,
+                so.pending,
+                so.correlative
+            FROM public.sales_operation so
+            WHERE so.operation_type = 'BUDGET'
+              AND EXISTS (
+                  SELECT 1 FROM mysql.quotes q
+                  WHERE q.quote_number = so.document_no
+                    AND q.deleted_at IS NULL
+              )
+            ORDER BY so.correlative
+            """
+
+            self.pg_cursor.execute(query_pg)
+            operations = self.pg_cursor.fetchall()
+
+            if not operations:
+                self._log("  No se encontraron presupuestos para sincronizar estados", "info")
+                return
+
+            estados_actualizados = 0
+
+            for op in operations:
+                try:
+                    document_no, pending, correlative = op
+
+                    # Determinar status basado en pending
+                    new_status = 'rejected' if pending else 'approved'
+
+                    # Actualizar en MySQL
+                    update_mysql = """
+                    UPDATE quotes
+                    SET status = %s, updated_at = NOW()
+                    WHERE quote_number = %s
+                      AND deleted_at IS NULL
+                    """
+
+                    self.mysql_cursor.execute(update_mysql, (new_status, str(document_no)))
+
+                    if self.mysql_cursor.rowcount > 0:
+                        estados_actualizados += 1
+                        self._log(f"  🔄 Quote #{document_no} (correlative {correlative}): "
+                                f"pending={pending} → status='{new_status}'", "debug")
+
+                except Exception as e:
+                    self._log(f"  ❌ Error actualizando quote #{op[0] if op else 'unknown'}: {str(e)}", "error")
+
+            self.mysql_conn.commit()
+
+            if estados_actualizados > 0:
+                self._log(f"✅ Estados sincronizados: {estados_actualizados} quotes actualizados", "success")
+            else:
+                self._log("ℹ️  No hubo cambios de estados para sincronizar", "info")
+
+        except Exception as e:
+            self._log(f"Error sincronizando estados de quotes: {str(e)}", "error")
+            self.stats['quotes']['errores'] += 1
+
     # ====================================================================
     # SINCRONIZACIÓN DE CAMBIOS A MYSQL
     # ====================================================================
@@ -2382,6 +2455,11 @@ class SmartSyncComplete:
 
             # Sincronizar quotes a PostgreSQL (dirección opuesta)
             self.sincronizar_quotes_postgresql(cambios_quotes)
+
+            # Sincronizar estados de quotes (PostgreSQL → MySQL)
+            self._log("", "info")
+            self._log("🔄 SINCRONIZANDO ESTADOS DE QUOTES...", "info")
+            self._sincronizar_estados_quotes_mysql()
 
             # Reporte final
             duracion = (datetime.now() - inicio).total_seconds()
