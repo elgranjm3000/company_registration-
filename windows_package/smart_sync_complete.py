@@ -1647,7 +1647,15 @@ class SmartSyncComplete:
             # Calcular costos usando COSTO REAL del producto (no 80% del precio)
             unitary_cost = product_cost  # COSTO real del producto
             total_net_cost = qty * product_cost  # Costo neto = cantidad × costo
-            total_tax_cost = ta * 0.8  # 80% del impuesto (según modelo)
+
+            # Calcular tax_cost basado en sale_tax de PostgreSQL (16% del costo)
+            if product_sale_tax == '01':
+                total_tax_cost = total_net_cost * 0.16  # 16% IVA sobre el costo
+            elif product_sale_tax == 'EX':
+                total_tax_cost = 0  # Exento
+            else:
+                total_tax_cost = 0  # Otro caso
+
             total_cost = total_net_cost + total_tax_cost  # Costo total
             total_net = sub - disc_amt  # Precio neto (para ventas)
 
@@ -1666,7 +1674,7 @@ class SmartSyncComplete:
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING line
             """
 
@@ -1705,10 +1713,11 @@ class SmartSyncComplete:
 
             line = self.pg_cursor.fetchone()[0]
 
-            # Insertar monedas del detalle (pasando product_cost)
-            self._insertar_item_monedas(correlativo, line, item, bcv_rate, product_cost)
+            # Insertar monedas del detalle (pasando product_cost, product_code y product_sale_tax)
+            self._insertar_item_monedas(correlativo, line, item, bcv_rate, product_cost, product_code, product_sale_tax)
 
-    def _insertar_item_monedas(self, correlativo: int, line: int, item: tuple, bcv_rate: float, product_cost: float):
+    def _insertar_item_monedas(self, correlativo: int, line: int, item: tuple, bcv_rate: float,
+                                product_cost: float, product_code: str, product_sale_tax: str):
         """Insertar monedas de un item"""
         (description, name, subtotal, unit, unit_price, total,
          tax_amount, discount_amount, discount_percentage, quantity,
@@ -1722,10 +1731,16 @@ class SmartSyncComplete:
         tot = safe_float(total)
         disc = safe_float(discount_amount)
 
-        # Dólares - Usar COSTO REAL (no 80% del precio)
+        # Dólares - Usar COSTO REAL y calcular tax basado en sale_tax de PostgreSQL
         unitary_cost = product_cost  # COSTO real
         total_net_cost = quantity_f * product_cost  # Cantidad × costo
-        total_tax_cost = ta * 0.8  # 80% del impuesto
+
+        # Calcular tax_cost basado en sale_tax (pasado como parámetro)
+        if product_sale_tax == '01':
+            total_tax_cost = total_net_cost * 0.16  # 16% IVA
+        else:  # 'EX' u otro
+            total_tax_cost = 0  # Exento
+
         total_cost = total_net_cost + total_tax_cost
         total_net = sub - disc
 
