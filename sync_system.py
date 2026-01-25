@@ -445,10 +445,16 @@ class ConfigWindow:
         self.entry_email.insert(0, self.config.get('company_email', ''))
         self.entry_email.grid(row=1, column=1, pady=5, padx=5)
 
+        # Nombre de compañía
+        ttk.Label(frame, text="Nombre:").grid(row=2, column=0, sticky="w", pady=5, padx=5)
+        self.entry_name = ttk.Entry(frame, width=40)
+        self.entry_name.insert(0, self.config.get('company_name', ''))
+        self.entry_name.grid(row=2, column=1, pady=5, padx=5)
+
         # Info
         info = tk.Label(frame, text="ℹ️ Estos datos se usan para identificar la empresa en la sincronización",
                        fg="gray", justify="left")
-        info.grid(row=2, column=0, columnspan=2, pady=10, padx=5, sticky="w")
+        info.grid(row=3, column=0, columnspan=2, pady=10, padx=5, sticky="w")
 
     def crear_campos_configuracion(self, parent):
         """Crea campos de configuración"""
@@ -550,6 +556,7 @@ class ConfigWindow:
         # Empresa (configurable por el usuario)
         config_nuevo['company_rif'] = self.entry_rif.get().strip()
         config_nuevo['company_email'] = self.entry_email.get().strip()
+        config_nuevo['company_name'] = self.entry_name.get().strip()
 
         # Configuración
         config_nuevo['sync_interval_minutes'] = self.intervalo.get()
