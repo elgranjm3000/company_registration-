@@ -37,6 +37,7 @@ def build_exe():
 
         # Agregar todos los datos necesarios
         '--add-data=smart_sync_complete.py;.',
+        '--add-data=smart_sellers_sync_module.py;.',
 
         # Ocultar consola (excepto en errores)
         '--noconsole',
