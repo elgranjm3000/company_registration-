@@ -83,6 +83,9 @@ class SmartSellersSyncModule:
                 FROM sellers s
                 LEFT JOIN users u ON s.user_code = u.code
                 WHERE s.user_code IS NOT NULL
+                  AND u.email IS NOT NULL
+                  AND u.email != ''
+                  AND u.email != '@'
                 ORDER BY s.code
             """)
 
