@@ -1797,10 +1797,11 @@ class SmartSyncComplete:
         if bcv == 0:
             bcv = 170
 
-        if tax_amount > 0 and subtotal > 0:
-            # Calcular alícuota redondeada a 2 decimales
-            aliquot = round(tax_amount / subtotal * 100, 2)
+        # Obtener aliquot directamente desde MySQL (campo tax)
+        # El campo tax en MySQL YA contiene el porcentaje (ej: 16.00)
+        aliquot = safe_float(quote.get('tax', 0))
 
+        if tax_amount > 0 and subtotal > 0:
             # Base imponible
             taxable_amount = subtotal - discount_amount
 
