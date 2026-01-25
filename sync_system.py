@@ -623,8 +623,38 @@ class ConfigWindow:
 
         if guardar_config(config_nuevo):
             self.estado.config(text="✅ Configuración guardada exitosamente", fg="green")
-            messagebox.showinfo("Éxito", "Configuración guardada correctamente\n\nEl sistema está listo para usar")
+
+            # Ejecutar primera sincronización
+            self.estado.config(text="⏳ Ejecutando primera sincronización...", fg="blue")
+            self.root.update()
+
+            try:
+                from sync_module import SyncModule
+                sync = SyncModule(config_nuevo)
+                if sync.verificar_conexiones():
+                    sync.sincronizar()
+                    sync.cerrar()
+                    mensaje = "Configuración guardada correctamente\n\n✅ Primera sincronización completada\n\nEl sistema continuará sincronizando en segundo plano."
+                else:
+                    mensaje = "Configuración guardada\n\n⚠️ No se pudo conectar a las bases de datos\n\nVerifique la configuración y las credenciales."
+            except Exception as e:
+                mensaje = f"Configuración guardada\n\n⚠️ Error en sincronización: {str(e)}"
+
+            messagebox.showinfo("Éxito", mensaje)
+
+            # Destruir ventana de configuración e iniciar system tray
             self.root.destroy()
+
+            # Iniciar system tray automáticamente
+            try:
+                from pywinauto.application import Application
+                import sys
+                # Reiniciar app en modo tray
+                import subprocess
+                script_path = os.path.abspath(__file__)
+                subprocess.Popen([sys.executable, script_path, "--mode", "tray"])
+            except Exception as e:
+                print(f"No se pudo iniciar system tray: {e}")
         else:
             messagebox.showerror("Error", "No se pudo guardar la configuración")
 
@@ -1084,9 +1114,10 @@ class SystemTrayService:
                     txt.config(state="disabled")
 
         def cerrar_ventana():
-            """Cierra la ventana y detiene el monitoreo"""
+            """Cierra la ventana pero mantiene el system tray activo"""
             log_running[0] = False
-            root.destroy()
+            root.withdraw()  # Ocultar ventana en lugar de destruirla
+            # El system tray sigue activo y la app continúa ejecutándose
 
         # Iniciar actualización automática
         actualizar_logs()
