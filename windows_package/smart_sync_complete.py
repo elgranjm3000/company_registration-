@@ -1246,8 +1246,10 @@ class SmartSyncComplete:
                         self._log(f"  ℹ️ Quote #{quote_id} ya existe en PostgreSQL (omitiendo)", "debug")
                         self.pg_conn.rollback()
                     else:
-                        # Otro error, registrar y continuar
+                        # Otro error, registrar con traceback completo
+                        import traceback
                         self._log(f"Error procesando quote {quote.get('id')}: {str(e)}", "error")
+                        self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
                         self.pg_conn.rollback()  # Rollback para que no afecte siguientes quotes
                         self.stats['quotes']['errores'] += 1
 
@@ -2251,6 +2253,64 @@ class SmartSyncComplete:
             self.stats['categories']['errores'] += 1
 
     # ====================================================================
+    # SINCRONIZACIÓN DE SELLERS
+    # ====================================================================
+
+    def _sincronizar_sellers(self):
+        """
+        Sincronizar sellers desde PostgreSQL a MySQL
+        Usa SmartSellersSyncModule para la sincronización
+        """
+        try:
+            from smart_sellers_sync_module import SmartSellersSyncModule
+
+            # Preparar configuraciones
+            postgresql_config = {
+                'host': self.postgresql_config['host'],
+                'port': self.postgresql_config['port'],
+                'database': self.postgresql_config['database'],
+                'user': self.postgresql_config['user'],
+                'password': self.postgresql_config['password']
+            }
+
+            mysql_config = {
+                'host': self.mysql_config['host'],
+                'port': int(self.mysql_config['port']),
+                'database': self.mysql_config['database'],
+                'user': self.mysql_config['user'],
+                'password': self.mysql_config['password']
+            }
+
+            # Crear módulo de sellers
+            sellers_sync = SmartSellersSyncModule(self)
+
+            # Conectar
+            if not sellers_sync.conectar_postgresql(postgresql_config):
+                self._log("❌ No se pudo conectar a PostgreSQL para sellers", "error")
+                return
+
+            if not sellers_sync.conectar_mysql(mysql_config):
+                self._log("❌ No se pudo conectar a MySQL para sellers", "error")
+                return
+
+            # Ejecutar sincronización
+            resultado = sellers_sync.ejecutar_sync()
+
+            # Cerrar conexiones
+            sellers_sync.cerrar()
+
+            if resultado:
+                self._log("✅ Sellers sincronizados correctamente", "success")
+            else:
+                self._log("⚠️  Sincronización de sellers completada con errores", "warning")
+
+        except ImportError:
+            self._log("❌ Módulo smart_sellers_sync_module no encontrado", "error")
+        except Exception as e:
+            self._log(f"❌ Error sincronizando sellers: {str(e)}", "error")
+            self.stats['sellers']['errores'] += 1
+
+    # ====================================================================
     # MÉTODO PRINCIPAL
     # ====================================================================
 
@@ -2286,6 +2346,11 @@ class SmartSyncComplete:
 
             # Detectar cambios en quotes (MySQL → PostgreSQL)
             cambios_quotes = self.detectar_cambios_quotes()
+
+            # Sincronizar sellers siempre (no usa hash, sincronización completa)
+            self._log("", "info")
+            self._log("👤 SINCRONIZANDO SELLERS...", "info")
+            self._sincronizar_sellers()
 
             # Verificar si hay cambios
             total_cambios = (
@@ -2428,13 +2493,16 @@ if __name__ == "__main__":
         'password': os.getenv('DB_PASSWORD_MYSQL')
     }
 
-    company_id = 1  # O obtener de MySQL
+    # Configuración de empresa (según logs)
+    company_rif = 'J502741283'
+    company_email = 'multiserviciosleblanc@gmail.com'
+    company_id = 27  # ID de empresa en PostgreSQL
 
     # Crear app
     app = ServiceApp(postgresql_config, mysql_config, company_id)
 
     # Crear módulo de sync
-    sync = SmartSyncComplete(app, postgresql_config, mysql_config, company_id)
+    sync = SmartSyncComplete(app, postgresql_config, mysql_config, company_rif, company_email)
 
     # Inicializar tabla (primera vez)
     sync.inicializar_tabla_hashes()

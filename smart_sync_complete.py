@@ -2253,6 +2253,64 @@ class SmartSyncComplete:
             self.stats['categories']['errores'] += 1
 
     # ====================================================================
+    # SINCRONIZACIÓN DE SELLERS
+    # ====================================================================
+
+    def _sincronizar_sellers(self):
+        """
+        Sincronizar sellers desde PostgreSQL a MySQL
+        Usa SmartSellersSyncModule para la sincronización
+        """
+        try:
+            from smart_sellers_sync_module import SmartSellersSyncModule
+
+            # Preparar configuraciones
+            postgresql_config = {
+                'host': self.postgresql_config['host'],
+                'port': self.postgresql_config['port'],
+                'database': self.postgresql_config['database'],
+                'user': self.postgresql_config['user'],
+                'password': self.postgresql_config['password']
+            }
+
+            mysql_config = {
+                'host': self.mysql_config['host'],
+                'port': int(self.mysql_config['port']),
+                'database': self.mysql_config['database'],
+                'user': self.mysql_config['user'],
+                'password': self.mysql_config['password']
+            }
+
+            # Crear módulo de sellers
+            sellers_sync = SmartSellersSyncModule(self)
+
+            # Conectar
+            if not sellers_sync.conectar_postgresql(postgresql_config):
+                self._log("❌ No se pudo conectar a PostgreSQL para sellers", "error")
+                return
+
+            if not sellers_sync.conectar_mysql(mysql_config):
+                self._log("❌ No se pudo conectar a MySQL para sellers", "error")
+                return
+
+            # Ejecutar sincronización
+            resultado = sellers_sync.ejecutar_sync()
+
+            # Cerrar conexiones
+            sellers_sync.cerrar()
+
+            if resultado:
+                self._log("✅ Sellers sincronizados correctamente", "success")
+            else:
+                self._log("⚠️  Sincronización de sellers completada con errores", "warning")
+
+        except ImportError:
+            self._log("❌ Módulo smart_sellers_sync_module no encontrado", "error")
+        except Exception as e:
+            self._log(f"❌ Error sincronizando sellers: {str(e)}", "error")
+            self.stats['sellers']['errores'] += 1
+
+    # ====================================================================
     # MÉTODO PRINCIPAL
     # ====================================================================
 
@@ -2288,6 +2346,11 @@ class SmartSyncComplete:
 
             # Detectar cambios en quotes (MySQL → PostgreSQL)
             cambios_quotes = self.detectar_cambios_quotes()
+
+            # Sincronizar sellers siempre (no usa hash, sincronización completa)
+            self._log("", "info")
+            self._log("👤 SINCRONIZANDO SELLERS...", "info")
+            self._sincronizar_sellers()
 
             # Verificar si hay cambios
             total_cambios = (
