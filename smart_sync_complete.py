@@ -552,8 +552,9 @@ class SmartSyncComplete:
         Generar hash MD5 para un producto
 
         Args:
-            product: Tupla con (code, description, short_name, department,
-                               price, cost, higher_price, min_stock, status)
+            product: Tupla con (code, description, short_name, department, stock,
+                               product_type, price, cost, higher_price, min_stock,
+                               status, image_type, product_image, sale_tax, aliquot)
 
         Returns:
             Hash MD5 hexadecimal
@@ -565,11 +566,15 @@ class SmartSyncComplete:
                 str(product[1]) if product[1] else '',  # description
                 str(product[2]) if product[2] else '',  # short_name
                 str(product[3]) if product[3] else '',  # department
+                str(float(product[4]) if product[4] else 0),  # stock ✓ AGREGADO
+                str(product[5]) if product[5] else '',  # product_type
                 str(safe_float(product[6])),            # price
                 str(safe_float(product[7])),            # cost
                 str(safe_float(product[8])),            # higher_price
                 str(safe_float(product[9])),            # min_stock
-                str(product[10]) if product[10] else ''  # status
+                str(product[10]) if product[10] else '',  # status
+                str(product[13]) if product[13] else '',  # sale_tax
+                str(product[14]) if product[14] else ''   # aliquot
             )
 
             datos = "|".join(campos)
