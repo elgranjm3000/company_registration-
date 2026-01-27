@@ -1078,8 +1078,11 @@ class SystemTrayService:
                 duration=5,
                 threaded=True
             )
-        except Exception:
-            pass  # Si falla la notificación, continuar sin problema
+            log(f"✅ Notificación enviada: {titulo} - {mensaje}", "INFO")
+        except ImportError:
+            log("⚠️ win10toast no está instalado. Las notificaciones están deshabilitadas.", "WARNING")
+        except Exception as e:
+            log(f"⚠️ Error mostrando notificación: {e}", "WARNING")
 
     def actualizar_tooltip(self):
         """Actualiza el tooltip del icono"""

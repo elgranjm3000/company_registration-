@@ -2049,7 +2049,7 @@ class SmartSyncComplete:
                     description if description else None,
                     safe_float(price),
                     safe_float(cost),
-                    stock if stock else 0,
+                    float(stock) if stock else 0,  # Convertir Decimal a float
                     int(min_stock) if min_stock else 0,
                     category_id,
                     status,  # Usar el status calculado del SELECT
@@ -2142,7 +2142,7 @@ class SmartSyncComplete:
                     description if description else None,
                     safe_float(price),
                     safe_float(cost),
-                    stock if stock else 0,
+                    float(stock) if stock else 0,  # Convertir Decimal a float
                     int(min_stock) if min_stock else 0,
                     category_id,
                     status,
