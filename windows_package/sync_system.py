@@ -190,8 +190,9 @@ def guardar_config(config):
 class SyncModule:
     """Módulo de sincronización"""
 
-    def __init__(self, config):
+    def __init__(self, config, progress_callback=None):
         self.config = config
+        self.progress_callback = progress_callback  # Callback de progreso
         self.pg_conn = None
         self.mysql_conn = None
         self.stats = {
@@ -306,7 +307,8 @@ class SyncModule:
                 mysql_config=mysql_config,
                 company_rif=self.config['company_rif'],
                 company_email=self.config['company_email'],
-                company_name=self.config.get('company_name', '')  # ✅ Agregado
+                company_name=self.config.get('company_name', ''),  # ✅ Agregado
+                progress_callback=self.progress_callback  # ✅ Callback de progreso
             )
 
             # Inicializar tabla sync_hashes si no existe
@@ -666,7 +668,31 @@ class ConfigWindow:
             detalles_label = ttk.Label(frame, text="", font=("Arial", 9), foreground="gray")
             detalles_label.pack(pady=5)
 
+            # Contadores de progreso por entidad
+            contenedor_contadores = ttk.Frame(frame)
+            contenedor_contadores.pack(pady=15, fill="x")
+
+            # Labels para cada entidad
+            lbl_products = ttk.Label(contenedor_contadores, text="Products: --/--", font=("Arial", 9))
+            lbl_products.pack(anchor="w", padx=20, pady=2)
+
+            lbl_customers = ttk.Label(contenedor_contadores, text="Customers: --/--", font=("Arial", 9))
+            lbl_customers.pack(anchor="w", padx=20, pady=2)
+
+            lbl_categories = ttk.Label(contenedor_contadores, text="Categories: --/--", font=("Arial", 9))
+            lbl_categories.pack(anchor="w", padx=20, pady=2)
+
+            # Diccionario para almacenar estado de contadores
+            contadores = {
+                'products': {'current': 0, 'total': 0},
+                'customers': {'current': 0, 'total': 0},
+                'categories': {'current': 0, 'total': 0}
+            }
+
             progreso.update()
+
+            # Variable para controlar el resultado
+            resultado_sync = {'exito': False, 'mensaje': '', 'error': None}
 
             def actualizar_estado(mensaje, detalles=""):
                 """Actualiza el estado de la sincronización"""
@@ -675,8 +701,25 @@ class ConfigWindow:
                     detalles_label.config(text=detalles)
                 progreso.update_idletasks()  # Forzar actualización inmediata
 
-            # Variable para controlar el resultado
-            resultado_sync = {'exito': False, 'mensaje': '', 'error': None}
+            def actualizar_contador(entity, current, total):
+                """Actualiza el contador de una entidad específica"""
+                nonlocal contadores
+                if entity in contadores:
+                    contadores[entity]['current'] = current
+                    contadores[entity]['total'] = total
+
+                    # Mapeo de entidades a labels
+                    labels_map = {
+                        'products': lbl_products,
+                        'customers': lbl_customers,
+                        'categories': lbl_categories
+                    }
+
+                    if entity in labels_map:
+                        lbl = labels_map[entity]
+                        percentage = round((current / total * 100), 1) if total > 0 else 0
+                        lbl.config(text=f"{entity.capitalize()}: {current}/{total} ({percentage}%)")
+                        progreso.update_idletasks()
 
             def ejecutar_sincronizacion_thread():
                 """Ejecuta la sincronización en un thread separado"""
@@ -687,7 +730,7 @@ class ConfigWindow:
                         actualizar_estado("🔌 Verificando conexiones...", "Conectando a bases de datos")
 
                         # SyncModule está definido en este mismo archivo
-                        sync = SyncModule(config_nuevo)
+                        sync = SyncModule(config_nuevo, progress_callback=actualizar_contador)
 
                         if sync.verificar_conexiones():
                             actualizar_estado("🔄 Sincronizando...", "Products, Customers, Categories, Quotes")
@@ -766,6 +809,7 @@ class ConfigWindow:
 
             # Ejecutar sincronización en thread
             ejecutar_sincronizacion_thread()
+
         else:
             messagebox.showerror("Error", "No se pudo guardar la configuración")
 

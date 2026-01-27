@@ -52,7 +52,7 @@ class SmartSyncComplete:
         sync.ejecutar_sync_completa()
     """
 
-    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str, company_name: str = ''):
+    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str, company_name: str = '', progress_callback=None):
         """
         Inicializar módulo de sincronización
 
@@ -63,6 +63,8 @@ class SmartSyncComplete:
             company_rif: RIF de la empresa
             company_email: Email de la empresa
             company_name: Nombre de la empresa (opcional)
+            progress_callback: Función callback para reportar progreso (opcional)
+                              Recibe dict: {'entity': 'products', 'current': 8, 'total': 1800}
         """
         self.app = app
         self.postgresql_config = postgresql_config
@@ -72,6 +74,7 @@ class SmartSyncComplete:
         self.company_name = company_name  # ✅ Agregado
         self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
+        self.progress_callback = progress_callback  # Callback para reportar progreso
 
         # Estadísticas
         self.stats = {
@@ -95,6 +98,27 @@ class SmartSyncComplete:
         # Sistema de notificaciones
         self.notificaciones_habilitadas = True
         self._verificar_sistema_notificaciones()
+
+    def _reportar_progreso(self, entity: str, current: int, total: int):
+        """
+        Reporta progreso de sincronización al callback
+
+        Args:
+            entity: Nombre de la entidad ('products', 'customers', 'categories', 'sellers', 'quotes')
+            current: Número actual de registros procesados
+            total: Total de registros a procesar
+        """
+        if self.progress_callback and total > 0:
+            try:
+                self.progress_callback({
+                    'entity': entity,
+                    'current': current,
+                    'total': total,
+                    'percentage': round((current / total) * 100, 1)
+                })
+            except Exception as e:
+                # Silencioso para no interrumpir la sincronización
+                pass
 
     def _setup_file_logging(self):
         """
@@ -1997,6 +2021,10 @@ class SmartSyncComplete:
 
         self._log("Sincronizando changes de products a MySQL...", "info")
 
+        # Calcular total para progreso
+        total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
+        current_count = 0
+
         try:
             # Crear mapeo de categorías existentes en MySQL
             self.mysql_cursor.execute("SELECT name, id FROM categories WHERE company_id = %s",
@@ -2094,6 +2122,8 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['products']['nuevos'] += 1
+                current_count += 1
+                self._reportar_progreso('products', current_count, total_cambios)
 
                 # Commit cada 50 productos para no acumular transacción enorme
                 if idx % 50 == 0:
@@ -2195,6 +2225,8 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['products']['modificados'] += 1
+                current_count += 1
+                self._reportar_progreso('products', current_count, total_cambios)
 
                 # Commit cada 50 productos
                 if idx % 50 == 0:
@@ -2265,6 +2297,10 @@ class SmartSyncComplete:
 
         self._log("Sincronizando cambios de customers a MySQL...", "info")
 
+        # Calcular total para progreso
+        total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
+        current_count = 0
+
         try:
             # Nuevos
             for cliente in cambios['nuevos']:
@@ -2290,6 +2326,8 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['customers']['nuevos'] += 1
+                current_count += 1
+                self._reportar_progreso('customers', current_count, total_cambios)
 
             # Modificados
             for cliente in cambios['modificados']:
@@ -2315,6 +2353,8 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['customers']['modificados'] += 1
+                current_count += 1
+                self._reportar_progreso('customers', current_count, total_cambios)
 
             self.mysql_conn.commit()
             self._log(f"✅ Customers sincronizados: {self.stats['customers']['nuevos']} nuevos, "
@@ -2331,8 +2371,12 @@ class SmartSyncComplete:
 
         self._log("Sincronizando cambios de categories a MySQL...", "info")
 
+        # Calcular total para progreso
+        total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
+        current_count = 0
+
         try:
-            for code, description in cambios['nuevos']:
+            for idx, (code, description) in enumerate(cambios['nuevos'], 1):
                 if not self.sync_running:
                     break
 
@@ -2346,6 +2390,8 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['categories']['nuevos'] += 1
+                current_count += 1
+                self._reportar_progreso('categories', current_count, total_cambios)
 
             for code, description in cambios['modificados']:
                 if not self.sync_running:
@@ -2361,6 +2407,8 @@ class SmartSyncComplete:
                 ))
 
                 self.stats['categories']['modificados'] += 1
+                current_count += 1
+                self._reportar_progreso('categories', current_count, total_cambios)
 
             self.mysql_conn.commit()
             self._log(f"✅ Categories sincronizados: {self.stats['categories']['nuevos']} nuevos, "
