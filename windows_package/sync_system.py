@@ -630,7 +630,7 @@ class ConfigWindow:
             # Crear ventana de progreso
             progreso = tk.Toplevel(self.root)
             progreso.title("Sincronizando...")
-            progreso.geometry("500x300")
+            progreso.geometry("700x550")  # Aumentado de 500x300 a 700x550
             progreso.resizable(False, False)
 
             # Centrar ventana
@@ -670,17 +670,24 @@ class ConfigWindow:
 
             # Contadores de progreso por entidad
             contenedor_contadores = ttk.Frame(frame)
-            contenedor_contadores.pack(pady=15, fill="x")
+            contenedor_contadores.pack(pady=20, fill="x", expand=True)
 
-            # Labels para cada entidad
-            lbl_products = ttk.Label(contenedor_contadores, text="Products: --/--", font=("Arial", 9))
-            lbl_products.pack(anchor="w", padx=20, pady=2)
+            # Título de contadores
+            ttk.Label(contenedor_contadores, text="📊 PROGRESO DE SINCRONIZACIÓN",
+                     font=("Arial", 11, "bold")).pack(pady=(0, 10))
 
-            lbl_customers = ttk.Label(contenedor_contadores, text="Customers: --/--", font=("Arial", 9))
-            lbl_customers.pack(anchor="w", padx=20, pady=2)
+            # Labels para cada entidad con fuente más grande
+            lbl_products = ttk.Label(contenedor_contadores, text="📦 Products: --/--",
+                                    font=("Arial", 10))
+            lbl_products.pack(anchor="w", padx=30, pady=5)
 
-            lbl_categories = ttk.Label(contenedor_contadores, text="Categories: --/--", font=("Arial", 9))
-            lbl_categories.pack(anchor="w", padx=20, pady=2)
+            lbl_customers = ttk.Label(contenedor_contadores, text="👥 Customers: --/--",
+                                     font=("Arial", 10))
+            lbl_customers.pack(anchor="w", padx=30, pady=5)
+
+            lbl_categories = ttk.Label(contenedor_contadores, text="📁 Categories: --/--",
+                                      font=("Arial", 10))
+            lbl_categories.pack(anchor="w", padx=30, pady=5)
 
             # Diccionario para almacenar estado de contadores
             contadores = {
@@ -708,17 +715,19 @@ class ConfigWindow:
                     contadores[entity]['current'] = current
                     contadores[entity]['total'] = total
 
-                    # Mapeo de entidades a labels
-                    labels_map = {
-                        'products': lbl_products,
-                        'customers': lbl_customers,
-                        'categories': lbl_categories
+                    # Mapeo de entidades a labels y emojis
+                    entity_info = {
+                        'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
+                        'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
+                        'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'}
                     }
 
-                    if entity in labels_map:
-                        lbl = labels_map[entity]
+                    if entity in entity_info:
+                        info = entity_info[entity]
                         percentage = round((current / total * 100), 1) if total > 0 else 0
-                        lbl.config(text=f"{entity.capitalize()}: {current}/{total} ({percentage}%)")
+                        info['label'].config(
+                            text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
+                        )
                         progreso.update_idletasks()
 
             def ejecutar_sincronizacion_thread():
