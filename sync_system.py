@@ -715,11 +715,18 @@ class ConfigWindow:
                 # Programar la actualización en el thread principal
                 progreso.after(0, actualizar_gui)
 
-            def actualizar_contador(entity, current, total):
+            def actualizar_contador(progreso_data):
                 """
                 Actualiza el contador de una entidad específica
                 Esta función se llama desde el thread de sincronización
+
+                Args:
+                    progreso_data: Dict con keys 'entity', 'current', 'total', 'percentage'
                 """
+                entity = progreso_data.get('entity', '')
+                current = progreso_data.get('current', 0)
+                total = progreso_data.get('total', 0)
+
                 nonlocal contadores
                 if entity in contadores:
                     contadores[entity]['current'] = current
