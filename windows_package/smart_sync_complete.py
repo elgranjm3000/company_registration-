@@ -897,10 +897,24 @@ class SmartSyncComplete:
                     # Producto modificado (sin cambio de status)
                     cambios['modificados'].append(producto)
                     self._log(f"  🔄 MODIFICADO: {code}", "debug")
-                    self._guardar_hash('products', code, hash_actual)
+
+                    # Guardar hash con status actual en last_sync_data
+                    data_sync = {
+                        'status': producto[12],  # status (active/inactive)
+                        'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    self._guardar_hash('products', code, hash_actual, data_sync)
                 else:
-                    # Sin cambios, solo actualizar timestamp
-                    self._guardar_hash('products', code, hash_actual)
+                    # Sin cambios, solo actualizar timestamp pero MANTENER last_sync_data
+                    # No actualizar last_sync_data para no perder el status guardado
+                    update_query = """
+                    UPDATE sync_hashes
+                    SET updated_at = NOW()
+                    WHERE table_name = %s
+                      AND record_key = %s
+                      AND company_id = %s
+                    """
+                    self.pg_cursor.execute(update_query, ('products', code, self.company_id))
 
             # Detectar productos inactivos (eliminados del query pero con hash guardado)
             if claves_actuales:
