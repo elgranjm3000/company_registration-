@@ -785,12 +785,12 @@ class SmartSyncComplete:
         try:
             # Query para obtener productos de PostgreSQL con coin y description_coin
             query = """
-            SELECT
+            SELECT DISTINCT ON (a.code)
                 a.code,
                 a.description,
                 a.short_name,
                 a.department,
-                SUM(c.stock) AS stock,
+                COALESCE(c.total_stock, 0) AS stock,
                 a.product_type,
                 a.coin,
                 f.description AS description_coin,
@@ -820,32 +820,19 @@ class SmartSyncComplete:
                 a.sale_tax,
                 e.aliquot
             FROM products a
+            LEFT JOIN (
+                SELECT product_code, SUM(stock) as total_stock
+                FROM products_stock
+                GROUP BY product_code
+            ) c ON a.code = c.product_code
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
-            LEFT JOIN products_stock c ON a.code = c.product_code
             LEFT JOIN products_image d ON d.main_code = a.code
             LEFT JOIN taxes e ON e.code = a.sale_tax
             LEFT JOIN coin f ON f.code = a.coin
             WHERE a.code IS NOT NULL
               AND a.code != ''
               AND a.status = '01'
-            GROUP BY
-                a.code,
-                a.description,
-                a.short_name,
-                a.department,
-                a.product_type,
-                a.coin,
-                f.description,
-                b.maximum_price,
-                b.offer_price,
-                b.higher_price,
-                a.minimal_stock,
-                a.status,
-                d.image_type,
-                d.product_image,
-                a.sale_tax,
-                e.aliquot
-            ORDER BY a.code
+            ORDER BY a.code, b.maximum_price DESC
             """
 
             self.pg_cursor.execute(query)
