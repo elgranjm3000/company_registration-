@@ -1054,8 +1054,7 @@ class SmartSyncComplete:
             LEFT JOIN coin f ON f.code = a.coin
             WHERE a.code IS NOT NULL
               AND a.code != ''
-              AND a.status = '01'
-            ORDER BY a.code, b.maximum_price DESC
+            ORDER BY a.code, b.maximum_price DESC;
             """
 
             self.pg_cursor.execute(query)
