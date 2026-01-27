@@ -52,7 +52,7 @@ class SmartSyncComplete:
         sync.ejecutar_sync_completa()
     """
 
-    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str):
+    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str, company_name: str = ''):
         """
         Inicializar módulo de sincronización
 
@@ -62,12 +62,14 @@ class SmartSyncComplete:
             mysql_config: Dict con configuración MySQL
             company_rif: RIF de la empresa
             company_email: Email de la empresa
+            company_name: Nombre de la empresa (opcional)
         """
         self.app = app
         self.postgresql_config = postgresql_config
         self.mysql_config = mysql_config
         self.company_rif = company_rif
         self.company_email = company_email
+        self.company_name = company_name  # ✅ Agregado
         self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
 
@@ -447,10 +449,9 @@ class SmartSyncComplete:
 
                 address = pg_data.get('address') if pg_data else None
                 phone = pg_data.get('phone') if pg_data else None
-                company_name = self.company_rif  # Usar RIF como nombre temporal si no hay datos de PG
 
-                if pg_data and pg_data.get('name'):
-                    company_name = pg_data['name']
+                # Usar el nombre del formulario (company_name) en lugar del RIF
+                company_name = self.company_name if hasattr(self, 'company_name') else self.company_rif
 
                 # Insertar nueva empresa (como app.py líneas 718-737)
                 insert_query = """

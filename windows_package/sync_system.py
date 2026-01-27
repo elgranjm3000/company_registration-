@@ -305,7 +305,8 @@ class SyncModule:
                 postgresql_config=postgresql_config,
                 mysql_config=mysql_config,
                 company_rif=self.config['company_rif'],
-                company_email=self.config['company_email']
+                company_email=self.config['company_email'],
+                company_name=self.config.get('company_name', '')  # ✅ Agregado
             )
 
             # Inicializar tabla sync_hashes si no existe
@@ -1044,7 +1045,8 @@ class SystemTrayService:
                 postgresql_config=postgresql_config,
                 mysql_config=mysql_config,
                 company_rif=self.config['company_rif'],
-                company_email=self.config['company_email']
+                company_email=self.config['company_email'],
+                company_name=self.config.get('company_name', '')  # ✅ Agregado
             )
 
             sync_system.inicializar_tabla_hashes()
