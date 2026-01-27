@@ -1072,12 +1072,8 @@ class SystemTrayService:
         try:
             from win10toast import ToastNotifier
             toast = ToastNotifier()
-            toast.show_toast(
-                title=f"🔄 {titulo}",
-                message=mensaje,
-                duration=5,
-                threaded=True
-            )
+            # Usar parámetros posicionales para compatibilidad con diferentes versiones
+            toast.show_toast(f"🔄 {titulo}", mensaje, duration=5, threaded=True)
             log(f"✅ Notificación enviada: {titulo} - {mensaje}", "INFO")
         except ImportError:
             log("⚠️ win10toast no está instalado. Las notificaciones están deshabilitadas.", "WARNING")
