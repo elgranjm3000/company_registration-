@@ -728,7 +728,7 @@ class ConfigWindow:
                         info['label'].config(
                             text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
                         )
-                        progreso.update_idletasks()
+                        progreso.update()  # Forzar actualización inmediata de la GUI
 
             def ejecutar_sincronizacion_thread():
                 """Ejecuta la sincronización en un thread separado"""
