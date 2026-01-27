@@ -768,6 +768,224 @@ class SmartSyncComplete:
             return None
 
     # ====================================================================
+    # SYSTEM LOGS - REGISTRO DE ACTIVIDAD
+    # ====================================================================
+
+    def _get_public_ip(self):
+        """
+        Obtener la IP pública del equipo
+
+        Returns:
+            str con la IP pública o None si no se puede obtener
+        """
+        try:
+            import urllib.request
+            import urllib.error
+
+            # Servicios para obtener IP pública (orden de preferencia)
+            services = [
+                'https://api.ipify.org',
+                'https://icanhazip.com',
+                'https://ifconfig.me/ip'
+            ]
+
+            for service in services:
+                try:
+                    with urllib.request.urlopen(service, timeout=5) as response:
+                        ip = response.read().decode('utf-8').strip()
+                        if ip:
+                            self._log(f"IP pública obtenida: {ip}", "debug")
+                            return ip
+                except:
+                    continue
+
+            self._log("No se pudo obtener IP pública", "warning")
+            return None
+        except Exception as e:
+            self._log(f"Error obteniendo IP pública: {str(e)}", "warning")
+            return None
+
+    def _get_mac_address(self):
+        """
+        Obtener la MAC address del equipo
+
+        Returns:
+            str con la MAC address o None si no se puede obtener
+        """
+        try:
+            import uuid
+            # Obtener MAC address de la primera interfaz disponible
+            mac = uuid.getnode()
+            mac_address = ':'.join([f'{(mac >> i) & 0xff:02x}' for i in range(0, 48, 8)][::-1])
+
+            if mac_address != '00:00:00:00:00:00':
+                self._log(f"MAC address obtenida: {mac_address}", "debug")
+                return mac_address
+            else:
+                return None
+        except Exception as e:
+            self._log(f"Error obteniendo MAC address: {str(e)}", "warning")
+            return None
+
+    def _get_geolocation(self, ip_address):
+        """
+        Obtener geolocalización a partir de la IP
+
+        Args:
+            ip_address: Dirección IP pública
+
+        Returns:
+            tuple (lat, lng) o (None, None) si no se puede obtener
+        """
+        if not ip_address:
+            return None, None
+
+        try:
+            import urllib.request
+
+            # Usar ip-api.com (gratis, sin API key para uso no comercial)
+            url = f'http://ip-api.com/json/{ip_address}?fields=status,lat,lon'
+
+            with urllib.request.urlopen(url, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+                if data.get('status') == 'success':
+                    lat = data.get('lat')
+                    lon = data.get('lon')
+                    if lat is not None and lon is not None:
+                        self._log(f"Geolocalización obtenida: {lat}, {lon}", "debug")
+                        return lat, lon
+
+            return None, None
+        except Exception as e:
+            self._log(f"Error obteniendo geolocalización: {str(e)}", "warning")
+            return None, None
+
+    def _log_to_system_logs(self, action: str, record_key: str, lat: float = None, lng: float = None):
+        """
+        Registrar actividad en system_logs de MySQL (un registro por key)
+
+        Args:
+            action: Entidad que se está modificando ('products', 'customers', etc.)
+            record_key: ID del registro individual que se sincroniza
+            lat: Latitud (opcional)
+            lng: Longitud (opcional)
+        """
+        try:
+            # Obtener información del sistema
+            ip_address = self._get_public_ip()
+            mac_address = self._get_mac_address()
+
+            # Si no se proporciona lat/lng, intentar obtener desde IP
+            if lat is None or lng is None:
+                lat, lng = self._get_geolocation(ip_address)
+
+            # Convertir IP a varbinary(16) para MySQL
+            ip_bytes = None
+            if ip_address:
+                try:
+                    import ipaddress
+                    ip_obj = ipaddress.ip_address(ip_address)
+                    ip_bytes = ip_obj.packed
+                except:
+                    pass
+
+            # Asegurar que record_key no sea NULL (campo NOT NULL en MySQL)
+            if record_key is None:
+                record_key = ''
+
+            # Insertar en system_logs con ST_GeomFromText para el campo POINT
+            if lat is not None and lng is not None:
+                # MySQL POINT: POINT(lng, lat) - notar que va longitud primero
+                insert_query = """
+                INSERT INTO system_logs (
+                    user_id,
+                    action,
+                    record_key,
+                    ip_address,
+                    mac_address,
+                    location,
+                    lat,
+                    lng,
+                    created_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, ST_GeomFromText(%s), %s, %s, NOW()
+                )
+                """
+                location_point = f'POINT({lng} {lat})'
+
+                self.mysql_cursor.execute(insert_query, (
+                    self.company_rif,  # user_id = RIF
+                    action,
+                    record_key,
+                    ip_bytes,
+                    mac_address,
+                    location_point,
+                    lat,
+                    lng
+                ))
+            else:
+                # Sin geolocalización
+                insert_query = """
+                INSERT INTO system_logs (
+                    user_id,
+                    action,
+                    record_key,
+                    ip_address,
+                    mac_address,
+                    lat,
+                    lng,
+                    created_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, NOW()
+                )
+                """
+
+                self.mysql_cursor.execute(insert_query, (
+                    self.company_rif,  # user_id = RIF
+                    action,
+                    record_key,
+                    ip_bytes,
+                    mac_address,
+                    lat,
+                    lng
+                ))
+
+            self.mysql_conn.commit()
+
+            self._log(f"System log registrado: action={action}, key={record_key}, ip={ip_address}", "debug")
+
+        except Exception as e:
+            self._log(f"Error registrando en system_logs: {str(e)}", "warning")
+            # No interrumpir la sincronización por errores de logging
+
+    def _log_to_system_logs_batch(self, action: str, record_keys: list, lat: float = None, lng: float = None):
+        """
+        Registrar múltiples registros en system_logs (uno por cada key)
+
+        Args:
+            action: Entidad que se está modificando ('products', 'customers', etc.)
+            record_keys: Lista de IDs de registros a sincronizar
+            lat: Latitud (opcional)
+            lng: Longitud (opcional)
+        """
+        if not record_keys:
+            # Si no hay keys, registrar un log vacío
+            self._log_to_system_logs(action, '', lat, lng)
+            return
+
+        # Obtener información del sistema una sola vez
+        ip_address = self._get_public_ip()
+        mac_address = self._get_mac_address()
+
+        if lat is None or lng is None:
+            lat, lng = self._get_geolocation(ip_address)
+
+        # Registrar cada key individualmente
+        for key in record_keys:
+            self._log_to_system_logs(action, key, lat, lng)
+
+    # ====================================================================
     # DETECCIÓN DE CAMBIOS - PRODUCTS
     # ====================================================================
 
@@ -1259,6 +1477,16 @@ class SmartSyncComplete:
             return
 
         self._log("Sincronizando quotes a PostgreSQL...", "info")
+
+        # Recopilar IDs de quotes para el log
+        record_keys = []
+        for quote in cambios.get('nuevos', []):
+            record_keys.append(str(quote[0]))  # id es el primer campo
+        for quote in cambios.get('modificados', []):
+            record_keys.append(str(quote[0]))  # id es el primer campo
+
+        # Registrar en system_logs (un registro por cada quote)
+        self._log_to_system_logs_batch('quotes', record_keys)
 
         try:
             # Obtener MAC address para la estación
@@ -2022,6 +2250,16 @@ class SmartSyncComplete:
 
         self._log("Sincronizando changes de products a MySQL...", "info")
 
+        # Recopilar IDs de productos para el log
+        record_keys = []
+        for producto in cambios['nuevos']:
+            record_keys.append(producto[0])  # code es el primer campo
+        for producto in cambios['modificados']:
+            record_keys.append(producto[0])  # code es el primer campo
+
+        # Registrar en system_logs (un registro por cada producto)
+        self._log_to_system_logs_batch('products', record_keys)
+
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
         current_count = 0
@@ -2298,6 +2536,16 @@ class SmartSyncComplete:
 
         self._log("Sincronizando cambios de customers a MySQL...", "info")
 
+        # Recopilar IDs de customers para el log
+        record_keys = []
+        for customer in cambios['nuevos']:
+            record_keys.append(customer[0])  # code es el primer campo
+        for customer in cambios['modificados']:
+            record_keys.append(customer[0])  # code es el primer campo
+
+        # Registrar en system_logs (un registro por cada customer)
+        self._log_to_system_logs_batch('customers', record_keys)
+
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
         current_count = 0
@@ -2372,6 +2620,16 @@ class SmartSyncComplete:
 
         self._log("Sincronizando cambios de categories a MySQL...", "info")
 
+        # Recopilar IDs de categories para el log
+        record_keys = []
+        for category in cambios['nuevos']:
+            record_keys.append(category[0])  # code es el primer campo
+        for category in cambios['modificados']:
+            record_keys.append(category[0])  # code es el primer campo
+
+        # Registrar en system_logs (un registro por cada category)
+        self._log_to_system_logs_batch('categories', record_keys)
+
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
         current_count = 0
@@ -2428,6 +2686,9 @@ class SmartSyncComplete:
         Sincronizar sellers desde PostgreSQL a MySQL
         Usa SmartSellersSyncModule para la sincronización
         """
+        # Registrar en system_logs
+        self._log_to_system_logs('sellers')
+
         try:
             # Agregar directorio actual al sys.path para encontrar el módulo
             import sys
