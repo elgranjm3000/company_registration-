@@ -320,40 +320,12 @@ class SyncModule:
 
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
 
-            # Mostrar ventana de messagebox de Windows
-            try:
-                import tkinter as tk
-                from tkinter import messagebox
-
-                temp_root = tk.Tk()
-                temp_root.withdraw()  # Ocultar ventana principal
-
-                # Centrar ventana
-                temp_root.update_idletasks()
-                width = 400
-                height = 200
-                x = (temp_root.winfo_screenwidth() // 2) - (width // 2)
-                y = (temp_root.winfo_screenheight() // 2) - (height // 2)
-                temp_root.geometry(f"{width}x{height}+{x}+{y}")
-
-                if resultado:
-                    messagebox.showinfo(
-                        "✅ Sincronización Exitosa",
-                        "La sincronización se ha completado exitosamente.\n\n"
-                        "Revisa el log para más detalles.",
-                        parent=temp_root
-                    )
-                else:
-                    messagebox.showwarning(
-                        "⚠️ Sincronización con Errores",
-                        "La sincronización se completó con errores.\n\n"
-                        "Revisa el log para más detalles.",
-                        parent=temp_root
-                    )
-
-                temp_root.destroy()
-            except Exception as e:
-                log(f"Error mostrando messagebox: {e}", "WARNING")
+            # El toast notification ya se muestra en ejecutar_sync_completa()
+            # No mostramos messagebox para no ser intrusivos
+            if resultado:
+                log("✅ Sincronización completada exitosamente", "SUCCESS")
+            else:
+                log("⚠️ Sincronización completada con errores", "WARNING")
 
             return resultado
 
@@ -1250,19 +1222,17 @@ class SystemTrayService:
             if resultado:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "✅ Exitosa"
-                self._mostrar_notificacion_windows("Sincronización Exitosa", f"Última sync: {self.last_sync_time}")
-
-                # Mostrar ventana de Windows messagebox (más visible)
-                self._mostrar_messagebox_windows("✅ Sincronización Exitosa",
-                    f"La sincronización se ha completado exitosamente.\n\nÚltima sync: {self.last_sync_time}")
+                # Solo toast, no messagebox (no intrusivo)
+                self._mostrar_notificacion_windows("Sincronización Exitosa",
+                    f"✅ Completada: {self.last_sync_time}\n"
+                    f"Products: {sync_system.stats['products']['nuevos']} nuevos, "
+                    f"{sync_system.stats['products']['modificados']} modificados")
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error"
-                self._mostrar_notificacion_windows("Error en Sincronización", "Revisa los logs para más detalles")
-
-                # Mostrar ventana de Windows messagebox (más visible)
-                self._mostrar_messagebox_windows("⚠️ Sincronización con Errores",
-                    "La sincronización se completó con errores.\n\nRevisa los logs para más detalles.")
+                # Solo toast, no messagebox (no intrusivo)
+                self._mostrar_notificacion_windows("Error en Sincronización",
+                    "Revisa los logs para más detalles")
 
         except Exception as e:
             log(f"Error en sincronización: {e}", "ERROR")
