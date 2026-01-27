@@ -1242,18 +1242,100 @@ class SystemTrayService:
         finally:
             self.is_syncing = False
 
-    def _mostrar_notificacion_windows(self, titulo: str, mensaje: str):
-        """Muestra notificación de Windows"""
+    def _mostrar_notificacion_windows(self, titulo: str, mensaje: str, con_sonido: bool = True):
+        """
+        Muestra notificación de Windows más visible
+
+        Opciones de visibilidad implementadas:
+        1. Toast notification (win10toast) - sutil
+        2. Beep sonoro (winsound) - audible
+        3. MessageBox con timeout - visible pero se cierra solo
+
+        Args:
+            titulo: Título de la notificación
+            mensaje: Mensaje a mostrar
+            con_sonido: Si True, reproduce un beep audible
+        """
+        # Opción 1: Beep sonoro (muy efectivo para alertar)
+        if con_sonido:
+            try:
+                import winsound
+                # Beep de 300ms a 1000Hz (tono medio-agudo)
+                winsound.Beep(1000, 300)
+                log("✅ Beep sonoro reproducido", "INFO")
+            except Exception as e:
+                log(f"⚠️ No se pudo reproducir beep: {e}", "WARNING")
+
+        # Opción 2: Toast notification (sutil pero visible)
         try:
             from win10toast import ToastNotifier
             toast = ToastNotifier()
-            # Usar parámetros posicionales para compatibilidad con diferentes versiones
-            toast.show_toast(f"🔄 {titulo}", mensaje, duration=5, threaded=True)
-            log(f"✅ Notificación enviada: {titulo} - {mensaje}", "INFO")
+            # Aumentar duración y threaded=False para que se vea mejor
+            toast.show_toast(f"🔄 {titulo}", mensaje, duration=8, threaded=False)
+            log(f"✅ Notificación toast mostrada: {titulo}", "INFO")
         except ImportError:
-            log("⚠️ win10toast no está instalado. Las notificaciones están deshabilitadas.", "WARNING")
+            log("⚠️ win10toast no está instalado", "WARNING")
         except Exception as e:
-            log(f"⚠️ Error mostrando notificación: {e}", "WARNING")
+            log(f"⚠️ Error mostrando toast: {e}", "WARNING")
+
+        # Opción 3: MessageBox con timeout (más visible, se cierra solo)
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            import threading
+
+            def mostrar_messagebox_timeout():
+                """Muestra messagebox que se cierra automáticamente después de 4 segundos"""
+                temp_root = tk.Tk()
+                temp_root.withdraw()  # Ocultar ventana principal
+
+                # Centrar ventana
+                temp_root.update_idletasks()
+                width = 450
+                height = 200
+                x = (temp_root.winfo_screenwidth() // 2) - (width // 2)
+                y = (temp_root.winfo_screenheight() // 2) - (height // 2)
+                temp_root.geometry(f"{width}x{height}+{x}+{y}")
+
+                # Cerrar automáticamente después de 4 segundos
+                def auto_cerrar():
+                    try:
+                        temp_root.destroy()
+                    except:
+                        pass
+
+                # Programar cierre automático
+                temp_root.after(4000, auto_cerrar)
+
+                # Mostrar messagebox
+                if "Exitosa" in titulo or "✅" in titulo:
+                    messagebox.showinfo(
+                        titulo,
+                        f"{mensaje}\n\n⏱️ Esta ventana se cerrará automáticamente en 4 segundos...",
+                        parent=temp_root
+                    )
+                else:
+                    messagebox.showwarning(
+                        titulo,
+                        f"{mensaje}\n\n⏱️ Esta ventana se cerrará automáticamente en 4 segundos...",
+                        parent=temp_root
+                    )
+
+                # Destruir ventana si el usuario cerró manualmente
+                try:
+                    temp_root.destroy()
+                except:
+                    pass
+
+            # Ejecutar en thread para no bloquear
+            thread = threading.Thread(target=mostrar_messagebox_timeout)
+            thread.daemon = True
+            thread.start()
+
+            log("✅ MessageBox con timeout mostrado (se cerrará solo en 4s)", "INFO")
+
+        except Exception as e:
+            log(f"⚠️ Error mostrando messagebox con timeout: {e}", "WARNING")
 
     def _mostrar_messagebox_windows(self, titulo: str, mensaje: str):
         """
