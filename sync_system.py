@@ -668,56 +668,105 @@ class ConfigWindow:
 
             progreso.update()
 
+            # Variable para controlar el resultado
+            resultado_sync = {'exito': False, 'mensaje': '', 'error': None}
+
             def actualizar_estado(mensaje, detalles=""):
+                """Actualiza el estado de la sincronización"""
                 estado_label.config(text=mensaje)
                 if detalles:
                     detalles_label.config(text=detalles)
-                progreso.update()
+                progreso.update_idletasks()  # Forzar actualización inmediata
 
-            try:
-                # Ejecutar primera sincronización
-                actualizar_estado("🔌 Verificando conexiones...", "Conectando a bases de datos")
+            def ejecutar_sincronizacion_thread():
+                """Ejecuta la sincronización en un thread separado"""
+                import threading
+                def sync_worker():
+                    try:
+                        # Ejecutar primera sincronización
+                        actualizar_estado("🔌 Verificando conexiones...", "Conectando a bases de datos")
 
-                # SyncModule está definido en este mismo archivo
-                sync = SyncModule(config_nuevo)
+                        # SyncModule está definido en este mismo archivo
+                        sync = SyncModule(config_nuevo)
 
-                if sync.verificar_conexiones():
-                    actualizar_estado("🔄 Sincronizando...", "Products, Customers, Categories, Quotes")
-                    sync.sincronizar()
-                    sync.cerrar()
+                        if sync.verificar_conexiones():
+                            actualizar_estado("🔄 Sincronizando...", "Products, Customers, Categories, Quotes")
+                            sync.sincronizar()
+                            sync.cerrar()
 
-                    actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
-                    progress_bar.stop()
+                            actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
+                            resultado_sync['exito'] = True
+                            resultado_sync['mensaje'] = "Configuración guardada correctamente\n\n✅ Primera sincronización completada\n\nEl sistema continuará sincronizando en segundo plano."
+                        else:
+                            actualizar_estado("❌ Error", "No se pudo conectar")
+                            resultado_sync['exito'] = False
+                            resultado_sync['mensaje'] = "Configuración guardada\n\n⚠️ No se pudo conectar a las bases de datos\n\nVerifique la configuración y las credenciales."
+                    except Exception as e:
+                        actualizar_estado("❌ Error", str(e))
+                        resultado_sync['exito'] = False
+                        resultado_sync['error'] = e
+                        resultado_sync['mensaje'] = f"Configuración guardada\n\n⚠️ Error en sincronización: {str(e)}"
+                    finally:
+                        progress_bar.stop()
+                        # Notificar que terminó
+                        progreso.after(0, lambda: progreso.event_generate('<<SyncComplete>>'))
 
-                    mensaje = "Configuración guardada correctamente\n\n✅ Primera sincronización completada\n\nEl sistema continuará sincronizando en segundo plano."
-                else:
-                    actualizar_estado("❌ Error", "No se pudo conectar")
-                    progress_bar.stop()
-                    mensaje = "Configuración guardada\n\n⚠️ No se pudo conectar a las bases de datos\n\nVerifique la configuración y las credenciales."
-            except Exception as e:
-                actualizar_estado("❌ Error", str(e))
-                progress_bar.stop()
-                mensaje = f"Configuración guardada\n\n⚠️ Error en sincronización: {str(e)}"
+                # Crear y iniciar el thread
+                thread = threading.Thread(target=sync_worker, daemon=True)
+                thread.start()
 
-            # Cerrar ventana de progreso
-            progreso.after(1500, progreso.destroy)
-            progreso.wait_window()
+            def on_sync_complete(event):
+                """Callback cuando termina la sincronización"""
+                # Cerrar ventana de progreso después de un momento
+                progreso.after(1000, progreso.destroy)
 
-            messagebox.showinfo("Éxito", mensaje)
+                # Mostrar notificación toast en la barra de tareas (tipo Avast/AVG)
+                try:
+                    from win10toast import ToastNotifier
+                    toast = ToastNotifier()
 
-            # Destruir ventana de configuración e iniciar system tray
-            self.root.destroy()
+                    if resultado_sync['exito']:
+                        toast.show_toast(
+                            "✅ Sincronización Exitosa",
+                            "Los datos se han sincronizado correctamente",
+                            duration=5,
+                            threaded=True,
+                            icon_path=None  # Usa icono por defecto de la app
+                        )
+                    else:
+                        toast.show_toast(
+                            "⚠️ Advertencia",
+                            resultado_sync['mensaje'][:100] + "..." if len(resultado_sync['mensaje']) > 100 else resultado_sync['mensaje'],
+                            duration=7,
+                            threaded=True
+                        )
+                except ImportError:
+                    # Fallback a messagebox si no hay win10toast
+                    if resultado_sync['exito']:
+                        messagebox.showinfo("Éxito", resultado_sync['mensaje'])
+                    else:
+                        messagebox.showwarning("Advertencia", resultado_sync['mensaje'])
 
-            # Iniciar system tray automáticamente
-            try:
-                from pywinauto.application import Application
-                import sys
-                # Reiniciar app en modo tray
-                import subprocess
-                script_path = os.path.abspath(__file__)
-                subprocess.Popen([sys.executable, script_path, "--mode", "tray"])
-            except Exception as e:
-                print(f"No se pudo iniciar system tray: {e}")
+                # Destruir ventana de configuración e iniciar system tray
+                self.root.destroy()
+
+                # Iniciar system tray automáticamente
+                try:
+                    from pywinauto.application import Application
+                    import sys
+                    # Reiniciar app en modo tray
+                    import subprocess
+                    script_path = os.path.abspath(__file__)
+                    subprocess.Popen([sys.executable, script_path, "--mode", "tray"])
+                except Exception as e:
+                    print(f"No se pudo iniciar system tray: {e}")
+
+            # Bind del evento de completado
+            progreso.bind('<<SyncComplete>>', on_sync_complete)
+
+            # Ejecutar sincronización en thread
+            ejecutar_sincronizacion_thread()
+
         else:
             messagebox.showerror("Error", "No se pudo guardar la configuración")
 
@@ -826,8 +875,43 @@ class ManagerWindow:
                 )
                 self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 self.agregar_log("✅ Sincronización completada")
+
+                # Mostrar notificación toast tipo Avast/AVG
+                try:
+                    from win10toast import ToastNotifier
+                    toast = ToastNotifier()
+
+                    # Crear mensaje con estadísticas
+                    mensaje_stats = (
+                        f"Products: {stats['products']['nuevos']} nuevos\n"
+                        f"Customers: {stats['customers']['nuevos']} nuevos\n"
+                        f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                        f"Quotes: {stats['quotes']['nuevos']} nuevos"
+                    )
+
+                    toast.show_toast(
+                        "✅ Sincronización Exitosa",
+                        mensaje_stats,
+                        duration=5,
+                        threaded=True
+                    )
+                except ImportError:
+                    pass  # Si no hay win10toast, no mostrar nada
             else:
                 self.agregar_log("❌ Error en sincronización")
+
+                # Mostrar notificación de error
+                try:
+                    from win10toast import ToastNotifier
+                    toast = ToastNotifier()
+                    toast.show_toast(
+                        "⚠️ Error de Sincronización",
+                        "Verifica los logs para más detalles",
+                        duration=7,
+                        threaded=True
+                    )
+                except ImportError:
+                    pass
 
         except Exception as e:
             self.agregar_log(f"❌ Error: {str(e)}")
