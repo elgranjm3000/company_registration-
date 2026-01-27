@@ -919,7 +919,7 @@ class SmartSyncComplete:
                 location_point = f'POINT({lng} {lat})'
 
                 self.mysql_cursor.execute(insert_query, (
-                    self.company_rif,  # user_id = RIF
+                    self.company_rif,  # user_id = RIF de la empresa
                     action_full,
                     record_key,
                     ip_bytes,
