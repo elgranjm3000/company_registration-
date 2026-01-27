@@ -861,13 +861,14 @@ class SmartSyncComplete:
             self._log(f"Error obteniendo geolocalización: {str(e)}", "warning")
             return None, None
 
-    def _log_to_system_logs(self, action: str, record_key: str, lat: float = None, lng: float = None):
+    def _log_to_system_logs(self, action: str, record_key: str, operation: str = 'SYNC', lat: float = None, lng: float = None):
         """
         Registrar actividad en system_logs de MySQL (un registro por key)
 
         Args:
             action: Entidad que se está modificando ('products', 'customers', etc.)
             record_key: ID del registro individual que se sincroniza
+            operation: Tipo de operación ('CREATE', 'UPDATE', 'DELETE', 'SYNC')
             lat: Latitud (opcional)
             lng: Longitud (opcional)
         """
@@ -894,6 +895,9 @@ class SmartSyncComplete:
             if record_key is None:
                 record_key = ''
 
+            # Combinar action y operation: "products - CREATE"
+            action_full = f"{action} - {operation}"
+
             # Insertar en system_logs con ST_GeomFromText para el campo POINT
             if lat is not None and lng is not None:
                 # MySQL POINT: POINT(lng, lat) - notar que va longitud primero
@@ -916,7 +920,7 @@ class SmartSyncComplete:
 
                 self.mysql_cursor.execute(insert_query, (
                     self.company_rif,  # user_id = RIF
-                    action,
+                    action_full,
                     record_key,
                     ip_bytes,
                     mac_address,
@@ -943,7 +947,7 @@ class SmartSyncComplete:
 
                 self.mysql_cursor.execute(insert_query, (
                     self.company_rif,  # user_id = RIF
-                    action,
+                    action_full,
                     record_key,
                     ip_bytes,
                     mac_address,
@@ -953,25 +957,26 @@ class SmartSyncComplete:
 
             self.mysql_conn.commit()
 
-            self._log(f"System log registrado: action={action}, key={record_key}, ip={ip_address}", "debug")
+            self._log(f"System log registrado: action={action_full}, key={record_key}, ip={ip_address}", "debug")
 
         except Exception as e:
             self._log(f"Error registrando en system_logs: {str(e)}", "warning")
             # No interrumpir la sincronización por errores de logging
 
-    def _log_to_system_logs_batch(self, action: str, record_keys: list, lat: float = None, lng: float = None):
+    def _log_to_system_logs_batch(self, action: str, record_keys: list, operation: str = 'SYNC', lat: float = None, lng: float = None):
         """
         Registrar múltiples registros en system_logs (uno por cada key)
 
         Args:
             action: Entidad que se está modificando ('products', 'customers', etc.)
             record_keys: Lista de IDs de registros a sincronizar
+            operation: Tipo de operación ('CREATE', 'UPDATE', 'DELETE', 'SYNC')
             lat: Latitud (opcional)
             lng: Longitud (opcional)
         """
         if not record_keys:
             # Si no hay keys, registrar un log vacío
-            self._log_to_system_logs(action, '', lat, lng)
+            self._log_to_system_logs(action, '', operation, lat, lng)
             return
 
         # Obtener información del sistema una sola vez
@@ -983,7 +988,7 @@ class SmartSyncComplete:
 
         # Registrar cada key individualmente
         for key in record_keys:
-            self._log_to_system_logs(action, key, lat, lng)
+            self._log_to_system_logs(action, key, operation, lat, lng)
 
     # ====================================================================
     # DETECCIÓN DE CAMBIOS - PRODUCTS
@@ -1478,15 +1483,14 @@ class SmartSyncComplete:
 
         self._log("Sincronizando quotes a PostgreSQL...", "info")
 
-        # Recopilar IDs de quotes para el log
-        record_keys = []
-        for quote in cambios.get('nuevos', []):
-            record_keys.append(str(quote[0]))  # id es el primer campo
-        for quote in cambios.get('modificados', []):
-            record_keys.append(str(quote[0]))  # id es el primer campo
+        # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        nuevos_quotes = [str(q[0]) for q in cambios.get('nuevos', [])]
+        modificados_quotes = [str(q[0]) for q in cambios.get('modificados', [])]
 
-        # Registrar en system_logs (un registro por cada quote)
-        self._log_to_system_logs_batch('quotes', record_keys)
+        if nuevos_quotes:
+            self._log_to_system_logs_batch('quotes', nuevos_quotes, 'CREATE')
+        if modificados_quotes:
+            self._log_to_system_logs_batch('quotes', modificados_quotes, 'UPDATE')
 
         try:
             # Obtener MAC address para la estación
@@ -2250,15 +2254,14 @@ class SmartSyncComplete:
 
         self._log("Sincronizando changes de products a MySQL...", "info")
 
-        # Recopilar IDs de productos para el log
-        record_keys = []
-        for producto in cambios['nuevos']:
-            record_keys.append(producto[0])  # code es el primer campo
-        for producto in cambios['modificados']:
-            record_keys.append(producto[0])  # code es el primer campo
+        # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        nuevos_products = [p[0] for p in cambios['nuevos']]
+        modificados_products = [p[0] for p in cambios['modificados']]
 
-        # Registrar en system_logs (un registro por cada producto)
-        self._log_to_system_logs_batch('products', record_keys)
+        if nuevos_products:
+            self._log_to_system_logs_batch('products', nuevos_products, 'CREATE')
+        if modificados_products:
+            self._log_to_system_logs_batch('products', modificados_products, 'UPDATE')
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
@@ -2536,15 +2539,14 @@ class SmartSyncComplete:
 
         self._log("Sincronizando cambios de customers a MySQL...", "info")
 
-        # Recopilar IDs de customers para el log
-        record_keys = []
-        for customer in cambios['nuevos']:
-            record_keys.append(customer[0])  # code es el primer campo
-        for customer in cambios['modificados']:
-            record_keys.append(customer[0])  # code es el primer campo
+        # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        nuevos_customers = [c[0] for c in cambios['nuevos']]
+        modificados_customers = [c[0] for c in cambios['modificados']]
 
-        # Registrar en system_logs (un registro por cada customer)
-        self._log_to_system_logs_batch('customers', record_keys)
+        if nuevos_customers:
+            self._log_to_system_logs_batch('customers', nuevos_customers, 'CREATE')
+        if modificados_customers:
+            self._log_to_system_logs_batch('customers', modificados_customers, 'UPDATE')
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
@@ -2620,15 +2622,14 @@ class SmartSyncComplete:
 
         self._log("Sincronizando cambios de categories a MySQL...", "info")
 
-        # Recopilar IDs de categories para el log
-        record_keys = []
-        for category in cambios['nuevos']:
-            record_keys.append(category[0])  # code es el primer campo
-        for category in cambios['modificados']:
-            record_keys.append(category[0])  # code es el primer campo
+        # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        nuevos_categories = [c[0] for c in cambios['nuevos']]
+        modificados_categories = [c[0] for c in cambios['modificados']]
 
-        # Registrar en system_logs (un registro por cada category)
-        self._log_to_system_logs_batch('categories', record_keys)
+        if nuevos_categories:
+            self._log_to_system_logs_batch('categories', nuevos_categories, 'CREATE')
+        if modificados_categories:
+            self._log_to_system_logs_batch('categories', modificados_categories, 'UPDATE')
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
@@ -2686,8 +2687,8 @@ class SmartSyncComplete:
         Sincronizar sellers desde PostgreSQL a MySQL
         Usa SmartSellersSyncModule para la sincronización
         """
-        # Registrar en system_logs
-        self._log_to_system_logs('sellers')
+        # Registrar en system_logs (sincronización completa)
+        self._log_to_system_logs('sellers', '', 'SYNC')
 
         try:
             # Agregar directorio actual al sys.path para encontrar el módulo
@@ -2856,8 +2857,23 @@ class SmartSyncComplete:
 
             if sum(s['errores'] for s in self.stats.values()) == 0:
                 self._log("✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO", "success")
+                # Mostrar notificación toast de Windows
+                self._mostrar_notificacion(
+                    titulo="✅ Sincronización Completada",
+                    mensaje=f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} | "
+                           f"Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} | "
+                           f"Duración: {duracion:.1f}s",
+                    duracion=5
+                )
             else:
                 self._log("⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES", "warning")
+                # Mostrar notificación toast con advertencia
+                errores_count = sum(s['errores'] for s in self.stats.values())
+                self._mostrar_notificacion(
+                    titulo="⚠️ Sincronización con Errores",
+                    mensaje=f"Completada con {errores_count} error(es). Revisa el log para detalles.",
+                    duracion=10
+                )
 
             return True
 
