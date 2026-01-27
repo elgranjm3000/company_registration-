@@ -319,6 +319,42 @@ class SyncModule:
             resultado = sync_system.ejecutar_sync_completa()
 
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
+
+            # Mostrar ventana de messagebox de Windows
+            try:
+                import tkinter as tk
+                from tkinter import messagebox
+
+                temp_root = tk.Tk()
+                temp_root.withdraw()  # Ocultar ventana principal
+
+                # Centrar ventana
+                temp_root.update_idletasks()
+                width = 400
+                height = 200
+                x = (temp_root.winfo_screenwidth() // 2) - (width // 2)
+                y = (temp_root.winfo_screenheight() // 2) - (height // 2)
+                temp_root.geometry(f"{width}x{height}+{x}+{y}")
+
+                if resultado:
+                    messagebox.showinfo(
+                        "✅ Sincronización Exitosa",
+                        "La sincronización se ha completado exitosamente.\n\n"
+                        "Revisa el log para más detalles.",
+                        parent=temp_root
+                    )
+                else:
+                    messagebox.showwarning(
+                        "⚠️ Sincronización con Errores",
+                        "La sincronización se completó con errores.\n\n"
+                        "Revisa el log para más detalles.",
+                        parent=temp_root
+                    )
+
+                temp_root.destroy()
+            except Exception as e:
+                log(f"Error mostrando messagebox: {e}", "WARNING")
+
             return resultado
 
         except Exception as e:
@@ -1215,10 +1251,18 @@ class SystemTrayService:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "✅ Exitosa"
                 self._mostrar_notificacion_windows("Sincronización Exitosa", f"Última sync: {self.last_sync_time}")
+
+                # Mostrar ventana de Windows messagebox (más visible)
+                self._mostrar_messagebox_windows("✅ Sincronización Exitosa",
+                    f"La sincronización se ha completado exitosamente.\n\nÚltima sync: {self.last_sync_time}")
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error"
                 self._mostrar_notificacion_windows("Error en Sincronización", "Revisa los logs para más detalles")
+
+                # Mostrar ventana de Windows messagebox (más visible)
+                self._mostrar_messagebox_windows("⚠️ Sincronización con Errores",
+                    "La sincronización se completó con errores.\n\nRevisa los logs para más detalles.")
 
         except Exception as e:
             log(f"Error en sincronización: {e}", "ERROR")
@@ -1240,6 +1284,45 @@ class SystemTrayService:
             log("⚠️ win10toast no está instalado. Las notificaciones están deshabilitadas.", "WARNING")
         except Exception as e:
             log(f"⚠️ Error mostrando notificación: {e}", "WARNING")
+
+    def _mostrar_messagebox_windows(self, titulo: str, mensaje: str):
+        """
+        Muestra ventana de messagebox de Windows (más visible que toast)
+
+        Esta ventana aparece en el centro de la pantalla y el usuario
+        debe hacer clic en "OK" para cerrarla, asegurando que note la alerta.
+        """
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+
+            # Crear ventana temporal oculta
+            temp_root = tk.Tk()
+            temp_root.withdraw()  # Ocultar ventana principal
+
+            # Posicionar ventana en el centro de la pantalla
+            temp_root.update_idletasks()
+            width = 400
+            height = 200
+            x = (temp_root.winfo_screenwidth() // 2) - (width // 2)
+            y = (temp_root.winfo_screenheight() // 2) - (height // 2)
+            temp_root.geometry(f"{width}x{height}+{x}+{y}")
+
+            # Mostrar messagebox según el tipo
+            if "Exitosa" in titulo or "✅" in titulo:
+                messagebox.showinfo(titulo, mensaje, parent=temp_root)
+            elif "Error" in titulo or "⚠️" in titulo:
+                messagebox.showwarning(titulo, mensaje, parent=temp_root)
+            else:
+                messagebox.showinfo(titulo, mensaje, parent=temp_root)
+
+            # Destruir ventana temporal
+            temp_root.destroy()
+
+            log(f"✅ Ventana de alerta mostrada: {titulo}", "INFO")
+
+        except Exception as e:
+            log(f"⚠️ Error mostrando ventana de alerta: {e}", "WARNING")
 
     def actualizar_tooltip(self):
         """Actualiza el tooltip del icono"""
