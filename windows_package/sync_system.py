@@ -702,33 +702,49 @@ class ConfigWindow:
             resultado_sync = {'exito': False, 'mensaje': '', 'error': None}
 
             def actualizar_estado(mensaje, detalles=""):
-                """Actualiza el estado de la sincronización"""
-                estado_label.config(text=mensaje)
-                if detalles:
-                    detalles_label.config(text=detalles)
-                progreso.update_idletasks()  # Forzar actualización inmediata
+                """
+                Actualiza el estado de la sincronización
+                Esta función se llama desde el thread de sincronización
+                """
+                def actualizar_gui():
+                    estado_label.config(text=mensaje)
+                    if detalles:
+                        detalles_label.config(text=detalles)
+                    progreso.update_idletasks()  # Actualizar GUI
+
+                # Programar la actualización en el thread principal
+                progreso.after(0, actualizar_gui)
 
             def actualizar_contador(entity, current, total):
-                """Actualiza el contador de una entidad específica"""
+                """
+                Actualiza el contador de una entidad específica
+                Esta función se llama desde el thread de sincronización
+                """
                 nonlocal contadores
                 if entity in contadores:
                     contadores[entity]['current'] = current
                     contadores[entity]['total'] = total
 
-                    # Mapeo de entidades a labels y emojis
-                    entity_info = {
-                        'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
-                        'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
-                        'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'}
-                    }
+                    # Usar after() para ejecutar la actualización en el thread principal de Tkinter
+                    # Esto es necesario porque Tkinter NO es thread-safe
+                    def actualizar_gui():
+                        # Mapeo de entidades a labels y emojis
+                        entity_info = {
+                            'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
+                            'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
+                            'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'}
+                        }
 
-                    if entity in entity_info:
-                        info = entity_info[entity]
-                        percentage = round((current / total * 100), 1) if total > 0 else 0
-                        info['label'].config(
-                            text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
-                        )
-                        progreso.update()  # Forzar actualización inmediata de la GUI
+                        if entity in entity_info:
+                            info = entity_info[entity]
+                            percentage = round((current / total * 100), 1) if total > 0 else 0
+                            info['label'].config(
+                                text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
+                            )
+                            progreso.update_idletasks()  # Actualizar GUI
+
+                    # Programar la actualización en el thread principal
+                    progreso.after(0, actualizar_gui)
 
             def ejecutar_sincronizacion_thread():
                 """Ejecuta la sincronización en un thread separado"""
