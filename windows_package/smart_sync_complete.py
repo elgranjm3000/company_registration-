@@ -757,7 +757,7 @@ class SmartSyncComplete:
                 a.description,
                 a.short_name,
                 a.department,
-                c.stock,
+                COALESCE(c.total_stock, 0) as stock,
                 a.product_type,
                 CASE
                     WHEN b.maximum_price IS NULL OR b.maximum_price < 0 OR b.maximum_price > 99999999
@@ -786,7 +786,11 @@ class SmartSyncComplete:
                 e.aliquot
             FROM products a
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
-            LEFT JOIN products_stock c ON a.code = c.product_code
+            LEFT JOIN (
+                SELECT product_code, SUM(stock) as total_stock
+                FROM products_stock
+                GROUP BY product_code
+            ) c ON a.code = c.product_code
             LEFT JOIN products_image d ON d.main_code = a.code
             LEFT JOIN taxes e ON e.code = a.sale_tax
             WHERE a.code IS NOT NULL
