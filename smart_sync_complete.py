@@ -553,28 +553,31 @@ class SmartSyncComplete:
 
         Args:
             product: Tupla con (code, description, short_name, department, stock,
-                               product_type, price, cost, higher_price, min_stock,
-                               status, image_type, product_image, sale_tax, aliquot)
+                               product_type, coin, description_coin, price, cost,
+                               higher_price, min_stock, status, image_type,
+                               product_image, sale_tax, aliquot)
 
         Returns:
             Hash MD5 hexadecimal
         """
         try:
-            # Campos clave para detectar cambios
+            # Campos clave para detectar cambios (todos los campos importantes)
             campos = (
                 str(product[0]) if product[0] else '',  # code
                 str(product[1]) if product[1] else '',  # description
                 str(product[2]) if product[2] else '',  # short_name
                 str(product[3]) if product[3] else '',  # department
-                str(float(product[4]) if product[4] else 0),  # stock ✓ AGREGADO
+                str(float(product[4]) if product[4] else 0),  # stock
                 str(product[5]) if product[5] else '',  # product_type
-                str(safe_float(product[6])),            # price
-                str(safe_float(product[7])),            # cost
-                str(safe_float(product[8])),            # higher_price
-                str(safe_float(product[9])),            # min_stock
-                str(product[10]) if product[10] else '',  # status
-                str(product[13]) if product[13] else '',  # sale_tax
-                str(product[14]) if product[14] else ''   # aliquot
+                str(product[6]) if product[6] else '',  # coin ✓ NUEVO
+                str(product[7]) if product[7] else '',  # description_coin ✓ NUEVO
+                str(safe_float(product[8])),            # price
+                str(safe_float(product[9])),            # cost
+                str(safe_float(product[10])),           # higher_price
+                str(safe_float(product[11])),           # min_stock
+                str(product[12]) if product[12] else '',  # status
+                str(product[15]) if product[15] else '',  # sale_tax
+                str(product[16]) if product[16] else ''   # aliquot
             )
 
             datos = "|".join(campos)
@@ -755,52 +758,68 @@ class SmartSyncComplete:
         cambios = {'nuevos': [], 'modificados': [], 'eliminados': []}
 
         try:
-            # Query exacto de app.py para obtener productos de PostgreSQL
+            # Query para obtener productos de PostgreSQL con coin y description_coin
             query = """
-            SELECT DISTINCT ON (a.code)
+            SELECT
                 a.code,
                 a.description,
                 a.short_name,
                 a.department,
-                COALESCE(c.total_stock, 0) as stock,
+                SUM(c.stock) AS stock,
                 a.product_type,
+                a.coin,
+                f.description AS description_coin,
                 CASE
                     WHEN b.maximum_price IS NULL OR b.maximum_price < 0 OR b.maximum_price > 99999999
                     THEN 0
                     ELSE b.maximum_price
-                END as price,
+                END AS price,
                 CASE
                     WHEN b.offer_price IS NULL OR b.offer_price < 0 OR b.offer_price > 99999999
                     THEN 0
                     ELSE b.offer_price
-                END as cost,
+                END AS cost,
                 CASE
                     WHEN b.higher_price IS NULL OR b.higher_price < 0 OR b.higher_price > 99999999
                     THEN 0
                     ELSE b.higher_price
-                END as higher_price,
+                END AS higher_price,
                 CASE
                     WHEN a.minimal_stock IS NULL OR a.minimal_stock < 0 OR a.minimal_stock > 2147483647
                     THEN 0
                     ELSE a.minimal_stock
-                END as min_stock,
-                CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END as status,
+                END AS min_stock,
+                CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END AS status,
                 d.image_type,
                 d.product_image,
                 a.sale_tax,
                 e.aliquot
             FROM products a
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
-            LEFT JOIN (
-                SELECT product_code, SUM(stock) as total_stock
-                FROM products_stock
-                GROUP BY product_code
-            ) c ON a.code = c.product_code
+            LEFT JOIN products_stock c ON a.code = c.product_code
             LEFT JOIN products_image d ON d.main_code = a.code
             LEFT JOIN taxes e ON e.code = a.sale_tax
+            LEFT JOIN coin f ON f.code = a.coin
             WHERE a.code IS NOT NULL
-            AND a.code != ''
-            AND a.status = '01'
+              AND a.code != ''
+              AND a.status = '01'
+            GROUP BY
+                a.code,
+                a.description,
+                a.short_name,
+                a.department,
+                a.product_type,
+                a.coin,
+                f.description,
+                b.maximum_price,
+                b.offer_price,
+                b.higher_price,
+                a.minimal_stock,
+                a.status,
+                d.image_type,
+                d.product_image,
+                a.sale_tax,
+                e.aliquot
             ORDER BY a.code
             """
 
@@ -1993,8 +2012,10 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos del query de app.py
-                code, description, short_name, department, stock, product_type, price, cost, higher_price, min_stock, status, image_type, product_image, sale_tax, aliquot = producto
+                # Desempaquetar con todos los campos (ahora incluye coin y description_coin)
+                (code, description, short_name, department, stock, product_type,
+                 coin, description_coin, price, cost, higher_price, min_stock, status,
+                 image_type, product_image, sale_tax, aliquot) = producto
 
                 # Verificar que la categoría existe en MySQL
                 if department not in category_mapping:
@@ -2007,7 +2028,7 @@ class SmartSyncComplete:
                 # Crear JSON de imagen
                 image_json = self._create_image_json(image_type, product_image)
 
-                # INSERT exacto de app.py
+                # INSERT con coin y description_coin
                 insert_query = """
                 INSERT INTO products (
                     company_id,
@@ -2025,10 +2046,12 @@ class SmartSyncComplete:
                     higher_price,
                     sale_tax,
                     aliquot,
+                    coin,
+                    description_coin,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -2044,6 +2067,8 @@ class SmartSyncComplete:
                     higher_price = VALUES(higher_price),
                     sale_tax = VALUES(sale_tax),
                     aliquot = VALUES(aliquot),
+                    coin = VALUES(coin),
+                    description_coin = VALUES(description_coin),
                     updated_at = NOW()
                 """
 
@@ -2062,7 +2087,9 @@ class SmartSyncComplete:
                     image_json,
                     safe_float(higher_price),
                     sale_tax,
-                    aliquot
+                    aliquot,
+                    coin if coin else None,  # Moneda
+                    description_coin if description_coin else None  # Descripción de moneda
                 ))
 
                 self.stats['products']['nuevos'] += 1
@@ -2086,8 +2113,10 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos
-                code, description, short_name, department, stock, product_type, price, cost, higher_price, min_stock, status, image_type, product_image, sale_tax, aliquot = producto
+                # Desempaquetar con todos los campos (ahora incluye coin y description_coin)
+                (code, description, short_name, department, stock, product_type,
+                 coin, description_coin, price, cost, higher_price, min_stock, status,
+                 image_type, product_image, sale_tax, aliquot) = producto
 
                 # Verificar que la categoría existe en MySQL
                 if department not in category_mapping:
@@ -2100,7 +2129,7 @@ class SmartSyncComplete:
                 # Crear JSON de imagen
                 image_json = self._create_image_json(image_type, product_image)
 
-                # UPDATE de app.py (no usa UPDATE separado, solo ON DUPLICATE KEY UPDATE)
+                # UPDATE con coin y description_coin
                 update_query = """
                 INSERT INTO products (
                     company_id,
@@ -2118,10 +2147,12 @@ class SmartSyncComplete:
                     higher_price,
                     sale_tax,
                     aliquot,
+                    coin,
+                    description_coin,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -2137,6 +2168,8 @@ class SmartSyncComplete:
                     higher_price = VALUES(higher_price),
                     sale_tax = VALUES(sale_tax),
                     aliquot = VALUES(aliquot),
+                    coin = VALUES(coin),
+                    description_coin = VALUES(description_coin),
                     updated_at = NOW()
                 """
 
@@ -2155,7 +2188,9 @@ class SmartSyncComplete:
                     image_json,
                     safe_float(higher_price),
                     sale_tax,
-                    aliquot
+                    aliquot,
+                    coin if coin else None,  # Moneda
+                    description_coin if description_coin else None  # Descripción de moneda
                 ))
 
                 self.stats['products']['modificados'] += 1
