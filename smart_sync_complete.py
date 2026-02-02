@@ -423,13 +423,13 @@ class SmartSyncComplete:
             # [PASO 1] Verificar que existe en tabla 'acceso' (como app.py línea 633)
             self._log("  🔍 Verificando tabla 'acceso'...", "debug")
             query_acceso = """
-            SELECT codigo, correo_electronico
+            SELECT id_fiscal, correo_electronico
             FROM acceso
-            WHERE codigo = %s AND LOWER(correo_electronico) = LOWER(%s)
+            WHERE id_fiscal = %s
             LIMIT 1
             """
 
-            self.mysql_cursor.execute(query_acceso, (self.company_rif, self.company_email))
+            self.mysql_cursor.execute(query_acceso, (self.company_rif,))
             acceso = self.mysql_cursor.fetchone()
 
             if not acceso:
@@ -450,11 +450,11 @@ class SmartSyncComplete:
             query_companies = """
             SELECT id, name
             FROM companies
-            WHERE rif = %s AND email = %s
+            WHERE rif = %s
             LIMIT 1
             """
 
-            self.mysql_cursor.execute(query_companies, (self.company_rif, self.company_email))
+            self.mysql_cursor.execute(query_companies, (self.company_rif,))
             company = self.mysql_cursor.fetchone()
 
             if company:
@@ -1193,6 +1193,144 @@ class SmartSyncComplete:
         return cambios
 
     # ====================================================================
+    # DETECCIÓN DE CAMBIOS - PRODUCTS MYSQL → POSTGRESQL
+    # ====================================================================
+
+    def detectar_cambios_products_mysql(self) -> Dict[str, List]:
+        """
+        Detectar cambios en products de MySQL para sincronizar a PostgreSQL
+
+        Returns:
+            Dict con 'nuevos', 'modificados'
+        """
+        self._log("Detectando cambios en products (MySQL → PostgreSQL)...", "info")
+
+        cambios = {
+            'nuevos': [],
+            'modificados': []
+        }
+
+        try:
+            # Obtener products de MySQL
+            query = """
+            SELECT
+                id,
+                code,
+                name,
+                description,
+                price,
+                cost,
+                higher_price,
+                coin,
+                description_coin,
+                min_stock,
+                category_id,
+                status,
+                product_type,
+                sale_tax,
+                aliquot,
+                created_at,
+                updated_at
+            FROM products
+            WHERE company_id = %s
+            ORDER BY id
+            """
+
+            self.mysql_cursor.execute(query, (self.company_id,))
+            products_mysql = self.mysql_cursor.fetchall()
+
+            # Convertir a diccionarios
+            columnas = [
+                'id', 'code', 'name', 'description', 'price', 'cost',
+                'higher_price', 'coin', 'description_coin', 'min_stock',
+                'category_id', 'status', 'product_type', 'sale_tax',
+                'aliquot', 'created_at', 'updated_at'
+            ]
+
+            products_dict = []
+            for fila in products_mysql:
+                product_dict = dict(zip(columnas, fila))
+                products_dict.append(product_dict)
+
+            self._log(f"   📋 Products encontrados en MySQL: {len(products_dict)}", "info")
+
+            if not products_dict:
+                self._log("   ℹ️ No hay products en MySQL para esta empresa", "info")
+                return cambios
+
+            # Mostrar códigos de products encontrados
+            codigos_encontrados = [p['code'] for p in products_dict]
+            self._log(f"   🔍 Códigos: {codigos_encontrados[:10]}{'...' if len(codigos_encontrados) > 10 else ''}", "debug")
+
+            for product in products_dict:
+                if not self.sync_running:
+                    break
+
+                product_id = product['id']
+                product_code = product['code']
+
+                # Generar hash actual
+                hash_actual = self._generar_hash_product_mysql(product)
+
+                # Buscar hash guardado en sync_hashes (PostgreSQL)
+                hash_guardado = self._obtener_hash_guardado('products_mysql', str(product_id))
+
+                self._log(f"   🔍 Product #{product_id} ({product_code}): hash_guardado={hash_guardado[0][:8] if hash_guardado else 'None'}", "debug")
+
+                if hash_guardado is None:
+                    # Nuevo product
+                    cambios['nuevos'].append(product)
+                    self._log(f"  ✨ NUEVO: Product #{product_id} ({product_code})", "info")
+                elif hash_guardado[0] != hash_actual:
+                    # Product modificado
+                    cambios['modificados'].append(product)
+                    self._log(f"  🔄 MODIFICADO: Product #{product_id} ({product_code})", "info")
+
+                # NOTA: El hash se guarda DESPUÉS de sincronizar exitosamente
+                # en sincronizar_products_postgresql()
+
+            self._log(f"✅ Products detectados: {len(cambios['nuevos'])} nuevos, "
+                      f"{len(cambios['modificados'])} modificados", "info")
+
+        except Exception as e:
+            self._log(f"Error detectando cambios en products de MySQL: {str(e)}", "error")
+            self.stats['products']['errores'] += 1
+
+        return cambios
+
+    def _generar_hash_product_mysql(self, product: dict) -> str:
+        """
+        Generar hash MD5 de un product de MySQL
+
+        Args:
+            product: Diccionario con datos del product
+
+        Returns:
+            Hash MD5 hexadecimal
+        """
+        import hashlib
+
+        # Campos relevantes para el hash
+        campos_hash = [
+            product['code'],
+            product['name'],
+            str(product['price']),
+            str(product['cost']),
+            str(product.get('higher_price', 0)),
+            product.get('coin', ''),
+            product.get('description_coin', ''),
+            str(product.get('min_stock', 0)),
+            str(product.get('category_id', '')),
+            product.get('status', 'active'),
+            product.get('product_type', 'finished'),
+            product.get('sale_tax', ''),
+            str(product.get('aliquot', 0))
+        ]
+
+        datos_hash = "|".join(str(c) for c in campos_hash)
+        return hashlib.md5(datos_hash.encode()).hexdigest()
+
+    # ====================================================================
     # DETECCIÓN DE CAMBIOS - CUSTOMERS
     # ====================================================================
 
@@ -1348,6 +1486,141 @@ class SmartSyncComplete:
     # DETECCIÓN DE CAMBIOS - QUOTES (MySQL → PostgreSQL)
     # ====================================================================
 
+    def _verificar_y_sincronizar_customer(self, customer_id: int, customer_doc: str,
+                                          customer_name: str, customer_email: str,
+                                          customer_phone: str, customer_address: str):
+        """
+        Verificar si un customer existe en PostgreSQL y sincronizarlo si no existe
+
+        Args:
+            customer_id: ID del customer en MySQL
+            customer_doc: Document number (RIF/Cédula)
+            customer_name: Nombre del customer
+            customer_email: Email del customer
+            customer_phone: Teléfono del customer
+            customer_address: Dirección del customer
+        """
+        try:
+            # Verificar si existe en PostgreSQL
+            self.pg_cursor.execute(
+                "SELECT code FROM clients WHERE code = %s",
+                (customer_doc,)
+            )
+            existe = self.pg_cursor.fetchone()
+
+            if existe:
+                self._log(f"  👤 Customer {customer_doc} ya existe en PostgreSQL", "debug")
+                return
+
+            # No existe, insertar
+            self._log(f"  ✨ Sincronizando customer {customer_doc} a PostgreSQL...", "info")
+
+            # Usar valores genéricos para columnas con restricciones
+            sql_insert = """
+            INSERT INTO clients (
+                code, description, address, email, phone, contact,
+                country, province, city, client_type, area_sales,
+                seller, client_group
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (code) DO NOTHING
+            """
+
+            self.pg_cursor.execute(sql_insert, (
+                customer_doc,        # code
+                customer_name[:255], # description
+                customer_address[:255] if customer_address else '',
+                customer_email[:255] if customer_email else '',
+                customer_phone[:50] if customer_phone else '',
+                customer_name[:100],  # contact
+                '00',                # country (LOCAL)
+                '00',                # province (LOCAL)
+                '00',                # city (LOCAL)
+                '01',                # client_type (Juridico)
+                '00',                # area_sales
+                '00',                # seller
+                '00'                 # client_group (GENERICO)
+            ))
+
+            self.pg_conn.commit()
+            self._log(f"  ✅ Customer {customer_doc} sincronizado a PostgreSQL", "info")
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error sincronizando customer {customer_doc}: {str(e)}", "warning")
+            self.pg_conn.rollback()
+
+    def _verificar_y_sincronizar_products_quote(self, quote_id: int):
+        """
+        Verificar y sincronizar todos los products de un quote antes de insertarlo
+
+        Args:
+            quote_id: ID del quote en MySQL
+        """
+        try:
+            # Obtener todos los products del quote con sus datos
+            self.mysql_cursor.execute("""
+                SELECT DISTINCT
+                    p.id, p.code, p.name, p.description, p.price, p.cost,
+                    p.product_type, p.status
+                FROM quote_items qi
+                JOIN products p ON p.id = qi.product_id
+                WHERE qi.quote_id = %s
+            """, (quote_id,))
+
+            products_mysql = self.mysql_cursor.fetchall()
+
+            if not products_mysql:
+                return
+
+            self._log(f"  📦 Verificando {len(products_mysql)} products del quote...", "debug")
+
+            for product in products_mysql:
+                product_id, product_code, product_name, product_desc, product_price, product_cost, product_type, product_status = product
+
+                # Verificar si existe en PostgreSQL
+                self.pg_cursor.execute(
+                    "SELECT code FROM products WHERE code = %s",
+                    (product_code,)
+                )
+                existe = self.pg_cursor.fetchone()
+
+                if existe:
+                    continue
+
+                # No existe, sincronizar
+                self._log(f"  ✨ Sincronizando product {product_code} a PostgreSQL...", "info")
+
+                # Obtener valores válidos para columnas con restricciones
+                self.pg_cursor.execute("SELECT code FROM status WHERE code != '00' LIMIT 1")
+                status_row = self.pg_cursor.fetchone()
+                status_valido = status_row[0] if status_row else '01'
+
+                # Insertar product
+                sql_insert = """
+                INSERT INTO products (
+                    code, description, minimal_sale, maximal_sale,
+                    status, product_type, sale_price
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (code) DO NOTHING
+                """
+
+                self.pg_cursor.execute(sql_insert, (
+                    product_code,
+                    (product_desc or product_name)[:255],
+                    float(product_cost) if product_cost else 0,
+                    float(product_price) if product_price else 0,
+                    status_valido,
+                    product_type if product_type else 'finished',
+                    int(float(product_price) * 100) if product_price else 0
+                ))
+
+                self._log(f"  ✅ Product {product_code} sincronizado", "debug")
+
+            self.pg_conn.commit()
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error sincronizando products del quote: {str(e)}", "warning")
+            self.pg_conn.rollback()
+
     def _generar_hash_quote(self, quote: dict) -> str:
         """
         Generar hash MD5 para un quote (desde MySQL)
@@ -1429,9 +1702,15 @@ class SmartSyncComplete:
                 quote_dict = dict(zip(columnas, fila))
                 quotes_dict.append(quote_dict)
 
+            self._log(f"   📋 Quotes encontrados en MySQL: {len(quotes_dict)}", "info")
+
             if not quotes_dict:
                 self._log("   ℹ️ No hay quotes en MySQL para esta empresa", "info")
                 return cambios
+
+            # Mostrar IDs de quotes encontrados
+            ids_encontrados = [q['id'] for q in quotes_dict]
+            self._log(f"   🔍 IDs encontrados: {ids_encontrados}", "info")
 
             ids_actuales = []
 
@@ -1440,6 +1719,7 @@ class SmartSyncComplete:
                     break
 
                 quote_id = quote['id']
+                quote_number = quote['quote_number']
                 ids_actuales.append(str(quote_id))
 
                 # Generar hash actual
@@ -1448,20 +1728,19 @@ class SmartSyncComplete:
                 # Buscar hash guardado en sync_hashes (PostgreSQL)
                 hash_guardado = self._obtener_hash_guardado('quotes', str(quote_id))
 
+                self._log(f"   🔍 Quote #{quote_id} ({quote_number}): hash_guardado={hash_guardado[0][:8] if hash_guardado else 'None'}", "debug")
+
                 if hash_guardado is None:
                     # Nuevo quote
                     cambios['nuevos'].append(quote)
-                    self._log(f"  ✨ NUEVO: Quote #{quote_id} ({quote['quote_number']})", "debug")
+                    self._log(f"  ✨ NUEVO: Quote #{quote_id} ({quote_number})", "info")
                 elif hash_guardado[0] != hash_actual:
                     # Quote modificado
                     cambios['modificados'].append(quote)
-                    self._log(f"  🔄 MODIFICADO: Quote #{quote_id} ({quote['quote_number']})", "debug")
+                    self._log(f"  🔄 MODIFICADO: Quote #{quote_id} ({quote_number})", "info")
 
-                # Guardar hash actualizado
-                self._guardar_hash('quotes', str(quote_id), hash_actual, quote)
-
-            # Commit hashes en PostgreSQL
-            self.pg_conn.commit()
+                # NOTA: El hash se guarda DESPUÉS de sincronizar exitosamente
+                # en sincronizar_quotes_postgresql()
 
             self._log(f"✅ Quotes detectados: {len(cambios['nuevos'])} nuevos, "
                       f"{len(cambios['modificados'])} modificados", "info")
@@ -1594,12 +1873,18 @@ class SmartSyncComplete:
 
         if customer:
             customer_name, customer_email, customer_phone, customer_doc, customer_address = customer
+
+            # VERIFICAR Y SINCRONIZAR CUSTOMER A POSTGRESQL si no existe
+            self._verificar_y_sincronizar_customer(quote['customer_id'], customer_doc, customer_name, customer_email, customer_phone, customer_address)
         else:
             customer_name = "Cliente Migrado"
             customer_email = ""
             customer_phone = ""
             customer_doc = f"MIG-{quote['customer_id']}"
             customer_address = ""
+
+        # VERIFICAR Y SINCRONIZAR PRODUCTS DEL QUOTE antes de insertar
+        self._verificar_y_sincronizar_products_quote(quote['id'])
 
         # Calcular la suma total de cantidades (quantity) de los items
         self.mysql_cursor.execute(
@@ -2628,6 +2913,127 @@ class SmartSyncComplete:
             self._log(f"Error sincronizando customers a MySQL: {str(e)}", "error")
             self.stats['customers']['errores'] += 1
 
+    # ====================================================================
+    # SINCRONIZACIÓN DE PRODUCTS (MYSQL → POSTGRESQL)
+    # ====================================================================
+
+    def sincronizar_products_postgresql(self, cambios: Dict[str, List]):
+        """
+        Sincronizar products de MySQL a PostgreSQL
+
+        Args:
+            cambios: Dict con 'nuevos' y 'modificados'
+        """
+        if not cambios.get('nuevos') and not cambios.get('modificados'):
+            self._log("✅ Products: No hay cambios para sincronizar (MySQL → PG)", "info")
+            return
+
+        total_nuevos = len(cambios.get('nuevos', []))
+        total_modificados = len(cambios.get('modificados', []))
+
+        self._log("", "info")
+        self._log("📦 SINCRONIZANDO PRODUCTS (MySQL → PostgreSQL)...", "info")
+        self._log(f"   📋 Nuevos: {total_nuevos} | Modificados: {total_modificados}", "info")
+
+        try:
+            # Obtener valores válidos para columnas con restricciones
+            self.pg_cursor.execute("SELECT code FROM status WHERE code != '00' LIMIT 1")
+            status_row = self.pg_cursor.fetchone()
+            status_valido = status_row[0] if status_row else '01'
+
+            self.pg_cursor.execute("SELECT code FROM taxes LIMIT 1")
+            tax_row = self.pg_cursor.fetchone()
+            tax_valido = tax_row[0] if tax_row else ''
+
+            self.pg_cursor.execute("SELECT code FROM coin LIMIT 1")
+            coin_row = self.pg_cursor.fetchone()
+            coin_valido = coin_row[0] if coin_row else ''
+
+            # Procesar products nuevos y modificados
+            products_a_procesar = cambios.get('nuevos', []) + cambios.get('modificados', [])
+
+            for product in products_a_procesar:
+                if not self.sync_running:
+                    break
+
+                product_id = product['id']
+                product_code = product['code']
+
+                try:
+                    # Verificar si ya existe
+                    self.pg_cursor.execute(
+                        "SELECT code FROM products WHERE code = %s",
+                        (product_code,)
+                    )
+                    existe = self.pg_cursor.fetchone()
+
+                    if existe:
+                        # UPDATE
+                        self._log(f"  🔄 Actualizando product {product_code}...", "debug")
+                        sql_update = """
+                        UPDATE products SET
+                            description = %s,
+                            minimal_sale = %s,
+                            maximal_sale = %s,
+                            status = %s,
+                            product_type = %s,
+                            updated_at = NOW()
+                        WHERE code = %s
+                        """
+                        self.pg_cursor.execute(sql_update, (
+                            product.get('description', '')[:255],
+                            float(product.get('cost', 0)),
+                            float(product.get('price', 0)),
+                            status_valido,
+                            product.get('product_type', 'finished'),
+                            product_code
+                        ))
+                    else:
+                        # INSERT
+                        self._log(f"  ✨ Insertando product {product_code}...", "debug")
+                        sql_insert = """
+                        INSERT INTO products (
+                            code, description, minimal_sale, maximal_sale,
+                            status, product_type, sale_price
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """
+                        self.pg_cursor.execute(sql_insert, (
+                            product_code,
+                            product.get('description', '')[:255],
+                            float(product.get('cost', 0)),
+                            float(product.get('price', 0)),
+                            status_valido,
+                            product.get('product_type', 'finished'),
+                            int(float(product.get('price', 0)) * 100)  # sale_price está en centimos
+                        ))
+
+                    # Guardar hash DESPUÉS de insertar/actualizar exitosamente
+                    hash_nuevo = self._generar_hash_product_mysql(product)
+                    self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
+
+                    self.pg_conn.commit()
+                    self.stats['products']['nuevos'] += 1
+
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        self._log(f"  ℹ️ Product {product_code} ya existe (omitiendo)", "debug")
+                        self.pg_conn.rollback()
+                    else:
+                        import traceback
+                        self._log(f"Error procesando product {product_code}: {str(e)}", "error")
+                        self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+                        self.pg_conn.rollback()
+                        self.stats['products']['errores'] += 1
+
+            self._log(f"✅ Products completados: {self.stats['products']['nuevos']} nuevos, "
+                      f"{self.stats['products']['modificados']} modificados, "
+                      f"{self.stats['products']['errores']} errores", "success")
+
+        except Exception as e:
+            self._log(f"Error sincronizando products a PostgreSQL: {str(e)}", "error")
+            self.stats['products']['errores'] += 1
+
     def sincronizar_categories_mysql(self, cambios: Dict[str, List]):
         """Sincronizar cambios de categories a MySQL"""
         if not any(cambios.values()):
@@ -2804,6 +3210,9 @@ class SmartSyncComplete:
             cambios_customers = self.detectar_cambios_customers()
             cambios_categories = self.detectar_cambios_categories()
 
+            # Detectar cambios en products de MySQL (para sincronizar a PostgreSQL)
+            cambios_products_mysql = self.detectar_cambios_products_mysql()
+
             # Detectar cambios en quotes (MySQL → PostgreSQL)
             cambios_quotes = self.detectar_cambios_quotes()
 
@@ -2840,7 +3249,10 @@ class SmartSyncComplete:
             self._log("👥 SINCRONIZANDO CUSTOMERS...", "info")
             self.sincronizar_customers_mysql(cambios_customers)
 
-            # Sincronizar quotes a PostgreSQL (dirección opuesta)
+            # 4. Products de MySQL → PostgreSQL (ANTES de quotes para que existan)
+            self.sincronizar_products_postgresql(cambios_products_mysql)
+
+            # 5. Quotes a PostgreSQL (dirección opuesta, requiere products y customers)
             self.sincronizar_quotes_postgresql(cambios_quotes)
 
             # Sincronizar estados de quotes (PostgreSQL → MySQL)
