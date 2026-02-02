@@ -1380,7 +1380,8 @@ class SmartSyncComplete:
         Returns:
             Dict con 'nuevos', 'modificados', 'actualizaciones_estado'
         """
-        self._log("Detectando cambios en quotes (MySQL → PostgreSQL)...", "info")
+        self._log("", "info")
+        self._log("💰 DETECTANDO CAMBIOS EN QUOTES (MySQL → PostgreSQL)...", "info")
 
         cambios = {
             'nuevos': [],
@@ -1428,6 +1429,10 @@ class SmartSyncComplete:
                 quote_dict = dict(zip(columnas, fila))
                 quotes_dict.append(quote_dict)
 
+            if not quotes_dict:
+                self._log("   ℹ️ No hay quotes en MySQL para esta empresa", "info")
+                return cambios
+
             ids_actuales = []
 
             for quote in quotes_dict:
@@ -1458,7 +1463,7 @@ class SmartSyncComplete:
             # Commit hashes en PostgreSQL
             self.pg_conn.commit()
 
-            self._log(f"Quotes: {len(cambios['nuevos'])} nuevos, "
+            self._log(f"✅ Quotes detectados: {len(cambios['nuevos'])} nuevos, "
                       f"{len(cambios['modificados'])} modificados", "info")
 
         except Exception as e:
@@ -1478,13 +1483,19 @@ class SmartSyncComplete:
         Los quotes se migran a sales_operation en PostgreSQL
         """
         if not cambios.get('nuevos') and not cambios.get('modificados'):
+            self._log("✅ Quotes: No hay cambios para sincronizar", "info")
             return
 
-        self._log("Sincronizando quotes a PostgreSQL...", "info")
+        total_nuevos = len(cambios.get('nuevos', []))
+        total_modificados = len(cambios.get('modificados', []))
+
+        self._log("", "info")
+        self._log("💰 SINCRONIZANDO QUOTES (MySQL → PostgreSQL)...", "info")
+        self._log(f"   📋 Nuevos: {total_nuevos} | Modificados: {total_modificados}", "info")
 
         # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
-        nuevos_quotes = [str(q[0]) for q in cambios.get('nuevos', [])]
-        modificados_quotes = [str(q[0]) for q in cambios.get('modificados', [])]
+        nuevos_quotes = [str(q['id']) for q in cambios.get('nuevos', [])]
+        modificados_quotes = [str(q['id']) for q in cambios.get('modificados', [])]
 
         if nuevos_quotes:
             self._log_to_system_logs_batch('quotes', nuevos_quotes, 'CREATE')
@@ -1538,7 +1549,10 @@ class SmartSyncComplete:
                         self.pg_conn.rollback()  # Rollback para que no afecte siguientes quotes
                         self.stats['quotes']['errores'] += 1
 
-            self._log(f"✅ Quotes sincronizados a PostgreSQL: {self.stats['quotes']['nuevos']} nuevos", "success")
+            # Resumen final
+            self._log(f"✅ Quotes completados: {self.stats['quotes']['nuevos']} nuevos, "
+                      f"{self.stats['quotes']['modificados']} modificados, "
+                      f"{self.stats['quotes']['errores']} errores", "success")
 
             # Notificar si hay nuevos presupuestos
             if self.stats['quotes']['nuevos'] > 0:
