@@ -3133,19 +3133,19 @@ class SmartSyncComplete:
                             int(float(product.get('price', 0)) * 100)  # sale_price está en centimos
                         ))
 
-                    # Guardar hash DESPUÉS de insertar/actualizar exitosamente
-                    hash_nuevo = self._generar_hash_product_mysql(product)
-                    self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
-
                     self.pg_conn.commit()
 
-                    # Actualizar estadísticas y reportar progreso
+                    # Actualizar estadísticas y reportar progreso INMEDIATAMENTE
                     if existe:
                         self.stats['products']['modificados'] += 1
                     else:
                         self.stats['products']['nuevos'] += 1
 
                     self._reportar_progreso('products', current_count, total_a_procesar)
+
+                    # Guardar hash DESPUÉS de reportar progreso (para no retrasar el contador)
+                    hash_nuevo = self._generar_hash_product_mysql(product)
+                    self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
 
                 except Exception as e:
                     error_msg = str(e).lower()
