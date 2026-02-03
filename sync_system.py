@@ -1858,7 +1858,7 @@ def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
     parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
-                       default="auto", help="Modo de ejecución")
+                       default="manager", help="Modo de ejecución")  # CAMBIADO: default="manager"
 
     args = parser.parse_args()
     config = cargar_config()
@@ -1868,7 +1868,7 @@ def main():
         if not config.get('configured') or config.get('first_run'):
             args.mode = "config"
         else:
-            args.mode = "tray"  # Por defecto: modo tray (icono en barra de tareas)
+            args.mode = "manager"  # CAMBIADO: Por defecto mostrar ventana manager, no tray
 
     # Ejecutar según modo
     if args.mode == "config":
