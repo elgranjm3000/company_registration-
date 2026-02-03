@@ -2705,77 +2705,77 @@ class SmartSyncComplete:
                     image_json = self._create_image_json(image_type, product_image)
 
                     # INSERT con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
-                insert_query = """
-                INSERT INTO products (
-                    company_id,
-                    code,
-                    name,
-                    description,
-                    price,
-                    cost,
-                    stock,
-                    min_stock,
-                    category_id,
-                    status,
-                    product_type,
-                    images,
-                    higher_price,
-                    sale_tax,
-                    aliquot,
-                    coin,
-                    description_coin,
-                    unitary_cost,
-                    buy_tax,
-                    buy_aliquot,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
-                )
-                ON DUPLICATE KEY UPDATE
-                    name = VALUES(name),
-                    description = VALUES(description),
-                    price = VALUES(price),
-                    cost = VALUES(cost),
-                    stock = VALUES(stock),
-                    min_stock = VALUES(min_stock),
-                    category_id = VALUES(category_id),
-                    status = VALUES(status),
-                    product_type = VALUES(product_type),
-                    images = VALUES(images),
-                    higher_price = VALUES(higher_price),
-                    sale_tax = VALUES(sale_tax),
-                    aliquot = VALUES(aliquot),
-                    coin = VALUES(coin),
-                    description_coin = VALUES(description_coin),
-                    unitary_cost = VALUES(unitary_cost),
-                    buy_tax = VALUES(buy_tax),
-                    buy_aliquot = VALUES(buy_aliquot),
-                    updated_at = NOW()
-                """
+                    insert_query = """
+                    INSERT INTO products (
+                        company_id,
+                        code,
+                        name,
+                        description,
+                        price,
+                        cost,
+                        stock,
+                        min_stock,
+                        category_id,
+                        status,
+                        product_type,
+                        images,
+                        higher_price,
+                        sale_tax,
+                        aliquot,
+                        coin,
+                        description_coin,
+                        unitary_cost,
+                        buy_tax,
+                        buy_aliquot,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        description = VALUES(description),
+                        price = VALUES(price),
+                        cost = VALUES(cost),
+                        stock = VALUES(stock),
+                        min_stock = VALUES(min_stock),
+                        category_id = VALUES(category_id),
+                        status = VALUES(status),
+                        product_type = VALUES(product_type),
+                        images = VALUES(images),
+                        higher_price = VALUES(higher_price),
+                        sale_tax = VALUES(sale_tax),
+                        aliquot = VALUES(aliquot),
+                        coin = VALUES(coin),
+                        description_coin = VALUES(description_coin),
+                        unitary_cost = VALUES(unitary_cost),
+                        buy_tax = VALUES(buy_tax),
+                        buy_aliquot = VALUES(buy_aliquot),
+                        updated_at = NOW()
+                    """
 
-                self.mysql_cursor.execute(insert_query, (
-                    self.company_id,
-                    code,
-                    short_name,  # El nombre del producto es short_name
-                    description if description else None,
-                    safe_float(price),
-                    safe_float(cost),
-                    float(stock) if stock else 0,  # Convertir Decimal a float
-                    int(min_stock) if min_stock else 0,
-                    category_id,
-                    status,  # Usar el status calculado del SELECT
-                    product_type,
-                    image_json,
-                    safe_float(higher_price),
-                    sale_tax,
-                    aliquot,
-                    coin if coin else None,  # Moneda
-                    description_coin if description_coin else None,  # Descripción de moneda
-                    safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
-                    buy_tax if buy_tax else None,  # buy_tax de products
-                    buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
-                ))
+                    self.mysql_cursor.execute(insert_query, (
+                        self.company_id,
+                        code,
+                        short_name,  # El nombre del producto es short_name
+                        description if description else None,
+                        safe_float(price),
+                        safe_float(cost),
+                        float(stock) if stock else 0,  # Convertir Decimal a float
+                        int(min_stock) if min_stock else 0,
+                        category_id,
+                        status,  # Usar el status calculado del SELECT
+                        product_type,
+                        image_json,
+                        safe_float(higher_price),
+                        sale_tax,
+                        aliquot,
+                        coin if coin else None,  # Moneda
+                        description_coin if description_coin else None,  # Descripción de moneda
+                        safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
+                        buy_tax if buy_tax else None,  # buy_tax de products
+                        buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
+                    ))
 
                     self.stats['products']['nuevos'] += 1
                     current_count += 1
@@ -2828,77 +2828,77 @@ class SmartSyncComplete:
                     image_json = self._create_image_json(image_type, product_image)
 
                     # UPDATE con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
-                update_query = """
-                INSERT INTO products (
-                    company_id,
-                    code,
-                    name,
-                    description,
-                    price,
-                    cost,
-                    stock,
-                    min_stock,
-                    category_id,
-                    status,
-                    product_type,
-                    images,
-                    higher_price,
-                    sale_tax,
-                    aliquot,
-                    coin,
-                    description_coin,
-                    unitary_cost,
-                    buy_tax,
-                    buy_aliquot,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
-                )
-                ON DUPLICATE KEY UPDATE
-                    name = VALUES(name),
-                    description = VALUES(description),
-                    price = VALUES(price),
-                    cost = VALUES(cost),
-                    stock = VALUES(stock),
-                    min_stock = VALUES(min_stock),
-                    category_id = VALUES(category_id),
-                    status = VALUES(status),
-                    product_type = VALUES(product_type),
-                    images = VALUES(images),
-                    higher_price = VALUES(higher_price),
-                    sale_tax = VALUES(sale_tax),
-                    aliquot = VALUES(aliquot),
-                    coin = VALUES(coin),
-                    description_coin = VALUES(description_coin),
-                    unitary_cost = VALUES(unitary_cost),
-                    buy_tax = VALUES(buy_tax),
-                    buy_aliquot = VALUES(buy_aliquot),
-                    updated_at = NOW()
-                """
+                    update_query = """
+                    INSERT INTO products (
+                        company_id,
+                        code,
+                        name,
+                        description,
+                        price,
+                        cost,
+                        stock,
+                        min_stock,
+                        category_id,
+                        status,
+                        product_type,
+                        images,
+                        higher_price,
+                        sale_tax,
+                        aliquot,
+                        coin,
+                        description_coin,
+                        unitary_cost,
+                        buy_tax,
+                        buy_aliquot,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        description = VALUES(description),
+                        price = VALUES(price),
+                        cost = VALUES(cost),
+                        stock = VALUES(stock),
+                        min_stock = VALUES(min_stock),
+                        category_id = VALUES(category_id),
+                        status = VALUES(status),
+                        product_type = VALUES(product_type),
+                        images = VALUES(images),
+                        higher_price = VALUES(higher_price),
+                        sale_tax = VALUES(sale_tax),
+                        aliquot = VALUES(aliquot),
+                        coin = VALUES(coin),
+                        description_coin = VALUES(description_coin),
+                        unitary_cost = VALUES(unitary_cost),
+                        buy_tax = VALUES(buy_tax),
+                        buy_aliquot = VALUES(buy_aliquot),
+                        updated_at = NOW()
+                    """
 
-                self.mysql_cursor.execute(update_query, (
-                    self.company_id,
-                    code,
-                    short_name,
-                    description if description else None,
-                    safe_float(price),
-                    safe_float(cost),
-                    float(stock) if stock else 0,  # Convertir Decimal a float
-                    int(min_stock) if min_stock else 0,
-                    category_id,
-                    status,
-                    product_type,
-                    image_json,
-                    safe_float(higher_price),
-                    sale_tax,
-                    aliquot,
-                    coin if coin else None,  # Moneda
-                    description_coin if description_coin else None,  # Descripción de moneda
-                    safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
-                    buy_tax if buy_tax else None,  # buy_tax de products
-                    buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
-                ))
+                    self.mysql_cursor.execute(update_query, (
+                        self.company_id,
+                        code,
+                        short_name,
+                        description if description else None,
+                        safe_float(price),
+                        safe_float(cost),
+                        float(stock) if stock else 0,  # Convertir Decimal a float
+                        int(min_stock) if min_stock else 0,
+                        category_id,
+                        status,
+                        product_type,
+                        image_json,
+                        safe_float(higher_price),
+                        sale_tax,
+                        aliquot,
+                        coin if coin else None,  # Moneda
+                        description_coin if description_coin else None,  # Descripción de moneda
+                        safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
+                        buy_tax if buy_tax else None,  # buy_tax de products
+                        buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
+                    ))
 
                     self.stats['products']['modificados'] += 1
                     current_count += 1
