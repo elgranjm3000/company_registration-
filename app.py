@@ -16,6 +16,7 @@ import uuid
 import os
 from dotenv import load_dotenv
 from smart_sellers_sync_module import SmartSellersSyncModule
+from smart_sync_complete import SmartSyncComplete
 
 load_dotenv()
 
@@ -96,9 +97,13 @@ class CompleteSyncApp:
         
         # Variable global para company_id
         self.company_id = None
-        
+
         # Control de sincronización
         self.sync_running = False
+
+        # Instancia de SmartSyncComplete (sistema nuevo con contadores de progreso)
+        self.smart_sync = None  # Se inicializará cuando se obtenga company_rif y company_email
+        self.progress_update_job = None  # Job para actualizar progreso en UI
         
         self.setup_styles()
         self.create_widgets()
@@ -465,102 +470,49 @@ class CompleteSyncApp:
         self.log_message("Sincronización detenida por el usuario", "warning")
     
     def complete_sync_process(self):
-        """Proceso completo de sincronización"""
+        """Proceso completo de sincronización usando SmartSyncComplete"""
         start_time = datetime.now()
         self.log_message("=== INICIANDO SINCRONIZACIÓN COMPLETA ===", "info")
-        self.log_message("PostgreSQL → MySQL", "info")
-        
+        self.log_message("Sistema bidireccional PostgreSQL ↔ MySQL", "info")
+
         try:
             self.update_config()
-            
+
             # Resetear progress
             self.progress_var.set(0)
-            total_steps = sum([
-                self.sync_companies_var.get(),
-                self.sync_categories_var.get(),
-                self.sync_products_var.get(),
-                self.sync_customers_var.get(),
-                self.sync_users_var.get(),
-                self.sync_sellers_var.get(),
-                self.sync_quotes_var.get()
-            ])
-            current_step = 0
-            
-            # 1. Companies (obligatorio para obtener company_id)
-            if self.sync_companies_var.get():
-                if not self.sync_running:
-                    return
-                self.status_var.set("Sincronizando Companies...")
-                self.sync_companies()
-                current_step += 1
-                self.progress_var.set((current_step / total_steps) * 100)
-            
-            # 2. Categories
-            if self.sync_categories_var.get() and self.company_id:
-                if not self.sync_running:
-                    return
-                self.status_var.set("Sincronizando Categories...")
-                self.sync_categories()
-                current_step += 1
-                self.progress_var.set((current_step / total_steps) * 100)
-            
-            # 3. Products
-            if self.sync_products_var.get() and self.company_id:
-                if not self.sync_running:
-                    return
-                self.status_var.set("Sincronizando Products...")
-                self.sync_products()
-                current_step += 1
-                self.progress_var.set((current_step / total_steps) * 100)
-            
-            # 4. Customers
-            if self.sync_customers_var.get() and self.company_id:
-                if not self.sync_running:
-                    return
-                self.status_var.set("Sincronizando Customers...")
-                self.sync_customers()
-                current_step += 1
-                self.progress_var.set((current_step / total_steps) * 100)
-            
-            # 5. Users
-            if self.sync_users_var.get():
-                if not self.sync_running:
-                    return
-                self.status_var.set("Sincronizando Users...")
-                self.sync_users()
-                current_step += 1
-                self.progress_var.set((current_step / total_steps) * 100)
-            
-            # 6. Sellers
-            if self.sync_sellers_var.get() and self.company_id:
-                if not self.sync_running:
-                    return
-                self.status_var.set("Sincronizando Sellers...")
-                self.sync_sellers()
-                current_step += 1
-                self.progress_var.set((current_step / total_steps) * 100)
-                
-            if self.sync_quotes_var.get() and self.company_id:
-                if not self.sync_running:
-                    return
-                self.status_var.set("Sincronizando Quotes...")
-                self.sync_quotes()
-                current_step += 1
-                self.progress_var.set((current_step / total_steps) * 100)
-            
-            # Reporte final
-            end_time = datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            
-            self.log_message("=== SINCRONIZACIÓN COMPLETADA ===", "success")
-            self.log_message(f"Tiempo total: {duration:.1f} segundos", "info")
-            self.log_message(f"Company ID: {self.company_id}", "info")
-            
-            self.status_var.set("Sincronización completada exitosamente")
-            self.progress_var.set(100)
-            
-            messagebox.showinfo("Éxito", f"Sincronización completada en {duration:.1f} segundos")
-            
+
+            # Inicializar SmartSyncComplete
+            if not self._init_smart_sync():
+                raise Exception("No se pudo inicializar SmartSyncComplete")
+
+            # Iniciar actualizaciones de progreso en UI
+            self._start_progress_updates()
+
+            # Ejecutar sincronización completa usando SmartSyncComplete
+            success = self.smart_sync.ejecutar_sync_completa()
+
+            if success:
+                # Reporte final
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds()
+
+                self.log_message("=== SINCRONIZACIÓN COMPLETADA ===", "success")
+                self.log_message(f"Tiempo total: {duration:.1f} segundos", "info")
+
+                # Obtener estadísticas finales
+                stats = self.smart_sync.stats
+                self.log_message(f"Products: {stats['products']['nuevos']} nuevos, {stats['products']['modificados']} modificados", "info")
+                self.log_message(f"Customers: {stats['customers']['nuevos']} nuevos, {stats['customers']['modificados']} modificados", "info")
+                self.log_message(f"Categories: {stats['categories']['nuevos']} nuevos, {stats['categories']['modificados']} modificados", "info")
+                self.log_message(f"Quotes: {stats['quotes']['nuevos']} nuevos", "info")
+
+                self.status_var.set("Sincronización completada exitosamente")
+                self.progress_var.set(100)
+
+                messagebox.showinfo("Éxito", f"Sincronización completada en {duration:.1f} segundos")
+            else:
+                raise Exception("La sincronización devolvió False")
+
         except Exception as e:
             self.log_message(f"Error durante sincronización: {str(e)}", "error")
             self.status_var.set("Error en sincronización")
@@ -570,7 +522,86 @@ class CompleteSyncApp:
             self.sync_running = False
             self.sync_btn.config(state=tk.NORMAL)
             self.stop_btn.config(state=tk.DISABLED)
-    
+            self._stop_progress_updates()  # Detener actualizaciones de progreso
+
+    # ====================================================================
+    # MÉTODOS PARA INTEGRACIÓN CON SmartSyncComplete
+    # ====================================================================
+
+    def _init_smart_sync(self):
+        """Inicializar SmartSyncComplete con los datos de configuración"""
+        try:
+            company_rif = self.company_rif_var.get().strip()
+            company_email = self.company_email_var.get().strip()
+
+            if not company_rif or not company_email:
+                self.log_message("Error: company_rif y company_email son requeridos", "error")
+                return None
+
+            self.smart_sync = SmartSyncComplete(
+                app=self,
+                postgresql_config=self.postgresql_config,
+                mysql_config=self.mysql_config,
+                company_rif=company_rif,
+                company_email=company_email,
+                company_name='',  # Opcional
+                progress_callback=None  # Usaremos polling en lugar de callback
+            )
+
+            # Inicializar tabla de hashes
+            self.smart_sync.inicializar_tabla_hashes()
+
+            return True
+        except Exception as e:
+            self.log_message(f"Error inicializando SmartSyncComplete: {str(e)}", "error")
+            return None
+
+    def _start_progress_updates(self):
+        """Iniciar actualizaciones periódicas del progreso en la UI"""
+        if self.progress_update_job is None:
+            self._update_progress_from_sync()
+
+    def _update_progress_from_sync(self):
+        """Actualizar la UI con la información de progreso de SmartSyncComplete"""
+        if self.smart_sync and self.sync_running:
+            try:
+                progress = self.smart_sync.get_progress_info()
+
+                if progress['entity']:
+                    entity_name = progress['entity'].upper()
+                    current = progress['current']
+                    total = progress['total']
+                    percentage = progress['percentage']
+
+                    # Actualizar status_var con el progreso detallado
+                    self.status_var.set(f"Sincronizando {entity_name}: {current}/{total} ({percentage:.1f}%)")
+
+                    # Calcular progreso general (aproximado)
+                    # Asumimos que hay 7 entidades principales
+                    entities_order = ['categories', 'products', 'customers', 'sellers', 'quotes']
+                    if progress['entity'] in entities_order:
+                        entity_index = entities_order.index(progress['entity'])
+                        base_progress = (entity_index / len(entities_order)) * 100
+                        entity_progress = (percentage / len(entities_order))
+                        total_progress = base_progress + entity_progress
+                        self.progress_var.set(total_progress)
+            except Exception as e:
+                pass  # Silencioso para no interrumpir
+
+        # Programar próxima actualización en 200ms
+        if self.sync_running:
+            self.progress_update_job = self.root.after(200, self._update_progress_from_sync)
+
+    def _stop_progress_updates(self):
+        """Detener actualizaciones de progreso"""
+        if self.progress_update_job:
+            self.root.after_cancel(self.progress_update_job)
+            self.progress_update_job = None
+
+    # ====================================================================
+    # MÉTODOS DE SINCRONIZACIÓN ANTIGUOS (Mantenidos por compatibilidad)
+    # ====================================================================
+
     def sync_companies(self):
         """Sincronizar companies usando valores del formulario"""
         self.log_message("=== SINCRONIZANDO COMPANIES ===", "info")
