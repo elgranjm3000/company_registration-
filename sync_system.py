@@ -1770,6 +1770,7 @@ class SystemTrayService:
 
             # Crear menú contextual
             menu = pystray.Menu(
+                pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
                 pystray.MenuItem('📊 Ver Logs', self.ver_logs),
                 pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
                 pystray.MenuItem('⚙️ Configuración', lambda: self.abrir_config()),
@@ -1849,6 +1850,25 @@ Clic derecho → Ver Logs (tiempo real)"""
 
         # Actualizar intervalo
         log("Configuración actualizada", "INFO")
+
+    def abrir_manager(self):
+        """Abre ventana del Manager desde el system tray"""
+        import tkinter as tk
+        import threading
+
+        def abrir_ventana_manager():
+            """Abre la ventana del manager en un thread separado"""
+            root = tk.Tk()
+            root.title("Sync System Manager")
+            app = ManagerWindow(root)
+            root.mainloop()
+
+        # Ejecutar en thread para no bloquear el icono de tray
+        thread = threading.Thread(target=abrir_ventana_manager)
+        thread.daemon = True
+        thread.start()
+
+        log("✅ Ventana del Manager abierta", "INFO")
 
 # ==============================================================================
 # MAIN - INICIO DEL SISTEMA
