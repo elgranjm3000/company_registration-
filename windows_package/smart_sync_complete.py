@@ -75,6 +75,15 @@ class SmartSyncComplete:
         self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
         self.progress_callback = progress_callback  # Callback para reportar progreso
+        self.progress_active = False  # Flag para saber si hay un contador activo
+
+        # Información de progreso accesible desde la UI
+        self.progress_info = {
+            'entity': '',      # 'products', 'customers', 'categories', etc.
+            'current': 0,      # Progreso actual
+            'total': 0,        # Total a procesar
+            'percentage': 0.0  # Porcentaje completado
+        }
 
         # Estadísticas
         self.stats = {
@@ -108,17 +117,72 @@ class SmartSyncComplete:
             current: Número actual de registros procesados
             total: Total de registros a procesar
         """
-        if self.progress_callback and total > 0:
-            try:
-                self.progress_callback({
-                    'entity': entity,
-                    'current': current,
-                    'total': total,
-                    'percentage': round((current / total) * 100, 1)
-                })
-            except Exception as e:
-                # Silencioso para no interrumpir la sincronización
-                pass
+        if total > 0:
+            percentage = round((current / total) * 100, 1)
+
+            # Actualizar progress_info (accesible desde la UI)
+            self.progress_info = {
+                'entity': entity,
+                'current': current,
+                'total': total,
+                'percentage': percentage
+            }
+
+            # Activar flag de progreso al inicio
+            if current == 1:
+                self.progress_active = True
+
+            # Mostrar progreso en consola SIEMPRE (visible para el usuario)
+            # Usar carriage return para sobrescribir la línea y crear efecto de contador
+            import sys
+            entity_name = entity.upper()
+
+            # Calcular frecuencia de actualización según el total
+            # Para muchos registros, actualizar cada 10; para pocos, actualizar siempre
+            if total > 100:
+                update_freq = 10
+            elif total > 50:
+                update_freq = 5
+            else:
+                update_freq = 1
+
+            # Solo mostrar si es múltiplo de la frecuencia o es el último
+            if current % update_freq == 0 or current == total:
+                sys.stdout.write(f"\r  📊 {entity_name}: {current}/{total} ({percentage}%)")
+                sys.stdout.flush()
+
+            # También llamar al callback si existe (para interfaz gráfica)
+            if self.progress_callback:
+                try:
+                    self.progress_callback({
+                        'entity': entity,
+                        'current': current,
+                        'total': total,
+                        'percentage': percentage
+                    })
+                except Exception as e:
+                    # Silencioso para no interrumpir la sincronización
+                    pass
+
+            # Imprimir salto de línea al completar y desactivar flag
+            if current == total:
+                print()  # Salto de línea al terminar
+                self.progress_active = False  # Desactivar flag al terminar
+
+    def get_progress_info(self):
+        """
+        Obtener información actual del progreso de sincronización
+        Útil para que la interfaz gráfica consulte el estado
+
+        Returns:
+            Dict con {entity, current, total, percentage}
+        """
+        return self.progress_info.copy() if self.progress_info else {
+            'entity': '',
+            'current': 0,
+            'total': 0,
+            'percentage': 0.0
+        }
 
     def _setup_file_logging(self):
         """
@@ -261,7 +325,10 @@ class SmartSyncComplete:
             self.app.log_message(mensaje, tipo)
         else:
             # Fallback para uso sin interfaz gráfica
-            self._print_to_console(f"[{tipo.upper()}] {mensaje}")
+            # NO imprimir logs DEBUG en consola cuando hay un contador activo
+            # para no interrumpir el carriage return (\r) del contador
+            if not (self.progress_active and tipo == 'debug'):
+                self._print_to_console(f"[{tipo.upper()}] {mensaje}")
 
         # SIEMPRE escribir al archivo de log
         log_prefix = {
@@ -423,13 +490,13 @@ class SmartSyncComplete:
             # [PASO 1] Verificar que existe en tabla 'acceso' (como app.py línea 633)
             self._log("  🔍 Verificando tabla 'acceso'...", "debug")
             query_acceso = """
-            SELECT codigo, correo_electronico
+            SELECT id_fiscal, correo_electronico
             FROM acceso
-            WHERE codigo = %s AND LOWER(correo_electronico) = LOWER(%s)
+            WHERE id_fiscal = %s
             LIMIT 1
             """
 
-            self.mysql_cursor.execute(query_acceso, (self.company_rif, self.company_email))
+            self.mysql_cursor.execute(query_acceso, (self.company_rif,))
             acceso = self.mysql_cursor.fetchone()
 
             if not acceso:
@@ -450,11 +517,11 @@ class SmartSyncComplete:
             query_companies = """
             SELECT id, name
             FROM companies
-            WHERE rif = %s AND email = %s
+            WHERE rif = %s
             LIMIT 1
             """
 
-            self.mysql_cursor.execute(query_companies, (self.company_rif, self.company_email))
+            self.mysql_cursor.execute(query_companies, (self.company_rif,))
             company = self.mysql_cursor.fetchone()
 
             if company:
@@ -580,7 +647,8 @@ class SmartSyncComplete:
             product: Tupla con (code, description, short_name, department, stock,
                                product_type, coin, description_coin, price, cost,
                                higher_price, min_stock, status, image_type,
-                               product_image, sale_tax, aliquot)
+                               product_image, sale_tax, aliquot, buy_tax,
+                               buy_aliquot, unitary_cost)
 
         Returns:
             Hash MD5 hexadecimal
@@ -594,15 +662,18 @@ class SmartSyncComplete:
                 str(product[3]) if product[3] else '',  # department
                 str(float(product[4]) if product[4] else 0),  # stock
                 str(product[5]) if product[5] else '',  # product_type
-                str(product[6]) if product[6] else '',  # coin ✓ NUEVO
-                str(product[7]) if product[7] else '',  # description_coin ✓ NUEVO
+                str(product[6]) if product[6] else '',  # coin
+                str(product[7]) if product[7] else '',  # description_coin
                 str(safe_float(product[8])),            # price
                 str(safe_float(product[9])),            # cost
                 str(safe_float(product[10])),           # higher_price
                 str(safe_float(product[11])),           # min_stock
                 str(product[12]) if product[12] else '',  # status
                 str(product[15]) if product[15] else '',  # sale_tax
-                str(product[16]) if product[16] else ''   # aliquot
+                str(product[16]) if product[16] else '',  # aliquot
+                str(product[17]) if product[17] else '',  # buy_tax ✓ NUEVO
+                str(safe_float(product[18]) if product[18] else 0),  # buy_aliquot ✓ NUEVO
+                str(safe_float(product[19]) if product[19] else 0)   # unitary_cost ✓ NUEVO
             )
 
             datos = "|".join(campos)
@@ -1041,7 +1112,10 @@ class SmartSyncComplete:
                 d.image_type,
                 d.product_image,
                 a.sale_tax,
-                e.aliquot
+                e.aliquot,
+                a.buy_tax,
+                g.aliquot AS buy_aliquot,
+                b.unitary_cost
             FROM products a
             LEFT JOIN (
                 SELECT product_code, SUM(stock) as total_stock
@@ -1051,6 +1125,7 @@ class SmartSyncComplete:
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
             LEFT JOIN products_image d ON d.main_code = a.code
             LEFT JOIN taxes e ON e.code = a.sale_tax
+            LEFT JOIN taxes g ON g.code = a.buy_tax
             LEFT JOIN coin f ON f.code = a.coin
             WHERE a.code IS NOT NULL
               AND a.code != ''
@@ -1191,6 +1266,144 @@ class SmartSyncComplete:
             self._log(f"Error detectando cambios en products: {str(e)}", "error")
 
         return cambios
+
+    # ====================================================================
+    # DETECCIÓN DE CAMBIOS - PRODUCTS MYSQL → POSTGRESQL
+    # ====================================================================
+
+    def detectar_cambios_products_mysql(self) -> Dict[str, List]:
+        """
+        Detectar cambios en products de MySQL para sincronizar a PostgreSQL
+
+        Returns:
+            Dict con 'nuevos', 'modificados'
+        """
+        self._log("Detectando cambios en products (MySQL → PostgreSQL)...", "info")
+
+        cambios = {
+            'nuevos': [],
+            'modificados': []
+        }
+
+        try:
+            # Obtener products de MySQL
+            query = """
+            SELECT
+                id,
+                code,
+                name,
+                description,
+                price,
+                cost,
+                higher_price,
+                coin,
+                description_coin,
+                min_stock,
+                category_id,
+                status,
+                product_type,
+                sale_tax,
+                aliquot,
+                created_at,
+                updated_at
+            FROM products
+            WHERE company_id = %s
+            ORDER BY id
+            """
+
+            self.mysql_cursor.execute(query, (self.company_id,))
+            products_mysql = self.mysql_cursor.fetchall()
+
+            # Convertir a diccionarios
+            columnas = [
+                'id', 'code', 'name', 'description', 'price', 'cost',
+                'higher_price', 'coin', 'description_coin', 'min_stock',
+                'category_id', 'status', 'product_type', 'sale_tax',
+                'aliquot', 'created_at', 'updated_at'
+            ]
+
+            products_dict = []
+            for fila in products_mysql:
+                product_dict = dict(zip(columnas, fila))
+                products_dict.append(product_dict)
+
+            self._log(f"   📋 Products encontrados en MySQL: {len(products_dict)}", "info")
+
+            if not products_dict:
+                self._log("   ℹ️ No hay products en MySQL para esta empresa", "info")
+                return cambios
+
+            # Mostrar códigos de products encontrados
+            codigos_encontrados = [p['code'] for p in products_dict]
+            self._log(f"   🔍 Códigos: {codigos_encontrados[:10]}{'...' if len(codigos_encontrados) > 10 else ''}", "debug")
+
+            for product in products_dict:
+                if not self.sync_running:
+                    break
+
+                product_id = product['id']
+                product_code = product['code']
+
+                # Generar hash actual
+                hash_actual = self._generar_hash_product_mysql(product)
+
+                # Buscar hash guardado en sync_hashes (PostgreSQL)
+                hash_guardado = self._obtener_hash_guardado('products_mysql', str(product_id))
+
+                self._log(f"   🔍 Product #{product_id} ({product_code}): hash_guardado={hash_guardado[0][:8] if hash_guardado else 'None'}", "debug")
+
+                if hash_guardado is None:
+                    # Nuevo product
+                    cambios['nuevos'].append(product)
+                    self._log(f"  ✨ NUEVO: Product #{product_id} ({product_code})", "info")
+                elif hash_guardado[0] != hash_actual:
+                    # Product modificado
+                    cambios['modificados'].append(product)
+                    self._log(f"  🔄 MODIFICADO: Product #{product_id} ({product_code})", "info")
+
+                # NOTA: El hash se guarda DESPUÉS de sincronizar exitosamente
+                # en sincronizar_products_postgresql()
+
+            self._log(f"✅ Products detectados: {len(cambios['nuevos'])} nuevos, "
+                      f"{len(cambios['modificados'])} modificados", "info")
+
+        except Exception as e:
+            self._log(f"Error detectando cambios en products de MySQL: {str(e)}", "error")
+            self.stats['products']['errores'] += 1
+
+        return cambios
+
+    def _generar_hash_product_mysql(self, product: dict) -> str:
+        """
+        Generar hash MD5 de un product de MySQL
+
+        Args:
+            product: Diccionario con datos del product
+
+        Returns:
+            Hash MD5 hexadecimal
+        """
+        import hashlib
+
+        # Campos relevantes para el hash
+        campos_hash = [
+            product['code'],
+            product['name'],
+            str(product['price']),
+            str(product['cost']),
+            str(product.get('higher_price', 0)),
+            product.get('coin', ''),
+            product.get('description_coin', ''),
+            str(product.get('min_stock', 0)),
+            str(product.get('category_id', '')),
+            product.get('status', 'active'),
+            product.get('product_type', 'finished'),
+            product.get('sale_tax', ''),
+            str(product.get('aliquot', 0))
+        ]
+
+        datos_hash = "|".join(str(c) for c in campos_hash)
+        return hashlib.md5(datos_hash.encode()).hexdigest()
 
     # ====================================================================
     # DETECCIÓN DE CAMBIOS - CUSTOMERS
@@ -1348,6 +1561,141 @@ class SmartSyncComplete:
     # DETECCIÓN DE CAMBIOS - QUOTES (MySQL → PostgreSQL)
     # ====================================================================
 
+    def _verificar_y_sincronizar_customer(self, customer_id: int, customer_doc: str,
+                                          customer_name: str, customer_email: str,
+                                          customer_phone: str, customer_address: str):
+        """
+        Verificar si un customer existe en PostgreSQL y sincronizarlo si no existe
+
+        Args:
+            customer_id: ID del customer en MySQL
+            customer_doc: Document number (RIF/Cédula)
+            customer_name: Nombre del customer
+            customer_email: Email del customer
+            customer_phone: Teléfono del customer
+            customer_address: Dirección del customer
+        """
+        try:
+            # Verificar si existe en PostgreSQL
+            self.pg_cursor.execute(
+                "SELECT code FROM clients WHERE code = %s",
+                (customer_doc,)
+            )
+            existe = self.pg_cursor.fetchone()
+
+            if existe:
+                self._log(f"  👤 Customer {customer_doc} ya existe en PostgreSQL", "debug")
+                return
+
+            # No existe, insertar
+            self._log(f"  ✨ Sincronizando customer {customer_doc} a PostgreSQL...", "info")
+
+            # Usar valores genéricos para columnas con restricciones
+            sql_insert = """
+            INSERT INTO clients (
+                code, description, address, email, phone, contact,
+                country, province, city, client_type, area_sales,
+                seller, client_group
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (code) DO NOTHING
+            """
+
+            self.pg_cursor.execute(sql_insert, (
+                customer_doc,        # code
+                customer_name[:255], # description
+                customer_address[:255] if customer_address else '',
+                customer_email[:255] if customer_email else '',
+                customer_phone[:50] if customer_phone else '',
+                customer_name[:100],  # contact
+                '00',                # country (LOCAL)
+                '00',                # province (LOCAL)
+                '00',                # city (LOCAL)
+                '01',                # client_type (Juridico)
+                '00',                # area_sales
+                '00',                # seller
+                '00'                 # client_group (GENERICO)
+            ))
+
+            self.pg_conn.commit()
+            self._log(f"  ✅ Customer {customer_doc} sincronizado a PostgreSQL", "info")
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error sincronizando customer {customer_doc}: {str(e)}", "warning")
+            self.pg_conn.rollback()
+
+    def _verificar_y_sincronizar_products_quote(self, quote_id: int):
+        """
+        Verificar y sincronizar todos los products de un quote antes de insertarlo
+
+        Args:
+            quote_id: ID del quote en MySQL
+        """
+        try:
+            # Obtener todos los products del quote con sus datos
+            self.mysql_cursor.execute("""
+                SELECT DISTINCT
+                    p.id, p.code, p.name, p.description, p.price, p.cost,
+                    p.product_type, p.status
+                FROM quote_items qi
+                JOIN products p ON p.id = qi.product_id
+                WHERE qi.quote_id = %s
+            """, (quote_id,))
+
+            products_mysql = self.mysql_cursor.fetchall()
+
+            if not products_mysql:
+                return
+
+            self._log(f"  📦 Verificando {len(products_mysql)} products del quote...", "debug")
+
+            for product in products_mysql:
+                product_id, product_code, product_name, product_desc, product_price, product_cost, product_type, product_status = product
+
+                # Verificar si existe en PostgreSQL
+                self.pg_cursor.execute(
+                    "SELECT code FROM products WHERE code = %s",
+                    (product_code,)
+                )
+                existe = self.pg_cursor.fetchone()
+
+                if existe:
+                    continue
+
+                # No existe, sincronizar
+                self._log(f"  ✨ Sincronizando product {product_code} a PostgreSQL...", "info")
+
+                # Obtener valores válidos para columnas con restricciones
+                self.pg_cursor.execute("SELECT code FROM status WHERE code != '00' LIMIT 1")
+                status_row = self.pg_cursor.fetchone()
+                status_valido = status_row[0] if status_row else '01'
+
+                # Insertar product
+                sql_insert = """
+                INSERT INTO products (
+                    code, description, minimal_sale, maximal_sale,
+                    status, product_type, sale_price
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (code) DO NOTHING
+                """
+
+                self.pg_cursor.execute(sql_insert, (
+                    product_code,
+                    (product_desc or product_name)[:255],
+                    float(product_cost) if product_cost else 0,
+                    float(product_price) if product_price else 0,
+                    status_valido,
+                    product_type if product_type else 'finished',
+                    int(float(product_price) * 100) if product_price else 0
+                ))
+
+                self._log(f"  ✅ Product {product_code} sincronizado", "debug")
+
+            self.pg_conn.commit()
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error sincronizando products del quote: {str(e)}", "warning")
+            self.pg_conn.rollback()
+
     def _generar_hash_quote(self, quote: dict) -> str:
         """
         Generar hash MD5 para un quote (desde MySQL)
@@ -1429,9 +1777,15 @@ class SmartSyncComplete:
                 quote_dict = dict(zip(columnas, fila))
                 quotes_dict.append(quote_dict)
 
+            self._log(f"   📋 Quotes encontrados en MySQL: {len(quotes_dict)}", "info")
+
             if not quotes_dict:
                 self._log("   ℹ️ No hay quotes en MySQL para esta empresa", "info")
                 return cambios
+
+            # Mostrar IDs de quotes encontrados
+            ids_encontrados = [q['id'] for q in quotes_dict]
+            self._log(f"   🔍 IDs encontrados: {ids_encontrados}", "info")
 
             ids_actuales = []
 
@@ -1440,6 +1794,7 @@ class SmartSyncComplete:
                     break
 
                 quote_id = quote['id']
+                quote_number = quote['quote_number']
                 ids_actuales.append(str(quote_id))
 
                 # Generar hash actual
@@ -1448,20 +1803,19 @@ class SmartSyncComplete:
                 # Buscar hash guardado en sync_hashes (PostgreSQL)
                 hash_guardado = self._obtener_hash_guardado('quotes', str(quote_id))
 
+                self._log(f"   🔍 Quote #{quote_id} ({quote_number}): hash_guardado={hash_guardado[0][:8] if hash_guardado else 'None'}", "debug")
+
                 if hash_guardado is None:
                     # Nuevo quote
                     cambios['nuevos'].append(quote)
-                    self._log(f"  ✨ NUEVO: Quote #{quote_id} ({quote['quote_number']})", "debug")
+                    self._log(f"  ✨ NUEVO: Quote #{quote_id} ({quote_number})", "info")
                 elif hash_guardado[0] != hash_actual:
                     # Quote modificado
                     cambios['modificados'].append(quote)
-                    self._log(f"  🔄 MODIFICADO: Quote #{quote_id} ({quote['quote_number']})", "debug")
+                    self._log(f"  🔄 MODIFICADO: Quote #{quote_id} ({quote_number})", "info")
 
-                # Guardar hash actualizado
-                self._guardar_hash('quotes', str(quote_id), hash_actual, quote)
-
-            # Commit hashes en PostgreSQL
-            self.pg_conn.commit()
+                # NOTA: El hash se guarda DESPUÉS de sincronizar exitosamente
+                # en sincronizar_quotes_postgresql()
 
             self._log(f"✅ Quotes detectados: {len(cambios['nuevos'])} nuevos, "
                       f"{len(cambios['modificados'])} modificados", "info")
@@ -1594,12 +1948,18 @@ class SmartSyncComplete:
 
         if customer:
             customer_name, customer_email, customer_phone, customer_doc, customer_address = customer
+
+            # VERIFICAR Y SINCRONIZAR CUSTOMER A POSTGRESQL si no existe
+            self._verificar_y_sincronizar_customer(quote['customer_id'], customer_doc, customer_name, customer_email, customer_phone, customer_address)
         else:
             customer_name = "Cliente Migrado"
             customer_email = ""
             customer_phone = ""
             customer_doc = f"MIG-{quote['customer_id']}"
             customer_address = ""
+
+        # VERIFICAR Y SINCRONIZAR PRODUCTS DEL QUOTE antes de insertar
+        self._verificar_y_sincronizar_products_quote(quote['id'])
 
         # Calcular la suma total de cantidades (quantity) de los items
         self.mysql_cursor.execute(
@@ -1668,6 +2028,7 @@ class SmartSyncComplete:
         total_exempt = safe_float(sum(item[0] for item in exempt_items)) if exempt_items else 0
 
         # Insertar sales_operation (SIN correlative - dejar que PostgreSQL lo genere)
+        # NOTA: total_net_cost, total_tax_cost, total_cost se calcularán después de insertar detalles
         sql_operation = """
         INSERT INTO public.sales_operation (
             operation_type, document_no, emission_date,
@@ -1679,12 +2040,12 @@ class SmartSyncComplete:
             total_tax, total, credit, cash, coin_code, canceled,
             pending, wait, total_net_cost, total_tax_cost, total_cost,
             freight_tax, freight_aliquot, document_no_internal,
-            control_no, operation_comments
+            control_no, operation_comments, type_price
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         RETURNING correlative
         """
@@ -1710,7 +2071,7 @@ class SmartSyncComplete:
         total_net = quote_subtotal - quote_discount_amount
         expiration = emission_date + timedelta(days=1)
 
-        # Ejecutar query con todos los valores pre-calculados
+        # Ejecutar query con costos en 0 (se calcularán después de insertar detalles)
         self.pg_cursor.execute(sql_operation, (
             'BUDGET',                  # operation_type
             document_no,               # document_no
@@ -1745,14 +2106,15 @@ class SmartSyncComplete:
             False,                     # canceled
             True,                      # pending (rechazado al inicio, requiere aprobación)
             False,                     # wait (no está en espera)
-            total_net_cost,            # total_net_cost (COSTO real de productos)
-            total_tax_cost,            # total_tax_cost (Impuesto sobre COSTO)
-            total_cost_calculado,      # total_cost (Costo total + impuestos)
+            0.0,                       # total_net_cost (se calculará después)
+            0.0,                       # total_tax_cost (se calculará después)
+            0.0,                       # total_cost (se calculará después)
             '01',                      # freight_tax
             16,                        # freight_aliquot
             document_no,               # document_no_internal
             '',                        # control_no
-            ''                         # operation_comments
+            '',                        # operation_comments
+            2                          # type_price (2 = precio normal)
         ))
 
         # Recuperar el correlative generado por PostgreSQL
@@ -1771,12 +2133,58 @@ class SmartSyncComplete:
 
             # Insertar impuestos
             self._insertar_quote_taxes(correlativo, quote, bcv_rate)
+
+            # Actualizar sales_operation con sumatorias de los detalles
+            self._actualizar_costos_desde_detalles(correlativo)
         else:
             self._log(f"  WARNING: No se pudo obtener correlative para quote #{quote['id']}", "warning")
             correlativo = None
 
         # Retornar el correlative generado
         return correlativo
+
+    def _actualizar_costos_desde_detalles(self, correlative: int):
+        """
+        Actualizar total_net_cost, total_tax_cost, total_cost en sales_operation
+        con las sumatorias de sales_operation_details
+
+        Args:
+            correlative: Correlative del sales_operation
+        """
+        try:
+            # Calcular sumatorias desde los detalles
+            self.pg_cursor.execute("""
+                UPDATE sales_operation
+                SET
+                    total_net_cost = (
+                        SELECT COALESCE(SUM(total_net_cost), 0)
+                        FROM sales_operation_details
+                        WHERE main_correlative = %s
+                    ),
+                    total_tax_cost = (
+                        SELECT COALESCE(SUM(total_tax_cost), 0)
+                        FROM sales_operation_details
+                        WHERE main_correlative = %s
+                    ),
+                    total_cost = (
+                        SELECT COALESCE(SUM(total_cost), 0)
+                        FROM sales_operation_details
+                        WHERE main_correlative = %s
+                    )
+                WHERE correlative = %s
+                RETURNING total_net_cost, total_tax_cost, total_cost
+            """, (correlative, correlative, correlative, correlative))
+
+            result = self.pg_cursor.fetchone()
+            if result:
+                tnc, ttc, tc = result
+                self._log(f"  ✅ Costos actualizados desde detalles: net_cost={tnc:.2f}, tax_cost={ttc:.2f}, cost={tc:.2f}", "debug")
+
+            self.pg_conn.commit()
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error actualizando costos desde detalles: {str(e)}", "warning")
+            self.pg_conn.rollback()
 
     def _obtener_station_valida(self, mac: str) -> str:
         """
@@ -1861,15 +2269,21 @@ class SmartSyncComplete:
 
     def _insertar_quote_items(self, correlativo: int, quote: dict, bcv_rate: float):
         """Insertar items del quote (sales_operation_details)"""
-        # Obtener items del quote
+        # Obtener items del quote con datos de products de MySQL
         query_items = """
         SELECT
-            description, name, subtotal, unit, unit_price, total,
-            tax_amount, discount_amount, discount_percentage, quantity,
-            product_id
-        FROM quote_items
-        WHERE quote_id = %s
-        ORDER BY id
+            qi.description, qi.name, qi.subtotal, qi.unit, qi.unit_price, qi.total,
+            qi.tax_amount, qi.discount_amount, qi.discount_percentage, qi.quantity,
+            qi.product_id,
+            p.code AS product_code,
+            p.unitary_cost,
+            p.aliquot AS sale_aliquot,
+            p.buy_aliquot,
+            p.product_type
+        FROM quote_items qi
+        JOIN products p ON p.id = qi.product_id
+        WHERE qi.quote_id = %s
+        ORDER BY qi.id
         """
 
         self.mysql_cursor.execute(query_items, (quote['id'],))
@@ -1878,20 +2292,15 @@ class SmartSyncComplete:
         for item in items:
             (description, name, subtotal, unit, unit_price, total,
              tax_amount, discount_amount, discount_percentage, quantity,
-             product_id) = item
+             product_id, product_code, unitary_cost, sale_aliquot, buy_aliquot, product_type) = item
 
-            # Obtener código de producto, COSTO y sale_tax desde PostgreSQL
-            self.mysql_cursor.execute(
-                "SELECT code, cost FROM products WHERE id = %s",
-                (product_id,)
-            )
-            product_result = self.mysql_cursor.fetchone()
-            if product_result and product_result[0]:
-                product_code = product_result[0]
-                product_cost = safe_float(product_result[1]) if product_result[1] else 0
-            else:
+            # Si no hay código de producto, usar migración
+            if not product_code:
                 product_code = f"MIG-{product_id}"
-                product_cost = 0
+                unitary_cost = 0
+                sale_aliquot = 16
+                buy_aliquot = 16
+                product_type = 'finished'
 
             # Obtener sale_tax desde PostgreSQL (tabla products)
             self.pg_cursor.execute(
@@ -1899,18 +2308,7 @@ class SmartSyncComplete:
                 (product_code,)
             )
             pg_product = self.pg_cursor.fetchone()
-            if pg_product and pg_product[0]:
-                product_sale_tax = pg_product[0]
-                # Calcular sale_aliquot basado en sale_tax
-                if product_sale_tax == '01':
-                    product_sale_aliquot = 16  # IVA 16%
-                elif product_sale_tax == 'EX':
-                    product_sale_aliquot = 0   # Exento
-                else:
-                    product_sale_aliquot = 0   # Otro caso
-            else:
-                product_sale_tax = '01'  # Default
-                product_sale_aliquot = 16
+            product_sale_tax = pg_product[0] if pg_product else '01'
 
             # Obtener correlative Y unit_type desde products_units
             self.pg_cursor.execute(
@@ -1945,19 +2343,17 @@ class SmartSyncComplete:
             else:
                 tax_percent = 0
 
-            # Calcular costos usando COSTO REAL del producto (no 80% del precio)
-            unitary_cost = product_cost  # COSTO real del producto
-            total_net_cost = qty * product_cost  # Costo neto = cantidad × costo
+            # Valores de MySQL
+            uc = safe_float(unitary_cost) if unitary_cost else 0
+            sa = safe_float(sale_aliquot) if sale_aliquot else 16
+            ba = safe_float(buy_aliquot) if buy_aliquot else 16
 
-            # Calcular tax_cost basado en sale_tax de PostgreSQL (16% del costo)
-            if product_sale_tax == '01':
-                total_tax_cost = total_net_cost * 0.16  # 16% IVA sobre el costo
-            elif product_sale_tax == 'EX':
-                total_tax_cost = 0  # Exento
-            else:
-                total_tax_cost = 0  # Otro caso
+            # Calcular costos según nueva fórmula:
+            unitary_cost_final = uc  # unitary_cost de MySQL
+            total_net_cost = uc * qty  # total_net_cost = unitary_cost * cantidad
+            total_tax_cost = uc * (ba / 100) * qty  # total_tax_cost = unitary_cost * buy_aliquot/100 * cantidad
+            total_cost = total_net_cost + total_tax_cost  # total_cost = total_net_cost + total_tax_cost
 
-            total_cost = total_net_cost + total_tax_cost  # Costo total
             total_net = sub - disc_amt  # Precio neto (para ventas)
 
             # Pre-calcular descripción (evitar inline 'or')
@@ -1971,11 +2367,11 @@ class SmartSyncComplete:
                 sale_tax, sale_aliquot, price, total_net_cost, total_tax_cost,
                 total_cost, total_net_gross, total_tax_gross, total_gross,
                 percent_discount, discount, total_net, total_tax, total,
-                coin_code, buy_aliquot, buy_tax, pending_amount
+                coin_code, buy_aliquot, buy_tax, pending_amount, product_type
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING line
             """
 
@@ -1991,13 +2387,13 @@ class SmartSyncComplete:
                 product_unit,       # unit (correlative de products_units)
                 1.0,                # conversion_factor
                 product_unit_type,  # unit_type (desde products_units)
-                unitary_cost,
-                product_sale_tax,       # sale_tax (desde products)
-                product_sale_aliquot,   # sale_aliquot (16 para '01', 0 para 'EX')
+                unitary_cost_final, # unitary_cost de MySQL
+                product_sale_tax,   # sale_tax (desde products)
+                sa,                 # sale_aliquot de MySQL
                 up,
-                total_net_cost,
-                total_tax_cost,
-                total_cost,
+                total_net_cost,     # unitary_cost * cantidad
+                total_tax_cost,     # unitary_cost * buy_aliquot/100 * cantidad
+                total_cost,         # total_net_cost + total_tax_cost
                 sub,
                 ta,
                 tot,
@@ -2007,22 +2403,25 @@ class SmartSyncComplete:
                 ta,
                 tot,
                 '02',     # coin_code (dólar)
-                16,       # buy_aliquot
-                '01',     # buy_tax
-                qty
+                ba,       # buy_aliquot de MySQL
+                '01',     # buy_tax (general)
+                0.0,      # pending_amount
+                product_type  # product_type de MySQL
             ))
 
             line = self.pg_cursor.fetchone()[0]
 
-            # Insertar monedas del detalle (pasando product_cost, product_code y product_sale_tax)
-            self._insertar_item_monedas(correlativo, line, item, bcv_rate, product_cost, product_code, product_sale_tax)
+            # Insertar monedas del detalle (pasando los nuevos valores)
+            self._insertar_item_monedas(correlativo, line, item, bcv_rate, unitary_cost_final, product_code, product_sale_tax, total_net_cost, total_tax_cost, total_cost)
 
     def _insertar_item_monedas(self, correlativo: int, line: int, item: tuple, bcv_rate: float,
-                                product_cost: float, product_code: str, product_sale_tax: str):
+                                unitary_cost: float, product_code: str, product_sale_tax: str,
+                                total_net_cost: float, total_tax_cost: float, total_cost: float):
         """Insertar monedas de un item"""
         (description, name, subtotal, unit, unit_price, total,
          tax_amount, discount_amount, discount_percentage, quantity,
-         product_id) = item
+         product_id, product_code_mysql, unitary_cost_mysql, sale_aliquot_mysql,
+         buy_aliquot_mysql, product_type_mysql) = item
 
         # Calcular todos los valores ANTES del execute
         unit_price_f = safe_float(unit_price)
@@ -2032,17 +2431,9 @@ class SmartSyncComplete:
         tot = safe_float(total)
         disc = safe_float(discount_amount)
 
-        # Dólares - Usar COSTO REAL y calcular tax basado en sale_tax de PostgreSQL
-        unitary_cost = product_cost  # COSTO real
-        total_net_cost = quantity_f * product_cost  # Cantidad × costo
+        # Usar los valores calculados que vienen como parámetros (de MySQL)
+        # unitary_cost, total_net_cost, total_tax_cost, total_cost ya vienen calculados
 
-        # Calcular tax_cost basado en sale_tax (pasado como parámetro)
-        if product_sale_tax == '01':
-            total_tax_cost = total_net_cost * 0.16  # 16% IVA
-        else:  # 'EX' u otro
-            total_tax_cost = 0  # Exento
-
-        total_cost = total_net_cost + total_tax_cost
         total_net = sub - disc
 
         sql_detail_coins = """
@@ -2056,11 +2447,11 @@ class SmartSyncComplete:
 
         self.pg_cursor.execute(sql_detail_coins, (
             correlativo, line,
-            unitary_cost,
+            unitary_cost,       # unitary_cost de MySQL
             unit_price_f,
-            total_net_cost,
-            total_tax_cost,
-            total_cost,
+            total_net_cost,    # de MySQL (unitary_cost * cantidad)
+            total_tax_cost,    # de MySQL (unitary_cost * buy_aliquot/100 * cantidad)
+            total_cost,        # de MySQL (total_net_cost + total_tax_cost)
             sub,
             ta,
             tot,
@@ -2296,10 +2687,10 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos (ahora incluye coin y description_coin)
+                # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
                 (code, description, short_name, department, stock, product_type,
                  coin, description_coin, price, cost, higher_price, min_stock, status,
-                 image_type, product_image, sale_tax, aliquot) = producto
+                 image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
                 # Verificar que la categoría existe en MySQL
                 if department not in category_mapping:
@@ -2312,7 +2703,7 @@ class SmartSyncComplete:
                 # Crear JSON de imagen
                 image_json = self._create_image_json(image_type, product_image)
 
-                # INSERT con coin y description_coin
+                # INSERT con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
                 insert_query = """
                 INSERT INTO products (
                     company_id,
@@ -2332,10 +2723,13 @@ class SmartSyncComplete:
                     aliquot,
                     coin,
                     description_coin,
+                    unitary_cost,
+                    buy_tax,
+                    buy_aliquot,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -2353,6 +2747,9 @@ class SmartSyncComplete:
                     aliquot = VALUES(aliquot),
                     coin = VALUES(coin),
                     description_coin = VALUES(description_coin),
+                    unitary_cost = VALUES(unitary_cost),
+                    buy_tax = VALUES(buy_tax),
+                    buy_aliquot = VALUES(buy_aliquot),
                     updated_at = NOW()
                 """
 
@@ -2373,7 +2770,10 @@ class SmartSyncComplete:
                     sale_tax,
                     aliquot,
                     coin if coin else None,  # Moneda
-                    description_coin if description_coin else None  # Descripción de moneda
+                    description_coin if description_coin else None,  # Descripción de moneda
+                    safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
+                    buy_tax if buy_tax else None,  # buy_tax de products
+                    buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
                 ))
 
                 self.stats['products']['nuevos'] += 1
@@ -2383,7 +2783,7 @@ class SmartSyncComplete:
                 # Commit cada 50 productos para no acumular transacción enorme
                 if idx % 50 == 0:
                     self.mysql_conn.commit()
-                    self._log(f"  ✅ Progreso: {idx}/{total_nuevos} productos insertados", "info")
+                    # No imprimir log aquí para no interferir con el contador
 
             # Commit final de los nuevos
             if total_nuevos > 0:
@@ -2399,10 +2799,10 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos (ahora incluye coin y description_coin)
+                # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
                 (code, description, short_name, department, stock, product_type,
                  coin, description_coin, price, cost, higher_price, min_stock, status,
-                 image_type, product_image, sale_tax, aliquot) = producto
+                 image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
                 # Verificar que la categoría existe en MySQL
                 if department not in category_mapping:
@@ -2415,7 +2815,7 @@ class SmartSyncComplete:
                 # Crear JSON de imagen
                 image_json = self._create_image_json(image_type, product_image)
 
-                # UPDATE con coin y description_coin
+                # UPDATE con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
                 update_query = """
                 INSERT INTO products (
                     company_id,
@@ -2435,10 +2835,13 @@ class SmartSyncComplete:
                     aliquot,
                     coin,
                     description_coin,
+                    unitary_cost,
+                    buy_tax,
+                    buy_aliquot,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -2456,6 +2859,9 @@ class SmartSyncComplete:
                     aliquot = VALUES(aliquot),
                     coin = VALUES(coin),
                     description_coin = VALUES(description_coin),
+                    unitary_cost = VALUES(unitary_cost),
+                    buy_tax = VALUES(buy_tax),
+                    buy_aliquot = VALUES(buy_aliquot),
                     updated_at = NOW()
                 """
 
@@ -2476,7 +2882,10 @@ class SmartSyncComplete:
                     sale_tax,
                     aliquot,
                     coin if coin else None,  # Moneda
-                    description_coin if description_coin else None  # Descripción de moneda
+                    description_coin if description_coin else None,  # Descripción de moneda
+                    safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
+                    buy_tax if buy_tax else None,  # buy_tax de products
+                    buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
                 ))
 
                 self.stats['products']['modificados'] += 1
@@ -2486,7 +2895,7 @@ class SmartSyncComplete:
                 # Commit cada 50 productos
                 if idx % 50 == 0:
                     self.mysql_conn.commit()
-                    self._log(f"  ✅ Progreso: {idx}/{total_modificados} productos actualizados", "info")
+                    # No imprimir log aquí para no interferir con el contador
 
             # Commit final de los modificados
             if total_modificados > 0:
@@ -2627,6 +3036,136 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"Error sincronizando customers a MySQL: {str(e)}", "error")
             self.stats['customers']['errores'] += 1
+
+    # ====================================================================
+    # SINCRONIZACIÓN DE PRODUCTS (MYSQL → POSTGRESQL)
+    # ====================================================================
+
+    def sincronizar_products_postgresql(self, cambios: Dict[str, List]):
+        """
+        Sincronizar products de MySQL a PostgreSQL
+
+        Args:
+            cambios: Dict con 'nuevos' y 'modificados'
+        """
+        if not cambios.get('nuevos') and not cambios.get('modificados'):
+            self._log("✅ Products: No hay cambios para sincronizar (MySQL → PG)", "info")
+            return
+
+        total_nuevos = len(cambios.get('nuevos', []))
+        total_modificados = len(cambios.get('modificados', []))
+
+        self._log("", "info")
+        self._log("📦 SINCRONIZANDO PRODUCTS (MySQL → PostgreSQL)...", "info")
+        self._log(f"   📋 Nuevos: {total_nuevos} | Modificados: {total_modificados}", "info")
+
+        try:
+            # Obtener valores válidos para columnas con restricciones
+            self.pg_cursor.execute("SELECT code FROM status WHERE code != '00' LIMIT 1")
+            status_row = self.pg_cursor.fetchone()
+            status_valido = status_row[0] if status_row else '01'
+
+            self.pg_cursor.execute("SELECT code FROM taxes LIMIT 1")
+            tax_row = self.pg_cursor.fetchone()
+            tax_valido = tax_row[0] if tax_row else ''
+
+            self.pg_cursor.execute("SELECT code FROM coin LIMIT 1")
+            coin_row = self.pg_cursor.fetchone()
+            coin_valido = coin_row[0] if coin_row else ''
+
+            # Procesar products nuevos y modificados
+            products_a_procesar = cambios.get('nuevos', []) + cambios.get('modificados', [])
+            total_a_procesar = len(products_a_procesar)
+            current_count = 0
+
+            for product in products_a_procesar:
+                if not self.sync_running:
+                    break
+
+                product_id = product['id']
+                product_code = product['code']
+                current_count += 1
+
+                try:
+                    # Verificar si ya existe
+                    self.pg_cursor.execute(
+                        "SELECT code FROM products WHERE code = %s",
+                        (product_code,)
+                    )
+                    existe = self.pg_cursor.fetchone()
+
+                    if existe:
+                        # UPDATE
+                        self._log(f"  🔄 Actualizando product {product_code}...", "debug")
+                        sql_update = """
+                        UPDATE products SET
+                            description = %s,
+                            minimal_sale = %s,
+                            maximal_sale = %s,
+                            status = %s,
+                            product_type = %s
+                        WHERE code = %s
+                        """
+                        self.pg_cursor.execute(sql_update, (
+                            product.get('description', '')[:255],
+                            float(product.get('cost', 0)),
+                            float(product.get('price', 0)),
+                            status_valido,
+                            product.get('product_type', 'finished'),
+                            product_code
+                        ))
+                    else:
+                        # INSERT
+                        self._log(f"  ✨ Insertando product {product_code}...", "debug")
+                        sql_insert = """
+                        INSERT INTO products (
+                            code, description, minimal_sale, maximal_sale,
+                            status, product_type, sale_price
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """
+                        self.pg_cursor.execute(sql_insert, (
+                            product_code,
+                            product.get('description', '')[:255],
+                            float(product.get('cost', 0)),
+                            float(product.get('price', 0)),
+                            status_valido,
+                            product.get('product_type', 'finished'),
+                            int(float(product.get('price', 0)) * 100)  # sale_price está en centimos
+                        ))
+
+                    self.pg_conn.commit()
+
+                    # Actualizar estadísticas y reportar progreso INMEDIATAMENTE
+                    if existe:
+                        self.stats['products']['modificados'] += 1
+                    else:
+                        self.stats['products']['nuevos'] += 1
+
+                    self._reportar_progreso('products', current_count, total_a_procesar)
+
+                    # Guardar hash DESPUÉS de reportar progreso (para no retrasar el contador)
+                    hash_nuevo = self._generar_hash_product_mysql(product)
+                    self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
+
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        self._log(f"  ℹ️ Product {product_code} ya existe (omitiendo)", "debug")
+                        self.pg_conn.rollback()
+                    else:
+                        import traceback
+                        self._log(f"Error procesando product {product_code}: {str(e)}", "error")
+                        self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+                        self.pg_conn.rollback()
+                        self.stats['products']['errores'] += 1
+
+            self._log(f"✅ Products completados: {self.stats['products']['nuevos']} nuevos, "
+                      f"{self.stats['products']['modificados']} modificados, "
+                      f"{self.stats['products']['errores']} errores", "success")
+
+        except Exception as e:
+            self._log(f"Error sincronizando products a PostgreSQL: {str(e)}", "error")
+            self.stats['products']['errores'] += 1
 
     def sincronizar_categories_mysql(self, cambios: Dict[str, List]):
         """Sincronizar cambios de categories a MySQL"""
@@ -2804,6 +3343,9 @@ class SmartSyncComplete:
             cambios_customers = self.detectar_cambios_customers()
             cambios_categories = self.detectar_cambios_categories()
 
+            # Detectar cambios en products de MySQL (para sincronizar a PostgreSQL)
+            cambios_products_mysql = self.detectar_cambios_products_mysql()
+
             # Detectar cambios en quotes (MySQL → PostgreSQL)
             cambios_quotes = self.detectar_cambios_quotes()
 
@@ -2817,7 +3359,8 @@ class SmartSyncComplete:
                 len(cambios_products['nuevos']) + len(cambios_products['modificados']) +
                 len(cambios_customers['nuevos']) + len(cambios_customers['modificados']) +
                 len(cambios_categories['nuevos']) + len(cambios_categories['modificados']) +
-                len(cambios_quotes['nuevos']) + len(cambios_quotes['modificados'])
+                len(cambios_quotes['nuevos']) + len(cambios_quotes['modificados']) +
+                len(cambios_products_mysql['nuevos']) + len(cambios_products_mysql['modificados'])
             )
 
             if total_cambios == 0:
@@ -2840,7 +3383,10 @@ class SmartSyncComplete:
             self._log("👥 SINCRONIZANDO CUSTOMERS...", "info")
             self.sincronizar_customers_mysql(cambios_customers)
 
-            # Sincronizar quotes a PostgreSQL (dirección opuesta)
+            # 4. Products de MySQL → PostgreSQL (ANTES de quotes para que existan)
+            self.sincronizar_products_postgresql(cambios_products_mysql)
+
+            # 5. Quotes a PostgreSQL (dirección opuesta, requiere products y customers)
             self.sincronizar_quotes_postgresql(cambios_quotes)
 
             # Sincronizar estados de quotes (PostgreSQL → MySQL)

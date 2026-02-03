@@ -54,6 +54,12 @@ except ImportError as e:
     print("Ejecute: pip install psycopg2-binary pymysql")
     sys.exit(1)
 
+# Importar SmartSyncComplete
+try:
+    from smart_sync_complete import SmartSyncComplete
+except ImportError:
+    SmartSyncComplete = None
+
 # ==============================================================================
 # CONFIGURACIÓN
 # ==============================================================================
@@ -874,7 +880,44 @@ class ManagerWindow:
         self.root.geometry(f'{width}x{height}+{x}+{y}')
 
         self.config = cargar_config()
-        self.sync_module = SyncModule(self.config)
+
+        # Inicializar SmartSyncComplete si está disponible
+        if SmartSyncComplete:
+            postgresql_config = {
+                'host': self.config['postgres_host'],
+                'database': self.config['postgres_database'],
+                'user': self.config['postgres_user'],
+                'password': self.config['postgres_password']
+            }
+            mysql_config = {
+                'host': self.config['mysql_host'],
+                'database': self.config['mysql_database'],
+                'user': self.config['mysql_user'],
+                'password': self.config['mysql_password']
+            }
+
+            # Crear wrapper para app
+            class AppWrapper:
+                def log_message(self, mensaje, tipo):
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    print(f"[{timestamp}] {tipo.upper()}: {mensaje}")
+
+            app = AppWrapper()
+
+            self.sync_module = SmartSyncComplete(
+                app=app,
+                postgresql_config=postgresql_config,
+                mysql_config=mysql_config,
+                company_rif=self.config.get('company_rif', ''),
+                company_email=self.config.get('company_email', ''),
+                progress_callback=None
+            )
+        else:
+            self.sync_module = SyncModule(self.config)
+
+        # Job para actualizar progreso en UI
+        self.progress_update_job = None
 
         self.crear_gui()
         self.actualizar_estado()
@@ -910,6 +953,10 @@ class ManagerWindow:
                                  font=("Arial", 10))
         self.lbl_stats.pack()
 
+        # Label de progreso detallado (para SmartSyncComplete)
+        self.lbl_progress = tk.Label(stats_frame, text="Listo para sincronizar", font=("Arial", 9), fg="blue")
+        self.lbl_progress.pack(pady=(5,0))
+
         # Botones
         btn_frame = tk.Frame(main_frame)
         btn_frame.pack(fill="x", pady=10)
@@ -935,18 +982,30 @@ class ManagerWindow:
             self.lbl_estado.config(text="🔴 NO CONFIGURADO", fg="red")
             return
 
-        # Verificar conexiones
-        if self.sync_module.verificar_conexiones():
-            self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
+        # Verificar conexiones (solo para SyncModule antiguo)
+        if hasattr(self.sync_module, 'verificar_conexiones'):
+            if self.sync_module.verificar_conexiones():
+                self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
+            else:
+                self.lbl_estado.config(text="🟡 ERROR DE CONEXIÓN", fg="orange")
         else:
-            self.lbl_estado.config(text="🟡 ERROR DE CONEXIÓN", fg="orange")
+            # SmartSyncComplete no tiene verificar_conexiones, asumimos activo
+            self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
 
     def sincronizar(self):
         """Ejecuta sincronización"""
         self.agregar_log("Iniciando sincronización...")
 
-        try:
-            resultado = self.sync_module.sincronizar()
+        # Si es SmartSyncComplete, usar el nuevo sistema con contadores de progreso
+        if SmartSyncComplete and hasattr(self.sync_module, 'ejecutar_sync_completa'):
+            # Iniciar actualizaciones de progreso
+            self._start_progress_updates()
+
+            # Ejecutar sincronización completa
+            resultado = self.sync_module.ejecutar_sync_completa()
+
+            # Detener actualizaciones de progreso
+            self._stop_progress_updates()
 
             if resultado:
                 stats = self.sync_module.stats
@@ -957,6 +1016,7 @@ class ManagerWindow:
                          f"Quotes: {stats['quotes']['nuevos']} nuevos"
                 )
                 self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                self.lbl_progress.config(text="✅ Sincronización completada", fg="green")
                 self.agregar_log("✅ Sincronización completada")
 
                 # Mostrar notificación toast tipo Avast/AVG
@@ -982,6 +1042,7 @@ class ManagerWindow:
                     pass  # Si no hay win10toast, no mostrar nada
             else:
                 self.agregar_log("❌ Error en sincronización")
+                self.lbl_progress.config(text="❌ Error en sincronización", fg="red")
 
                 # Mostrar notificación de error
                 try:
@@ -995,9 +1056,95 @@ class ManagerWindow:
                     )
                 except ImportError:
                     pass
+        else:
+            # Usar sistema antiguo SyncModule
+            try:
+                resultado = self.sync_module.sincronizar()
 
-        except Exception as e:
-            self.agregar_log(f"❌ Error: {str(e)}")
+                if resultado:
+                    stats = self.sync_module.stats
+                    self.lbl_stats.config(
+                        text=f"Products: {stats['products']['nuevos']} nuevos | "
+                             f"Customers: {stats['customers']['nuevos']} nuevos | "
+                             f"Categories: {stats['categories']['nuevos']} nuevos | "
+                             f"Quotes: {stats['quotes']['nuevos']} nuevos"
+                    )
+                    self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    self.agregar_log("✅ Sincronización completada")
+
+                    # Mostrar notificación toast tipo Avast/AVG
+                    try:
+                        from win10toast import ToastNotifier
+                        toast = ToastNotifier()
+
+                        # Crear mensaje con estadísticas
+                        mensaje_stats = (
+                            f"Products: {stats['products']['nuevos']} nuevos\n"
+                            f"Customers: {stats['customers']['nuevos']} nuevos\n"
+                            f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                            f"Quotes: {stats['quotes']['nuevos']} nuevos"
+                        )
+
+                        toast.show_toast(
+                            "✅ Sincronización Exitosa",
+                            mensaje_stats,
+                            duration=5,
+                            threaded=True
+                        )
+                    except ImportError:
+                        pass  # Si no hay win10toast, no mostrar nada
+                else:
+                    self.agregar_log("❌ Error en sincronización")
+
+                    # Mostrar notificación de error
+                    try:
+                        from win10toast import ToastNotifier
+                        toast = ToastNotifier()
+                        toast.show_toast(
+                            "⚠️ Error de Sincronización",
+                            "Verifica los logs para más detalles",
+                            duration=7,
+                            threaded=True
+                        )
+                    except ImportError:
+                        pass
+
+            except Exception as e:
+                self.agregar_log(f"❌ Error: {str(e)}")
+
+    def _start_progress_updates(self):
+        """Iniciar actualizaciones periódicas del progreso en la UI"""
+        if SmartSyncComplete and self.progress_update_job is None:
+            self._update_progress_from_sync()
+
+    def _update_progress_from_sync(self):
+        """Actualizar la UI con la información de progreso de SmartSyncComplete"""
+        if SmartSyncComplete and hasattr(self.sync_module, 'get_progress_info'):
+            try:
+                progress = self.sync_module.get_progress_info()
+
+                if progress['entity']:
+                    entity_name = progress['entity'].upper()
+                    current = progress['current']
+                    total = progress['total']
+                    percentage = progress['percentage']
+
+                    # Actualizar label de progreso
+                    self.lbl_progress.config(
+                        text=f"Sincronizando {entity_name}: {current}/{total} ({percentage:.1f}%)",
+                        fg="blue"
+                    )
+            except Exception as e:
+                pass  # Silencioso para no interrumpir
+
+        # Programar próxima actualización en 200ms
+        self.progress_update_job = self.root.after(200, self._update_progress_from_sync)
+
+    def _stop_progress_updates(self):
+        """Detener actualizaciones de progreso"""
+        if self.progress_update_job:
+            self.root.after_cancel(self.progress_update_job)
+            self.progress_update_job = None
 
     def configurar(self):
         """Abre configuración"""
@@ -1623,6 +1770,7 @@ class SystemTrayService:
 
             # Crear menú contextual
             menu = pystray.Menu(
+                pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
                 pystray.MenuItem('📊 Ver Logs', self.ver_logs),
                 pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
                 pystray.MenuItem('⚙️ Configuración', lambda: self.abrir_config()),
@@ -1703,6 +1851,25 @@ Clic derecho → Ver Logs (tiempo real)"""
         # Actualizar intervalo
         log("Configuración actualizada", "INFO")
 
+    def abrir_manager(self):
+        """Abre ventana del Manager desde el system tray"""
+        import tkinter as tk
+        import threading
+
+        def abrir_ventana_manager():
+            """Abre la ventana del manager en un thread separado"""
+            root = tk.Tk()
+            root.title("Sync System Manager")
+            app = ManagerWindow(root)
+            root.mainloop()
+
+        # Ejecutar en thread para no bloquear el icono de tray
+        thread = threading.Thread(target=abrir_ventana_manager)
+        thread.daemon = True
+        thread.start()
+
+        log("✅ Ventana del Manager abierta", "INFO")
+
 # ==============================================================================
 # MAIN - INICIO DEL SISTEMA
 # ==============================================================================
@@ -1711,7 +1878,7 @@ def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
     parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
-                       default="auto", help="Modo de ejecución")
+                       default="manager", help="Modo de ejecución")  # CAMBIADO: default="manager"
 
     args = parser.parse_args()
     config = cargar_config()
@@ -1721,7 +1888,7 @@ def main():
         if not config.get('configured') or config.get('first_run'):
             args.mode = "config"
         else:
-            args.mode = "tray"  # Por defecto: modo tray (icono en barra de tareas)
+            args.mode = "manager"  # CAMBIADO: Por defecto mostrar ventana manager, no tray
 
     # Ejecutar según modo
     if args.mode == "config":
