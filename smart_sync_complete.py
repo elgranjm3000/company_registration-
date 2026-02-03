@@ -607,7 +607,8 @@ class SmartSyncComplete:
             product: Tupla con (code, description, short_name, department, stock,
                                product_type, coin, description_coin, price, cost,
                                higher_price, min_stock, status, image_type,
-                               product_image, sale_tax, aliquot)
+                               product_image, sale_tax, aliquot, buy_tax,
+                               buy_aliquot, unitary_cost)
 
         Returns:
             Hash MD5 hexadecimal
@@ -621,15 +622,18 @@ class SmartSyncComplete:
                 str(product[3]) if product[3] else '',  # department
                 str(float(product[4]) if product[4] else 0),  # stock
                 str(product[5]) if product[5] else '',  # product_type
-                str(product[6]) if product[6] else '',  # coin ✓ NUEVO
-                str(product[7]) if product[7] else '',  # description_coin ✓ NUEVO
+                str(product[6]) if product[6] else '',  # coin
+                str(product[7]) if product[7] else '',  # description_coin
                 str(safe_float(product[8])),            # price
                 str(safe_float(product[9])),            # cost
                 str(safe_float(product[10])),           # higher_price
                 str(safe_float(product[11])),           # min_stock
                 str(product[12]) if product[12] else '',  # status
                 str(product[15]) if product[15] else '',  # sale_tax
-                str(product[16]) if product[16] else ''   # aliquot
+                str(product[16]) if product[16] else '',  # aliquot
+                str(product[17]) if product[17] else '',  # buy_tax ✓ NUEVO
+                str(safe_float(product[18]) if product[18] else 0),  # buy_aliquot ✓ NUEVO
+                str(safe_float(product[19]) if product[19] else 0)   # unitary_cost ✓ NUEVO
             )
 
             datos = "|".join(campos)
