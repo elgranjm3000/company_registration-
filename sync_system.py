@@ -54,6 +54,12 @@ except ImportError as e:
     print("Ejecute: pip install psycopg2-binary pymysql")
     sys.exit(1)
 
+# Importar SmartSyncComplete
+try:
+    from smart_sync_complete import SmartSyncComplete
+except ImportError:
+    SmartSyncComplete = None
+
 # ==============================================================================
 # CONFIGURACIÓN
 # ==============================================================================
