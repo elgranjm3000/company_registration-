@@ -3320,7 +3320,8 @@ class SmartSyncComplete:
                 len(cambios_products['nuevos']) + len(cambios_products['modificados']) +
                 len(cambios_customers['nuevos']) + len(cambios_customers['modificados']) +
                 len(cambios_categories['nuevos']) + len(cambios_categories['modificados']) +
-                len(cambios_quotes['nuevos']) + len(cambios_quotes['modificados'])
+                len(cambios_quotes['nuevos']) + len(cambios_quotes['modificados']) +
+                len(cambios_products_mysql['nuevos']) + len(cambios_products_mysql['modificados'])
             )
 
             if total_cambios == 0:
