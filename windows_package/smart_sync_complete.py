@@ -2934,6 +2934,12 @@ class SmartSyncComplete:
             self._log(f"Error sincronizando products a MySQL: {str(e)}", "error")
             self.stats['products']['errores'] += 1
 
+            # Si es un error de conexión, propagar hacia arriba para detener la sincronización
+            error_msg = str(e).lower()
+            if any(err in error_msg for err in ['connection', 'timeout', 'mysql', 'database', 'operational']):
+                self._log("❌ Error crítico de conexión - deteniendo sincronización", "error")
+                raise  # Propagar el error para que ejecutar_sync_completa lo maneje
+
     def _sincronizar_status_products_mysql(self, productos_inactivos: List[Dict]):
         """
         Sincroniza cambios de status (active/inactive) de products a MySQL
@@ -3096,6 +3102,12 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"Error sincronizando customers a MySQL: {str(e)}", "error")
             self.stats['customers']['errores'] += 1
+
+            # Si es un error de conexión, propagar hacia arriba para detener la sincronización
+            error_msg = str(e).lower()
+            if any(err in error_msg for err in ['connection', 'timeout', 'mysql', 'database', 'operational']):
+                self._log("❌ Error crítico de conexión - deteniendo sincronización", "error")
+                raise  # Propagar el error para que ejecutar_sync_completa lo maneje
 
     # ====================================================================
     # SINCRONIZACIÓN DE PRODUCTS (MYSQL → POSTGRESQL)
@@ -3334,6 +3346,12 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"Error sincronizando categories a MySQL: {str(e)}", "error")
             self.stats['categories']['errores'] += 1
+
+            # Si es un error de conexión, propagar hacia arriba para detener la sincronización
+            error_msg = str(e).lower()
+            if any(err in error_msg for err in ['connection', 'timeout', 'mysql', 'database', 'operational']):
+                self._log("❌ Error crítico de conexión - deteniendo sincronización", "error")
+                raise  # Propagar el error para que ejecutar_sync_completa lo maneje
 
     # ====================================================================
     # SINCRONIZACIÓN DE SELLERS
