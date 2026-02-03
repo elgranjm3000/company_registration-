@@ -1,0 +1,178 @@
+[2026-02-03 01:26:16] ======================================================================
+[2026-02-03 01:26:16] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-02-03 01:26:16] Inicio: 2026-02-03 01:26:16
+[2026-02-03 01:26:16] Empresa RIF: J316277860
+[2026-02-03 01:26:16] Empresa Email: multiserviciosleblanc@gmail.com
+[2026-02-03 01:26:16] ======================================================================
+[2026-02-03 01:26:16] 
+[2026-02-03 01:26:16] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-02-03 01:26:16] ℹ️  INFO: 
+[2026-02-03 01:26:16] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-02-03 01:26:16] ℹ️  INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-02-03 01:26:16] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-02-03 01:26:16] ℹ️  INFO: 
+[2026-02-03 01:26:16] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-02-03 01:26:16] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-02-03 01:26:16] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-02-03 01:26:16] 🔍 DEBUG:    Port: 3306
+[2026-02-03 01:26:16] 🔍 DEBUG:    Database: chrystal_movil
+[2026-02-03 01:26:16] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=multiserviciosleblanc@gmail.com
+[2026-02-03 01:26:16] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-02-03 01:26:16] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-02-03 01:26:16] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-02-03 01:26:17] ✅ SUCCESS: ✅ Empresa encontrada: Empresa Test (ID: 44)
+[2026-02-03 01:26:17] ℹ️  INFO: Detectando cambios en products...
+[2026-02-03 01:26:17] 🔍 DEBUG:   ✨ NUEVO: PROD-AUTO-20260202174752
+[2026-02-03 01:26:17] ℹ️  INFO: Products: 1 nuevos, 0 modificados, 0 eliminados
+[2026-02-03 01:26:17] ℹ️  INFO: Detectando cambios en customers...
+[2026-02-03 01:26:17] 🔍 DEBUG:   ✨ NUEVO: TEST-AUTO-20260202174751
+[2026-02-03 01:26:18] ℹ️  INFO: Customers: 1 nuevos, 0 modificados, 0 eliminados
+[2026-02-03 01:26:18] ℹ️  INFO: Detectando cambios en categories...
+[2026-02-03 01:26:18] ℹ️  INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+[2026-02-03 01:26:18] ℹ️  INFO: Detectando cambios en products (MySQL → PostgreSQL)...
+[2026-02-03 01:26:18] ℹ️  INFO:    📋 Products encontrados en MySQL: 2
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Códigos: ['TEST-PROD-001', 'PROD-AUTO-20260202174752']
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Product #129204 (TEST-PROD-001): hash_guardado=None
+[2026-02-03 01:26:18] ℹ️  INFO:   ✨ NUEVO: Product #129204 (TEST-PROD-001)
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Product #129205 (PROD-AUTO-20260202174752): hash_guardado=None
+[2026-02-03 01:26:18] ℹ️  INFO:   ✨ NUEVO: Product #129205 (PROD-AUTO-20260202174752)
+[2026-02-03 01:26:18] ℹ️  INFO: ✅ Products detectados: 2 nuevos, 0 modificados
+[2026-02-03 01:26:18] ℹ️  INFO: 
+[2026-02-03 01:26:18] ℹ️  INFO: 💰 DETECTANDO CAMBIOS EN QUOTES (MySQL → PostgreSQL)...
+[2026-02-03 01:26:18] ℹ️  INFO:    📋 Quotes encontrados en MySQL: 5
+[2026-02-03 01:26:18] ℹ️  INFO:    🔍 IDs encontrados: [147, 148, 149, 150, 151]
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Quote #147 (TEST-2026-001): hash_guardado=1244bc27
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Quote #148 (TEST-2026-002): hash_guardado=c40e175d
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Quote #149 (TEST-2026-003): hash_guardado=109da51c
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Quote #150 (AUTO-20260202174752): hash_guardado=857aa22a
+[2026-02-03 01:26:18] 🔍 DEBUG:    🔍 Quote #151 (TEST-SUM-20260203012607): hash_guardado=None
+[2026-02-03 01:26:18] ℹ️  INFO:   ✨ NUEVO: Quote #151 (TEST-SUM-20260203012607)
+[2026-02-03 01:26:18] ℹ️  INFO: ✅ Quotes detectados: 1 nuevos, 0 modificados
+[2026-02-03 01:26:18] ℹ️  INFO: 
+[2026-02-03 01:26:18] ℹ️  INFO: 👤 SINCRONIZANDO SELLERS...
+[2026-02-03 01:26:19] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-03 01:26:19] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-03 01:26:20] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-02-03 01:26:21] 🔍 DEBUG: System log registrado: action=sellers - SYNC, key=, ip=131.72.168.71
+[2026-02-03 01:26:21] ❌ ERROR: ❌ Error sincronizando sellers: 'port'
+[2026-02-03 01:26:21] ℹ️  INFO: 
+[2026-02-03 01:26:21] ℹ️  INFO: 📦 SINCRONIZANDO CATEGORIES...
+[2026-02-03 01:26:21] ℹ️  INFO: 
+[2026-02-03 01:26:21] ℹ️  INFO: 📦 SINCRONIZANDO PRODUCTS...
+[2026-02-03 01:26:21] ℹ️  INFO: Sincronizando changes de products a MySQL...
+[2026-02-03 01:26:21] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-03 01:26:21] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-03 01:26:21] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-02-03 01:26:21] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-03 01:26:21] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-03 01:26:21] 🔍 DEBUG: System log registrado: action=products - CREATE, key=PROD-AUTO-20260202174752, ip=131.72.168.71
+[2026-02-03 01:26:22] ℹ️  INFO:   📦 Insertando 1 productos NUEVOS...
+[2026-02-03 01:26:22] ⚠️  WARNING:   ⚠️ Product PROD-AUTO-20260202174752 omitido: categoría 'None' no existe en MySQL
+[2026-02-03 01:26:22] ✅ SUCCESS:   ✅ Commit final: 0/1 productos nuevos insertados
+[2026-02-03 01:26:22] ⚠️  WARNING:   ⚠️ 1 productos omitidos por categoría inexistente
+[2026-02-03 01:26:22] ✅ SUCCESS: ✅ Products sincronizados: 0 nuevos, 0 modificados
+[2026-02-03 01:26:22] ℹ️  INFO: 
+[2026-02-03 01:26:22] ℹ️  INFO: 👥 SINCRONIZANDO CUSTOMERS...
+[2026-02-03 01:26:22] ℹ️  INFO: Sincronizando cambios de customers a MySQL...
+[2026-02-03 01:26:22] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-03 01:26:22] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-03 01:26:22] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-02-03 01:26:22] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-03 01:26:22] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-03 01:26:23] 🔍 DEBUG: System log registrado: action=customers - CREATE, key=TEST-AUTO-20260202174751, ip=131.72.168.71
+[2026-02-03 01:26:23] ✅ SUCCESS: ✅ Customers sincronizados: 1 nuevos, 0 modificados
+[2026-02-03 01:26:23] ℹ️  INFO: 
+[2026-02-03 01:26:23] ℹ️  INFO: 📦 SINCRONIZANDO PRODUCTS (MySQL → PostgreSQL)...
+[2026-02-03 01:26:23] ℹ️  INFO:    📋 Nuevos: 2 | Modificados: 0
+[2026-02-03 01:26:23] 🔍 DEBUG:   🔄 Actualizando product TEST-PROD-001...
+[2026-02-03 01:26:23] ❌ ERROR: Error procesando product TEST-PROD-001: no existe la columna «updated_at» en la relación «products»
+LINE 8:                             updated_at = NOW()
+                                    ^
+
+[2026-02-03 01:26:23] ❌ ERROR: TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 3035, in sincronizar_products_postgresql
+    self.pg_cursor.execute(sql_update, (
+psycopg2.errors.UndefinedColumn: no existe la columna «updated_at» en la relación «products»
+LINE 8:                             updated_at = NOW()
+                                    ^
+
+
+[2026-02-03 01:26:23] 🔍 DEBUG:   🔄 Actualizando product PROD-AUTO-20260202174752...
+[2026-02-03 01:26:23] ❌ ERROR: Error procesando product PROD-AUTO-20260202174752: no existe la columna «updated_at» en la relación «products»
+LINE 8:                             updated_at = NOW()
+                                    ^
+
+[2026-02-03 01:26:23] ❌ ERROR: TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 3035, in sincronizar_products_postgresql
+    self.pg_cursor.execute(sql_update, (
+psycopg2.errors.UndefinedColumn: no existe la columna «updated_at» en la relación «products»
+LINE 8:                             updated_at = NOW()
+                                    ^
+
+
+[2026-02-03 01:26:23] ✅ SUCCESS: ✅ Products completados: 0 nuevos, 0 modificados, 2 errores
+[2026-02-03 01:26:23] ℹ️  INFO: 
+[2026-02-03 01:26:23] ℹ️  INFO: 💰 SINCRONIZANDO QUOTES (MySQL → PostgreSQL)...
+[2026-02-03 01:26:23] ℹ️  INFO:    📋 Nuevos: 1 | Modificados: 0
+[2026-02-03 01:26:23] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-03 01:26:23] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-03 01:26:23] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-02-03 01:26:24] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-03 01:26:24] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-03 01:26:24] 🔍 DEBUG: System log registrado: action=quotes - CREATE, key=151, ip=131.72.168.71
+[2026-02-03 01:26:24] 🔍 DEBUG:   Procesando quote #151...
+[2026-02-03 01:26:24] 🔍 DEBUG:   ℹ️ Usando station: 00
+[2026-02-03 01:26:24] 🔍 DEBUG:   👤 Customer TEST-AUTO-20260202174751 ya existe en PostgreSQL
+[2026-02-03 01:26:24] 🔍 DEBUG:   📦 Verificando 2 products del quote...
+[2026-02-03 01:26:25] 🔍 DEBUG:   Quote #151 insertado con correlative=30239 (auto-generado)
+[2026-02-03 01:26:25] ❌ ERROR: Error procesando quote 151: la sintaxis de entrada no es válida para tipo double precision: «finished»
+LINE 12: ...       0.0, 0.0, 50.0, 0.0, 50.0, '02', 16, '01', 'finished'
+                                                              ^
+
+[2026-02-03 01:26:25] ❌ ERROR: TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 1808, in sincronizar_quotes_postgresql
+    correlativo = self._insertar_quote_postgresql(quote, mac)
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 2061, in _insertar_quote_postgresql
+    self._insertar_quote_items(correlativo, quote, bcv_rate)
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 2308, in _insertar_quote_items
+    self.pg_cursor.execute(sql_detail, (
+psycopg2.errors.InvalidTextRepresentation: la sintaxis de entrada no es válida para tipo double precision: «finished»
+LINE 12: ...       0.0, 0.0, 50.0, 0.0, 50.0, '02', 16, '01', 'finished'
+                                                              ^
+
+
+[2026-02-03 01:26:25] ✅ SUCCESS: ✅ Quotes completados: 0 nuevos, 0 modificados, 1 errores
+[2026-02-03 01:26:25] ℹ️  INFO: 
+[2026-02-03 01:26:25] ℹ️  INFO: 🔄 SINCRONIZANDO ESTADOS DE QUOTES...
+[2026-02-03 01:26:25] ℹ️  INFO: Sincronizando estados de quotes (PostgreSQL → MySQL)...
+[2026-02-03 01:26:25] ❌ ERROR: Error sincronizando estados de quotes: no existe la relación «mysql.quotes»
+LINE 9:                   SELECT 1 FROM mysql.quotes q
+                                        ^
+
+[2026-02-03 01:26:25] ℹ️  INFO: 
+[2026-02-03 01:26:25] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-02-03 01:26:25] ℹ️  INFO: ║                    RESUMEN DE SINCRONIZACIÓN                    ║
+[2026-02-03 01:26:25] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-02-03 01:26:25] ✅ SUCCESS: Products:   0 nuevos, 0 modificados, 0 inactivados
+[2026-02-03 01:26:25] ✅ SUCCESS: Customers:  1 nuevos, 0 modificados
+[2026-02-03 01:26:25] ✅ SUCCESS: Categories: 0 nuevos, 0 modificados
+[2026-02-03 01:26:25] ✅ SUCCESS: Sellers:    0 nuevos, 0 actualizados
+[2026-02-03 01:26:25] ✅ SUCCESS: Quotes:     0 nuevos (MySQL→PG), 0 estados actualizados
+[2026-02-03 01:26:25] ℹ️  INFO: Duración:   9.32 segundos
+[2026-02-03 01:26:25] ℹ️  INFO: 
+[2026-02-03 01:26:25] ⚠️  WARNING: ⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES
+[2026-02-03 01:26:25] 
+[2026-02-03 01:26:25] ======================================================================
+[2026-02-03 01:26:25] FIN DE SINCRONIZACIÓN
+[2026-02-03 01:26:25] Fin: 2026-02-03 01:26:25
+[2026-02-03 01:26:25] 
+[2026-02-03 01:26:25] ESTADÍSTICAS FINALES:
+[2026-02-03 01:26:25]   Products: 0 nuevos, 0 modificados, 2 errores
+[2026-02-03 01:26:25]   Customers: 1 nuevos, 0 modificados, 0 errores
+[2026-02-03 01:26:25]   Sellers: 0 nuevos, 0 modificados, 1 errores
+[2026-02-03 01:26:25]   Quotes: 0 nuevos, 0 modificados, 2 errores
+[2026-02-03 01:26:25] ======================================================================
+[2026-02-03 01:26:25] 

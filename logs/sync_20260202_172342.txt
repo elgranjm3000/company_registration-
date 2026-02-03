@@ -1,0 +1,35 @@
+[2026-02-02 17:23:42] ======================================================================
+[2026-02-02 17:23:42] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-02-02 17:23:42] Inicio: 2026-02-02 17:23:42
+[2026-02-02 17:23:42] Empresa RIF: J316277860
+[2026-02-02 17:23:42] Empresa Email: multiserviciosleblanc@gmail.com
+[2026-02-02 17:23:42] ======================================================================
+[2026-02-02 17:23:42] 
+[2026-02-02 17:23:42] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-02-02 17:23:42] ℹ️  INFO: 
+[2026-02-02 17:23:42] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-02-02 17:23:42] ℹ️  INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-02-02 17:23:42] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-02-02 17:23:42] ℹ️  INFO: 
+[2026-02-02 17:23:42] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-02-02 17:23:42] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-02-02 17:23:42] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-02-02 17:23:42] 🔍 DEBUG:    Port: 3306
+[2026-02-02 17:23:42] 🔍 DEBUG:    Database: chrystal_movil
+[2026-02-02 17:23:42] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=multiserviciosleblanc@gmail.com
+[2026-02-02 17:23:42] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-02-02 17:23:43] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-02-02 17:23:43] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-02-02 17:23:43] ⚠️  WARNING:   ⚠️ Empresa no encontrada en 'companies', creando registro...
+[2026-02-02 17:23:43] ℹ️  INFO:   💡 Si esto es un error, usa app.py para sincronizar la empresa primero
+[2026-02-02 17:23:43] ❌ ERROR: ❌ Error obteniendo company_id: IntegrityError: (1062, "Duplicate entry 'J316277860' for key 'companies_rif_unique'")
+[2026-02-02 17:23:43] ❌ ERROR:    Error: 1062
+[2026-02-02 17:23:43] ❌ ERROR: ❌ No se pudo obtener el company_id. Verifica RIF y email en la configuración.
+[2026-02-02 17:23:43] 
+[2026-02-02 17:23:43] ======================================================================
+[2026-02-02 17:23:43] FIN DE SINCRONIZACIÓN
+[2026-02-02 17:23:43] Fin: 2026-02-02 17:23:43
+[2026-02-02 17:23:43] 
+[2026-02-02 17:23:43] ESTADÍSTICAS FINALES:
+[2026-02-02 17:23:43] ======================================================================
+[2026-02-02 17:23:43] 

@@ -1,0 +1,34 @@
+[2026-01-27 12:29:31] ======================================================================
+[2026-01-27 12:29:31] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-01-27 12:29:31] Inicio: 2026-01-27 12:29:31
+[2026-01-27 12:29:31] Empresa RIF: J316277860
+[2026-01-27 12:29:31] Empresa Email: @
+[2026-01-27 12:29:31] ======================================================================
+[2026-01-27 12:29:31] 
+[2026-01-27 12:29:31] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-01-27 12:29:31] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-01-27 12:29:32] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-01-27 12:29:32] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-01-27 12:29:32] 🔍 DEBUG:    Port: 3306
+[2026-01-27 12:29:32] 🔍 DEBUG:    Database: chrystal_movil
+[2026-01-27 12:29:32] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=@
+[2026-01-27 12:29:32] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-01-27 12:29:32] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-01-27 12:29:32] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-01-27 12:29:32] ✅ SUCCESS: ✅ Empresa encontrada: Empresa Test (ID: 44)
+[2026-01-27 12:29:33] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:29:33] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:29:33] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:29:34] 🔍 DEBUG: System log registrado: action=products, records=5, ip=186.165.103.17
+[2026-01-27 12:29:34] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:29:34] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:29:34] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:29:35] 🔍 DEBUG: System log registrado: action=customers, records=3, ip=186.165.103.17
+[2026-01-27 12:29:35] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:29:35] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:29:35] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:29:36] 🔍 DEBUG: System log registrado: action=categories, records=4, ip=186.165.103.17
+[2026-01-27 12:29:36] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:29:36] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:29:36] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:29:37] 🔍 DEBUG: System log registrado: action=sellers, records=0, ip=186.165.103.17

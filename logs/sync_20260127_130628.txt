@@ -1,0 +1,59 @@
+[2026-01-27 13:06:28] ======================================================================
+[2026-01-27 13:06:28] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-01-27 13:06:28] Inicio: 2026-01-27 13:06:28
+[2026-01-27 13:06:28] Empresa RIF: J316277860
+[2026-01-27 13:06:28] Empresa Email: @
+[2026-01-27 13:06:28] ======================================================================
+[2026-01-27 13:06:28] 
+[2026-01-27 13:06:28] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-01-27 13:06:28] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-01-27 13:06:29] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-01-27 13:06:29] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-01-27 13:06:29] 🔍 DEBUG:    Port: 3306
+[2026-01-27 13:06:29] 🔍 DEBUG:    Database: chrystal_movil
+[2026-01-27 13:06:29] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=@
+[2026-01-27 13:06:29] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-01-27 13:06:29] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-01-27 13:06:29] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-01-27 13:06:29] ✅ SUCCESS: ✅ Empresa encontrada: Empresa Test (ID: 44)
+[2026-01-27 13:06:30] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:30] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:30] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 13:06:31] 🔍 DEBUG: System log registrado: action=test - TEST, key=KEY001, ip=186.165.103.17
+[2026-01-27 13:06:31] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:31] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:31] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 13:06:32] 🔍 DEBUG: System log registrado: action=products - CREATE, key=P001, ip=186.165.103.17
+[2026-01-27 13:06:32] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:32] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:32] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 13:06:33] 🔍 DEBUG: System log registrado: action=products - UPDATE, key=P002, ip=186.165.103.17
+[2026-01-27 13:06:33] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:33] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:33] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 13:06:34] 🔍 DEBUG: System log registrado: action=sellers - SYNC, key=, ip=186.165.103.17
+[2026-01-27 13:06:34] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:34] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:34] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 13:06:35] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:35] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:35] 🔍 DEBUG: System log registrado: action=products - CREATE, key=P010, ip=186.165.103.17
+[2026-01-27 13:06:36] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:36] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:36] 🔍 DEBUG: System log registrado: action=products - CREATE, key=P011, ip=186.165.103.17
+[2026-01-27 13:06:36] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:36] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:37] 🔍 DEBUG: System log registrado: action=products - CREATE, key=P012, ip=186.165.103.17
+[2026-01-27 13:06:37] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:37] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:37] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 13:06:38] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:38] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:38] 🔍 DEBUG: System log registrado: action=customers - UPDATE, key=C010, ip=186.165.103.17
+[2026-01-27 13:06:39] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:39] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:39] 🔍 DEBUG: System log registrado: action=customers - UPDATE, key=C011, ip=186.165.103.17
+[2026-01-27 13:06:40] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 13:06:40] 🔍 DEBUG: MAC address obtenida: 9b:b2:90:68:55:46
+[2026-01-27 13:06:40] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 13:06:41] 🔍 DEBUG: System log registrado: action=test - TEST, key=KEY, ip=186.165.103.17

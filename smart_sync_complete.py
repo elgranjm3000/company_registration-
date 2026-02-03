@@ -1957,6 +1957,7 @@ class SmartSyncComplete:
         total_exempt = safe_float(sum(item[0] for item in exempt_items)) if exempt_items else 0
 
         # Insertar sales_operation (SIN correlative - dejar que PostgreSQL lo genere)
+        # NOTA: total_net_cost, total_tax_cost, total_cost se calcularán después de insertar detalles
         sql_operation = """
         INSERT INTO public.sales_operation (
             operation_type, document_no, emission_date,
@@ -1999,7 +2000,7 @@ class SmartSyncComplete:
         total_net = quote_subtotal - quote_discount_amount
         expiration = emission_date + timedelta(days=1)
 
-        # Ejecutar query con todos los valores pre-calculados
+        # Ejecutar query con costos en 0 (se calcularán después de insertar detalles)
         self.pg_cursor.execute(sql_operation, (
             'BUDGET',                  # operation_type
             document_no,               # document_no
@@ -2034,9 +2035,9 @@ class SmartSyncComplete:
             False,                     # canceled
             True,                      # pending (rechazado al inicio, requiere aprobación)
             False,                     # wait (no está en espera)
-            total_net_cost,            # total_net_cost (COSTO real de productos)
-            total_tax_cost,            # total_tax_cost (Impuesto sobre COSTO)
-            total_cost_calculado,      # total_cost (Costo total + impuestos)
+            0.0,                       # total_net_cost (se calculará después)
+            0.0,                       # total_tax_cost (se calculará después)
+            0.0,                       # total_cost (se calculará después)
             '01',                      # freight_tax
             16,                        # freight_aliquot
             document_no,               # document_no_internal
@@ -2061,12 +2062,58 @@ class SmartSyncComplete:
 
             # Insertar impuestos
             self._insertar_quote_taxes(correlativo, quote, bcv_rate)
+
+            # Actualizar sales_operation con sumatorias de los detalles
+            self._actualizar_costos_desde_detalles(correlativo)
         else:
             self._log(f"  WARNING: No se pudo obtener correlative para quote #{quote['id']}", "warning")
             correlativo = None
 
         # Retornar el correlative generado
         return correlativo
+
+    def _actualizar_costos_desde_detalles(self, correlative: int):
+        """
+        Actualizar total_net_cost, total_tax_cost, total_cost en sales_operation
+        con las sumatorias de sales_operation_details
+
+        Args:
+            correlative: Correlative del sales_operation
+        """
+        try:
+            # Calcular sumatorias desde los detalles
+            self.pg_cursor.execute("""
+                UPDATE sales_operation
+                SET
+                    total_net_cost = (
+                        SELECT COALESCE(SUM(total_net_cost), 0)
+                        FROM sales_operation_details
+                        WHERE main_correlative = %s
+                    ),
+                    total_tax_cost = (
+                        SELECT COALESCE(SUM(total_tax_cost), 0)
+                        FROM sales_operation_details
+                        WHERE main_correlative = %s
+                    ),
+                    total_cost = (
+                        SELECT COALESCE(SUM(total_cost), 0)
+                        FROM sales_operation_details
+                        WHERE main_correlative = %s
+                    )
+                WHERE correlative = %s
+                RETURNING total_net_cost, total_tax_cost, total_cost
+            """, (correlative, correlative, correlative, correlative))
+
+            result = self.pg_cursor.fetchone()
+            if result:
+                tnc, ttc, tc = result
+                self._log(f"  ✅ Costos actualizados desde detalles: net_cost={tnc:.2f}, tax_cost={ttc:.2f}, cost={tc:.2f}", "debug")
+
+            self.pg_conn.commit()
+
+        except Exception as e:
+            self._log(f"  ⚠️ Error actualizando costos desde detalles: {str(e)}", "warning")
+            self.pg_conn.rollback()
 
     def _obtener_station_valida(self, mac: str) -> str:
         """
@@ -2249,11 +2296,11 @@ class SmartSyncComplete:
                 sale_tax, sale_aliquot, price, total_net_cost, total_tax_cost,
                 total_cost, total_net_gross, total_tax_gross, total_gross,
                 percent_discount, discount, total_net, total_tax, total,
-                coin_code, buy_aliquot, buy_tax, pending_amount
+                coin_code, buy_aliquot, buy_tax, pending_amount, product_type
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING line
             """
 
@@ -2287,6 +2334,7 @@ class SmartSyncComplete:
                 '02',     # coin_code (dólar)
                 ba,       # buy_aliquot de MySQL
                 '01',     # buy_tax (general)
+                0.0,      # pending_amount
                 product_type  # product_type de MySQL
             ))
 

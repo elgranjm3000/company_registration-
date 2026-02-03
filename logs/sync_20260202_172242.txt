@@ -1,0 +1,42 @@
+[2026-02-02 17:22:42] ======================================================================
+[2026-02-02 17:22:42] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-02-02 17:22:42] Inicio: 2026-02-02 17:22:42
+[2026-02-02 17:22:42] Empresa RIF: J316277860
+[2026-02-02 17:22:42] Empresa Email: multiserviciosleblanc@gmail.com
+[2026-02-02 17:22:42] ======================================================================
+[2026-02-02 17:22:42] 
+[2026-02-02 17:22:42] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-02-02 17:22:42] ℹ️  INFO: Verificando/creando tabla sync_hashes...
+[2026-02-02 17:22:42] ⚠️  WARNING:   ⚠️ Error creando índice 'idx_sync_hashes_lookup': la relación «idx_sync_hashes_lookup» ya existe
+
+[2026-02-02 17:22:42] ⚠️  WARNING:   ⚠️ Error creando índice 'idx_sync_hashes_table': la relación «idx_sync_hashes_table» ya existe
+
+[2026-02-02 17:22:42] ✅ SUCCESS: ✅ Tabla sync_hashes lista
+[2026-02-02 17:22:42] ℹ️  INFO: 
+[2026-02-02 17:22:42] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-02-02 17:22:42] ℹ️  INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-02-02 17:22:42] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-02-02 17:22:42] ℹ️  INFO: 
+[2026-02-02 17:22:42] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-02-02 17:22:43] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-02-02 17:22:43] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-02-02 17:22:43] 🔍 DEBUG:    Port: 3306
+[2026-02-02 17:22:43] 🔍 DEBUG:    Database: chrystal_movil
+[2026-02-02 17:22:43] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=multiserviciosleblanc@gmail.com
+[2026-02-02 17:22:43] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-02-02 17:22:43] ❌ ERROR: 
+[2026-02-02 17:22:43] ❌ ERROR: ❌ ERROR: No se encontraron datos en tabla 'acceso'
+[2026-02-02 17:22:43] ❌ ERROR:    RIF: J316277860
+[2026-02-02 17:22:43] ❌ ERROR:    Email: multiserviciosleblanc@gmail.com
+[2026-02-02 17:22:43] ❌ ERROR: 
+[2026-02-02 17:22:43] ⚠️  WARNING:    💡 La empresa debe estar registrada en la tabla 'acceso' de MySQL
+[2026-02-02 17:22:43] ⚠️  WARNING:    💡 Verifica que el RIF y email sean correctos
+[2026-02-02 17:22:43] ❌ ERROR: ❌ No se pudo obtener el company_id. Verifica RIF y email en la configuración.
+[2026-02-02 17:22:43] 
+[2026-02-02 17:22:43] ======================================================================
+[2026-02-02 17:22:43] FIN DE SINCRONIZACIÓN
+[2026-02-02 17:22:43] Fin: 2026-02-02 17:22:43
+[2026-02-02 17:22:43] 
+[2026-02-02 17:22:43] ESTADÍSTICAS FINALES:
+[2026-02-02 17:22:43] ======================================================================
+[2026-02-02 17:22:43] 

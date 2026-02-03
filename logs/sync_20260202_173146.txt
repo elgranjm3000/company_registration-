@@ -1,0 +1,49 @@
+[2026-02-02 17:31:46] ======================================================================
+[2026-02-02 17:31:46] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-02-02 17:31:46] Inicio: 2026-02-02 17:31:46
+[2026-02-02 17:31:46] Empresa RIF: J316277860
+[2026-02-02 17:31:46] Empresa Email: multiserviciosleblanc@gmail.com
+[2026-02-02 17:31:46] ======================================================================
+[2026-02-02 17:31:46] 
+[2026-02-02 17:31:46] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-02-02 17:31:46] ℹ️  INFO: 
+[2026-02-02 17:31:46] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-02-02 17:31:46] ℹ️  INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-02-02 17:31:46] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-02-02 17:31:46] ℹ️  INFO: 
+[2026-02-02 17:31:46] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-02-02 17:31:47] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-02-02 17:31:47] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-02-02 17:31:47] 🔍 DEBUG:    Port: 3306
+[2026-02-02 17:31:47] 🔍 DEBUG:    Database: chrystal_movil
+[2026-02-02 17:31:47] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=multiserviciosleblanc@gmail.com
+[2026-02-02 17:31:47] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-02-02 17:31:47] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-02-02 17:31:47] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-02-02 17:31:47] ✅ SUCCESS: ✅ Empresa encontrada: Empresa Test (ID: 44)
+[2026-02-02 17:31:47] ℹ️  INFO: Detectando cambios en products...
+[2026-02-02 17:31:48] ℹ️  INFO: Products: 0 nuevos, 0 modificados, 0 eliminados
+[2026-02-02 17:31:48] ℹ️  INFO: Detectando cambios en customers...
+[2026-02-02 17:31:49] ℹ️  INFO: Customers: 0 nuevos, 0 modificados, 0 eliminados
+[2026-02-02 17:31:49] ℹ️  INFO: Detectando cambios en categories...
+[2026-02-02 17:31:49] ℹ️  INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+[2026-02-02 17:31:49] ℹ️  INFO: 
+[2026-02-02 17:31:49] ℹ️  INFO: 💰 DETECTANDO CAMBIOS EN QUOTES (MySQL → PostgreSQL)...
+[2026-02-02 17:31:49] ℹ️  INFO: ✅ Quotes detectados: 0 nuevos, 0 modificados
+[2026-02-02 17:31:49] ℹ️  INFO: 
+[2026-02-02 17:31:49] ℹ️  INFO: 👤 SINCRONIZANDO SELLERS...
+[2026-02-02 17:31:50] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-02 17:31:50] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-02 17:31:51] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-02-02 17:31:51] 🔍 DEBUG: System log registrado: action=sellers - SYNC, key=, ip=131.72.168.71
+[2026-02-02 17:31:51] ❌ ERROR: ❌ Error sincronizando sellers: 'port'
+[2026-02-02 17:31:51] ✅ SUCCESS: ✨ No hay cambios que sincronizar
+[2026-02-02 17:31:51] 
+[2026-02-02 17:31:51] ======================================================================
+[2026-02-02 17:31:51] FIN DE SINCRONIZACIÓN
+[2026-02-02 17:31:51] Fin: 2026-02-02 17:31:51
+[2026-02-02 17:31:51] 
+[2026-02-02 17:31:51] ESTADÍSTICAS FINALES:
+[2026-02-02 17:31:51]   Sellers: 0 nuevos, 0 modificados, 1 errores
+[2026-02-02 17:31:51] ======================================================================
+[2026-02-02 17:31:51] 

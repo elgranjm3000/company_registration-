@@ -670,3 +670,16 @@ DETAIL:  La llave (unit)=(1) no está presente en la tabla «products_units».
 [2026-01-24 14:08:57] [INFO] 
 [2026-01-24 14:08:57] [SUCCESS] ✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO
 [2026-01-24 14:08:57] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-02-02 17:22:31] [WARNING] ⚠️ winreg no disponible (solo Windows)
+[2026-02-02 17:22:31] [INFO] ======================================================================
+[2026-02-02 17:22:31] [INFO] INICIANDO SYSTEM TRAY SERVICE
+[2026-02-02 17:22:31] [INFO] ======================================================================
+[2026-02-02 17:22:31] [INFO] RIF: J316277860
+[2026-02-02 17:22:31] [INFO] Email: multiserviciosleblanc@gmail.com
+[2026-02-02 17:22:31] [INFO] Intervalo: 30 minutos
+[2026-02-02 17:22:31] [INFO] 
+[2026-02-02 17:22:31] [ERROR] ERROR: pystray no está instalado
+[2026-02-02 17:22:31] [ERROR] Ejecute: pip install pystray Pillow
+[2026-02-02 17:22:31] [INFO] 
+[2026-02-02 17:22:31] [INFO] Instalación:
+[2026-02-02 17:22:31] [INFO]   pip install pystray Pillow

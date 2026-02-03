@@ -1,0 +1,122 @@
+[2026-02-02 17:38:26] ======================================================================
+[2026-02-02 17:38:26] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-02-02 17:38:26] Inicio: 2026-02-02 17:38:26
+[2026-02-02 17:38:26] Empresa RIF: J316277860
+[2026-02-02 17:38:26] Empresa Email: multiserviciosleblanc@gmail.com
+[2026-02-02 17:38:26] ======================================================================
+[2026-02-02 17:38:26] 
+[2026-02-02 17:38:26] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-02-02 17:38:26] ℹ️  INFO: 
+[2026-02-02 17:38:26] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-02-02 17:38:26] ℹ️  INFO: ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-02-02 17:38:26] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-02-02 17:38:26] ℹ️  INFO: 
+[2026-02-02 17:38:26] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-02-02 17:38:27] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-02-02 17:38:27] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-02-02 17:38:27] 🔍 DEBUG:    Port: 3306
+[2026-02-02 17:38:27] 🔍 DEBUG:    Database: chrystal_movil
+[2026-02-02 17:38:27] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=multiserviciosleblanc@gmail.com
+[2026-02-02 17:38:27] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-02-02 17:38:27] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-02-02 17:38:27] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-02-02 17:38:27] ✅ SUCCESS: ✅ Empresa encontrada: Empresa Test (ID: 44)
+[2026-02-02 17:38:27] ℹ️  INFO: Detectando cambios en products...
+[2026-02-02 17:38:28] ℹ️  INFO: Products: 0 nuevos, 0 modificados, 0 eliminados
+[2026-02-02 17:38:28] ℹ️  INFO: Detectando cambios en customers...
+[2026-02-02 17:38:29] ℹ️  INFO: Customers: 0 nuevos, 0 modificados, 0 eliminados
+[2026-02-02 17:38:29] ℹ️  INFO: Detectando cambios en categories...
+[2026-02-02 17:38:29] ℹ️  INFO: Categories: 0 nuevos, 0 modificados, 0 eliminados
+[2026-02-02 17:38:29] ℹ️  INFO: 
+[2026-02-02 17:38:29] ℹ️  INFO: 💰 DETECTANDO CAMBIOS EN QUOTES (MySQL → PostgreSQL)...
+[2026-02-02 17:38:29] ℹ️  INFO:    📋 Quotes encontrados en MySQL: 3
+[2026-02-02 17:38:29] ℹ️  INFO:    🔍 IDs encontrados: [147, 148, 149]
+[2026-02-02 17:38:29] 🔍 DEBUG:    🔍 Quote #147 (TEST-2026-001): hash_guardado=None
+[2026-02-02 17:38:29] ℹ️  INFO:   ✨ NUEVO: Quote #147 (TEST-2026-001)
+[2026-02-02 17:38:29] 🔍 DEBUG:    🔍 Quote #148 (TEST-2026-002): hash_guardado=None
+[2026-02-02 17:38:29] ℹ️  INFO:   ✨ NUEVO: Quote #148 (TEST-2026-002)
+[2026-02-02 17:38:29] 🔍 DEBUG:    🔍 Quote #149 (TEST-2026-003): hash_guardado=None
+[2026-02-02 17:38:29] ℹ️  INFO:   ✨ NUEVO: Quote #149 (TEST-2026-003)
+[2026-02-02 17:38:29] ℹ️  INFO: ✅ Quotes detectados: 3 nuevos, 0 modificados
+[2026-02-02 17:38:29] ℹ️  INFO: 
+[2026-02-02 17:38:29] ℹ️  INFO: 👤 SINCRONIZANDO SELLERS...
+[2026-02-02 17:38:29] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-02 17:38:29] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-02 17:38:29] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-02-02 17:38:29] 🔍 DEBUG: System log registrado: action=sellers - SYNC, key=, ip=131.72.168.71
+[2026-02-02 17:38:29] ❌ ERROR: ❌ Error sincronizando sellers: 'port'
+[2026-02-02 17:38:29] ℹ️  INFO: 
+[2026-02-02 17:38:29] ℹ️  INFO: 📦 SINCRONIZANDO CATEGORIES...
+[2026-02-02 17:38:29] ℹ️  INFO: 
+[2026-02-02 17:38:29] ℹ️  INFO: 📦 SINCRONIZANDO PRODUCTS...
+[2026-02-02 17:38:29] ℹ️  INFO: 
+[2026-02-02 17:38:29] ℹ️  INFO: 👥 SINCRONIZANDO CUSTOMERS...
+[2026-02-02 17:38:29] ℹ️  INFO: 
+[2026-02-02 17:38:29] ℹ️  INFO: 💰 SINCRONIZANDO QUOTES (MySQL → PostgreSQL)...
+[2026-02-02 17:38:29] ℹ️  INFO:    📋 Nuevos: 3 | Modificados: 0
+[2026-02-02 17:38:30] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-02 17:38:30] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-02 17:38:30] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-02-02 17:38:30] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-02 17:38:30] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-02 17:38:30] 🔍 DEBUG: System log registrado: action=quotes - CREATE, key=147, ip=131.72.168.71
+[2026-02-02 17:38:30] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-02 17:38:30] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-02 17:38:31] 🔍 DEBUG: System log registrado: action=quotes - CREATE, key=148, ip=131.72.168.71
+[2026-02-02 17:38:31] 🔍 DEBUG: IP pública obtenida: 131.72.168.71
+[2026-02-02 17:38:31] 🔍 DEBUG: MAC address obtenida: 87:0c:88:f6:b2:9a
+[2026-02-02 17:38:31] 🔍 DEBUG: System log registrado: action=quotes - CREATE, key=149, ip=131.72.168.71
+[2026-02-02 17:38:31] 🔍 DEBUG:   Procesando quote #147...
+[2026-02-02 17:38:31] 🔍 DEBUG:   ℹ️ Usando station: 00
+[2026-02-02 17:38:32] 🔍 DEBUG:   Quote #147 insertado con correlative=30234 (auto-generado)
+[2026-02-02 17:38:32] 🔍 DEBUG:   Procesando quote #148...
+[2026-02-02 17:38:32] 🔍 DEBUG:   ℹ️ Usando station: 00
+[2026-02-02 17:38:33] 🔍 DEBUG:   Quote #148 insertado con correlative=30235 (auto-generado)
+[2026-02-02 17:38:33] 🔍 DEBUG:   Procesando quote #149...
+[2026-02-02 17:38:33] 🔍 DEBUG:   ℹ️ Usando station: 00
+[2026-02-02 17:38:33] 🔍 DEBUG:   Quote #149 insertado con correlative=30236 (auto-generado)
+[2026-02-02 17:38:34] ❌ ERROR: Error procesando quote 149: inserción o actualización en la tabla «sales_operation_details» viola la llave foránea «sales_operation_details_code_product_fkey»
+DETAIL:  La llave (code_product)=(TEST-PROD-001) no está presente en la tabla «products».
+
+[2026-02-02 17:38:34] ❌ ERROR: TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 1534, in sincronizar_quotes_postgresql
+    correlativo = self._insertar_quote_postgresql(quote, mac)
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 1779, in _insertar_quote_postgresql
+    self._insertar_quote_items(correlativo, quote, bcv_rate)
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 1992, in _insertar_quote_items
+    self.pg_cursor.execute(sql_detail, (
+psycopg2.errors.ForeignKeyViolation: inserción o actualización en la tabla «sales_operation_details» viola la llave foránea «sales_operation_details_code_product_fkey»
+DETAIL:  La llave (code_product)=(TEST-PROD-001) no está presente en la tabla «products».
+
+
+[2026-02-02 17:38:34] ✅ SUCCESS: ✅ Quotes completados: 2 nuevos, 0 modificados, 1 errores
+[2026-02-02 17:38:34] ℹ️  INFO: 
+[2026-02-02 17:38:34] ℹ️  INFO: 🔄 SINCRONIZANDO ESTADOS DE QUOTES...
+[2026-02-02 17:38:34] ℹ️  INFO: Sincronizando estados de quotes (PostgreSQL → MySQL)...
+[2026-02-02 17:38:34] ❌ ERROR: Error sincronizando estados de quotes: no existe la relación «mysql.quotes»
+LINE 9:                   SELECT 1 FROM mysql.quotes q
+                                        ^
+
+[2026-02-02 17:38:34] ℹ️  INFO: 
+[2026-02-02 17:38:34] ℹ️  INFO: ╔════════════════════════════════════════════════════════════════╗
+[2026-02-02 17:38:34] ℹ️  INFO: ║                    RESUMEN DE SINCRONIZACIÓN                    ║
+[2026-02-02 17:38:34] ℹ️  INFO: ╚════════════════════════════════════════════════════════════════╝
+[2026-02-02 17:38:34] ✅ SUCCESS: Products:   0 nuevos, 0 modificados, 0 inactivados
+[2026-02-02 17:38:34] ✅ SUCCESS: Customers:  0 nuevos, 0 modificados
+[2026-02-02 17:38:34] ✅ SUCCESS: Categories: 0 nuevos, 0 modificados
+[2026-02-02 17:38:34] ✅ SUCCESS: Sellers:    0 nuevos, 0 actualizados
+[2026-02-02 17:38:34] ✅ SUCCESS: Quotes:     2 nuevos (MySQL→PG), 0 estados actualizados
+[2026-02-02 17:38:34] ℹ️  INFO: Duración:   7.88 segundos
+[2026-02-02 17:38:34] ℹ️  INFO: 
+[2026-02-02 17:38:34] ⚠️  WARNING: ⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES
+[2026-02-02 17:38:34] 
+[2026-02-02 17:38:34] ======================================================================
+[2026-02-02 17:38:34] FIN DE SINCRONIZACIÓN
+[2026-02-02 17:38:34] Fin: 2026-02-02 17:38:34
+[2026-02-02 17:38:34] 
+[2026-02-02 17:38:34] ESTADÍSTICAS FINALES:
+[2026-02-02 17:38:34]   Sellers: 0 nuevos, 0 modificados, 1 errores
+[2026-02-02 17:38:34]   Quotes: 2 nuevos, 0 modificados, 2 errores
+[2026-02-02 17:38:34] ======================================================================
+[2026-02-02 17:38:34] 

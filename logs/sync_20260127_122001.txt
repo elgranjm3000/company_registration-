@@ -1,0 +1,41 @@
+[2026-01-27 12:20:01] ======================================================================
+[2026-01-27 12:20:01] SINCRONIZACIÓN PostgreSQL ↔ MySQL
+[2026-01-27 12:20:01] Inicio: 2026-01-27 12:20:01
+[2026-01-27 12:20:01] Empresa RIF: J316277860
+[2026-01-27 12:20:01] Empresa Email: @
+[2026-01-27 12:20:01] ======================================================================
+[2026-01-27 12:20:01] 
+[2026-01-27 12:20:01] ⚠️  WARNING: Sistema de notificaciones no disponible (pip install win10toast)
+[2026-01-27 12:20:01] ✅ SUCCESS: ✅ Conectado a PostgreSQL
+[2026-01-27 12:20:02] ✅ SUCCESS: ✅ Conectado a MySQL (pymysql)
+[2026-01-27 12:20:02] 🔍 DEBUG:    Host: 91.238.160.176
+[2026-01-27 12:20:02] 🔍 DEBUG:    Port: 3306
+[2026-01-27 12:20:02] 🔍 DEBUG:    Database: chrystal_movil
+[2026-01-27 12:20:02] ℹ️  INFO: 🔍 Buscando empresa: RIF=J316277860, Email=@
+[2026-01-27 12:20:02] 🔍 DEBUG:   🔍 Verificando tabla 'acceso'...
+[2026-01-27 12:20:02] ✅ SUCCESS:   ✅ Empresa encontrada en tabla 'acceso'
+[2026-01-27 12:20:02] 🔍 DEBUG:   🔍 Buscando en tabla 'companies'...
+[2026-01-27 12:20:02] ✅ SUCCESS: ✅ Empresa encontrada: Empresa Test (ID: 44)
+[2026-01-27 12:20:03] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:20:03] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:20:03] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:20:04] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:20:04] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:20:04] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:20:04] 🔍 DEBUG: System log registrado: action=products, ip=186.165.103.17, lat=10.4873, lng=-66.8738
+[2026-01-27 12:20:05] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:20:05] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:20:05] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:20:05] 🔍 DEBUG: System log registrado: action=customers, ip=186.165.103.17, lat=10.4873, lng=-66.8738
+[2026-01-27 12:20:06] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:20:06] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:20:06] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:20:06] 🔍 DEBUG: System log registrado: action=categories, ip=186.165.103.17, lat=10.4873, lng=-66.8738
+[2026-01-27 12:20:07] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:20:07] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:20:07] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:20:07] 🔍 DEBUG: System log registrado: action=quotes, ip=186.165.103.17, lat=10.4873, lng=-66.8738
+[2026-01-27 12:20:08] 🔍 DEBUG: IP pública obtenida: 186.165.103.17
+[2026-01-27 12:20:08] 🔍 DEBUG: MAC address obtenida: 09:53:90:d4:ba:db
+[2026-01-27 12:20:08] 🔍 DEBUG: Geolocalización obtenida: 10.4873, -66.8738
+[2026-01-27 12:20:08] 🔍 DEBUG: System log registrado: action=sellers, ip=186.165.103.17, lat=10.4873, lng=-66.8738
