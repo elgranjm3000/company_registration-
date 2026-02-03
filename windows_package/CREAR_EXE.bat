@@ -47,7 +47,8 @@ if %errorlevel% equ 0 (
     echo Ubicacion: dist\SyncSystem\sync_system.exe
     echo.
     echo Para ejecutar:
-    echo   dist\SyncSystem\sync_system.exe --mode tray
+    echo   dist\SyncSystem\sync_system.exe --mode manager     (Ventana GUI con contadores)
+    echo   dist\SyncSystem\sync_system.exe --mode tray        (Icono en barra de tareas + auto-inicio)
     echo.
 
     REM Preguntar si quiere ejecutar ahora
@@ -56,7 +57,7 @@ if %errorlevel% equ 0 (
         echo.
         echo Ejecutando...
         cd dist\SyncSystem
-        start sync_system.exe --mode tray
+        start sync_system.exe --mode manager
         cd ..\..
     )
 ) else (
