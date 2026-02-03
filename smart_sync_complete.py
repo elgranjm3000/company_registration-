@@ -108,17 +108,32 @@ class SmartSyncComplete:
             current: Número actual de registros procesados
             total: Total de registros a procesar
         """
-        if self.progress_callback and total > 0:
-            try:
-                self.progress_callback({
-                    'entity': entity,
-                    'current': current,
-                    'total': total,
-                    'percentage': round((current / total) * 100, 1)
-                })
-            except Exception as e:
-                # Silencioso para no interrumpir la sincronización
-                pass
+        if total > 0:
+            percentage = round((current / total) * 100, 1)
+
+            # Mostrar progreso en consola SIEMPRE (visible para el usuario)
+            # Usar carriage return para sobrescribir la línea y crear efecto de contador
+            import sys
+            entity_name = entity.upper()
+            sys.stdout.write(f"\r  📊 {entity_name}: {current}/{total} ({percentage}%)")
+            sys.stdout.flush()
+
+            # También llamar al callback si existe (para interfaz gráfica)
+            if self.progress_callback:
+                try:
+                    self.progress_callback({
+                        'entity': entity,
+                        'current': current,
+                        'total': total,
+                        'percentage': percentage
+                    })
+                except Exception as e:
+                    # Silencioso para no interrumpir la sincronización
+                    pass
+
+            # Imprimir salto de línea al completar
+            if current == total:
+                print()  # Salto de línea al terminar
 
     def _setup_file_logging(self):
         """
@@ -2712,7 +2727,7 @@ class SmartSyncComplete:
                 # Commit cada 50 productos para no acumular transacción enorme
                 if idx % 50 == 0:
                     self.mysql_conn.commit()
-                    self._log(f"  ✅ Progreso: {idx}/{total_nuevos} productos insertados", "info")
+                    # No imprimir log aquí para no interferir con el contador
 
             # Commit final de los nuevos
             if total_nuevos > 0:
@@ -2824,7 +2839,7 @@ class SmartSyncComplete:
                 # Commit cada 50 productos
                 if idx % 50 == 0:
                     self.mysql_conn.commit()
-                    self._log(f"  ✅ Progreso: {idx}/{total_modificados} productos actualizados", "info")
+                    # No imprimir log aquí para no interferir con el contador
 
             # Commit final de los modificados
             if total_modificados > 0:
