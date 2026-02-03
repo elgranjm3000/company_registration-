@@ -115,8 +115,20 @@ class SmartSyncComplete:
             # Usar carriage return para sobrescribir la línea y crear efecto de contador
             import sys
             entity_name = entity.upper()
-            sys.stdout.write(f"\r  📊 {entity_name}: {current}/{total} ({percentage}%)")
-            sys.stdout.flush()
+
+            # Calcular frecuencia de actualización según el total
+            # Para muchos registros, actualizar cada 10; para pocos, actualizar siempre
+            if total > 100:
+                update_freq = 10
+            elif total > 50:
+                update_freq = 5
+            else:
+                update_freq = 1
+
+            # Solo mostrar si es múltiplo de la frecuencia o es el último
+            if current % update_freq == 0 or current == total:
+                sys.stdout.write(f"\r  📊 {entity_name}: {current}/{total} ({percentage}%)")
+                sys.stdout.flush()
 
             # También llamar al callback si existe (para interfaz gráfica)
             if self.progress_callback:
