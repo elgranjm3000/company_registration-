@@ -2687,23 +2687,24 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
-                (code, description, short_name, department, stock, product_type,
-                 coin, description_coin, price, cost, higher_price, min_stock, status,
-                 image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                try:
+                    # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
+                    (code, description, short_name, department, stock, product_type,
+                     coin, description_coin, price, cost, higher_price, min_stock, status,
+                     image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
-                # Verificar que la categoría existe en MySQL
-                if department not in category_mapping:
-                    self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
-                    products_sin_categoria += 1
-                    continue
+                    # Verificar que la categoría existe en MySQL
+                    if department not in category_mapping:
+                        self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
+                        products_sin_categoria += 1
+                        continue
 
-                category_id = category_mapping[department]
+                    category_id = category_mapping[department]
 
-                # Crear JSON de imagen
-                image_json = self._create_image_json(image_type, product_image)
+                    # Crear JSON de imagen
+                    image_json = self._create_image_json(image_type, product_image)
 
-                # INSERT con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
+                    # INSERT con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
                 insert_query = """
                 INSERT INTO products (
                     company_id,
@@ -2776,14 +2777,24 @@ class SmartSyncComplete:
                     buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
                 ))
 
-                self.stats['products']['nuevos'] += 1
-                current_count += 1
-                self._reportar_progreso('products', current_count, total_cambios)
+                    self.stats['products']['nuevos'] += 1
+                    current_count += 1
+                    self._reportar_progreso('products', current_count, total_cambios)
 
-                # Commit cada 50 productos para no acumular transacción enorme
-                if idx % 50 == 0:
-                    self.mysql_conn.commit()
-                    # No imprimir log aquí para no interferir con el contador
+                    # Commit cada 50 productos para no acumular transacción enorme
+                    if idx % 50 == 0:
+                        self.mysql_conn.commit()
+                        # No imprimir log aquí para no interferir con el contador
+
+                except Exception as e:
+                    # Error con un producto específico - continuar con los demás
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        # Para ON DUPLICATE KEY UPDATE, esto es normal
+                        pass
+                    else:
+                        self._log(f"  ⚠️ Error insertando producto: {str(e)[:100]}", "warning")
+                        self.stats['products']['errores'] += 1
 
             # Commit final de los nuevos
             if total_nuevos > 0:
@@ -2799,23 +2810,24 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
-                (code, description, short_name, department, stock, product_type,
-                 coin, description_coin, price, cost, higher_price, min_stock, status,
-                 image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                try:
+                    # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
+                    (code, description, short_name, department, stock, product_type,
+                     coin, description_coin, price, cost, higher_price, min_stock, status,
+                     image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
-                # Verificar que la categoría existe en MySQL
-                if department not in category_mapping:
-                    self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
-                    products_sin_categoria += 1
-                    continue
+                    # Verificar que la categoría existe en MySQL
+                    if department not in category_mapping:
+                        self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
+                        products_sin_categoria += 1
+                        continue
 
-                category_id = category_mapping[department]
+                    category_id = category_mapping[department]
 
-                # Crear JSON de imagen
-                image_json = self._create_image_json(image_type, product_image)
+                    # Crear JSON de imagen
+                    image_json = self._create_image_json(image_type, product_image)
 
-                # UPDATE con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
+                    # UPDATE con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
                 update_query = """
                 INSERT INTO products (
                     company_id,
@@ -2888,14 +2900,19 @@ class SmartSyncComplete:
                     buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
                 ))
 
-                self.stats['products']['modificados'] += 1
-                current_count += 1
-                self._reportar_progreso('products', current_count, total_cambios)
+                    self.stats['products']['modificados'] += 1
+                    current_count += 1
+                    self._reportar_progreso('products', current_count, total_cambios)
 
-                # Commit cada 50 productos
-                if idx % 50 == 0:
-                    self.mysql_conn.commit()
-                    # No imprimir log aquí para no interferir con el contador
+                    # Commit cada 50 productos
+                    if idx % 50 == 0:
+                        self.mysql_conn.commit()
+                        # No imprimir log aquí para no interferir con el contador
+
+                except Exception as e:
+                    # Error con un producto específico - continuar con los demás
+                    self._log(f"  ⚠️ Error actualizando producto: {str(e)[:100]}", "warning")
+                    self.stats['products']['errores'] += 1
 
             # Commit final de los modificados
             if total_modificados > 0:
@@ -2976,62 +2993,105 @@ class SmartSyncComplete:
 
         try:
             # Nuevos
-            for cliente in cambios['nuevos']:
+            total_nuevos = len(cambios['nuevos'])
+            if total_nuevos > 0:
+                self._log(f"  👥 Insertando {total_nuevos} customers NUEVOS...", "info")
+
+            for idx, cliente in enumerate(cambios['nuevos'], 1):
                 if not self.sync_running:
                     break
 
-                code, description, address, client_id, email, phone, contact = cliente
+                try:
+                    code, description, address, client_id, email, phone, contact = cliente
 
-                if not email or email.strip() == '':
-                    email = f"customer_{code}@temp.local"
+                    if not email or email.strip() == '':
+                        email = f"customer_{code}@temp.local"
 
-                insert_query = """
-                INSERT INTO customers (
-                    company_id, name, email, document_number, address, phone, contact,
-                    status, created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                """
+                    insert_query = """
+                    INSERT INTO customers (
+                        company_id, name, email, document_number, address, phone, contact,
+                        status, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    """
 
-                self.mysql_cursor.execute(insert_query, (
-                    self.company_id, description, email, code,
-                    address if address else None, phone if phone else None,
-                    contact if contact else None, 'active'
-                ))
+                    self.mysql_cursor.execute(insert_query, (
+                        self.company_id, description, email, code,
+                        address if address else None, phone if phone else None,
+                        contact if contact else None, 'active'
+                    ))
 
-                self.stats['customers']['nuevos'] += 1
-                current_count += 1
-                self._reportar_progreso('customers', current_count, total_cambios)
+                    self.stats['customers']['nuevos'] += 1
+                    current_count += 1
+                    self._reportar_progreso('customers', current_count, total_cambios)
+
+                    # Commit cada 50 customers para no acumular transacción enorme
+                    if idx % 50 == 0:
+                        self.mysql_conn.commit()
+                        self._log(f"  ✅ Commit parcial: {idx}/{total_nuevos} customers insertados", "debug")
+
+                except Exception as e:
+                    # Error con un customer específico - continuar con los demás
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        self._log(f"  ℹ️ Customer {code} ya existe (omitiendo)", "debug")
+                    else:
+                        self._log(f"  ⚠️ Error insertando customer {code}: {str(e)[:100]}", "warning")
+                        self.stats['customers']['errores'] += 1
+
+            # Commit final de los nuevos
+            if total_nuevos > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['customers']['nuevos']}/{total_nuevos} customers nuevos insertados", "success")
 
             # Modificados
-            for cliente in cambios['modificados']:
+            total_modificados = len(cambios['modificados'])
+            if total_modificados > 0:
+                self._log(f"  👥 Actualizando {total_modificados} customers MODIFICADOS...", "info")
+
+            for idx, cliente in enumerate(cambios['modificados'], 1):
                 if not self.sync_running:
                     break
 
-                code, description, address, client_id, email, phone, contact = cliente
+                try:
+                    code, description, address, client_id, email, phone, contact = cliente
 
-                if not email or email.strip() == '':
-                    email = f"customer_{code}@temp.local"
+                    if not email or email.strip() == '':
+                        email = f"customer_{code}@temp.local"
 
-                update_query = """
-                UPDATE customers SET
-                    name = %s, email = %s, address = %s, phone = %s,
-                    contact = %s, updated_at = NOW()
-                WHERE company_id = %s AND document_number = %s
-                """
+                    update_query = """
+                    UPDATE customers SET
+                        name = %s, email = %s, address = %s, phone = %s,
+                        contact = %s, updated_at = NOW()
+                    WHERE company_id = %s AND document_number = %s
+                    """
 
-                self.mysql_cursor.execute(update_query, (
-                    description, email, address if address else None,
-                    phone if phone else None, contact if contact else None,
-                    self.company_id, code
-                ))
+                    self.mysql_cursor.execute(update_query, (
+                        description, email, address if address else None,
+                        phone if phone else None, contact if contact else None,
+                        self.company_id, code
+                    ))
 
-                self.stats['customers']['modificados'] += 1
-                current_count += 1
-                self._reportar_progreso('customers', current_count, total_cambios)
+                    self.stats['customers']['modificados'] += 1
+                    current_count += 1
+                    self._reportar_progreso('customers', current_count, total_cambios)
 
-            self.mysql_conn.commit()
+                    # Commit cada 50 customers
+                    if idx % 50 == 0:
+                        self.mysql_conn.commit()
+                        self._log(f"  ✅ Commit parcial: {idx}/{total_modificados} customers actualizados", "debug")
+
+                except Exception as e:
+                    # Error con un customer específico - continuar con los demás
+                    self._log(f"  ⚠️ Error actualizando customer {code}: {str(e)[:100]}", "warning")
+                    self.stats['customers']['errores'] += 1
+
+            # Commit final de los modificados
+            if total_modificados > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['customers']['modificados']}/{total_modificados} customers modificados actualizados", "success")
+
             self._log(f"✅ Customers sincronizados: {self.stats['customers']['nuevos']} nuevos, "
-                      f"{self.stats['customers']['modificados']} modificados", "success")
+                      f"{self.stats['customers']['modificados']} modificados, {self.stats['customers']['errores']} errores", "success")
 
         except Exception as e:
             self._log(f"Error sincronizando customers a MySQL: {str(e)}", "error")
