@@ -1848,13 +1848,14 @@ class SmartSyncComplete:
         self._log(f"   📋 Nuevos: {total_nuevos} | Modificados: {total_modificados}", "info")
 
         # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        # COMENTADO: Tarda mucho guardando en system_logs
         nuevos_quotes = [str(q['id']) for q in cambios.get('nuevos', [])]
         modificados_quotes = [str(q['id']) for q in cambios.get('modificados', [])]
 
-        if nuevos_quotes:
-            self._log_to_system_logs_batch('quotes', nuevos_quotes, 'CREATE')
-        if modificados_quotes:
-            self._log_to_system_logs_batch('quotes', modificados_quotes, 'UPDATE')
+        # if nuevos_quotes:
+        #     self._log_to_system_logs_batch('quotes', nuevos_quotes, 'CREATE')
+        # if modificados_quotes:
+        #     self._log_to_system_logs_batch('quotes', modificados_quotes, 'UPDATE')
 
         try:
             # Obtener MAC address para la estación
@@ -2659,13 +2660,14 @@ class SmartSyncComplete:
         self._log("Sincronizando changes de products a MySQL...", "info")
 
         # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        # COMENTADO: Tarda mucho guardando en system_logs
         nuevos_products = [p[0] for p in cambios['nuevos']]
         modificados_products = [p[0] for p in cambios['modificados']]
 
-        if nuevos_products:
-            self._log_to_system_logs_batch('products', nuevos_products, 'CREATE')
-        if modificados_products:
-            self._log_to_system_logs_batch('products', modificados_products, 'UPDATE')
+        # if nuevos_products:
+        #     self._log_to_system_logs_batch('products', nuevos_products, 'CREATE')
+        # if modificados_products:
+        #     self._log_to_system_logs_batch('products', modificados_products, 'UPDATE')
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
@@ -2697,6 +2699,8 @@ class SmartSyncComplete:
                     if department not in category_mapping:
                         self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
                         products_sin_categoria += 1
+                        # Reportar progreso aunque se omita el producto
+                        self._reportar_progreso('products', idx, total_cambios)
                         continue
 
                     category_id = category_mapping[department]
@@ -2778,13 +2782,13 @@ class SmartSyncComplete:
                     ))
 
                     self.stats['products']['nuevos'] += 1
-                    current_count += 1
-                    self._reportar_progreso('products', current_count, total_cambios)
-
                     # Commit cada 50 productos para no acumular transacción enorme
                     if idx % 50 == 0:
                         self.mysql_conn.commit()
                         # No imprimir log aquí para no interferir con el contador
+
+                    # Reportar progreso después de insertar exitosamente
+                    self._reportar_progreso('products', idx, total_cambios)
 
                 except Exception as e:
                     # Error con un producto específico - continuar con los demás
@@ -2795,6 +2799,9 @@ class SmartSyncComplete:
                     else:
                         self._log(f"  ⚠️ Error insertando producto: {str(e)[:100]}", "warning")
                         self.stats['products']['errores'] += 1
+
+                    # Reportar progreso aunque haya error
+                    self._reportar_progreso('products', idx, total_cambios)
 
             # Commit final de los nuevos
             if total_nuevos > 0:
@@ -2820,6 +2827,9 @@ class SmartSyncComplete:
                     if department not in category_mapping:
                         self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
                         products_sin_categoria += 1
+                        # Reportar progreso incluso si se omite (ajustar idx para continuar desde los nuevos)
+                        idx_adjusted = total_nuevos + idx
+                        self._reportar_progreso('products', idx_adjusted, total_cambios)
                         continue
 
                     category_id = category_mapping[department]
@@ -2901,18 +2911,23 @@ class SmartSyncComplete:
                     ))
 
                     self.stats['products']['modificados'] += 1
-                    current_count += 1
-                    self._reportar_progreso('products', current_count, total_cambios)
-
                     # Commit cada 50 productos
                     if idx % 50 == 0:
                         self.mysql_conn.commit()
                         # No imprimir log aquí para no interferir con el contador
 
+                    # Reportar progreso después de actualizar exitosamente (ajustar idx para continuar desde los nuevos)
+                    idx_adjusted = total_nuevos + idx
+                    self._reportar_progreso('products', idx_adjusted, total_cambios)
+
                 except Exception as e:
                     # Error con un producto específico - continuar con los demás
                     self._log(f"  ⚠️ Error actualizando producto: {str(e)[:100]}", "warning")
                     self.stats['products']['errores'] += 1
+
+                    # Reportar progreso aunque haya error
+                    idx_adjusted = total_nuevos + idx
+                    self._reportar_progreso('products', idx_adjusted, total_cambios)
 
             # Commit final de los modificados
             if total_modificados > 0:
@@ -2985,13 +3000,14 @@ class SmartSyncComplete:
         self._log("Sincronizando cambios de customers a MySQL...", "info")
 
         # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        # COMENTADO: Tarda mucho guardando en system_logs
         nuevos_customers = [c[0] for c in cambios['nuevos']]
         modificados_customers = [c[0] for c in cambios['modificados']]
 
-        if nuevos_customers:
-            self._log_to_system_logs_batch('customers', nuevos_customers, 'CREATE')
-        if modificados_customers:
-            self._log_to_system_logs_batch('customers', modificados_customers, 'UPDATE')
+        # if nuevos_customers:
+        #     self._log_to_system_logs_batch('customers', nuevos_customers, 'CREATE')
+        # if modificados_customers:
+        #     self._log_to_system_logs_batch('customers', modificados_customers, 'UPDATE')
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
@@ -3027,13 +3043,13 @@ class SmartSyncComplete:
                     ))
 
                     self.stats['customers']['nuevos'] += 1
-                    current_count += 1
-                    self._reportar_progreso('customers', current_count, total_cambios)
-
                     # Commit cada 50 customers para no acumular transacción enorme
                     if idx % 50 == 0:
                         self.mysql_conn.commit()
                         self._log(f"  ✅ Commit parcial: {idx}/{total_nuevos} customers insertados", "debug")
+
+                    # Reportar progreso después de insertar exitosamente
+                    self._reportar_progreso('customers', idx, total_cambios)
 
                 except Exception as e:
                     # Error con un customer específico - continuar con los demás
@@ -3043,6 +3059,9 @@ class SmartSyncComplete:
                     else:
                         self._log(f"  ⚠️ Error insertando customer {code}: {str(e)[:100]}", "warning")
                         self.stats['customers']['errores'] += 1
+
+                    # Reportar progreso aunque haya error
+                    self._reportar_progreso('customers', idx, total_cambios)
 
             # Commit final de los nuevos
             if total_nuevos > 0:
@@ -3078,18 +3097,23 @@ class SmartSyncComplete:
                     ))
 
                     self.stats['customers']['modificados'] += 1
-                    current_count += 1
-                    self._reportar_progreso('customers', current_count, total_cambios)
-
                     # Commit cada 50 customers
                     if idx % 50 == 0:
                         self.mysql_conn.commit()
                         self._log(f"  ✅ Commit parcial: {idx}/{total_modificados} customers actualizados", "debug")
 
+                    # Reportar progreso después de actualizar exitosamente (ajustar idx para continuar desde los nuevos)
+                    idx_adjusted = total_nuevos + idx
+                    self._reportar_progreso('customers', idx_adjusted, total_cambios)
+
                 except Exception as e:
                     # Error con un customer específico - continuar con los demás
                     self._log(f"  ⚠️ Error actualizando customer {code}: {str(e)[:100]}", "warning")
                     self.stats['customers']['errores'] += 1
+
+                    # Reportar progreso aunque haya error
+                    idx_adjusted = total_nuevos + idx
+                    self._reportar_progreso('customers', idx_adjusted, total_cambios)
 
             # Commit final de los modificados
             if total_modificados > 0:
@@ -3247,13 +3271,14 @@ class SmartSyncComplete:
         self._log("Sincronizando cambios de categories a MySQL...", "info")
 
         # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
+        # COMENTADO: Tarda mucho guardando en system_logs
         nuevos_categories = [c[0] for c in cambios['nuevos']]
         modificados_categories = [c[0] for c in cambios['modificados']]
 
-        if nuevos_categories:
-            self._log_to_system_logs_batch('categories', nuevos_categories, 'CREATE')
-        if modificados_categories:
-            self._log_to_system_logs_batch('categories', modificados_categories, 'UPDATE')
+        # if nuevos_categories:
+        #     self._log_to_system_logs_batch('categories', nuevos_categories, 'CREATE')
+        # if modificados_categories:
+        #     self._log_to_system_logs_batch('categories', modificados_categories, 'UPDATE')
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
@@ -3363,7 +3388,8 @@ class SmartSyncComplete:
         Usa SmartSellersSyncModule para la sincronización
         """
         # Registrar en system_logs (sincronización completa)
-        self._log_to_system_logs('sellers', '', 'SYNC')
+        # COMENTADO: Tarda mucho guardando en system_logs
+        # self._log_to_system_logs('sellers', '', 'SYNC')
 
         try:
             # Agregar directorio actual al sys.path para encontrar el módulo
