@@ -75,6 +75,7 @@ class SmartSyncComplete:
         self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
         self.progress_callback = progress_callback  # Callback para reportar progreso
+        self.progress_active = False  # Flag para saber si hay un contador activo
 
         # Estadísticas
         self.stats = {
@@ -111,6 +112,10 @@ class SmartSyncComplete:
         if total > 0:
             percentage = round((current / total) * 100, 1)
 
+            # Activar flag de progreso al inicio
+            if current == 1:
+                self.progress_active = True
+
             # Mostrar progreso en consola SIEMPRE (visible para el usuario)
             # Usar carriage return para sobrescribir la línea y crear efecto de contador
             import sys
@@ -143,9 +148,10 @@ class SmartSyncComplete:
                     # Silencioso para no interrumpir la sincronización
                     pass
 
-            # Imprimir salto de línea al completar
+            # Imprimir salto de línea al completar y desactivar flag
             if current == total:
                 print()  # Salto de línea al terminar
+                self.progress_active = False  # Desactivar flag al terminar
 
     def _setup_file_logging(self):
         """
@@ -288,7 +294,10 @@ class SmartSyncComplete:
             self.app.log_message(mensaje, tipo)
         else:
             # Fallback para uso sin interfaz gráfica
-            self._print_to_console(f"[{tipo.upper()}] {mensaje}")
+            # NO imprimir logs DEBUG en consola cuando hay un contador activo
+            # para no interrumpir el carriage return (\r) del contador
+            if not (self.progress_active and tipo == 'debug'):
+                self._print_to_console(f"[{tipo.upper()}] {mensaje}")
 
         # SIEMPRE escribir al archivo de log
         log_prefix = {
