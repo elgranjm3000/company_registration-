@@ -77,6 +77,14 @@ class SmartSyncComplete:
         self.progress_callback = progress_callback  # Callback para reportar progreso
         self.progress_active = False  # Flag para saber si hay un contador activo
 
+        # Información de progreso accesible desde la UI
+        self.progress_info = {
+            'entity': '',      # 'products', 'customers', 'categories', etc.
+            'current': 0,      # Progreso actual
+            'total': 0,        # Total a procesar
+            'percentage': 0.0  # Porcentaje completado
+        }
+
         # Estadísticas
         self.stats = {
             'products': {'nuevos': 0, 'modificados': 0, 'eliminados': 0, 'errores': 0},
@@ -111,6 +119,14 @@ class SmartSyncComplete:
         """
         if total > 0:
             percentage = round((current / total) * 100, 1)
+
+            # Actualizar progress_info (accesible desde la UI)
+            self.progress_info = {
+                'entity': entity,
+                'current': current,
+                'total': total,
+                'percentage': percentage
+            }
 
             # Activar flag de progreso al inicio
             if current == 1:
@@ -152,6 +168,21 @@ class SmartSyncComplete:
             if current == total:
                 print()  # Salto de línea al terminar
                 self.progress_active = False  # Desactivar flag al terminar
+
+    def get_progress_info(self):
+        """
+        Obtener información actual del progreso de sincronización
+        Útil para que la interfaz gráfica consulte el estado
+
+        Returns:
+            Dict con {entity, current, total, percentage}
+        """
+        return self.progress_info.copy() if self.progress_info else {
+            'entity': '',
+            'current': 0,
+            'total': 0,
+            'percentage': 0.0
+        }
 
     def _setup_file_logging(self):
         """
