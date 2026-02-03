@@ -6,3 +6,9 @@ dist/
 build/
 dist/
 .env
+
+# Logs
+logs/
+*.log
+sync_service.log
+sync_system.log
