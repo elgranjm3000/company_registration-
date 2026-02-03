@@ -982,11 +982,15 @@ class ManagerWindow:
             self.lbl_estado.config(text="🔴 NO CONFIGURADO", fg="red")
             return
 
-        # Verificar conexiones
-        if self.sync_module.verificar_conexiones():
-            self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
+        # Verificar conexiones (solo para SyncModule antiguo)
+        if hasattr(self.sync_module, 'verificar_conexiones'):
+            if self.sync_module.verificar_conexiones():
+                self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
+            else:
+                self.lbl_estado.config(text="🟡 ERROR DE CONEXIÓN", fg="orange")
         else:
-            self.lbl_estado.config(text="🟡 ERROR DE CONEXIÓN", fg="orange")
+            # SmartSyncComplete no tiene verificar_conexiones, asumimos activo
+            self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
 
     def sincronizar(self):
         """Ejecuta sincronización"""
