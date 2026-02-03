@@ -2151,15 +2151,21 @@ class SmartSyncComplete:
 
     def _insertar_quote_items(self, correlativo: int, quote: dict, bcv_rate: float):
         """Insertar items del quote (sales_operation_details)"""
-        # Obtener items del quote
+        # Obtener items del quote con datos de products de MySQL
         query_items = """
         SELECT
-            description, name, subtotal, unit, unit_price, total,
-            tax_amount, discount_amount, discount_percentage, quantity,
-            product_id
-        FROM quote_items
-        WHERE quote_id = %s
-        ORDER BY id
+            qi.description, qi.name, qi.subtotal, qi.unit, qi.unit_price, qi.total,
+            qi.tax_amount, qi.discount_amount, qi.discount_percentage, qi.quantity,
+            qi.product_id,
+            p.code AS product_code,
+            p.unitary_cost,
+            p.aliquot AS sale_aliquot,
+            p.buy_aliquot,
+            p.product_type
+        FROM quote_items qi
+        JOIN products p ON p.id = qi.product_id
+        WHERE qi.quote_id = %s
+        ORDER BY qi.id
         """
 
         self.mysql_cursor.execute(query_items, (quote['id'],))
@@ -2168,20 +2174,15 @@ class SmartSyncComplete:
         for item in items:
             (description, name, subtotal, unit, unit_price, total,
              tax_amount, discount_amount, discount_percentage, quantity,
-             product_id) = item
+             product_id, product_code, unitary_cost, sale_aliquot, buy_aliquot, product_type) = item
 
-            # Obtener código de producto, COSTO y sale_tax desde PostgreSQL
-            self.mysql_cursor.execute(
-                "SELECT code, cost FROM products WHERE id = %s",
-                (product_id,)
-            )
-            product_result = self.mysql_cursor.fetchone()
-            if product_result and product_result[0]:
-                product_code = product_result[0]
-                product_cost = safe_float(product_result[1]) if product_result[1] else 0
-            else:
+            # Si no hay código de producto, usar migración
+            if not product_code:
                 product_code = f"MIG-{product_id}"
-                product_cost = 0
+                unitary_cost = 0
+                sale_aliquot = 16
+                buy_aliquot = 16
+                product_type = 'finished'
 
             # Obtener sale_tax desde PostgreSQL (tabla products)
             self.pg_cursor.execute(
@@ -2189,18 +2190,7 @@ class SmartSyncComplete:
                 (product_code,)
             )
             pg_product = self.pg_cursor.fetchone()
-            if pg_product and pg_product[0]:
-                product_sale_tax = pg_product[0]
-                # Calcular sale_aliquot basado en sale_tax
-                if product_sale_tax == '01':
-                    product_sale_aliquot = 16  # IVA 16%
-                elif product_sale_tax == 'EX':
-                    product_sale_aliquot = 0   # Exento
-                else:
-                    product_sale_aliquot = 0   # Otro caso
-            else:
-                product_sale_tax = '01'  # Default
-                product_sale_aliquot = 16
+            product_sale_tax = pg_product[0] if pg_product else '01'
 
             # Obtener correlative Y unit_type desde products_units
             self.pg_cursor.execute(
@@ -2235,19 +2225,17 @@ class SmartSyncComplete:
             else:
                 tax_percent = 0
 
-            # Calcular costos usando COSTO REAL del producto (no 80% del precio)
-            unitary_cost = product_cost  # COSTO real del producto
-            total_net_cost = qty * product_cost  # Costo neto = cantidad × costo
+            # Valores de MySQL
+            uc = safe_float(unitary_cost) if unitary_cost else 0
+            sa = safe_float(sale_aliquot) if sale_aliquot else 16
+            ba = safe_float(buy_aliquot) if buy_aliquot else 16
 
-            # Calcular tax_cost basado en sale_tax de PostgreSQL (16% del costo)
-            if product_sale_tax == '01':
-                total_tax_cost = total_net_cost * 0.16  # 16% IVA sobre el costo
-            elif product_sale_tax == 'EX':
-                total_tax_cost = 0  # Exento
-            else:
-                total_tax_cost = 0  # Otro caso
+            # Calcular costos según nueva fórmula:
+            unitary_cost_final = uc  # unitary_cost de MySQL
+            total_net_cost = uc * qty  # total_net_cost = unitary_cost * cantidad
+            total_tax_cost = uc * (ba / 100) * qty  # total_tax_cost = unitary_cost * buy_aliquot/100 * cantidad
+            total_cost = total_net_cost + total_tax_cost  # total_cost = total_net_cost + total_tax_cost
 
-            total_cost = total_net_cost + total_tax_cost  # Costo total
             total_net = sub - disc_amt  # Precio neto (para ventas)
 
             # Pre-calcular descripción (evitar inline 'or')
@@ -2281,13 +2269,13 @@ class SmartSyncComplete:
                 product_unit,       # unit (correlative de products_units)
                 1.0,                # conversion_factor
                 product_unit_type,  # unit_type (desde products_units)
-                unitary_cost,
-                product_sale_tax,       # sale_tax (desde products)
-                product_sale_aliquot,   # sale_aliquot (16 para '01', 0 para 'EX')
+                unitary_cost_final, # unitary_cost de MySQL
+                product_sale_tax,   # sale_tax (desde products)
+                sa,                 # sale_aliquot de MySQL
                 up,
-                total_net_cost,
-                total_tax_cost,
-                total_cost,
+                total_net_cost,     # unitary_cost * cantidad
+                total_tax_cost,     # unitary_cost * buy_aliquot/100 * cantidad
+                total_cost,         # total_net_cost + total_tax_cost
                 sub,
                 ta,
                 tot,
@@ -2297,22 +2285,24 @@ class SmartSyncComplete:
                 ta,
                 tot,
                 '02',     # coin_code (dólar)
-                16,       # buy_aliquot
-                '01',     # buy_tax
-                qty
+                ba,       # buy_aliquot de MySQL
+                '01',     # buy_tax (general)
+                product_type  # product_type de MySQL
             ))
 
             line = self.pg_cursor.fetchone()[0]
 
-            # Insertar monedas del detalle (pasando product_cost, product_code y product_sale_tax)
-            self._insertar_item_monedas(correlativo, line, item, bcv_rate, product_cost, product_code, product_sale_tax)
+            # Insertar monedas del detalle (pasando los nuevos valores)
+            self._insertar_item_monedas(correlativo, line, item, bcv_rate, unitary_cost_final, product_code, product_sale_tax, total_net_cost, total_tax_cost, total_cost)
 
     def _insertar_item_monedas(self, correlativo: int, line: int, item: tuple, bcv_rate: float,
-                                product_cost: float, product_code: str, product_sale_tax: str):
+                                unitary_cost: float, product_code: str, product_sale_tax: str,
+                                total_net_cost: float, total_tax_cost: float, total_cost: float):
         """Insertar monedas de un item"""
         (description, name, subtotal, unit, unit_price, total,
          tax_amount, discount_amount, discount_percentage, quantity,
-         product_id) = item
+         product_id, product_code_mysql, unitary_cost_mysql, sale_aliquot_mysql,
+         buy_aliquot_mysql, product_type_mysql) = item
 
         # Calcular todos los valores ANTES del execute
         unit_price_f = safe_float(unit_price)
@@ -2322,17 +2312,9 @@ class SmartSyncComplete:
         tot = safe_float(total)
         disc = safe_float(discount_amount)
 
-        # Dólares - Usar COSTO REAL y calcular tax basado en sale_tax de PostgreSQL
-        unitary_cost = product_cost  # COSTO real
-        total_net_cost = quantity_f * product_cost  # Cantidad × costo
+        # Usar los valores calculados que vienen como parámetros (de MySQL)
+        # unitary_cost, total_net_cost, total_tax_cost, total_cost ya vienen calculados
 
-        # Calcular tax_cost basado en sale_tax (pasado como parámetro)
-        if product_sale_tax == '01':
-            total_tax_cost = total_net_cost * 0.16  # 16% IVA
-        else:  # 'EX' u otro
-            total_tax_cost = 0  # Exento
-
-        total_cost = total_net_cost + total_tax_cost
         total_net = sub - disc
 
         sql_detail_coins = """
@@ -2346,11 +2328,11 @@ class SmartSyncComplete:
 
         self.pg_cursor.execute(sql_detail_coins, (
             correlativo, line,
-            unitary_cost,
+            unitary_cost,       # unitary_cost de MySQL
             unit_price_f,
-            total_net_cost,
-            total_tax_cost,
-            total_cost,
+            total_net_cost,    # de MySQL (unitary_cost * cantidad)
+            total_tax_cost,    # de MySQL (unitary_cost * buy_aliquot/100 * cantidad)
+            total_cost,        # de MySQL (total_net_cost + total_tax_cost)
             sub,
             ta,
             tot,
