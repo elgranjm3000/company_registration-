@@ -3188,43 +3188,88 @@ class SmartSyncComplete:
         current_count = 0
 
         try:
+            # Nuevos
+            total_nuevos = len(cambios['nuevos'])
+            if total_nuevos > 0:
+                self._log(f"  📁 Insertando {total_nuevos} categories NUEVAS...", "info")
+
             for idx, (code, description) in enumerate(cambios['nuevos'], 1):
                 if not self.sync_running:
                     break
 
-                insert_query = """
-                INSERT INTO categories (company_id, name, description, status, created_at, updated_at)
-                VALUES (%s, %s, %s, 'active', NOW(), NOW())
-                """
+                try:
+                    insert_query = """
+                    INSERT INTO categories (company_id, name, description, status, created_at, updated_at)
+                    VALUES (%s, %s, %s, 'active', NOW(), NOW())
+                    """
 
-                self.mysql_cursor.execute(insert_query, (
-                    self.company_id, code, description if description else None
-                ))
+                    self.mysql_cursor.execute(insert_query, (
+                        self.company_id, code, description if description else None
+                    ))
 
-                self.stats['categories']['nuevos'] += 1
-                current_count += 1
-                self._reportar_progreso('categories', current_count, total_cambios)
+                    self.stats['categories']['nuevos'] += 1
+                    current_count += 1
+                    self._reportar_progreso('categories', current_count, total_cambios)
 
-            for code, description in cambios['modificados']:
+                    # Commit cada 50 categories para no acumular transacción enorme
+                    if idx % 50 == 0:
+                        self.mysql_conn.commit()
+                        self._log(f"  ✅ Commit parcial: {idx}/{total_nuevos} categories insertadas", "debug")
+
+                except Exception as e:
+                    # Error con un category específico - continuar con los demás
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        self._log(f"  ℹ️ Category {code} ya existe (omitiendo)", "debug")
+                    else:
+                        self._log(f"  ⚠️ Error insertando category {code}: {str(e)[:100]}", "warning")
+                        self.stats['categories']['errores'] += 1
+
+            # Commit final de los nuevos
+            if total_nuevos > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['categories']['nuevos']}/{total_nuevos} categories nuevas insertadas", "success")
+
+            # Modificados
+            total_modificados = len(cambios['modificados'])
+            if total_modificados > 0:
+                self._log(f"  📁 Actualizando {total_modificados} categories MODIFICADAS...", "info")
+
+            for idx, (code, description) in enumerate(cambios['modificados'], 1):
                 if not self.sync_running:
                     break
 
-                update_query = """
-                UPDATE categories SET description = %s, updated_at = NOW()
-                WHERE company_id = %s AND name = %s
-                """
+                try:
+                    update_query = """
+                    UPDATE categories SET description = %s, updated_at = NOW()
+                    WHERE company_id = %s AND name = %s
+                    """
 
-                self.mysql_cursor.execute(update_query, (
-                    description if description else None, self.company_id, code
-                ))
+                    self.mysql_cursor.execute(update_query, (
+                        description if description else None, self.company_id, code
+                    ))
 
-                self.stats['categories']['modificados'] += 1
-                current_count += 1
-                self._reportar_progreso('categories', current_count, total_cambios)
+                    self.stats['categories']['modificados'] += 1
+                    current_count += 1
+                    self._reportar_progreso('categories', current_count, total_cambios)
 
-            self.mysql_conn.commit()
+                    # Commit cada 50 categories
+                    if idx % 50 == 0:
+                        self.mysql_conn.commit()
+                        self._log(f"  ✅ Commit parcial: {idx}/{total_modificados} categories actualizadas", "debug")
+
+                except Exception as e:
+                    # Error con un category específico - continuar con los demás
+                    self._log(f"  ⚠️ Error actualizando category {code}: {str(e)[:100]}", "warning")
+                    self.stats['categories']['errores'] += 1
+
+            # Commit final de los modificados
+            if total_modificados > 0:
+                self.mysql_conn.commit()
+                self._log(f"  ✅ Commit final: {self.stats['categories']['modificados']}/{total_modificados} categories modificadas actualizadas", "success")
+
             self._log(f"✅ Categories sincronizados: {self.stats['categories']['nuevos']} nuevos, "
-                      f"{self.stats['categories']['modificados']} modificados", "success")
+                      f"{self.stats['categories']['modificados']} modificados, {self.stats['categories']['errores']} errores", "success")
 
         except Exception as e:
             self._log(f"Error sincronizando categories a MySQL: {str(e)}", "error")
