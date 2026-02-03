@@ -1041,7 +1041,10 @@ class SmartSyncComplete:
                 d.image_type,
                 d.product_image,
                 a.sale_tax,
-                e.aliquot
+                e.aliquot,
+                a.buy_tax,
+                g.aliquot AS buy_aliquot,
+                b.unitary_cost
             FROM products a
             LEFT JOIN (
                 SELECT product_code, SUM(stock) as total_stock
@@ -1051,6 +1054,7 @@ class SmartSyncComplete:
             LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
             LEFT JOIN products_image d ON d.main_code = a.code
             LEFT JOIN taxes e ON e.code = a.sale_tax
+            LEFT JOIN taxes g ON g.code = a.buy_tax
             LEFT JOIN coin f ON f.code = a.coin
             WHERE a.code IS NOT NULL
               AND a.code != ''
@@ -2582,10 +2586,10 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos (ahora incluye coin y description_coin)
+                # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
                 (code, description, short_name, department, stock, product_type,
                  coin, description_coin, price, cost, higher_price, min_stock, status,
-                 image_type, product_image, sale_tax, aliquot) = producto
+                 image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
                 # Verificar que la categoría existe en MySQL
                 if department not in category_mapping:
@@ -2598,7 +2602,7 @@ class SmartSyncComplete:
                 # Crear JSON de imagen
                 image_json = self._create_image_json(image_type, product_image)
 
-                # INSERT con coin y description_coin
+                # INSERT con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
                 insert_query = """
                 INSERT INTO products (
                     company_id,
@@ -2618,10 +2622,13 @@ class SmartSyncComplete:
                     aliquot,
                     coin,
                     description_coin,
+                    unitary_cost,
+                    buy_tax,
+                    buy_aliquot,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -2639,6 +2646,9 @@ class SmartSyncComplete:
                     aliquot = VALUES(aliquot),
                     coin = VALUES(coin),
                     description_coin = VALUES(description_coin),
+                    unitary_cost = VALUES(unitary_cost),
+                    buy_tax = VALUES(buy_tax),
+                    buy_aliquot = VALUES(buy_aliquot),
                     updated_at = NOW()
                 """
 
@@ -2659,7 +2669,10 @@ class SmartSyncComplete:
                     sale_tax,
                     aliquot,
                     coin if coin else None,  # Moneda
-                    description_coin if description_coin else None  # Descripción de moneda
+                    description_coin if description_coin else None,  # Descripción de moneda
+                    safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
+                    buy_tax if buy_tax else None,  # buy_tax de products
+                    buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
                 ))
 
                 self.stats['products']['nuevos'] += 1
@@ -2685,10 +2698,10 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Desempaquetar con todos los campos (ahora incluye coin y description_coin)
+                # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
                 (code, description, short_name, department, stock, product_type,
                  coin, description_coin, price, cost, higher_price, min_stock, status,
-                 image_type, product_image, sale_tax, aliquot) = producto
+                 image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
                 # Verificar que la categoría existe en MySQL
                 if department not in category_mapping:
@@ -2701,7 +2714,7 @@ class SmartSyncComplete:
                 # Crear JSON de imagen
                 image_json = self._create_image_json(image_type, product_image)
 
-                # UPDATE con coin y description_coin
+                # UPDATE con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
                 update_query = """
                 INSERT INTO products (
                     company_id,
@@ -2721,10 +2734,13 @@ class SmartSyncComplete:
                     aliquot,
                     coin,
                     description_coin,
+                    unitary_cost,
+                    buy_tax,
+                    buy_aliquot,
                     created_at,
                     updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                 )
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
@@ -2742,6 +2758,9 @@ class SmartSyncComplete:
                     aliquot = VALUES(aliquot),
                     coin = VALUES(coin),
                     description_coin = VALUES(description_coin),
+                    unitary_cost = VALUES(unitary_cost),
+                    buy_tax = VALUES(buy_tax),
+                    buy_aliquot = VALUES(buy_aliquot),
                     updated_at = NOW()
                 """
 
@@ -2762,7 +2781,10 @@ class SmartSyncComplete:
                     sale_tax,
                     aliquot,
                     coin if coin else None,  # Moneda
-                    description_coin if description_coin else None  # Descripción de moneda
+                    description_coin if description_coin else None,  # Descripción de moneda
+                    safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
+                    buy_tax if buy_tax else None,  # buy_tax de products
+                    buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
                 ))
 
                 self.stats['products']['modificados'] += 1
