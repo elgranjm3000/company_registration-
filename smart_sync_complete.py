@@ -3035,6 +3035,8 @@ class SmartSyncComplete:
 
             # Procesar products nuevos y modificados
             products_a_procesar = cambios.get('nuevos', []) + cambios.get('modificados', [])
+            total_a_procesar = len(products_a_procesar)
+            current_count = 0
 
             for product in products_a_procesar:
                 if not self.sync_running:
@@ -3042,6 +3044,7 @@ class SmartSyncComplete:
 
                 product_id = product['id']
                 product_code = product['code']
+                current_count += 1
 
                 try:
                     # Verificar si ya existe
@@ -3096,7 +3099,14 @@ class SmartSyncComplete:
                     self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
 
                     self.pg_conn.commit()
-                    self.stats['products']['nuevos'] += 1
+
+                    # Actualizar estadísticas y reportar progreso
+                    if existe:
+                        self.stats['products']['modificados'] += 1
+                    else:
+                        self.stats['products']['nuevos'] += 1
+
+                    self._reportar_progreso('products', current_count, total_a_procesar)
 
                 except Exception as e:
                     error_msg = str(e).lower()
