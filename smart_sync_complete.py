@@ -1964,12 +1964,12 @@ class SmartSyncComplete:
             total_tax, total, credit, cash, coin_code, canceled,
             pending, wait, total_net_cost, total_tax_cost, total_cost,
             freight_tax, freight_aliquot, document_no_internal,
-            control_no, operation_comments
+            control_no, operation_comments, type_price
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         RETURNING correlative
         """
@@ -2037,7 +2037,8 @@ class SmartSyncComplete:
             16,                        # freight_aliquot
             document_no,               # document_no_internal
             '',                        # control_no
-            ''                         # operation_comments
+            '',                        # operation_comments
+            2                          # type_price (2 = precio normal)
         ))
 
         # Recuperar el correlative generado por PostgreSQL
