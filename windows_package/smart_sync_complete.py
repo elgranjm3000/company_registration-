@@ -117,57 +117,61 @@ class SmartSyncComplete:
             current: Número actual de registros procesados
             total: Total de registros a procesar
         """
-        if total > 0:
-            percentage = round((current / total) * 100, 1)
+        try:
+            if total > 0:
+                percentage = round((current / total) * 100, 1)
 
-            # Actualizar progress_info (accesible desde la UI)
-            self.progress_info = {
-                'entity': entity,
-                'current': current,
-                'total': total,
-                'percentage': percentage
-            }
+                # Actualizar progress_info (accesible desde la UI)
+                self.progress_info = {
+                    'entity': entity,
+                    'current': current,
+                    'total': total,
+                    'percentage': percentage
+                }
 
-            # Activar flag de progreso al inicio
-            if current == 1:
-                self.progress_active = True
+                # Activar flag de progreso al inicio
+                if current == 1:
+                    self.progress_active = True
 
-            # Mostrar progreso en consola SIEMPRE (visible para el usuario)
-            # Usar carriage return para sobrescribir la línea y crear efecto de contador
-            import sys
-            entity_name = entity.upper()
+                # Mostrar progreso en consola SIEMPRE (visible para el usuario)
+                # Usar carriage return para sobrescribir la línea y crear efecto de contador
+                import sys
+                entity_name = entity.upper()
 
-            # Calcular frecuencia de actualización según el total
-            # Para muchos registros, actualizar cada 10; para pocos, actualizar siempre
-            if total > 100:
-                update_freq = 10
-            elif total > 50:
-                update_freq = 5
-            else:
-                update_freq = 1
+                # Calcular frecuencia de actualización según el total
+                # Para muchos registros, actualizar cada 10; para pocos, actualizar siempre
+                if total > 100:
+                    update_freq = 10
+                elif total > 50:
+                    update_freq = 5
+                else:
+                    update_freq = 1
 
-            # Solo mostrar si es múltiplo de la frecuencia o es el último
-            if current % update_freq == 0 or current == total:
-                sys.stdout.write(f"\r  📊 {entity_name}: {current}/{total} ({percentage}%)")
-                sys.stdout.flush()
+                # Solo mostrar si es múltiplo de la frecuencia o es el último
+                if current % update_freq == 0 or current == total:
+                    sys.stdout.write(f"\r  📊 {entity_name}: {current}/{total} ({percentage}%)")
+                    sys.stdout.flush()
 
-            # También llamar al callback si existe (para interfaz gráfica)
-            if self.progress_callback:
-                try:
-                    self.progress_callback({
-                        'entity': entity,
-                        'current': current,
-                        'total': total,
-                        'percentage': percentage
-                    })
-                except Exception as e:
-                    # Silencioso para no interrumpir la sincronización
-                    pass
+                # También llamar al callback si existe (para interfaz gráfica)
+                if self.progress_callback:
+                    try:
+                        self.progress_callback({
+                            'entity': entity,
+                            'current': current,
+                            'total': total,
+                            'percentage': percentage
+                        })
+                    except Exception as e:
+                        # Silencioso para no interrumpir la sincronización
+                        pass
 
-            # Imprimir salto de línea al completar y desactivar flag
-            if current == total:
-                print()  # Salto de línea al terminar
-                self.progress_active = False  # Desactivar flag al terminar
+                # Imprimir salto de línea al completar y desactivar flag
+                if current == total:
+                    print()  # Salto de línea al terminar
+                    self.progress_active = False  # Desactivar flag al terminar
+        except Exception as e:
+            # Error en el reporte de progreso - no interrumpir sincronización
+            pass
 
     def get_progress_info(self):
         """
