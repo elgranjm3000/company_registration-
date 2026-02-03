@@ -3063,8 +3063,7 @@ class SmartSyncComplete:
                             minimal_sale = %s,
                             maximal_sale = %s,
                             status = %s,
-                            product_type = %s,
-                            updated_at = NOW()
+                            product_type = %s
                         WHERE code = %s
                         """
                         self.pg_cursor.execute(sql_update, (
