@@ -2410,7 +2410,7 @@ class SmartSyncComplete:
                 '02',     # coin_code (dólar)
                 ba,       # buy_aliquot de MySQL
                 '01',     # buy_tax (general)
-                0.0,      # pending_amount
+                qty,      # pending_amount = amount
                 product_type  # product_type de MySQL
             ))
 
