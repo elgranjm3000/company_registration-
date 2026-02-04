@@ -2635,10 +2635,42 @@ class SmartSyncComplete:
                         self._log(f"  🔄 Quote #{document_no} (correlative {correlative}): "
                                 f"pending={pending} → status='{new_status}'", "debug")
 
+                        # Actualizar sync_hashes con el nuevo status
+                        # Primero obtener el quote completo de MySQL para generar el hash
+                        query_quote_mysql = """
+                        SELECT id, quote_number, customer_id, subtotal, tax,
+                               tax_amount, discount, total, status
+                        FROM quotes
+                        WHERE quote_number = %s
+                        LIMIT 1
+                        """
+                        self.mysql_cursor.execute(query_quote_mysql, (str(document_no),))
+                        quote_result = self.mysql_cursor.fetchone()
+
+                        if quote_result:
+                            # Crear diccionario con los datos del quote
+                            quote_dict = {
+                                'id': quote_result[0],
+                                'quote_number': quote_result[1],
+                                'customer_id': quote_result[2],
+                                'subtotal': float(quote_result[3]) if quote_result[3] else 0,
+                                'tax': float(quote_result[4]) if quote_result[4] else 0,
+                                'tax_amount': float(quote_result[5]) if quote_result[5] else 0,
+                                'discount': float(quote_result[6]) if quote_result[6] else 0,
+                                'total': float(quote_result[7]) if quote_result[7] else 0,
+                                'status': quote_result[8]
+                            }
+
+                            # Generar hash y guardar en sync_hashes
+                            nuevo_hash = self._generar_hash_quote(quote_dict)
+                            quote_dict['_postgres_correlative'] = correlative
+                            self._guardar_hash('quotes', str(quote_dict['id']), nuevo_hash, quote_dict)
+
                 except Exception as e:
                     self._log(f"  ❌ Error actualizando quote #{op[0] if op else 'unknown'}: {str(e)}", "error")
 
             self.mysql_conn.commit()
+            self.pg_conn.commit()
 
             if estados_actualizados > 0:
                 self._log(f"✅ Estados sincronizados: {estados_actualizados} quotes actualizados", "success")
