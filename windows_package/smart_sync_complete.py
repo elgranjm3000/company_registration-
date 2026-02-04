@@ -2284,7 +2284,8 @@ class SmartSyncComplete:
             p.unitary_cost,
             p.aliquot AS sale_aliquot,
             p.buy_aliquot,
-            p.product_type
+            p.product_type,
+            qi.type_price
         FROM quote_items qi
         JOIN products p ON p.id = qi.product_id
         WHERE qi.quote_id = %s
@@ -2297,7 +2298,7 @@ class SmartSyncComplete:
         for item in items:
             (description, name, subtotal, unit, unit_price, total,
              tax_amount, discount_amount, discount_percentage, quantity,
-             product_id, product_code, unitary_cost, sale_aliquot, buy_aliquot, product_type) = item
+             product_id, product_code, unitary_cost, sale_aliquot, buy_aliquot, product_type, type_price) = item
 
             # Si no hay código de producto, usar migración
             if not product_code:
@@ -2372,11 +2373,11 @@ class SmartSyncComplete:
                 sale_tax, sale_aliquot, price, total_net_cost, total_tax_cost,
                 total_cost, total_net_gross, total_tax_gross, total_gross,
                 percent_discount, discount, total_net, total_tax, total,
-                coin_code, buy_aliquot, buy_tax, pending_amount, product_type
+                coin_code, buy_aliquot, buy_tax, pending_amount, product_type, type_price
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING line
             """
 
@@ -2411,7 +2412,8 @@ class SmartSyncComplete:
                 ba,       # buy_aliquot de MySQL
                 '01',     # buy_tax (general)
                 qty,      # pending_amount = amount
-                product_type  # product_type de MySQL
+                product_type,  # product_type de MySQL
+                type_price  # type_price de quote_items
             ))
 
             line = self.pg_cursor.fetchone()[0]
@@ -2426,7 +2428,7 @@ class SmartSyncComplete:
         (description, name, subtotal, unit, unit_price, total,
          tax_amount, discount_amount, discount_percentage, quantity,
          product_id, product_code_mysql, unitary_cost_mysql, sale_aliquot_mysql,
-         buy_aliquot_mysql, product_type_mysql) = item
+         buy_aliquot_mysql, product_type_mysql, type_price) = item
 
         # Calcular todos los valores ANTES del execute
         unit_price_f = safe_float(unit_price)
