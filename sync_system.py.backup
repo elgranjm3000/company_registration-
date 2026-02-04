@@ -54,12 +54,6 @@ except ImportError as e:
     print("Ejecute: pip install psycopg2-binary pymysql")
     sys.exit(1)
 
-# Importar SmartSyncComplete
-try:
-    from smart_sync_complete import SmartSyncComplete
-except ImportError:
-    SmartSyncComplete = None
-
 # ==============================================================================
 # CONFIGURACIÓN
 # ==============================================================================
@@ -880,44 +874,7 @@ class ManagerWindow:
         self.root.geometry(f'{width}x{height}+{x}+{y}')
 
         self.config = cargar_config()
-
-        # Inicializar SmartSyncComplete si está disponible
-        if SmartSyncComplete:
-            postgresql_config = {
-                'host': self.config['postgres_host'],
-                'database': self.config['postgres_database'],
-                'user': self.config['postgres_user'],
-                'password': self.config['postgres_password']
-            }
-            mysql_config = {
-                'host': self.config['mysql_host'],
-                'database': self.config['mysql_database'],
-                'user': self.config['mysql_user'],
-                'password': self.config['mysql_password']
-            }
-
-            # Crear wrapper para app
-            class AppWrapper:
-                def log_message(self, mensaje, tipo):
-                    from datetime import datetime
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    print(f"[{timestamp}] {tipo.upper()}: {mensaje}")
-
-            app = AppWrapper()
-
-            self.sync_module = SmartSyncComplete(
-                app=app,
-                postgresql_config=postgresql_config,
-                mysql_config=mysql_config,
-                company_rif=self.config.get('company_rif', ''),
-                company_email=self.config.get('company_email', ''),
-                progress_callback=None
-            )
-        else:
-            self.sync_module = SyncModule(self.config)
-
-        # Job para actualizar progreso en UI
-        self.progress_update_job = None
+        self.sync_module = SyncModule(self.config)
 
         self.crear_gui()
         self.actualizar_estado()
@@ -953,16 +910,11 @@ class ManagerWindow:
                                  font=("Arial", 10))
         self.lbl_stats.pack()
 
-        # Label de progreso detallado (para SmartSyncComplete)
-        self.lbl_progress = tk.Label(stats_frame, text="Listo para sincronizar", font=("Arial", 9), fg="blue")
-        self.lbl_progress.pack(pady=(5,0))
-
         # Botones
         btn_frame = tk.Frame(main_frame)
         btn_frame.pack(fill="x", pady=10)
 
-        self.btn_sync = ttk.Button(btn_frame, text="🔄 Sincronizar Ahora", command=self.sincronizar, width=20)
-        self.btn_sync.pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="🔄 Sincronizar Ahora", command=self.sincronizar, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="⚙️ Configuración", command=self.configurar, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="📋 Ver Logs", command=self.ver_logs, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="❌ Salir", command=self.root.quit, width=20).pack(side="right", padx=5)
@@ -983,216 +935,69 @@ class ManagerWindow:
             self.lbl_estado.config(text="🔴 NO CONFIGURADO", fg="red")
             return
 
-        # Verificar conexiones (solo para SyncModule antiguo)
-        if hasattr(self.sync_module, 'verificar_conexiones'):
-            if self.sync_module.verificar_conexiones():
-                self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
-            else:
-                self.lbl_estado.config(text="🟡 ERROR DE CONEXIÓN", fg="orange")
-        else:
-            # SmartSyncComplete no tiene verificar_conexiones, asumimos activo
+        # Verificar conexiones
+        if self.sync_module.verificar_conexiones():
             self.lbl_estado.config(text="🟢 ACTIVO", fg="green")
+        else:
+            self.lbl_estado.config(text="🟡 ERROR DE CONEXIÓN", fg="orange")
 
     def sincronizar(self):
-        """Ejecuta sincronización en thread separado para no bloquear la GUI"""
+        """Ejecuta sincronización"""
         self.agregar_log("Iniciando sincronización...")
 
-        # Deshabilitar botón durante sincronización
-        self.btn_sync.config(state="disabled", text="⏳ Sincronizando...")
-
-        # Si es SmartSyncComplete, usar el nuevo sistema con contadores de progreso
-        if SmartSyncComplete and hasattr(self.sync_module, 'ejecutar_sync_completa'):
-            # Ejecutar en thread separado para no bloquear la GUI
-            import threading
-
-            def run_sync():
-                try:
-                    # Iniciar actualizaciones de progreso
-                    self.root.after(0, self._start_progress_updates)
-
-                    # Ejecutar sincronización completa
-                    resultado = self.sync_module.ejecutar_sync_completa()
-
-                    # Actualizar UI desde el thread principal
-                    self.root.after(0, lambda: self._sync_completed(resultado))
-
-                except Exception as e:
-                    self.root.after(0, lambda: self._sync_error(str(e)))
-
-            # Iniciar thread
-            sync_thread = threading.Thread(target=run_sync, daemon=True)
-            sync_thread.start()
-
-        else:
-            # Sistema antiguo SyncModule - también en thread
-            import threading
-
-            def run_sync_old():
-                try:
-                    resultado = self.sync_module.sincronizar()
-                    self.root.after(0, lambda: self._sync_completed_old(resultado))
-                except Exception as e:
-                    self.root.after(0, lambda: self._sync_error(str(e)))
-
-            sync_thread = threading.Thread(target=run_sync_old, daemon=True)
-            sync_thread.start()
-
-    def _sync_completed(self, resultado):
-        """Callback cuando la sincronización completa termina (SmartSyncComplete)"""
-        # Detener actualizaciones de progreso
-        self._stop_progress_updates()
-
-        # Rehabilitar botón
-        self.btn_sync.config(state="normal", text="🔄 Sincronizar Ahora")
-
-        if resultado:
-            stats = self.sync_module.stats
-            self.lbl_stats.config(
-                text=f"Products: {stats['products']['nuevos']} nuevos | "
-                     f"Customers: {stats['customers']['nuevos']} nuevos | "
-                     f"Categories: {stats['categories']['nuevos']} nuevos | "
-                     f"Quotes: {stats['quotes']['nuevos']} nuevos"
-            )
-            self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            self.lbl_progress.config(text="✅ Sincronización completada", fg="green")
-            self.agregar_log("✅ Sincronización completada")
-
-            # Mostrar notificación toast tipo Avast/AVG
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
-
-                # Crear mensaje con estadísticas
-                mensaje_stats = (
-                    f"Products: {stats['products']['nuevos']} nuevos\n"
-                    f"Customers: {stats['customers']['nuevos']} nuevos\n"
-                    f"Categories: {stats['categories']['nuevos']} nuevos\n"
-                    f"Quotes: {stats['quotes']['nuevos']} nuevos"
-                )
-
-                toast.show_toast(
-                    "✅ Sincronización Exitosa",
-                    mensaje_stats,
-                    duration=5,
-                    threaded=True
-                )
-            except ImportError:
-                pass  # Si no hay win10toast, no mostrar nada
-        else:
-            self.agregar_log("❌ Error en sincronización")
-            self.lbl_progress.config(text="❌ Error en sincronización", fg="red")
-
-            # Mostrar notificación de error
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
-                toast.show_toast(
-                    "⚠️ Error de Sincronización",
-                    "Verifica los logs para más detalles",
-                    duration=7,
-                    threaded=True
-                )
-            except ImportError:
-                pass
-
-    def _sync_completed_old(self, resultado):
-        """Callback cuando la sincronización antigua termina (SyncModule)"""
-        # Rehabilitar botón
-        self.btn_sync.config(state="normal", text="🔄 Sincronizar Ahora")
-
-        if resultado:
-            stats = self.sync_module.stats
-            self.lbl_stats.config(
-                text=f"Products: {stats['products']['nuevos']} nuevos | "
-                     f"Customers: {stats['customers']['nuevos']} nuevos | "
-                     f"Categories: {stats['categories']['nuevos']} nuevos | "
-                     f"Quotes: {stats['quotes']['nuevos']} nuevos"
-            )
-            self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            self.agregar_log("✅ Sincronización completada")
-
-            # Mostrar notificación toast
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
-
-                mensaje_stats = (
-                    f"Products: {stats['products']['nuevos']} nuevos\n"
-                    f"Customers: {stats['customers']['nuevos']} nuevos\n"
-                    f"Categories: {stats['categories']['nuevos']} nuevos\n"
-                    f"Quotes: {stats['quotes']['nuevos']} nuevos"
-                )
-
-                toast.show_toast(
-                    "✅ Sincronización Exitosa",
-                    mensaje_stats,
-                    duration=5,
-                    threaded=True
-                )
-            except ImportError:
-                pass
-        else:
-            self.agregar_log("❌ Error en sincronización")
-            self.lbl_progress.config(text="❌ Error en sincronización", fg="red")
-
-    def _sync_error(self, error_msg):
-        """Callback cuando hay un error en la sincronización"""
-        # Rehabilitar botón
-        self.btn_sync.config(state="normal", text="🔄 Sincronizar Ahora")
-
-        # Detener actualizaciones de progreso si están activas
-        self._stop_progress_updates()
-
-        # Mostrar error
-        self.agregar_log(f"❌ Error: {error_msg}")
-        self.lbl_progress.config(text=f"❌ Error: {error_msg[:50]}", fg="red")
-
-        # Mostrar notificación de error
         try:
-            from win10toast import ToastNotifier
-            toast = ToastNotifier()
-            toast.show_toast(
-                "⚠️ Error de Sincronización",
-                error_msg[:100],
-                duration=7,
-                threaded=True
-            )
-        except ImportError:
-            pass
+            resultado = self.sync_module.sincronizar()
 
-    def _start_progress_updates(self):
-        """Iniciar actualizaciones periódicas del progreso en la UI"""
-        if SmartSyncComplete and self.progress_update_job is None:
-            self._update_progress_from_sync()
+            if resultado:
+                stats = self.sync_module.stats
+                self.lbl_stats.config(
+                    text=f"Products: {stats['products']['nuevos']} nuevos | "
+                         f"Customers: {stats['customers']['nuevos']} nuevos | "
+                         f"Categories: {stats['categories']['nuevos']} nuevos | "
+                         f"Quotes: {stats['quotes']['nuevos']} nuevos"
+                )
+                self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                self.agregar_log("✅ Sincronización completada")
 
-    def _update_progress_from_sync(self):
-        """Actualizar la UI con la información de progreso de SmartSyncComplete"""
-        if SmartSyncComplete and hasattr(self.sync_module, 'get_progress_info'):
-            try:
-                progress = self.sync_module.get_progress_info()
+                # Mostrar notificación toast tipo Avast/AVG
+                try:
+                    from win10toast import ToastNotifier
+                    toast = ToastNotifier()
 
-                if progress['entity']:
-                    entity_name = progress['entity'].upper()
-                    current = progress['current']
-                    total = progress['total']
-                    percentage = progress['percentage']
-
-                    # Actualizar label de progreso
-                    self.lbl_progress.config(
-                        text=f"Sincronizando {entity_name}: {current}/{total} ({percentage:.1f}%)",
-                        fg="blue"
+                    # Crear mensaje con estadísticas
+                    mensaje_stats = (
+                        f"Products: {stats['products']['nuevos']} nuevos\n"
+                        f"Customers: {stats['customers']['nuevos']} nuevos\n"
+                        f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                        f"Quotes: {stats['quotes']['nuevos']} nuevos"
                     )
-            except Exception as e:
-                pass  # Silencioso para no interrumpir
 
-        # Programar próxima actualización en 200ms
-        self.progress_update_job = self.root.after(200, self._update_progress_from_sync)
+                    toast.show_toast(
+                        "✅ Sincronización Exitosa",
+                        mensaje_stats,
+                        duration=5,
+                        threaded=True
+                    )
+                except ImportError:
+                    pass  # Si no hay win10toast, no mostrar nada
+            else:
+                self.agregar_log("❌ Error en sincronización")
 
-    def _stop_progress_updates(self):
-        """Detener actualizaciones de progreso"""
-        if self.progress_update_job:
-            self.root.after_cancel(self.progress_update_job)
-            self.progress_update_job = None
+                # Mostrar notificación de error
+                try:
+                    from win10toast import ToastNotifier
+                    toast = ToastNotifier()
+                    toast.show_toast(
+                        "⚠️ Error de Sincronización",
+                        "Verifica los logs para más detalles",
+                        duration=7,
+                        threaded=True
+                    )
+                except ImportError:
+                    pass
+
+        except Exception as e:
+            self.agregar_log(f"❌ Error: {str(e)}")
 
     def configurar(self):
         """Abre configuración"""
@@ -1818,7 +1623,6 @@ class SystemTrayService:
 
             # Crear menú contextual
             menu = pystray.Menu(
-                pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
                 pystray.MenuItem('📊 Ver Logs', self.ver_logs),
                 pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
                 pystray.MenuItem('⚙️ Configuración', lambda: self.abrir_config()),
@@ -1899,25 +1703,6 @@ Clic derecho → Ver Logs (tiempo real)"""
         # Actualizar intervalo
         log("Configuración actualizada", "INFO")
 
-    def abrir_manager(self):
-        """Abre ventana del Manager desde el system tray"""
-        import tkinter as tk
-        import threading
-
-        def abrir_ventana_manager():
-            """Abre la ventana del manager en un thread separado"""
-            root = tk.Tk()
-            root.title("Sync System Manager")
-            app = ManagerWindow(root)
-            root.mainloop()
-
-        # Ejecutar en thread para no bloquear el icono de tray
-        thread = threading.Thread(target=abrir_ventana_manager)
-        thread.daemon = True
-        thread.start()
-
-        log("✅ Ventana del Manager abierta", "INFO")
-
 # ==============================================================================
 # MAIN - INICIO DEL SISTEMA
 # ==============================================================================
@@ -1926,7 +1711,7 @@ def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
     parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
-                       default="tray", help="Modo de ejecución")  # CAMBIADO: default="manager"
+                       default="auto", help="Modo de ejecución")
 
     args = parser.parse_args()
     config = cargar_config()
@@ -1936,7 +1721,7 @@ def main():
         if not config.get('configured') or config.get('first_run'):
             args.mode = "config"
         else:
-            args.mode = "manager"  # CAMBIADO: Por defecto mostrar ventana manager, no tray
+            args.mode = "tray"  # Por defecto: modo tray (icono en barra de tareas)
 
     # Ejecutar según modo
     if args.mode == "config":
