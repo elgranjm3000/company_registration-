@@ -2601,11 +2601,6 @@ class SmartSyncComplete:
                 so.correlative
             FROM public.sales_operation so
             WHERE so.operation_type = 'BUDGET'
-              AND EXISTS (
-                  SELECT 1 FROM mysql.quotes q
-                  WHERE q.quote_number = so.document_no
-                    AND q.deleted_at IS NULL
-              )
             ORDER BY so.correlative
             """
 
@@ -2630,13 +2625,13 @@ class SmartSyncComplete:
                     UPDATE quotes
                     SET status = %s, updated_at = NOW()
                     WHERE quote_number = %s
-                      AND deleted_at IS NULL
                     """
 
                     self.mysql_cursor.execute(update_mysql, (new_status, str(document_no)))
 
                     if self.mysql_cursor.rowcount > 0:
                         estados_actualizados += 1
+                        self.stats['quotes']['estados_actualizados'] += 1
                         self._log(f"  🔄 Quote #{document_no} (correlative {correlative}): "
                                 f"pending={pending} → status='{new_status}'", "debug")
 
