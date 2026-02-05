@@ -60,12 +60,28 @@ class SmartSellersSyncModule:
     def conectar_mysql(self, mysql_config: Dict[str, Any]) -> bool:
         """Conectar a MySQL"""
         try:
-            self.mysql_conn = pymysql.connect(**mysql_config)
-            self.mysql_cursor = self.mysql_cursor.cursor()
+            # Manejar el puerto - si es None, no incluirlo en la conexión
+            connect_params = mysql_config.copy()
+
+            # Si el puerto es None o 0, eliminarlo para usar el puerto por defecto (3306)
+            if 'port' in connect_params and (connect_params['port'] is None or connect_params['port'] == 0):
+                del connect_params['port']
+            elif 'port' in connect_params and isinstance(connect_params['port'], str):
+                # Convertir a entero si es string
+                try:
+                    connect_params['port'] = int(connect_params['port'])
+                except:
+                    del connect_params['port']
+
+            self.log(f"Conectando a MySQL: host={connect_params.get('host')}, db={connect_params.get('database')}, user={connect_params.get('user')}", "debug")
+
+            self.mysql_conn = pymysql.connect(**connect_params)
+            self.mysql_cursor = self.mysql_conn.cursor()
             self.log("✅ Conectado a MySQL (sellers)", "success")
             return True
         except Exception as e:
             self.log(f"❌ Error conectando MySQL: {e}", "error")
+            self.log(f"   Config: {mysql_config}", "debug")
             return False
 
     def _generar_hash_seller(self, seller: tuple) -> str:
