@@ -706,11 +706,16 @@ class ConfigWindow:
                                       font=("Arial", 10))
             lbl_categories.pack(anchor="w", padx=30, pady=5)
 
+            lbl_sellers = ttk.Label(contenedor_contadores, text="👤 Sellers: --/--",
+                                     font=("Arial", 10))
+            lbl_sellers.pack(anchor="w", padx=30, pady=5)
+
             # Diccionario para almacenar estado de contadores
             contadores = {
                 'products': {'current': 0, 'total': 0},
                 'customers': {'current': 0, 'total': 0},
-                'categories': {'current': 0, 'total': 0}
+                'categories': {'current': 0, 'total': 0},
+                'sellers': {'current': 0, 'total': 0}
             }
 
             progreso.update()
@@ -756,7 +761,8 @@ class ConfigWindow:
                         entity_info = {
                             'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
                             'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
-                            'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'}
+                            'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'},
+                            'sellers': {'label': lbl_sellers, 'emoji': '👤', 'name': 'Sellers'}
                         }
 
                         if entity in entity_info:
@@ -952,7 +958,7 @@ class ManagerWindow:
         stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"))
         stats_frame.pack(fill="x", pady=5, padx=5)
 
-        self.lbl_stats = tk.Label(stats_frame, text="Products: 0 | Customers: 0 | Categories: 0 | Quotes: 0",
+        self.lbl_stats = tk.Label(stats_frame, text="Products: 0 | Customers: 0 | Categories: 0 | Sellers: 0 | Quotes: 0",
                                  font=("Arial", 10))
         self.lbl_stats.pack()
 
@@ -1054,6 +1060,7 @@ class ManagerWindow:
                 text=f"Products: {stats['products']['nuevos']} nuevos | "
                      f"Customers: {stats['customers']['nuevos']} nuevos | "
                      f"Categories: {stats['categories']['nuevos']} nuevos | "
+                     f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
                      f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
             self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1070,6 +1077,7 @@ class ManagerWindow:
                     f"Products: {stats['products']['nuevos']} nuevos\n"
                     f"Customers: {stats['customers']['nuevos']} nuevos\n"
                     f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                    f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
                     f"Quotes: {stats['quotes']['nuevos']} nuevos"
                 )
 
@@ -1109,6 +1117,7 @@ class ManagerWindow:
                 text=f"Products: {stats['products']['nuevos']} nuevos | "
                      f"Customers: {stats['customers']['nuevos']} nuevos | "
                      f"Categories: {stats['categories']['nuevos']} nuevos | "
+                     f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
                      f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
             self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1123,6 +1132,7 @@ class ManagerWindow:
                     f"Products: {stats['products']['nuevos']} nuevos\n"
                     f"Customers: {stats['customers']['nuevos']} nuevos\n"
                     f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                    f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
                     f"Quotes: {stats['quotes']['nuevos']} nuevos"
                 )
 
