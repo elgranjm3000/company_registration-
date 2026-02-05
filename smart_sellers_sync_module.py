@@ -2,19 +2,28 @@
 """
 MÓDULO DE SINCRONIZACIÓN DE SELLERS
 ====================================
-Sincroniza vendedores desde PostgreSQL a MySQL
+Sincroniza vendedores desde PostgreSQL a MySQL usando sistema de hashes
 
 Autor: Sistema de Sincronización
-Versión: 1.0
+Versión: 2.0 (con sync_hashes)
 """
 
 import pymysql
 import psycopg2
-from typing import Dict, Any
+import hashlib
+from typing import Dict, Any, Tuple
+
+
+def safe_float(value):
+    """Convertir valor a float de forma segura"""
+    try:
+        return float(value) if value is not None else 0.0
+    except:
+        return 0.0
 
 
 class SmartSellersSyncModule:
-    """Módulo de sincronización inteligente de sellers"""
+    """Módulo de sincronización inteligente de sellers con sync_hashes"""
 
     def __init__(self, app):
         """
@@ -28,6 +37,9 @@ class SmartSellersSyncModule:
         self.pg_cursor = None
         self.mysql_conn = None
         self.mysql_cursor = None
+
+        # Obtener company_id del app
+        self.company_id = getattr(app, 'company_id', 27)
 
     def log(self, mensaje: str, nivel: str = "info"):
         """Enviar log al app"""
@@ -49,24 +61,94 @@ class SmartSellersSyncModule:
         """Conectar a MySQL"""
         try:
             self.mysql_conn = pymysql.connect(**mysql_config)
-            self.mysql_cursor = self.mysql_conn.cursor()
+            self.mysql_cursor = self.mysql_cursor.cursor()
             self.log("✅ Conectado a MySQL (sellers)", "success")
             return True
         except Exception as e:
             self.log(f"❌ Error conectando MySQL: {e}", "error")
             return False
 
+    def _generar_hash_seller(self, seller: tuple) -> str:
+        """Generar hash MD5 para un vendedor"""
+        try:
+            campos = (
+                str(seller[0]) if seller[0] else '',  # seller_code
+                str(seller[1]) if seller[1] else '',  # description
+                str(seller[2]) if seller[2] else '',  # status
+                str(safe_float(seller[3])),           # percent_sales
+                str(safe_float(seller[4])),           # percent_receivable
+                str(seller[5]) if seller[5] else '',  # inkeeper
+                str(seller[6]) if seller[6] else '',  # user_code
+                str(safe_float(seller[7])),           # percent_gerencial_debit_note
+                str(safe_float(seller[8])),           # percent_gerencial_credit_note
+                str(safe_float(seller[9])),           # percent_returned_check
+                str(seller[10]) if seller[10] else '' # email
+            )
+            datos = "|".join(campos)
+            return hashlib.md5(datos.encode('utf-8')).hexdigest()
+        except Exception as e:
+            self.log(f"Error generando hash de seller: {str(e)}", "error")
+            return hashlib.md5(str(seller[0]).encode()).hexdigest()
+
+    def _cargar_hashes_existentes(self) -> Dict[str, str]:
+        """Cargar hashes existentes desde sync_hashes"""
+        try:
+            self.pg_cursor.execute("""
+                SELECT record_key, record_hash
+                FROM sync_hashes
+                WHERE table_name = 'sellers'
+                  AND company_id = %s
+            """, (self.company_id,))
+
+            hashes = {}
+            for row in self.pg_cursor.fetchall():
+                hashes[row[0]] = row[1]
+            return hashes
+        except Exception as e:
+            self.log(f"Error cargando hashes existentes: {e}", "error")
+            return {}
+
+    def _guardar_hash(self, record_key: str, record_hash: str):
+        """Guardar o actualizar hash en sync_hashes"""
+        try:
+            # Primero intentar UPDATE
+            update_query = """
+            UPDATE sync_hashes
+            SET record_hash = %s,
+                updated_at = NOW()
+            WHERE table_name = %s
+              AND record_key = %s
+              AND company_id = %s
+            """
+            self.pg_cursor.execute(update_query,
+                                 (record_hash, 'sellers', record_key, self.company_id))
+
+            # Si el UPDATE no afectó ninguna fila, hacer INSERT
+            if self.pg_cursor.rowcount == 0:
+                insert_query = """
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, company_id, updated_at)
+                VALUES (%s, %s, %s, %s, NOW())
+                """
+                self.pg_cursor.execute(insert_query,
+                                     ('sellers', record_key, record_hash, self.company_id))
+        except Exception as e:
+            self.log(f"Error guardando hash: {e}", "error")
+
     def ejecutar_sync(self) -> dict:
         """
-        Ejecutar sincronización de sellers
+        Ejecutar sincronización de sellers usando sync_hashes
 
         Returns:
-            Dict con estadísticas: {'nuevos': int, 'actualizados': int, 'errores': int, 'exito': bool}
+            Dict con estadísticas: {'nuevos': int, 'modificados': int, 'errores': int, 'exito': bool}
         """
         try:
-            self.log("=== SINCRONIZANDO SELLERS ===", "info")
+            self.log("=== SINCRONIZANDO SELLERS (con sync_hashes) ===", "info")
 
-            # Obtener sellers desde PostgreSQL (solo campos que existen)
+            # Cargar hashes existentes
+            hashes_existentes = self._cargar_hashes_existentes()
+            self.log(f"📊 Hashes cargados: {len(hashes_existentes)} sellers previos", "info")
+
+            # Obtener sellers desde PostgreSQL
             self.pg_cursor.execute("""
                 SELECT
                     s.code as seller_code,
@@ -93,20 +175,30 @@ class SmartSellersSyncModule:
 
             if not sellers:
                 self.log("ℹ️  No se encontraron sellers para sincronizar", "warning")
-                return True
+                return {'nuevos': 0, 'modificados': 0, 'errores': 0, 'exito': True}
 
             self.log(f"📊 Se encontraron {len(sellers)} sellers en PostgreSQL", "info")
 
-            sellers_importados = 0
-            sellers_actualizados = 0
+            sellers_nuevos = 0
+            sellers_modificados = 0
+            sellers_omitidos = 0
             errores = 0
 
-            for seller in sellers:
+            for idx, seller in enumerate(sellers):
                 try:
                     (seller_code, description, status, percent_sales,
                      percent_receivable, inkeeper, user_code,
                      percent_gerencial_debit_note, percent_gerencial_credit_note,
                      percent_returned_check, email) = seller
+
+                    # Generar hash actual
+                    hash_actual = self._generar_hash_seller(seller)
+                    hash_anterior = hashes_existentes.get(seller_code, '')
+
+                    # Si el hash no cambió, omitir
+                    if hash_anterior and hash_actual == hash_anterior:
+                        sellers_omitidos += 1
+                        continue
 
                     # Buscar si ya existe en MySQL
                     self.mysql_cursor.execute(
@@ -114,9 +206,6 @@ class SmartSellersSyncModule:
                         (seller_code,)
                     )
                     existente = self.mysql_cursor.fetchone()
-
-                    # Obtener company_id desde el app si está disponible
-                    company_id = getattr(self.app, 'company_id', 27)
 
                     if existente:
                         # Actualizar seller existente
@@ -140,7 +229,7 @@ class SmartSellersSyncModule:
                             percent_gerencial_credit_note, percent_returned_check,
                             seller_id
                         ))
-                        sellers_actualizados += 1
+                        sellers_modificados += 1
                     else:
                         # Buscar user_id por email
                         self.mysql_cursor.execute(
@@ -170,34 +259,40 @@ class SmartSellersSyncModule:
                                 %s, NOW(), NOW()
                             )
                         """, (
-                            user_id, company_id, seller_code, description, status,
+                            user_id, self.company_id, seller_code, description, status,
                             percent_sales, percent_receivable, inkeeper,
                             user_code, percent_gerencial_debit_note, percent_gerencial_credit_note,
                             percent_returned_check
                         ))
-                        sellers_importados += 1
+                        sellers_nuevos += 1
 
-                    if (sellers_importados + sellers_actualizados) % 10 == 0:
-                        self.log(f"   Procesados: {sellers_importados} nuevos, {sellers_actualizados} actualizados", "info")
+                    # Guardar hash en sync_hashes
+                    self._guardar_hash(seller_code, hash_actual)
+
+                    # Reportar progreso cada 10 sellers
+                    if (sellers_nuevos + sellers_modificados) % 10 == 0:
+                        self.log(f"   Procesados: {sellers_nuevos} nuevos, {sellers_modificados} modificados, {sellers_omitidos} omitidos (sin cambios)", "info")
 
                 except Exception as e:
                     self.log(f"❌ Error procesando seller {seller[0] if seller else 'unknown'}: {e}", "error")
                     errores += 1
 
-            # Commit cambios
+            # Commit cambios en ambas bases de datos
             self.mysql_conn.commit()
+            self.pg_conn.commit()
 
             self.log("", "info")
             self.log("=== RESUMEN DE SINCRONIZACIÓN DE SELLERS ===", "info")
-            self.log(f"✅ Sellers importados: {sellers_importados}", "success")
-            self.log(f"🔄 Sellers actualizados: {sellers_actualizados}", "info")
+            self.log(f"✅ Sellers nuevos: {sellers_nuevos}", "success")
+            self.log(f"🔄 Sellers modificados: {sellers_modificados}", "info")
+            self.log(f"⏭️  Sellers omitidos (sin cambios): {sellers_omitidos}", "info")
             if errores > 0:
                 self.log(f"❌ Errores: {errores}", "error")
             self.log("=== SINCRONIZACIÓN DE SELLERS COMPLETADA ===", "info")
 
             return {
-                'nuevos': sellers_importados,
-                'actualizados': sellers_actualizados,
+                'nuevos': sellers_nuevos,
+                'actualizados': sellers_modificados,
                 'errores': errores,
                 'exito': errores == 0
             }
