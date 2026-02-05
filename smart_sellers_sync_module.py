@@ -82,7 +82,8 @@ class SmartSellersSyncModule:
                 str(safe_float(seller[7])),           # percent_gerencial_debit_note
                 str(safe_float(seller[8])),           # percent_gerencial_credit_note
                 str(safe_float(seller[9])),           # percent_returned_check
-                str(seller[10]) if seller[10] else '' # email
+                str(seller[10]) if seller[10] else '', # email
+                str(seller[11]) if seller[11] else ''  # password
             )
             datos = "|".join(campos)
             return hashlib.md5(datos.encode('utf-8')).hexdigest()
@@ -161,7 +162,8 @@ class SmartSellersSyncModule:
                     s.percent_gerencial_debit_note,
                     s.percent_gerencial_credit_note,
                     s.percent_returned_check,
-                    u.email
+                    u.email,
+                    u.user_password as password
                 FROM sellers s
                 LEFT JOIN users u ON s.user_code = u.code
                 WHERE s.user_code IS NOT NULL
@@ -189,7 +191,7 @@ class SmartSellersSyncModule:
                     (seller_code, description, status, percent_sales,
                      percent_receivable, inkeeper, user_code,
                      percent_gerencial_debit_note, percent_gerencial_credit_note,
-                     percent_returned_check, email) = seller
+                     percent_returned_check, email, password) = seller
 
                     # Generar hash actual
                     hash_actual = self._generar_hash_seller(seller)

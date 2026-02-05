@@ -714,7 +714,8 @@ class SmartSyncComplete:
                 str(safe_float(seller[7])),           # percent_gerencial_debit_note
                 str(safe_float(seller[8])),           # percent_gerencial_credit_note
                 str(safe_float(seller[9])),           # percent_returned_check
-                str(seller[10]) if seller[10] else '' # email
+                str(seller[10]) if seller[10] else '', # email
+                str(seller[11]) if seller[11] else ''  # password
             )
             datos = "|".join(campos)
             return hashlib.md5(datos.encode('utf-8')).hexdigest()
