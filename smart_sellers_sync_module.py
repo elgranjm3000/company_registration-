@@ -260,21 +260,20 @@ class SmartSellersSyncModule:
                             # Usuario no existe, crearlo en users
                             self.log(f"   Creando usuario en MySQL.users para: {email}", "debug")
 
-                            # Generar un nombre basado en la descripción del seller
-                            nombre_parts = description.split(' ')
-                            first_name = nombre_parts[0] if nombre_parts else seller_code
-                            last_name = ' '.join(nombre_parts[1:]) if len(nombre_parts) > 1 else ''
+                            # Usar 'name' en lugar de first_name/last_name
+                            # La descripción ya es el nombre completo
+                            name = description if description else seller_code
 
                             self.mysql_cursor.execute("""
                                 INSERT INTO users (
-                                    company_id, email, password, role, first_name, last_name,
-                                    status, created_at, updated_at
+                                    email, password, role, name, status,
+                                    created_at, updated_at
                                 ) VALUES (
-                                    %s, %s, %s, %s, %s, %s,
-                                    'active', NOW(), NOW()
+                                    %s, %s, %s, %s, 'active',
+                                    NOW(), NOW()
                                 )
                             """, (
-                                self.company_id, email, password, 'seller', first_name, last_name
+                                email, password, 'seller', name
                             ))
 
                             user_id = self.mysql_cursor.lastrowid
