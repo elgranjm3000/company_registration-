@@ -51,7 +51,7 @@ def build_exe():
         # Mostrar progreso
         '--log-level=INFO',
 
-        # ===== IMPORTANTE: Hidden imports para pymysql =====
+        # ===== IMPORTANTE: Hidden imports =====
         # pymysql es 100% Python puro - funciona perfectamente con PyInstaller
         '--hidden-import=pymysql',
         '--hidden-import=pymysql.connections',
@@ -65,6 +65,9 @@ def build_exe():
         '--hidden-import=win10toast',
         '--hidden-import=tkinter',
         '--hidden-import=tkinter.scrolledtext',
+        # Para sellers (bcrypt para passwords)
+        '--hidden-import=bcrypt',
+        '--hidden-import=hashlib',
 
         # Incluir paquetes completos
         '--collect-all=psycopg2',
