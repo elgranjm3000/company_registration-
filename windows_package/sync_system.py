@@ -386,6 +386,9 @@ class ConfigWindow:
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill="both", expand=True, padx=10, pady=5)
 
+        # Forzar foco en el notebook para evitar problemas con clicks
+        notebook.focus_set()
+
         # Pestaña PostgreSQL
         frame_pg = ttk.Frame(notebook)
         notebook.add(frame_pg, text="🐘 PostgreSQL")
@@ -1926,7 +1929,7 @@ def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
     parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
-                       default="tray", help="Modo de ejecución")  # CAMBIADO: default="manager"
+                       default="manager", help="Modo de ejecución")  # CAMBIADO: default="manager"
 
     args = parser.parse_args()
     config = cargar_config()

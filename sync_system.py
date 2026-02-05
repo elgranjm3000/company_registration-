@@ -386,6 +386,9 @@ class ConfigWindow:
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill="both", expand=True, padx=10, pady=5)
 
+        # Forzar foco en el notebook para evitar problemas con clicks
+        notebook.focus_set()
+
         # Pestaña PostgreSQL
         frame_pg = ttk.Frame(notebook)
         notebook.add(frame_pg, text="🐘 PostgreSQL")
