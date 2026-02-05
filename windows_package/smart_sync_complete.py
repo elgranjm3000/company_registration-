@@ -700,6 +700,29 @@ class SmartSyncComplete:
         except:
             return hashlib.md5(str(customer[0]).encode()).hexdigest()
 
+    def _generar_hash_seller(self, seller: tuple) -> str:
+        """Generar hash MD5 para un vendedor (sin password para detección de cambios)"""
+        try:
+            campos = (
+                str(seller[0]) if seller[0] else '',  # seller_code
+                str(seller[1]) if seller[1] else '',  # description
+                str(seller[2]) if seller[2] else '',  # status
+                str(safe_float(seller[3])),           # percent_sales
+                str(safe_float(seller[4])),           # percent_receivable
+                str(seller[5]) if seller[5] else '',  # inkeeper
+                str(seller[6]) if seller[6] else '',  # user_code
+                str(safe_float(seller[7])),           # percent_gerencial_debit_note
+                str(safe_float(seller[8])),           # percent_gerencial_credit_note
+                str(safe_float(seller[9])),           # percent_returned_check
+                str(seller[10]) if seller[10] else ''  # email
+                # NO incluimos password porque bcrypt genera hash diferente cada vez
+            )
+            datos = "|".join(campos)
+            return hashlib.md5(datos.encode('utf-8')).hexdigest()
+        except Exception as e:
+            self._log(f"Error generando hash de seller: {str(e)}", "error")
+            return hashlib.md5(str(seller[0]).encode()).hexdigest()
+
     def _generar_hash_category(self, category: tuple) -> str:
         """Generar hash MD5 para una categoría"""
         try:

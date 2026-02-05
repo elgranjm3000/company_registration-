@@ -101,7 +101,7 @@ class SmartSellersSyncModule:
             return False
 
     def _generar_hash_seller(self, seller: tuple) -> str:
-        """Generar hash MD5 para un vendedor"""
+        """Generar hash MD5 para un vendedor (sin password para detección de cambios)"""
         try:
             campos = (
                 str(seller[0]) if seller[0] else '',  # seller_code
@@ -114,8 +114,8 @@ class SmartSellersSyncModule:
                 str(safe_float(seller[7])),           # percent_gerencial_debit_note
                 str(safe_float(seller[8])),           # percent_gerencial_credit_note
                 str(safe_float(seller[9])),           # percent_returned_check
-                str(seller[10]) if seller[10] else '', # email
-                str(seller[11]) if seller[11] else ''  # password
+                str(seller[10]) if seller[10] else ''  # email
+                # NO incluimos password porque bcrypt genera hash diferente cada vez
             )
             datos = "|".join(campos)
             return hashlib.md5(datos.encode('utf-8')).hexdigest()
