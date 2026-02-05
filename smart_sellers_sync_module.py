@@ -23,6 +23,21 @@ def safe_float(value):
         return 0.0
 
 
+def mapear_status_seller(status_pg):
+    """
+    Mapear status de PostgreSQL a MySQL
+    PostgreSQL: '01' (activo) o '02' (inactivo)
+    MySQL: 'active' o 'inactive'
+    """
+    if status_pg == '01':
+        return 'active'
+    elif status_pg == '02':
+        return 'inactive'
+    else:
+        # Por defecto, si no es '01', treat as inactive
+        return 'inactive'
+
+
 def laravel_hash_make(password):
     """Generar hash compatible con Laravel Hash::make()"""
     # Convertir password a bytes si es string
@@ -244,10 +259,14 @@ class SmartSellersSyncModule:
                     if existente:
                         # Actualizar seller existente
                         seller_id = existente[0]
+
+                        # Mapear status de PostgreSQL a MySQL
+                        seller_status = mapear_status_seller(status)
+
                         self.mysql_cursor.execute("""
                             UPDATE sellers SET
                                 description = %s,
-                                status = %s,
+                                seller_status = %s,
                                 percent_sales = %s,
                                 percent_receivable = %s,
                                 inkeeper = %s,
@@ -258,11 +277,20 @@ class SmartSellersSyncModule:
                                 updated_at = NOW()
                             WHERE id = %s
                         """, (
-                            description, status, percent_sales, percent_receivable,
+                            description, seller_status, percent_sales, percent_receivable,
                             inkeeper, user_code, percent_gerencial_debit_note,
                             percent_gerencial_credit_note, percent_returned_check,
                             seller_id
                         ))
+
+                        # También actualizar el name del user asociado
+                        self.mysql_cursor.execute("""
+                            UPDATE users SET
+                                name = %s,
+                                updated_at = NOW()
+                            WHERE id = (SELECT user_id FROM sellers WHERE id = %s)
+                        """, (description, seller_id))
+
                         sellers_modificados += 1
                     else:
                         # Buscar user_id por email
@@ -301,9 +329,12 @@ class SmartSellersSyncModule:
                             user_id = user_result[0]
 
                         # Insertar nuevo seller
+                        # Mapear status de PostgreSQL a MySQL
+                        seller_status = mapear_status_seller(status)
+
                         self.mysql_cursor.execute("""
                             INSERT INTO sellers (
-                                user_id, company_id, code, description, status,
+                                user_id, company_id, code, description, seller_status,
                                 percent_sales, percent_receivable, inkeeper,
                                 user_code, percent_gerencial_debit_note, percent_gerencial_credit_note,
                                 percent_returned_check, created_at, updated_at
@@ -314,7 +345,7 @@ class SmartSellersSyncModule:
                                 %s, NOW(), NOW()
                             )
                         """, (
-                            user_id, self.company_id, seller_code, description, status,
+                            user_id, self.company_id, seller_code, description, seller_status,
                             percent_sales, percent_receivable, inkeeper,
                             user_code, percent_gerencial_debit_note, percent_gerencial_credit_note,
                             percent_returned_check
