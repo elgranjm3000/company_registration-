@@ -342,14 +342,18 @@ class SmartSellersSyncModule:
             self.log(f"🔄 Sellers modificados: {sellers_modificados}", "info")
             self.log(f"⏭️  Sellers omitidos (sin cambios): {sellers_omitidos}", "info")
             if errores > 0:
-                self.log(f"❌ Errores: {errores}", "error")
+                self.log(f"⚠️  Errores: {errores} (ver detalles arriba)", "warning")
             self.log("=== SINCRONIZACIÓN DE SELLERS COMPLETADA ===", "info")
+
+            # Considerar exitoso si al menos hubo sincronizaciones exitosas
+            # Los errores individuales (ej: usuario ya existe) no marcan toda la sync como fallida
+            exito = (sellers_nuevos + sellers_modificados) > 0 or errores == 0
 
             return {
                 'nuevos': sellers_nuevos,
                 'actualizados': sellers_modificados,
                 'errores': errores,
-                'exito': errores == 0
+                'exito': exito
             }
 
         except Exception as e:
