@@ -241,11 +241,30 @@ class SmartSellersSyncModule:
                         user_result = self.mysql_cursor.fetchone()
 
                         if not user_result:
-                            self.log(f"⚠️  No se encontró user para email: {email}", "warning")
-                            errores += 1
-                            continue
+                            # Usuario no existe, crearlo en users
+                            self.log(f"   Creando usuario en MySQL.users para: {email}", "debug")
 
-                        user_id = user_result[0]
+                            # Generar un nombre basado en la descripción del seller
+                            nombre_parts = description.split(' ')
+                            first_name = nombre_parts[0] if nombre_parts else seller_code
+                            last_name = ' '.join(nombre_parts[1:]) if len(nombre_parts) > 1 else ''
+
+                            self.mysql_cursor.execute("""
+                                INSERT INTO users (
+                                    company_id, email, password, role, first_name, last_name,
+                                    status, created_at, updated_at
+                                ) VALUES (
+                                    %s, %s, %s, %s, %s, %s,
+                                    'active', NOW(), NOW()
+                                )
+                            """, (
+                                self.company_id, email, password, 'seller', first_name, last_name
+                            ))
+
+                            user_id = self.mysql_cursor.lastrowid
+                            self.log(f"   ✅ Usuario creado con ID: {user_id}", "debug")
+                        else:
+                            user_id = user_result[0]
 
                         # Insertar nuevo seller
                         self.mysql_cursor.execute("""
