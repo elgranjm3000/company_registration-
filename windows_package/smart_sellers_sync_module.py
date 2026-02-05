@@ -5,12 +5,13 @@ MÓDULO DE SINCRONIZACIÓN DE SELLERS
 Sincroniza vendedores desde PostgreSQL a MySQL usando sistema de hashes
 
 Autor: Sistema de Sincronización
-Versión: 2.0 (con sync_hashes)
+Versión: 2.1 (con encriptación de passwords)
 """
 
 import pymysql
 import psycopg2
 import hashlib
+import bcrypt
 from typing import Dict, Any, Tuple
 
 
@@ -20,6 +21,21 @@ def safe_float(value):
         return float(value) if value is not None else 0.0
     except:
         return 0.0
+
+
+def laravel_hash_make(password):
+    """Generar hash compatible con Laravel Hash::make()"""
+    # Convertir password a bytes si es string
+    if isinstance(password, str):
+        password = password.encode('utf-8')
+
+    # Generar hash con bcrypt
+    salt = bcrypt.gensalt(rounds=10)
+    hashed = bcrypt.hashpw(password, salt)
+
+    # Reemplazar $2b$ con $2y$ para compatibilidad con Laravel
+    laravel_hash = hashed.decode('utf-8').replace('$2b$', '$2y$')
+    return laravel_hash
 
 
 class SmartSellersSyncModule:
@@ -264,6 +280,9 @@ class SmartSellersSyncModule:
                             # La descripción ya es el nombre completo
                             name = description if description else seller_code
 
+                            # Encriptar password con bcrypt (compatible con Laravel)
+                            hashed_password = laravel_hash_make(password)
+
                             self.mysql_cursor.execute("""
                                 INSERT INTO users (
                                     email, password, role, name, status,
@@ -273,7 +292,7 @@ class SmartSellersSyncModule:
                                     NOW(), NOW()
                                 )
                             """, (
-                                email, password, 'seller', name
+                                email, hashed_password, 'seller', name
                             ))
 
                             user_id = self.mysql_cursor.lastrowid
