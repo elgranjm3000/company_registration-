@@ -3197,6 +3197,10 @@ class SmartSyncComplete:
         """
         Sincronizar products de MySQL a PostgreSQL
 
+        NOTA: PostgreSQL es la fuente de verdad para products.
+        Solo se INSERTAN products que no existen (ej: creados desde quotes),
+        pero NUNCA se ACTUALIZAN products existentes desde MySQL.
+
         Args:
             cambios: Dict con 'nuevos' y 'modificados'
         """
@@ -3207,9 +3211,16 @@ class SmartSyncComplete:
         total_nuevos = len(cambios.get('nuevos', []))
         total_modificados = len(cambios.get('modificados', []))
 
+        # IGNORAR modificados - PostgreSQL es la fuente de verdad
+        if total_modificados > 0:
+            self._log(f"   ℹ️ Ignorando {total_modificados} products modificados en MySQL (PostgreSQL es la fuente de verdad)", "info")
+
+        if total_nuevos == 0:
+            return
+
         self._log("", "info")
-        self._log("📦 SINCRONIZANDO PRODUCTS (MySQL → PostgreSQL)...", "info")
-        self._log(f"   📋 Nuevos: {total_nuevos} | Modificados: {total_modificados}", "info")
+        self._log("📦 SINCRONIZANDO PRODUCTS NUEVOS (MySQL → PostgreSQL)...", "info")
+        self._log(f"   📋 Nuevos: {total_nuevos} (modificados ignorados)", "info")
 
         try:
             # Obtener valores válidos para columnas con restricciones
@@ -3217,16 +3228,8 @@ class SmartSyncComplete:
             status_row = self.pg_cursor.fetchone()
             status_valido = status_row[0] if status_row else '01'
 
-            self.pg_cursor.execute("SELECT code FROM taxes LIMIT 1")
-            tax_row = self.pg_cursor.fetchone()
-            tax_valido = tax_row[0] if tax_row else ''
-
-            self.pg_cursor.execute("SELECT code FROM coin LIMIT 1")
-            coin_row = self.pg_cursor.fetchone()
-            coin_valido = coin_row[0] if coin_row else ''
-
-            # Procesar products nuevos y modificados
-            products_a_procesar = cambios.get('nuevos', []) + cambios.get('modificados', [])
+            # Procesar SOLO products nuevos (ignorar modificados)
+            products_a_procesar = cambios.get('nuevos', [])
             total_a_procesar = len(products_a_procesar)
             current_count = 0
 
@@ -3247,55 +3250,40 @@ class SmartSyncComplete:
                     existe = self.pg_cursor.fetchone()
 
                     if existe:
-                        # UPDATE
-                        self._log(f"  🔄 Actualizando product {product_code}...", "debug")
-                        sql_update = """
-                        UPDATE products SET
-                            description = %s,
-                            minimal_sale = %s,
-                            maximal_sale = %s,
-                            status = %s,
-                            product_type = %s
-                        WHERE code = %s
-                        """
-                        self.pg_cursor.execute(sql_update, (
-                            product.get('description', '')[:255],
-                            float(product.get('cost', 0)),
-                            float(product.get('price', 0)),
-                            status_valido,
-                            product.get('product_type', 'finished'),
-                            product_code
-                        ))
-                    else:
-                        # INSERT
-                        self._log(f"  ✨ Insertando product {product_code}...", "debug")
-                        sql_insert = """
-                        INSERT INTO products (
-                            code, description, minimal_sale, maximal_sale,
-                            status, product_type, sale_price
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """
-                        self.pg_cursor.execute(sql_insert, (
-                            product_code,
-                            product.get('description', '')[:255],
-                            float(product.get('cost', 0)),
-                            float(product.get('price', 0)),
-                            status_valido,
-                            product.get('product_type', 'finished'),
-                            int(float(product.get('price', 0)) * 100)  # sale_price está en centimos
-                        ))
+                        # Ya existe - IGNORAR (PostgreSQL es la fuente de verdad)
+                        self._log(f"  ℹ️ Product {product_code} ya existe en PostgreSQL (omitiendo)", "debug")
+
+                        # Guardar hash para no volver a procesarlo
+                        hash_nuevo = self._generar_hash_product_mysql(product)
+                        self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
+                        continue
+
+                    # No existe - INSERTAR
+                    self._log(f"  ✨ Insertando product {product_code}...", "debug")
+                    sql_insert = """
+                    INSERT INTO products (
+                        code, description, minimal_sale, maximal_sale,
+                        status, product_type, sale_price
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (code) DO NOTHING
+                    """
+                    self.pg_cursor.execute(sql_insert, (
+                        product_code,
+                        product.get('description', '')[:255],
+                        float(product.get('cost', 0)),
+                        float(product.get('price', 0)),
+                        status_valido,
+                        product.get('product_type', 'finished'),
+                        int(float(product.get('price', 0)) * 100)  # sale_price está en centimos
+                    ))
 
                     self.pg_conn.commit()
 
-                    # Actualizar estadísticas y reportar progreso INMEDIATAMENTE
-                    if existe:
-                        self.stats['products']['modificados'] += 1
-                    else:
-                        self.stats['products']['nuevos'] += 1
-
+                    # Actualizar estadísticas y reportar progreso
+                    self.stats['products']['nuevos'] += 1
                     self._reportar_progreso('products', current_count, total_a_procesar)
 
-                    # Guardar hash DESPUÉS de reportar progreso (para no retrasar el contador)
+                    # Guardar hash DESPUÉS de insertar
                     hash_nuevo = self._generar_hash_product_mysql(product)
                     self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
 
@@ -3311,8 +3299,7 @@ class SmartSyncComplete:
                         self.pg_conn.rollback()
                         self.stats['products']['errores'] += 1
 
-            self._log(f"✅ Products completados: {self.stats['products']['nuevos']} nuevos, "
-                      f"{self.stats['products']['modificados']} modificados, "
+            self._log(f"✅ Products completados: {self.stats['products']['nuevos']} nuevos insertados, "
                       f"{self.stats['products']['errores']} errores", "success")
 
         except Exception as e:
