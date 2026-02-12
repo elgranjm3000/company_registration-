@@ -11,8 +11,8 @@
     "mysql_password": "muentes123.",
     "company_rif": "J502741283",
     "company_email": "multiserviciosleblanc@gmail.com",
-    "company_name": "",
-    "sync_interval_minutes": "2",
+    "company_name": "sss",
+    "sync_interval_minutes": "5",
     "configured": true,
     "first_run": false
 }
