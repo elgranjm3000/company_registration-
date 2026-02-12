@@ -77,6 +77,9 @@ class SmartSyncComplete:
         self.progress_callback = progress_callback  # Callback para reportar progreso
         self.progress_active = False  # Flag para saber si hay un contador activo
 
+        # Mensaje de error específico para mostrar en messagebox
+        self.error_message = None  # Se llena cuando hay un error específico
+
         # Información de progreso accesible desde la UI
         self.progress_info = {
             'entity': '',      # 'products', 'customers', 'categories', etc.
@@ -473,13 +476,13 @@ class SmartSyncComplete:
     def _obtener_company_id(self) -> bool:
         """
         Obtener company_id desde MySQL basado en RIF y email
-        Compatible con app.py - verifica acceso primero, luego companies
 
-        Flujo (igual que app.py sync_companies):
-        1. Verificar que existe en tabla 'acceso' (validación)
-        2. Si existe en acceso, buscar en 'companies'
-        3. Si existe en companies, usar ese ID
-        4. Si no existe en companies, crear nueva empresa
+        Flujo de validación cruzada:
+        1. Verificar que existe en tabla 'acceso' de MySQL (RIF y email coincidentes)
+        2. Verificar que existe en tabla 'company' de PostgreSQL (por email)
+        3. Si existe en ambas, buscar en 'companies' de MySQL
+        4. Si existe en companies de MySQL, usar ese ID
+        5. Si no existe en companies de MySQL, crear nueva empresa
 
         Returns:
             True si se encontró o creó el company_id, False si no
@@ -491,32 +494,84 @@ class SmartSyncComplete:
 
             self._log(f"🔍 Buscando empresa: RIF={self.company_rif}, Email={self.company_email}", "info")
 
-            # [PASO 1] Verificar que existe en tabla 'acceso' (como app.py línea 633)
-            self._log("  🔍 Verificando tabla 'acceso'...", "debug")
+            # [PASO 1] Verificar que existe en tabla 'acceso' con RIF y email coincidente
+            self._log("  🔍 Verificando tabla 'acceso' (RIF y email)...", "debug")
             query_acceso = """
             SELECT id_fiscal, correo_electronico
             FROM acceso
-            WHERE id_fiscal = %s
+            WHERE id_fiscal = %s AND correo_electronico = %s
             LIMIT 1
             """
 
-            self.mysql_cursor.execute(query_acceso, (self.company_rif,))
+            self.mysql_cursor.execute(query_acceso, (self.company_rif, self.company_email))
             acceso = self.mysql_cursor.fetchone()
 
             if not acceso:
-                # ❌ NO existe en acceso - DETENER proceso
+                # ❌ NO existe en acceso con ese RIF y email - DETENER proceso
                 self._log("", "error")
-                self._log("❌ ERROR: No se encontraron datos en tabla 'acceso'", "error")
-                self._log(f"   RIF: {self.company_rif}", "error")
-                self._log(f"   Email: {self.company_email}", "error")
+                self._log("❌ ERROR: No se encontraron datos coincidentes en tabla 'acceso'", "error")
+                self._log(f"   RIF buscado: {self.company_rif}", "error")
+                self._log(f"   Email buscado: {self.company_email}", "error")
                 self._log("", "error")
-                self._log("   💡 La empresa debe estar registrada en la tabla 'acceso' de MySQL", "warning")
+                self._log("   💡 La empresa debe estar registrada en 'acceso' con RIF y email coincidentes", "warning")
                 self._log("   💡 Verifica que el RIF y email sean correctos", "warning")
+
+                # Guardar mensaje de error para messagebox
+                self.error_message = (
+                    f"Empresa NO encontrada en la tabla 'acceso' de MySQL\n\n"
+                    f"RIF: {self.company_rif}\n"
+                    f"Email: {self.company_email}\n\n"
+                    f"La empresa debe estar registrada primero en el sistema."
+                )
                 return False
 
-            self._log("  ✅ Empresa encontrada en tabla 'acceso'", "success")
+            self._log("  ✅ Empresa encontrada en tabla 'acceso' (RIF y email coinciden)", "success")
 
-            # [PASO 2] Buscar si ya existe en tabla 'companies' (como app.py línea 688)
+            # [PASO 2] Verificar que existe en tabla 'company' de PostgreSQL (por email)
+            self._log("  🔍 Verificando tabla 'company' en PostgreSQL (por email)...", "debug")
+            if not self.pg_cursor:
+                self._log("❌ No hay conexión a PostgreSQL para verificar company", "error")
+                return False
+
+            query_pg_company = """
+            SELECT c.id, c.email, c.address, c.phone
+            FROM company c
+            WHERE LOWER(c.email) = LOWER(%s)
+            LIMIT 1
+            """
+
+            self.pg_cursor.execute(query_pg_company, (self.company_email,))
+            pg_company = self.pg_cursor.fetchone()
+
+            if not pg_company:
+                # ❌ NO existe en company de PostgreSQL - DETENER proceso
+                self._log("", "error")
+                self._log("❌ ERROR: No se encontraron datos en tabla 'company' de PostgreSQL", "error")
+                self._log(f"   Email buscado: {self.company_email}", "error")
+                self._log("", "error")
+                self._log("   💡 La empresa debe estar registrada en la tabla 'company' de PostgreSQL", "warning")
+                self._log("   💡 Verifica que el email sea correcto", "warning")
+
+                # Guardar mensaje de error para messagebox
+                self.error_message = (
+                    f"Empresa NO encontrada en la tabla 'company' de PostgreSQL\n\n"
+                    f"Email: {self.company_email}\n\n"
+                    f"La empresa debe estar registrada en PostgreSQL con este email."
+                )
+                return False
+
+            self._log("  ✅ Empresa encontrada en tabla 'company' de PostgreSQL", "success")
+            self._log(f"     ID: {pg_company[0]}", "debug")
+
+            # Guardar datos de PostgreSQL para uso posterior
+            self._pg_company_data = {
+                'id': pg_company[0],
+                'email': pg_company[1],
+                'address': pg_company[2],
+                'phone': pg_company[3]
+            }
+
+            # [PASO 3] Buscar si ya existe en tabla 'companies' de MySQL
             self._log("  🔍 Buscando en tabla 'companies'...", "debug")
             query_companies = """
             SELECT id, name
@@ -536,17 +591,15 @@ class SmartSyncComplete:
                 return True
             else:
                 # ⚠️ NO existe en companies - crear nueva empresa
-                self._log("  ⚠️ Empresa no encontrada en 'companies', creando registro...", "warning")
-                self._log("  💡 Si esto es un error, usa app.py para sincronizar la empresa primero", "info")
+                self._log("  ⚠️ Empresa no encontrada en 'companies', creando registro...", "info")
+                self._log("  💡 Validaciones superadas: acceso (MySQL) ✓ y company (PostgreSQL) ✓", "debug")
 
-                # Obtener datos adicionales de PostgreSQL para crear la empresa
-                pg_data = self._obtener_datos_postgres_para_empresa()
+                # Usar datos ya obtenidos de PostgreSQL (del PASO 2)
+                address = self._pg_company_data.get('address')
+                phone = self._pg_company_data.get('phone')
 
-                address = pg_data.get('address') if pg_data else None
-                phone = pg_data.get('phone') if pg_data else None
-
-                # Usar el nombre del formulario (company_name) en lugar del RIF
-                company_name = self.company_name if hasattr(self, 'company_name') else self.company_rif
+                # Usar el nombre del formulario (company_name) o el RIF como fallback
+                company_name = self.company_name if hasattr(self, 'company_name') and self.company_name else self.company_rif
 
                 # Insertar nueva empresa (como app.py líneas 718-737)
                 insert_query = """
@@ -1979,12 +2032,21 @@ class SmartSyncComplete:
 
             # VERIFICAR Y SINCRONIZAR CUSTOMER A POSTGRESQL si no existe
             self._verificar_y_sincronizar_customer(quote['customer_id'], customer_doc, customer_name, customer_email, customer_phone, customer_address)
+
+            # Obtener name_fiscal desde clients de PostgreSQL
+            self.pg_cursor.execute(
+                "SELECT name_fiscal FROM clients WHERE code = %s",
+                (customer_doc,)
+            )
+            client_fiscal_result = self.pg_cursor.fetchone()
+            client_name_fiscal = client_fiscal_result[0] if client_fiscal_result and client_fiscal_result[0] else customer_name
         else:
             customer_name = "Cliente Migrado"
             customer_email = ""
             customer_phone = ""
             customer_doc = f"MIG-{quote['customer_id']}"
             customer_address = ""
+            client_name_fiscal = "Cliente Migrado"
 
         # VERIFICAR Y SINCRONIZAR PRODUCTS DEL QUOTE antes de insertar
         self._verificar_y_sincronizar_products_quote(quote['id'])
@@ -2060,7 +2122,7 @@ class SmartSyncComplete:
         sql_operation = """
         INSERT INTO public.sales_operation (
             operation_type, document_no, emission_date,
-            register_date, client_code, client_name, client_id,
+            register_date, client_code, client_name, client_id, client_name_fiscal,
             client_address, client_phone, seller, credit_days,
             expiration_date, description, store, locations, user_code,
             station, total_amount, total_net_details, total_tax_details,
@@ -2073,7 +2135,7 @@ class SmartSyncComplete:
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         RETURNING correlative
         """
@@ -2108,6 +2170,7 @@ class SmartSyncComplete:
             client_code,               # client_code
             customer_name,             # client_name
             client_id,                 # client_id
+            client_name_fiscal,        # client_name_fiscal (desde clients.name_fiscal)
             client_address_final,      # client_address
             client_phone_final,        # client_phone
             '00',                      # seller

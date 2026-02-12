@@ -504,6 +504,21 @@ class ConfigWindow:
         self.entry_rif.insert(0, self.config.get('company_rif', ''))
         self.entry_rif.grid(row=0, column=1, pady=5, padx=5)
 
+        # Hacer que el RIF siempre sea mayúsculas
+        def rif_uppercase(event):
+            """Convierte el contenido del RIF a mayúsculas"""
+            current_text = self.entry_rif.get()
+            if current_text and current_text != current_text.upper():
+                # Solo actualizar si hay diferencia para evitar bucle infinito
+                cursor_pos = self.entry_rif.index(tk.INSERT)
+                self.entry_rif.delete(0, tk.END)
+                self.entry_rif.insert(0, current_text.upper())
+                # Reposicionar el cursor
+                self.entry_rif.icursor(cursor_pos)
+
+        # Solo bind de KeyRelease, sin FocusOut para evitar duplicación
+        self.entry_rif.bind('<KeyRelease>', rif_uppercase)
+
         # Email
         ttk.Label(frame, text="Email:").grid(row=1, column=0, sticky="w", pady=5, padx=5)
         self.entry_email = ttk.Entry(frame, width=40)
@@ -636,6 +651,76 @@ class ConfigWindow:
         ]):
             messagebox.showerror("Error", "Por favor complete todos los campos requeridos")
             return
+
+        # Validar que la compañía existe en las bases de datos
+        try:
+            from tkinter import messagebox as mb
+            import psycopg2
+            import pymysql
+
+            # Conectar a PostgreSQL para verificar
+            pg_conn = psycopg2.connect(
+                host=config_nuevo['postgres_host'],
+                database=config_nuevo['postgres_database'],
+                user=config_nuevo['postgres_user'],
+                password=config_nuevo['postgres_password']
+            )
+            pg_cursor = pg_conn.cursor()
+
+            # Verificar email en company (PostgreSQL)
+            pg_cursor.execute(
+                "SELECT id FROM company WHERE LOWER(email) = LOWER(%s)",
+                (config_nuevo['company_email'],)
+            )
+            pg_company = pg_cursor.fetchone()
+            pg_cursor.close()
+            pg_conn.close()
+
+            if not pg_company:
+                mb.showerror(
+                    "❌ Error de Validación",
+                    f"El email '{config_nuevo['company_email']}' NO existe en la tabla 'company' de PostgreSQL.\n\n"
+                    f"Por favor, verifique que el email sea correcto."
+                )
+                return
+
+            # Conectar a MySQL para verificar (credenciales harcodeadas)
+            mysql_conn = pymysql.connect(
+                host='91.238.160.176',
+                port=3306,
+                database='chrystal_movil',
+                user='chrystal_app',
+                password='muentes123.',
+                charset='utf8mb4'
+            )
+            mysql_cursor = mysql_conn.cursor()
+
+            # Verificar RIF y email en acceso (MySQL)
+            mysql_cursor.execute(
+                "SELECT id_fiscal FROM acceso WHERE id_fiscal = %s AND correo_electronico = %s",
+                (config_nuevo['company_rif'], config_nuevo['company_email'])
+            )
+            acceso = mysql_cursor.fetchone()
+            mysql_cursor.close()
+            mysql_conn.close()
+
+            if not acceso:
+                mb.showerror(
+                    "❌ Error de Validación",
+                    f"La empresa NO está registrada en la tabla 'acceso' de MySQL.\n\n"
+                    f"RIF: {config_nuevo['company_rif']}\n"
+                    f"Email: {config_nuevo['company_email']}\n\n"
+                    f"La empresa debe estar registrada primero en el sistema."
+                )
+                return
+
+        except Exception as e:
+            # Si hay error de conexión, mostrar advertencia pero permitir guardar
+            mb.showwarning(
+                "⚠️ Advertencia",
+                f"No se pudo validar la compañía en las bases de datos:\n{str(e)}\n\n"
+                f"Se guardará la configuración, pero verifique la conexión."
+            )
 
         # Guardar
         config_nuevo['configured'] = True
@@ -1093,18 +1178,29 @@ class ManagerWindow:
             self.agregar_log("❌ Error en sincronización")
             self.lbl_progress.config(text="❌ Error en sincronización", fg="red")
 
-            # Mostrar notificación de error
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
-                toast.show_toast(
-                    "⚠️ Error de Sincronización",
-                    "Verifica los logs para más detalles",
-                    duration=7,
-                    threaded=True
+            # Verificar si hay un mensaje de error específico (validación de compañía)
+            if hasattr(self.sync_module, 'error_message') and self.sync_module.error_message:
+                # Mostrar messagebox con el error específico
+                from tkinter import messagebox
+                messagebox.showerror(
+                    "❌ Error de Validación de Empresa",
+                    self.sync_module.error_message
                 )
-            except ImportError:
-                pass
+                # Limpiar el mensaje después de mostrarlo
+                self.sync_module.error_message = None
+            else:
+                # Mostrar notificación genérica de error
+                try:
+                    from win10toast import ToastNotifier
+                    toast = ToastNotifier()
+                    toast.show_toast(
+                        "⚠️ Error de Sincronización",
+                        "Verifica los logs para más detalles",
+                        duration=7,
+                        threaded=True
+                    )
+                except ImportError:
+                    pass
 
     def _sync_completed_old(self, resultado):
         """Callback cuando la sincronización antigua termina (SyncModule)"""
