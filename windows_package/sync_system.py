@@ -2100,8 +2100,11 @@ def main():
         else:
             args.mode = "manager"  # CAMBIADO: Por defecto mostrar ventana manager, no tray
 
+    # Verificar si necesita configuración (primera vez o configured=false)
+    necesita_config = not config.get('configured', False) or config.get('first_run', False)
+
     # Ejecutar según modo
-    if args.mode == "config":
+    if args.mode == "config" or necesita_config:
         # Modo configuración
         root = tk.Tk()
         app = ConfigWindow(root)
