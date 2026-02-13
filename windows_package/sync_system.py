@@ -169,21 +169,74 @@ def obtener_config_mysql():
 
 def cargar_config():
     """Carga configuración desde archivo"""
-    if not os.path.exists(CONFIG_FILE):
+    # Buscar CONFIG_FILE en múltiples ubicaciones (prioridad: externo > empaquetado)
+    config_path = buscar_config_externo()
+
+    if not config_path or not os.path.exists(config_path):
+        log(f"⚠️ No se encontró config externo, usando por defecto", "WARNING")
         return crear_config_default()
 
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+            log(f"✅ Config cargada desde: {config_path}", "INFO")
+            return config
     except Exception as e:
         log(f"Error cargando config: {e}", "ERROR")
         return crear_config_default()
 
+def buscar_config_externo():
+    """
+    Busca sync_config.json en ubicaciones externas (editables por el usuario)
+    Prioridad:
+    1. Directorio del .exe (sys._MEIPASS cuando está compilado)
+    2. Directorio del script (modo desarrollo)
+    3. Directorio actual de trabajo
+
+    Returns:
+        Ruta al config externo o None
+    """
+    # Ubicaciones a buscar (en orden de prioridad)
+    posibles_rutas = []
+
+    if getattr(sys, 'frozen', False):
+        # Modo .exe compilado
+        # sys._MEIPASS es donde PyInstaller desempaqueta los archivos
+        # El directorio del .exe es sys.executable
+        exe_dir = os.path.dirname(sys.executable)
+        posibles_rutas.append(os.path.join(exe_dir, CONFIG_FILE))
+        posibles_rutas.append(os.path.join(sys._MEIPASS, CONFIG_FILE))
+    else:
+        # Modo desarrollo (Python)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        posibles_rutas.append(os.path.join(script_dir, CONFIG_FILE))
+
+    # Agregar directorio de trabajo actual
+    posibles_rutas.append(os.path.join(os.getcwd(), CONFIG_FILE))
+
+    # Buscar la primera que exista
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            return ruta
+
+    # No se encontró ninguna
+    return None
+
 def guardar_config(config):
-    """Guarda configuración a archivo"""
+    """Guarda configuración a archivo externo (editable por usuario)"""
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        # Buscar ubicación externa para guardar
+        if getattr(sys, 'frozen', False):
+            # Modo .exe: guardar al lado del .exe
+            config_path = os.path.join(os.path.dirname(sys.executable), CONFIG_FILE)
+        else:
+            # Modo desarrollo: guardar al lado del script
+            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_FILE)
+
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
+
+        log(f"✅ Config guardada en: {config_path}", "INFO")
         return True
     except Exception as e:
         log(f"Error guardando config: {e}", "ERROR")
