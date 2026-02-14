@@ -2039,14 +2039,14 @@ class SmartSyncComplete:
                 (customer_doc,)
             )
             client_fiscal_result = self.pg_cursor.fetchone()
-            client_name_fiscal = client_fiscal_result[0] if client_fiscal_result and client_fiscal_result[0] else customer_name
+            client_name_fiscal = client_fiscal_result[0] if client_fiscal_result else 0
         else:
             customer_name = "Cliente Migrado"
             customer_email = ""
             customer_phone = ""
             customer_doc = f"MIG-{quote['customer_id']}"
             customer_address = ""
-            client_name_fiscal = "Cliente Migrado"
+            client_name_fiscal = 0
 
         # VERIFICAR Y SINCRONIZAR PRODUCTS DEL QUOTE antes de insertar
         self._verificar_y_sincronizar_products_quote(quote['id'])
