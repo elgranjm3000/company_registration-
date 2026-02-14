@@ -1202,7 +1202,7 @@ class SmartSyncComplete:
                 FROM products_stock
                 GROUP BY product_code
             ) c ON a.code = c.product_code
-            LEFT JOIN PRODUCTS_UNITS b ON a.code = b.product_code
+            LEFT JOIN products_units b ON a.code = b.product_code and unit = '00'
             LEFT JOIN products_image d ON d.main_code = a.code
             LEFT JOIN taxes e ON e.code = a.sale_tax
             LEFT JOIN taxes g ON g.code = a.buy_tax
