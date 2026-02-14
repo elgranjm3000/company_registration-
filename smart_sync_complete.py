@@ -3148,36 +3148,61 @@ class SmartSyncComplete:
                     if not email or email.strip() == '':
                         email = f"customer_{code}@temp.local"
 
-                    insert_query = """
-                    INSERT INTO customers (
-                        company_id, name, email, document_number, address, phone, contact,
-                        status, created_at, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    # VERIFICAR si existe ANTES de insertar
+                    check_query = """
+                    SELECT id
+                    FROM customers
+                    WHERE company_id = %s AND document_number = %s
                     """
+                    self.mysql_cursor.execute(check_query, (self.company_id, code))
+                    existe = self.mysql_cursor.fetchone()
 
-                    self.mysql_cursor.execute(insert_query, (
-                        self.company_id, description, email, code,
-                        address if address else None, phone if phone else None,
-                        contact if contact else None, 'active'
-                    ))
+                    if existe:
+                        # Ya existe - ACTUALIZAR
+                        update_query = """
+                        UPDATE customers SET
+                            name = %s,
+                            email = %s,
+                            address = %s,
+                            phone = %s,
+                            contact = %s,
+                            updated_at = NOW()
+                        WHERE company_id = %s AND document_number = %s
+                        """
+                        self.mysql_cursor.execute(update_query, (
+                            description, email, address if address else None,
+                            phone if phone else None, contact if contact else None,
+                            self.company_id, code
+                        ))
+                        self._log(f"  🔄 Customer {code} ya existía, actualizado", "debug")
+                        self.stats['customers']['modificados'] += 1
+                    else:
+                        # No existe - INSERTAR
+                        insert_query = """
+                        INSERT INTO customers (
+                            company_id, name, email, document_number, address, phone, contact,
+                            status, created_at, updated_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                        """
+                        self.mysql_cursor.execute(insert_query, (
+                            self.company_id, description, email, code,
+                            address if address else None, phone if phone else None,
+                            contact if contact else None, 'active'
+                        ))
+                        self.stats['customers']['nuevos'] += 1
 
-                    self.stats['customers']['nuevos'] += 1
                     # Commit cada 50 customers para no acumular transacción enorme
                     if idx % 50 == 0:
                         self.mysql_conn.commit()
-                        self._log(f"  ✅ Commit parcial: {idx}/{total_nuevos} customers insertados", "debug")
+                        self._log(f"  ✅ Commit parcial: {idx}/{total_nuevos} customers procesados", "debug")
 
                     # Reportar progreso después de insertar exitosamente
                     self._reportar_progreso('customers', idx, total_cambios)
 
                 except Exception as e:
                     # Error con un customer específico - continuar con los demás
-                    error_msg = str(e).lower()
-                    if 'duplicate' in error_msg or 'unique' in error_msg:
-                        self._log(f"  ℹ️ Customer {code} ya existe (omitiendo)", "debug")
-                    else:
-                        self._log(f"  ⚠️ Error insertando customer {code}: {str(e)[:100]}", "warning")
-                        self.stats['customers']['errores'] += 1
+                    self._log(f"  ⚠️ Error procesando customer {code}: {str(e)[:100]}", "warning")
+                    self.stats['customers']['errores'] += 1
 
                     # Reportar progreso aunque haya error
                     self._reportar_progreso('customers', idx, total_cambios)
