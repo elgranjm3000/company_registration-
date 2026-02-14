@@ -154,6 +154,32 @@ def desencriptar_credencial(texto_encriptado):
         # Fallback: base64
         return base64.b64decode(texto_encriptado.encode()).decode()
 
+def encriptar_config_json(config_dict):
+    """
+    Encripta un diccionario de configuración completo
+
+    Args:
+        config_dict: Diccionario con la configuración
+
+    Returns:
+        String encriptado (base64 del JSON encriptado)
+    """
+    json_str = json.dumps(config_dict)
+    return encriptar_credencial(json_str)
+
+def desencriptar_config_json(config_encrypted):
+    """
+    Desencripta un string de configuración encriptado
+
+    Args:
+        config_encrypted: String encriptado
+
+    Returns:
+        Diccionario con la configuración
+    """
+    json_str = desencriptar_credencial(config_encrypted)
+    return json.loads(json_str)
+
 def obtener_config_mysql():
     """
     Retorna la configuración de MySQL con credenciales encriptadas
@@ -168,7 +194,7 @@ def obtener_config_mysql():
     }
 
 def cargar_config():
-    """Carga configuración desde archivo"""
+    """Carga configuración desde archivo (encriptado o plano)"""
     # Buscar CONFIG_FILE en múltiples ubicaciones (prioridad: externo > empaquetado)
     config_path = buscar_config_externo()
 
@@ -178,20 +204,32 @@ def cargar_config():
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-            log(f"✅ Config cargada desde: {config_path}", "INFO")
+            contenido = f.read()
+
+        try:
+            # Intentar desencriptar (archivo .enc encriptado)
+            config = desencriptar_config_json(contenido)
+            log(f"✅ Config encriptada cargada desde: {config_path}", "INFO")
             return config
+        except Exception:
+            # Fallback: intentar como JSON plano (backward compatibility)
+            config = json.loads(contenido)
+            log(f"✅ Config plano cargada desde: {config_path}", "INFO")
+            return config
+
     except Exception as e:
         log(f"Error cargando config: {e}", "ERROR")
         return crear_config_default()
 
 def buscar_config_externo():
     """
-    Busca sync_config.json en ubicaciones externas (editables por el usuario)
+    Busca sync_config.enc (encriptado) o sync_config.json (plano) en ubicaciones externas
     Prioridad:
-    1. Directorio del .exe (sys._MEIPASS cuando está compilado)
-    2. Directorio del script (modo desarrollo)
-    3. Directorio actual de trabajo
+    1. Busca sync_config.enc (encriptado) primero
+    2. Si no existe, busca sync_config.json (plano, backward compatibility)
+    3. Directorio del .exe (sys._MEIPASS cuando está compilado)
+    4. Directorio del script (modo desarrollo)
+    5. Directorio actual de trabajo
 
     Returns:
         Ruta al config externo o None
@@ -204,15 +242,25 @@ def buscar_config_externo():
         # sys._MEIPASS es donde PyInstaller desempaqueta los archivos
         # El directorio del .exe es sys.executable
         exe_dir = os.path.dirname(sys.executable)
-        posibles_rutas.append(os.path.join(exe_dir, CONFIG_FILE))
-        posibles_rutas.append(os.path.join(sys._MEIPASS, CONFIG_FILE))
+
+        # Primero buscar .enc (encriptado)
+        posibles_rutas.append(os.path.join(exe_dir, "sync_config.enc"))
+        posibles_rutas.append(os.path.join(sys._MEIPASS, "sync_config.enc"))
+        # Luego buscar .json (plano, backward compatibility)
+        posibles_rutas.append(os.path.join(exe_dir, "sync_config.json"))
+        posibles_rutas.append(os.path.join(sys._MEIPASS, "sync_config.json"))
     else:
         # Modo desarrollo (Python)
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        posibles_rutas.append(os.path.join(script_dir, CONFIG_FILE))
+
+        # Primero buscar .enc (encriptado)
+        posibles_rutas.append(os.path.join(script_dir, "sync_config.enc"))
+        # Luego buscar .json (plano, backward compatibility)
+        posibles_rutas.append(os.path.join(script_dir, "sync_config.json"))
 
     # Agregar directorio de trabajo actual
-    posibles_rutas.append(os.path.join(os.getcwd(), CONFIG_FILE))
+    posibles_rutas.append(os.path.join(os.getcwd(), "sync_config.enc"))
+    posibles_rutas.append(os.path.join(os.getcwd(), "sync_config.json"))
 
     # Buscar la primera que exista
     for ruta in posibles_rutas:
@@ -223,20 +271,25 @@ def buscar_config_externo():
     return None
 
 def guardar_config(config):
-    """Guarda configuración a archivo externo (editable por usuario)"""
+    """Guarda configuración encriptada a archivo externo"""
     try:
         # Buscar ubicación externa para guardar
         if getattr(sys, 'frozen', False):
             # Modo .exe: guardar al lado del .exe
-            config_path = os.path.join(os.path.dirname(sys.executable), CONFIG_FILE)
+            config_dir = os.path.dirname(sys.executable)
         else:
             # Modo desarrollo: guardar al lado del script
-            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_FILE)
+            config_dir = os.path.dirname(os.path.abspath(__file__))
 
+        # Usar extensión .enc para archivo encriptado
+        config_path = os.path.join(config_dir, "sync_config.enc")
+
+        # Encriptar y guardar
+        config_encriptado = encriptar_config_json(config)
         with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=4)
+            f.write(config_encriptado)
 
-        log(f"✅ Config guardada en: {config_path}", "INFO")
+        log(f"✅ Config encriptada guardada en: {config_path}", "INFO")
         return True
     except Exception as e:
         log(f"Error guardando config: {e}", "ERROR")
