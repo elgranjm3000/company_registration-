@@ -1071,16 +1071,41 @@ class ConfigWindow:
                 # Destruir ventana de configuración e iniciar system tray
                 self.root.destroy()
 
-                # Iniciar system tray automáticamente
+                # Iniciar system tray automáticamente en el MISMO proceso
+                # (no usar subprocess para evitar que el proceso hijo falle silenciosamente)
                 try:
-                    from pywinauto.application import Application
-                    import sys
-                    # Reiniciar app en modo tray
-                    import subprocess
-                    script_path = os.path.abspath(__file__)
-                    subprocess.Popen([sys.executable, script_path, "--mode", "tray"])
+                    log("Iniciando System Tray...", "INFO")
+                    tray = SystemTrayService(config_nuevo)
+                    tray.iniciar()
                 except Exception as e:
-                    print(f"No se pudo iniciar system tray: {e}")
+                    # Si falla el system tray, mostrar error y ejecutar Manager como fallback
+                    log(f"Error iniciando System Tray: {e}", "ERROR")
+
+                    # Mostrar error al usuario
+                    try:
+                        import tkinter as tk
+                        from tkinter import messagebox
+                        error_root = tk.Tk()
+                        error_root.withdraw()
+                        messagebox.showwarning(
+                            "⚠️ System Tray No Disponible",
+                            f"No se pudo iniciar el icono en la barra de tareas.\n\n"
+                            f"Error: {str(e)[:100]}\n\n"
+                            f"Se abrirá la ventana del Manager en su lugar.\n\n"
+                            f"Para usar el System Tray, asegúrese de tener instaladas:\n"
+                            f"  pip install pystray Pillow"
+                        )
+                        error_root.destroy()
+                    except:
+                        pass
+
+                    # Fallback: Ejecutar Manager
+                    try:
+                        root = tk.Tk()
+                        app = ManagerWindow(root)
+                        root.mainloop()
+                    except:
+                        pass
 
             # Bind del evento de completado
             progreso.bind('<<SyncComplete>>', on_sync_complete)
@@ -2155,8 +2180,7 @@ class SystemTrayService:
             log("Creando icono de la bandeja del sistema...", "INFO")
             icon_image = self.crear_icono()
             if not icon_image:
-                log("No se pudo crear el icono. Saliendo.", "ERROR")
-                return
+                raise Exception("No se pudo crear el icono. Verifique que Pillow esté instalado.")
 
             log("✅ Icono creado correctamente", "SUCCESS")
 
@@ -2191,14 +2215,16 @@ Clic derecho → Ver Logs (tiempo real)"""
             log("", "INFO")
             self.icon.run()
 
-        except ImportError:
-            log("ERROR: pystray no está instalado", "ERROR")
+        except ImportError as e:
+            # Error específico si falta pystray o Pillow
+            error_msg = f"Falta dependencia: {str(e)}"
+            log(f"ERROR: {error_msg}", "ERROR")
             log("Ejecute: pip install pystray Pillow", "ERROR")
-            log("", "INFO")
-            log("Instalación:", "INFO")
-            log("  pip install pystray Pillow", "INFO")
+            raise Exception(error_msg)
         except Exception as e:
+            # Cualquier otro error
             log(f"Error iniciando servicio: {e}", "ERROR")
+            raise  # Re-lanzar para que el código que llama pueda manejar el error
 
     def bucle_sincronizacion(self):
         """Bucle de sincronización automática"""
