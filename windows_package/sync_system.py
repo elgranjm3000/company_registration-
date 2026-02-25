@@ -72,8 +72,41 @@ LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
 
-# Archivo de log principal (en carpeta logs/)
-LOG_FILE = os.path.join(LOGS_DIR, "sync_system.log")
+# Función para obtener el archivo de log según la empresa configurada
+def get_log_file():
+    """
+    Obtiene el archivo de log correspondiente a la empresa configurada.
+    Si hay configuración, usa un archivo por empresa.
+    Si no hay configuración, usa el archivo general.
+    """
+    try:
+        # Intentar cargar configuración para obtener el email de la empresa
+        config_path = buscar_config_externo()
+        if config_path and os.path.exists(config_path):
+            # Leer archivo (puede estar encriptado o plano)
+            with open(config_path, "r", encoding="utf-8") as f:
+                contenido = f.read()
+
+            # Intentar desencriptar
+            try:
+                config = desencriptar_config_json(contenido)
+            except:
+                config = json.loads(contenido)
+
+            # Obtener email de la empresa para usar como nombre de archivo
+            company_email = config.get('company_email', '')
+            if company_email:
+                # Limpiar email para usar como nombre de archivo (reemplazar @ y .)
+                email_safe = company_email.replace('@', '_').replace('.', '_')
+                return os.path.join(LOGS_DIR, f"sync_system_{email_safe}.log")
+    except:
+        pass
+
+    # Si no hay configuración o hay error, usar archivo general
+    return os.path.join(LOGS_DIR, "sync_system.log")
+
+# Archivo de log principal (se obtiene dinámicamente según la empresa)
+LOG_FILE = get_log_file()
 
 # ==============================================================================
 # UTILIDADES
@@ -785,8 +818,7 @@ class ConfigWindow:
             if not pg_company:
                 mb.showerror(
                     "❌ Error de Validación",
-                    f"El email '{config_nuevo['company_email']}' NO existe en la tabla 'company' de PostgreSQL.\n\n"
-                    f"Por favor, verifique que el email sea correcto."
+                    "La Empresa configurada no se encuentra registrada en el portal de Chrystal Mobile."
                 )
                 return
 
