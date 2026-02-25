@@ -1583,12 +1583,12 @@ class SystemTrayService:
 
     def _mostrar_notificacion_windows(self, titulo: str, mensaje: str, con_sonido: bool = True):
         """
-        Muestra notificación de Windows más visible
+        Muestra notificación usando Toast Widget dentro de la ventana
 
         Opciones de visibilidad implementadas:
-        1. Toast notification (win10toast) - sutil
-        2. Beep sonoro (winsound) - audible
-        3. MessageBox con timeout - visible pero se cierra solo
+        1. Beep sonoro (winsound) - audible
+        2. Toast notification (win10toast) - sutil (si está disponible)
+        3. Toast Widget dentro de la ventana - moderno y no intrusivo
 
         Args:
             titulo: Título de la notificación
@@ -1605,7 +1605,7 @@ class SystemTrayService:
             except Exception as e:
                 log(f"⚠️ No se pudo reproducir beep: {e}", "WARNING")
 
-        # Opción 2: Toast notification (sutil pero visible)
+        # Opción 2: Toast notification de Windows (sutil pero visible)
         try:
             from win10toast import ToastNotifier
             toast = ToastNotifier()
@@ -1617,64 +1617,161 @@ class SystemTrayService:
         except Exception as e:
             log(f"⚠️ Error mostrando toast: {e}", "WARNING")
 
-        # Opción 3: MessageBox con timeout (más visible, se cierra solo)
+        # Opción 3: Toast Widget dentro de la ventana (moderno, no intrusivo)
         try:
             import tkinter as tk
-            from tkinter import messagebox
-            import threading
 
-            def mostrar_messagebox_timeout():
-                """Muestra messagebox que se cierra automáticamente después de 4 segundos"""
-                temp_root = tk.Tk()
-                temp_root.withdraw()  # Ocultar ventana principal
+            # Obtener la ventana principal si existe
+            main_root = None
 
-                # Centrar ventana
-                temp_root.update_idletasks()
-                width = 450
-                height = 200
-                x = (temp_root.winfo_screenwidth() // 2) - (width // 2)
-                y = (temp_root.winfo_screenheight() // 2) - (height // 2)
-                temp_root.geometry(f"{width}x{height}+{x}+{y}")
+            # Buscar todas las ventanas Tk existentes
+            for widget in tk._default_root.winfo_children():
+                if isinstance(widget, tk.Toplevel) or (hasattr(widget, 'master') and widget.master == tk._default_root):
+                    main_root = widget.winfo_toplevel()
+                    break
 
-                # Cerrar automáticamente después de 4 segundos
-                def auto_cerrar():
-                    try:
-                        temp_root.destroy()
-                    except:
-                        pass
+            if not main_root or not main_root.winfo_exists():
+                # No hay ventana principal, crear una temporal
+                main_root = tk._default_root
 
-                # Programar cierre automático
-                temp_root.after(4000, auto_cerrar)
+            # Crear Toast Widget
+            self._mostrar_toast_widget(main_root, titulo, mensaje)
 
-                # Mostrar messagebox
-                if "Exitosa" in titulo or "✅" in titulo:
-                    messagebox.showinfo(
-                        titulo,
-                        f"{mensaje}\n\n⏱️ Esta ventana se cerrará automáticamente en 4 segundos...",
-                        parent=temp_root
-                    )
-                else:
-                    messagebox.showwarning(
-                        titulo,
-                        f"{mensaje}\n\n⏱️ Esta ventana se cerrará automáticamente en 4 segundos...",
-                        parent=temp_root
-                    )
+            log("✅ Toast Widget mostrado en ventana (se cerrará solo en 4s)", "INFO")
 
-                # Destruir ventana si el usuario cerró manualmente
+        except Exception as e:
+            log(f"⚠️ Error mostrando toast widget: {e}", "WARNING")
+
+    def _mostrar_toast_widget(self, parent_window, titulo: str, mensaje: str):
+        """
+        Muestra un Toast Widget dentro de la ventana principal
+
+        Aparece en la esquina superior derecha y se desvanece después de 4 segundos
+        """
+        import tkinter as tk
+
+        # Determinar colores según el tipo de mensaje
+        if "Exitosa" in titulo or "✅" in titulo:
+            bg_color = "#4CAF50"  # Verde para éxito
+            icono = "✅"
+        elif "Error" in titulo or "❌" in titulo:
+            bg_color = "#f44336"  # Rojo para error
+            icono = "❌"
+        elif "Advertencia" in titulo or "⚠️" in titulo:
+            bg_color = "#FF9800"  # Naranja para advertencia
+            icono = "⚠️"
+        else:
+            bg_color = "#2196F3"  # Azul para info
+            icono = "ℹ️"
+
+        # Crear frame del toast (sin bordes, flotante)
+        toast_frame = tk.Frame(
+            parent_window,
+            bg=bg_color,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2"
+        )
+
+        # Dimensiones del toast
+        toast_width = 350
+        toast_height = 80
+
+        # Posicionar en la esquina superior derecha
+        parent_window.update_idletasks()
+        window_width = parent_window.winfo_width()
+        x = window_width - toast_width - 20  # 20px de margen derecho
+        y = 20  # 20px de margen superior
+
+        toast_frame.place(x=x, y=y, width=toast_width, height=toast_height)
+
+        # Contenido del toast
+        # Icono
+        icon_label = tk.Label(
+            toast_frame,
+            text=icono,
+            font=("Arial", 24),
+            bg=bg_color,
+            fg="white"
+        )
+        icon_label.place(x=15, y=15)
+
+        # Título
+        titulo_label = tk.Label(
+            toast_frame,
+            text=titulo,
+            font=("Arial", 11, "bold"),
+            bg=bg_color,
+            fg="white",
+            anchor="w"
+        )
+        titulo_label.place(x=60, y=15, width=280)
+
+        # Mensaje (recortar si es muy largo)
+        mensaje_corto = mensaje if len(mensaje) <= 50 else mensaje[:47] + "..."
+        mensaje_label = tk.Label(
+            toast_frame,
+            text=mensaje_corto,
+            font=("Arial", 9),
+            bg=bg_color,
+            fg="white",
+            anchor="w",
+            wraplength=270
+        )
+        mensaje_label.place(x=60, y=38, width=280)
+
+        # Función para cerrar con animación de desvanecimiento
+        def cerrar_toast():
+            try:
+                # Intento 1: Desvanecimiento (fade out)
+                for i in range(10, 0, -1):
+                    alpha = float(i) / 10
+                    # Tkinter no soporta alpha directamente, usamos configuración de Windows
+                    toast_frame.config(bg=self._adjust_color(bg_color, alpha))
+                    icon_label.config(bg=toast_frame.cget("bg"))
+                    titulo_label.config(bg=toast_frame.cget("bg"))
+                    mensaje_label.config(bg=toast_frame.cget("bg"))
+                    parent_window.update()
+                    import time
+                    time.sleep(0.05)
+
+                # Eliminar el widget
+                toast_frame.place_forget()
+            except:
+                # Si falla la animación, simplemente eliminar
                 try:
-                    temp_root.destroy()
+                    toast_frame.place_forget()
                 except:
                     pass
 
-            # Ejecutar en thread para no bloquear
-            thread = threading.Thread(target=mostrar_messagebox_timeout)
-            thread.daemon = True
-            thread.start()
+        # Cerrar automáticamente después de 4 segundos
+        parent_window.after(4000, cerrar_toast)
 
-            log("✅ MessageBox con timeout mostrado (se cerrará solo en 4s)", "INFO")
+        # También permitir cerrar con clic
+        toast_frame.bind("<Button-1>", lambda e: cerrar_toast())
 
-        except Exception as e:
-            log(f"⚠️ Error mostrando messagebox con timeout: {e}", "WARNING")
+    def _adjust_color(self, hex_color: str, alpha: float) -> str:
+        """
+        Ajusta el color de acuerdo al alpha (simulado)
+
+        Nota: Tkinter no soporta transparencia alpha directamente.
+        Esta función oscurece el color para simular desvanecimiento.
+        """
+        try:
+            # Convertir hex a RGB
+            hex_color = hex_color.lstrip("#")
+            r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+
+            # Oscurecer según alpha (más bajo = más oscuro)
+            factor = 0.5 + (alpha * 0.5)
+            r = int(r * factor)
+            g = int(g * factor)
+            b = int(b * factor)
+
+            # Convertir de vuelta a hex
+            return f"#{r:02x}{g:02x}{b:02x}"
+        except:
+            return hex_color
 
     def _mostrar_messagebox_windows(self, titulo: str, mensaje: str):
         """
