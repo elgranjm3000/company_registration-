@@ -126,6 +126,59 @@ def log(mensaje="", nivel="INFO"):
     except Exception as e:
         print(f"Error escribiendo log: {e}")
 
+def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
+    """
+    Muestra notificación Banner prominente de Windows
+
+    Args:
+        titulo: Título de la notificación
+        mensaje: Mensaje principal
+        duracion: Duración en segundos (default 5)
+        icono: Ruta al icono (opcional)
+
+    Características:
+    - Banner prominente en esquina superior derecha
+    - Más visible que toast básico
+    - Icono personalizado si está disponible
+    - Threaded para no bloquear
+    """
+    try:
+        from win10toast import ToastNotifier
+        toast = ToastNotifier()
+
+        # Intentar usar icono personalizado si está disponible
+        icon_path = icono
+        if not icon_path:
+            # Buscar icono en el directorio del script
+            try:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                possible_icons = [
+                    os.path.join(script_dir, "icon.ico"),
+                    os.path.join(script_dir, "icon.png"),
+                    os.path.join(script_dir, "app.ico"),
+                ]
+                for path in possible_icons:
+                    if os.path.exists(path):
+                        icon_path = path
+                        break
+            except:
+                pass
+
+        # Mostrar banner con formato mejorado
+        toast.show_toast(
+            titulo,
+            mensaje,
+            duration=duracion,
+            icon_path=icon_path,
+            threaded=True,
+        )
+    except ImportError:
+        # Fallback silencioso si no hay win10toast
+        pass
+    except Exception as e:
+        # Fallback silencioso si hay error
+        pass
+
 def crear_config_default():
     """Crea configuración por defecto"""
     return {
@@ -873,20 +926,12 @@ class ConfigWindow:
         if guardar_config(config_nuevo):
             self.estado.config(text="✅ Configuración guardada exitosamente", fg="green")
 
-            # Mostrar notificación toast de configuración guardada
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
-                toast.show_toast(
-                    "✅ Configuración Guardada",
-                    "La configuración se ha guardado correctamente. Iniciando sincronización...",
-                    duration=3,
-                    threaded=True
-                )
-            except ImportError:
-                pass  # Si no hay win10toast, continuar sin toast
-            except Exception:
-                pass  # Si hay error con toast, continuar sin él
+            # Mostrar notificación BANNER de configuración guardada
+            mostrar_banner(
+                "✅ Configuración Guardada",
+                "La configuración se ha guardado correctamente. Iniciando sincronización...",
+                duracion=5
+            )
 
             # Crear ventana de progreso
             progreso = tk.Toplevel(self.root)
