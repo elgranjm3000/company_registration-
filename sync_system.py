@@ -116,13 +116,15 @@ LOG_FILE = get_log_file()
 # ==============================================================================
 
 def log(mensaje="", nivel="INFO"):
-    """Escribe log al archivo"""
+    """Escribe log al archivo de la empresa configurada"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_line = f"[{timestamp}] [{nivel}] {mensaje}\n"
     print(log_line.strip())
 
     try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
+        # Obtener el archivo de log dinámicamente según la empresa configurada
+        current_log_file = get_log_file()
+        with open(current_log_file, "a", encoding="utf-8") as f:
             f.write(log_line)
     except Exception as e:
         print(f"Error escribiendo log: {e}")
