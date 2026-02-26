@@ -2218,6 +2218,15 @@ class SystemTrayService:
     def iniciar(self):
         """Inicia el servicio en la bandeja del sistema"""
         try:
+            # Asegurarse de que no haya un icono anterior
+            if self.icon is not None:
+                log("⚠️ Ya existe un icono anterior, deteniéndolo...", "WARNING")
+                try:
+                    self.icon.stop()
+                    self.icon = None
+                except:
+                    self.icon = None
+
             log("=" * 70, "INFO")
             log("INICIANDO SYSTEM TRAY SERVICE", "INFO")
             log("=" * 70, "INFO")
@@ -2260,28 +2269,14 @@ Clic derecho → Ver Logs (tiempo real)"""
             sync_thread.daemon = True
             sync_thread.start()
 
-            # Ejecutar icono (bloqueante) con protección contra cierres inesperados
+            # Ejecutar icono (bloqueante)
             log("✅ Servicio iniciado en la bandeja del sistema", "INFO")
             log("💡 El icono está en la barra de tareas (junto al reloj)", "INFO")
             log("💡 Clic derecho para ver opciones", "INFO")
             log("", "INFO")
 
-            # Wrapper para proteger icon.run() contra excepciones
-            try:
-                self.icon.run()
-            except KeyboardInterrupt:
-                log("⚠️ Interrupción por teclado (Ctrl+C)", "WARNING")
-            except Exception as e:
-                log(f"❌ ERROR CRÍTICO en icon.run(): {type(e).__name__}: {e}", "ERROR")
-                log("💡 El icono se cerró inesperadamente. Reiniciando...", "INFO")
-                # Intentar reiniciar el icono automáticamente
-                try:
-                    import time
-                    time.sleep(2)  # Esperar un momento antes de reiniciar
-                    self.iniciar()  # Reiniciar el servicio
-                except Exception as restart_error:
-                    log(f"❌ No se pudo reiniciar el icono: {restart_error}", "ERROR")
-                    raise  # Si no se puede reiniciar, relanzar la excepción
+            # Ejecutar icono sin auto-restart (evita iconos duplicados)
+            self.icon.run()
 
         except ImportError as e:
             # Error específico si falta pystray o Pillow
@@ -2289,12 +2284,15 @@ Clic derecho → Ver Logs (tiempo real)"""
             log(f"ERROR: {error_msg}", "ERROR")
             log("Ejecute: pip install pystray Pillow", "ERROR")
             raise Exception(error_msg)
+        except KeyboardInterrupt:
+            log("⚠️ Interrupción por teclado (Ctrl+C)", "WARNING")
         except Exception as e:
-            # Cualquier otro error
-            log(f"Error iniciando servicio: {e}", "ERROR")
+            log(f"❌ ERROR en System Tray: {type(e).__name__}: {e}", "ERROR")
             import traceback
             log(f"Traceback completo:\n{traceback.format_exc()}", "ERROR")
-            raise  # Re-lanzar para que el código que llama pueda manejar el error
+            # NO reiniciar automáticamente aquí - esto causaba iconos duplicados
+            # El wrapper en main() se encargará del reinicio si es necesario
+            raise
 
     def bucle_sincronizacion(self):
         """Bucle de sincronización automática"""
