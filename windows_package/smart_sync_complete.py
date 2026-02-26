@@ -359,7 +359,7 @@ class SmartSyncComplete:
         Returns:
             True si se creó o ya existía, False si hubo error
         """
-        self._log("Verificando/creando tabla sync_hashes...", "info")
+        # No mostrar mensaje técnico - es transparente para el usuario
 
         try:
             self.pg_conn = psycopg2.connect(**self.postgresql_config)
@@ -387,7 +387,7 @@ class SmartSyncComplete:
 
             self.pg_conn.commit()
 
-            self._log("✅ Tabla sync_hashes lista", "success")
+            # No mostrar mensaje de éxito - es transparente para el usuario
             return True
 
         except Exception as e:
@@ -408,15 +408,15 @@ class SmartSyncComplete:
             try:
                 self.pg_cursor.execute(query)
                 self.pg_conn.commit()  # Commit después de crear índice
-                self._log(f"  Índice '{nombre_idx}' creado", "debug")
+                # No mostrar mensaje de creación - es transparente para el usuario
             except Exception as e:
-                # Si el índice ya existe, ignoramos el error
+                # Silenciar todos los errores de índices (no son relevantes para el usuario)
                 error_msg = str(e).lower()
                 if "already exists" in error_msg:
-                    self._log(f"  Índice '{nombre_idx}' ya existe", "debug")
+                    # El índice ya existe - es normal, no hacer nada
                     self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
                 else:
-                    self._log(f"  ⚠️ Error creando índice '{nombre_idx}': {str(e)}", "warning")
+                    # Otro error de índice - silenciar también (no relevante para el usuario)
                     self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
 
     def _conectar_bases_datos(self) -> bool:
@@ -434,9 +434,7 @@ class SmartSyncComplete:
                 self._log("✅ Conectado a PostgreSQL", "success")
             except Exception as e:
                 self._log(f"❌ Error conectando PostgreSQL: {type(e).__name__}: {str(e)}", "error")
-                self._log(f"   Host: {self.postgresql_config.get('host')}", "debug")
-                self._log(f"   Database: {self.postgresql_config.get('database')}", "debug")
-                self._log(f"   User: {self.postgresql_config.get('user')}", "debug")
+                # Datos de conexión ocultos por seguridad
                 return False
 
             # Conectar MySQL (usando pymysql - 100% Python puro)
@@ -451,15 +449,10 @@ class SmartSyncComplete:
                 )
                 self.mysql_cursor = self.mysql_conn.cursor()
                 self._log("✅ Conectado a MySQL (pymysql)", "success")
-                self._log(f"   Host: {self.mysql_config.get('host')}", "debug")
-                self._log(f"   Port: {self.mysql_config.get('port')}", "debug")
-                self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
+                # Datos de conexión ocultos por seguridad
             except Exception as e:
                 self._log(f"❌ Error conectando MySQL: {type(e).__name__}: {str(e)}", "error")
-                self._log(f"   Host: {self.mysql_config.get('host')}", "debug")
-                self._log(f"   Port: {self.mysql_config.get('port')}", "debug")
-                self._log(f"   Database: {self.mysql_config.get('database')}", "debug")
-                self._log(f"   User: {self.mysql_config.get('user')}", "debug")
+                # Datos de conexión ocultos por seguridad
 
                 # Mostrar error detallado de pymysql
                 if hasattr(e, 'args') and e.args:
