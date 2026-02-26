@@ -1863,7 +1863,7 @@ class SystemTrayService:
 
             lbl_info = tk.Label(
                 info_frame,
-                text="📁 Logs: windows_package/logs/  |  🔄 Actualización automática cada 2 segundos",
+                text="📁 Logs: Monitoreando archivo de log de la empresa  |  🔄 Actualización automática cada 2 segundos",
                 font=("Arial", 9),
                 anchor="w"
             )
@@ -1943,14 +1943,27 @@ class SystemTrayService:
                 """Fuerza la recarga completa del archivo"""
                 if current_log_file[0]:
                     try:
-                        with open(current_log_file[0], 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            txt.config(state="normal")
-                            txt.delete("1.0", "end")
-                            txt.insert("1.0", f"📄 Archivo: {os.path.basename(current_log_file[0])}\n" + "="*80 + "\n\n")
-                            txt.insert("end", content)
-                            txt.see("end")
-                            txt.config(state="disabled")
+                        # Intentar leer con diferentes codificaciones
+                        content = None
+                        for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+                            try:
+                                with open(current_log_file[0], "r", encoding=encoding) as f:
+                                    content = f.read()
+                                break
+                            except (UnicodeDecodeError, UnicodeError):
+                                continue
+
+                        if content is None:
+                            # Último intento: utf-8 ignorando errores
+                            with open(current_log_file[0], "r", encoding="utf-8", errors="replace") as f:
+                                content = f.read()
+
+                        txt.config(state="normal")
+                        txt.delete("1.0", "end")
+                        txt.insert("1.0", f"📄 Archivo: {os.path.basename(current_log_file[0])}\n" + "="*80 + "\n\n")
+                        txt.insert("end", content)
+                        txt.see("end")
+                        txt.config(state="disabled")
                     except Exception as e:
                         txt.config(state="normal")
                         txt.insert("end", f"\n❌ Error: {e}\n")
@@ -1977,24 +1990,34 @@ class SystemTrayService:
             log_file = current_log_file[0]
             if log_file and os.path.exists(log_file):
                 try:
-                    with open(log_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        txt.insert("1.0", f"📄 Archivo: {os.path.basename(log_file)}\n" + "="*80 + "\n\n")
-                        txt.insert("end", content)
-                        txt.see("end")
+                    # Intentar leer con diferentes codificaciones
+                    content = None
+                    for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+                        try:
+                            with open(log_file, "r", encoding=encoding) as f:
+                                content = f.read()
+                            break
+                        except (UnicodeDecodeError, UnicodeError):
+                            continue
+
+                    if content is None:
+                        # Último intento: utf-8 ignorando errores
+                        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                            content = f.read()
+
+                    txt.insert("1.0", f"📄 Archivo: {os.path.basename(log_file)}\n" + "="*80 + "\n\n")
+                    txt.insert("end", content)
+                    txt.see("end")
                 except Exception as e:
                     txt.insert("1.0", f"❌ Error cargando log: {e}")
             else:
                 txt.insert("1.0", "⏳ Esperando logs...\n\n")
-                txt.insert("end", "El sistema creará logs en:\n")
-                txt.insert("end", f"  {LOGS_DIR}\n\n")
-                txt.insert("end", "Logs que se crearán:\n")
-                txt.insert("end", "  • sync_system.log - Logs del sistema (arranque, errores)\n")
-                txt.insert("end", "  • sync_YYYYMMDD_HHMMSS.txt - Logs de sincronización\n\n")
-                txt.insert("end", "💡 Si el icono está en la barra de tareas, la sincronización\n")
-                txt.insert("end", "   se ejecutará automáticamente en segundo plano.\n\n")
-                txt.insert("end", "💡 Puedes forzar una sincronización desde:\n")
-                txt.insert("end", "   Clic derecho en el icono → Sincronizar Ahora\n")
+                txt.insert("end", "No hay logs disponibles aún.\n\n")
+                txt.insert("end", "El archivo de log se creará cuando se ejecute la sincronización.\n\n")
+                if log_file:
+                    txt.insert("end", f"Archivo de log: {os.path.basename(log_file)}\n")
+                else:
+                    txt.insert("end", f"Directorio de logs: {LOGS_DIR}\n")
 
             txt.config(state="disabled")
 
