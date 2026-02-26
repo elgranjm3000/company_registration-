@@ -1229,8 +1229,27 @@ class ManagerWindow:
         # Job para actualizar progreso en UI
         self.progress_update_job = None
 
+        # Configurar manejador de cierre de ventana
+        self.root.protocol("WM_DELETE_WINDOW", self.cerrar_ventana)
+
         self.crear_gui()
         self.actualizar_estado()
+
+    def cerrar_ventana(self):
+        """Cierra la ventana de forma segura"""
+        try:
+            # Cancelar cualquier job pendiente
+            if self.progress_update_job:
+                self.root.after_cancel(self.progress_update_job)
+
+            # Destruir la ventana
+            self.root.destroy()
+        except Exception as e:
+            print(f"Error cerrando ventana: {e}")
+            try:
+                self.root.destroy()
+            except:
+                pass
 
     def crear_gui(self):
         """Crea interfaz"""
@@ -1275,7 +1294,7 @@ class ManagerWindow:
         self.btn_sync.pack(side="left", padx=5)
         ttk.Button(btn_frame, text="⚙️ Configuración", command=self.configurar, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="📋 Ver Logs", command=self.ver_logs, width=20).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="❌ Salir", command=self.root.quit, width=20).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="❌ Salir", command=self.cerrar_ventana, width=20).pack(side="right", padx=5)
 
         # Logs
         log_frame = tk.LabelFrame(main_frame, text="📝 Logs en Tiempo Real", font=("Arial", 12, "bold"))
