@@ -1511,8 +1511,25 @@ class ManagerWindow:
         try:
             # Obtener el archivo de log dinámicamente según la empresa configurada
             current_log_file = get_log_file()
-            with open(current_log_file, "r", encoding="utf-8") as f:
-                txt.insert("1.0", f.read())
+
+            # Intentar leer con diferentes codificaciones
+            content = None
+            for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+                try:
+                    with open(current_log_file, "r", encoding=encoding) as f:
+                        content = f.read()
+                    break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+
+            if content is None:
+                # Último intento: utf-8 ignorando errores
+                with open(current_log_file, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+
+            txt.insert("1.0", content)
+        except FileNotFoundError:
+            txt.insert("1.0", "No hay logs disponibles aún.\n\nEl archivo de log se creará cuando se ejecute la sincronización.")
         except Exception as e:
             txt.insert("1.0", f"No hay logs disponibles\n\nError: {e}")
 
@@ -1521,13 +1538,27 @@ class ManagerWindow:
         try:
             # Obtener el archivo de log dinámicamente según la empresa configurada
             current_log_file = get_log_file()
-            with open(current_log_file, "r", encoding="utf-8") as f:
-                lineas = f.readlines()
-                ultimas = lineas[-20:] if len(lineas) > 20 else lineas
-                self.txt_logs.config(state="normal")
-                self.txt_logs.delete("1.0", "end")
-                self.txt_logs.insert("1.0", "".join(ultimas))
-                self.txt_logs.config(state="disabled")
+
+            # Intentar leer con diferentes codificaciones
+            lineas = None
+            for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+                try:
+                    with open(current_log_file, "r", encoding=encoding) as f:
+                        lineas = f.readlines()
+                    break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+
+            if lineas is None:
+                # Último intento: utf-8 ignorando errores
+                with open(current_log_file, "r", encoding="utf-8", errors="replace") as f:
+                    lineas = f.readlines()
+
+            ultimas = lineas[-20:] if len(lineas) > 20 else lineas
+            self.txt_logs.config(state="normal")
+            self.txt_logs.delete("1.0", "end")
+            self.txt_logs.insert("1.0", "".join(ultimas))
+            self.txt_logs.config(state="disabled")
         except:
             pass
 
