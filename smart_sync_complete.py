@@ -3281,6 +3281,106 @@ class SmartSyncComplete:
     # SINCRONIZACIÓN DE PRODUCTS (MYSQL → POSTGRESQL)
     # ====================================================================
 
+    def _eliminar_productos_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina productos de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica:
+        1. Obtiene todos los productos de MySQL
+        2. Para cada producto, verifica si existe en PostgreSQL
+        3. Si NO existe en PostgreSQL Y tenía un hash guardado (estaba sincronizado)
+        4. Lo elimina de MySQL
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO PRODUCTOS ELIMINADOS EN POSTGRESQL...", "info")
+
+            # Obtener todos los productos de MySQL
+            query = """
+            SELECT id, code
+            FROM products
+            WHERE company_id = %s
+            ORDER BY code
+            """
+            self.mysql_cursor.execute(query, (self.company_id,))
+            productos_mysql = self.mysql_cursor.fetchall()
+
+            if not productos_mysql:
+                self._log("   ℹ️ No hay productos en MySQL para verificar", "info")
+                return
+
+            self._log(f"   📋 Verificando {len(productos_mysql)} productos de MySQL...", "info")
+
+            productos_a_eliminar = []
+
+            for product_id, product_code in productos_mysql:
+                if not self.sync_running:
+                    break
+
+                # Verificar si existe en PostgreSQL
+                self.pg_cursor.execute(
+                    "SELECT code FROM products WHERE code = %s",
+                    (product_code,)
+                )
+                existe_en_pg = self.pg_cursor.fetchone()
+
+                if existe_en_pg:
+                    # Producto existe en PostgreSQL, OK
+                    continue
+
+                # No existe en PostgreSQL - verificar si tenía hash guardado
+                # (significa que estaba sincronizado y fue eliminado de PG)
+                hash_guardado = self._obtener_hash_guardado('products_mysql', str(product_id))
+
+                if hash_guardado:
+                    # Tenía hash pero ya no está en PG = fue eliminado de PG
+                    productos_a_eliminar.append((product_id, product_code))
+                    self._log(f"   🗑️ Producto {product_code} (ID: {product_id}) eliminado de PG, se eliminará de MySQL", "debug")
+                else:
+                    # Nunca tuvo hash = es nuevo, no se sincronizó aún
+                    self._log(f"   ℹ️ Producto {product_code} (ID: {product_id}) nunca se sincronizó a PG", "debug")
+
+            # Eliminar productos de MySQL
+            if productos_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(productos_a_eliminar)} productos de MySQL...", "info")
+
+                for product_id, product_code in productos_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM products
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (product_id, self.company_id))
+
+                        # Eliminar hash de sync_hashes
+                        self.pg_cursor.execute(
+                            "DELETE FROM sync_hashes WHERE entity_type = %s AND entity_id = %s",
+                            ('products_mysql', str(product_id))
+                        )
+
+                        self._log(f"   ✅ Producto {product_code} eliminado de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando product {product_code} de MySQL: {e}", "error")
+                        self.stats['products']['errores'] += 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+                self.pg_conn.commit()
+
+                self._log(f"   ✅ {len(productos_a_eliminar)} productos eliminados de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['products']['eliminados'] = self.stats.get('products', {}).get('eliminados', 0) + len(productos_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay productos que eliminar", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando productos eliminados: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+
     def sincronizar_products_postgresql(self, cambios: Dict[str, List]):
         """
         Sincronizar products de MySQL a PostgreSQL
@@ -3348,6 +3448,27 @@ class SmartSyncComplete:
 
                     # No existe - INSERTAR
                     self._log(f"  ✨ Insertando product {product_code}...", "debug")
+
+                    # Manejar valores NULL correctamente
+                    description = product.get('description') or ''
+                    cost = product.get('cost')
+                    price = product.get('price')
+                    product_type = product.get('product_type') or 'finished'
+
+                    # Convertir a float, usar 0 si es None
+                    try:
+                        cost_val = float(cost) if cost is not None else 0.0
+                    except (ValueError, TypeError):
+                        cost_val = 0.0
+
+                    try:
+                        price_val = float(price) if price is not None else 0.0
+                    except (ValueError, TypeError):
+                        price_val = 0.0
+
+                    # Calcular sale_price (en centimos)
+                    sale_price_cents = int(price_val * 100) if price_val > 0 else 0
+
                     sql_insert = """
                     INSERT INTO products (
                         code, description, minimal_sale, maximal_sale,
@@ -3357,12 +3478,12 @@ class SmartSyncComplete:
                     """
                     self.pg_cursor.execute(sql_insert, (
                         product_code,
-                        product.get('description', '')[:255],
-                        float(product.get('cost', 0)),
-                        float(product.get('price', 0)),
+                        description[:255] if description else '',
+                        cost_val,
+                        price_val,
                         status_valido,
-                        product.get('product_type', 'finished'),
-                        int(float(product.get('price', 0)) * 100)  # sale_price está en centimos
+                        product_type,
+                        sale_price_cents
                     ))
 
                     self.pg_conn.commit()
@@ -3664,6 +3785,9 @@ class SmartSyncComplete:
             self.sincronizar_customers_mysql(cambios_customers)
 
             # 4. Products de MySQL → PostgreSQL (ANTES de quotes para que existan)
+            # Primero eliminar de MySQL los que fueron eliminados de PostgreSQL
+            self._eliminar_productos_mysql_cuando_faltan_en_postgresql()
+            # Luego sincronizar nuevos productos
             self.sincronizar_products_postgresql(cambios_products_mysql)
 
             # 5. Quotes a PostgreSQL (dirección opuesta, requiere products y customers)
@@ -3682,7 +3806,7 @@ class SmartSyncComplete:
             self._log("╚════════════════════════════════════════════════════════════════╝", "info")
             self._log(f"Products:   {self.stats['products']['nuevos']} nuevos, "
                       f"{self.stats['products']['modificados']} modificados, "
-                      f"{self.stats['products']['eliminados']} inactivados", "success")
+                      f"{self.stats['products'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Customers:  {self.stats['customers']['nuevos']} nuevos, "
                       f"{self.stats['customers']['modificados']} modificados", "success")
             self._log(f"Categories: {self.stats['categories']['nuevos']} nuevos, "
@@ -3697,11 +3821,15 @@ class SmartSyncComplete:
             if sum(s['errores'] for s in self.stats.values()) == 0:
                 self._log("✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO", "success")
                 # Mostrar notificación toast de Windows
+                eliminados = self.stats['products'].get('eliminados', 0)
+                mensaje = f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} nuevos/modificados"
+                if eliminados > 0:
+                    mensaje += f" | {eliminados} eliminados"
+                mensaje += f" | Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} | Duración: {duracion:.1f}s"
+
                 self._mostrar_notificacion(
                     titulo="✅ Sincronización Completada",
-                    mensaje=f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} | "
-                           f"Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} | "
-                           f"Duración: {duracion:.1f}s",
+                    mensaje=mensaje,
                     duracion=5
                 )
             else:
