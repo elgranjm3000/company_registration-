@@ -9,10 +9,10 @@
     "mysql_database": "chrystal_movil",
     "mysql_user": "chrystal_app",
     "mysql_password": "muentes123.",
-    "company_rif": "J502741283",
-    "company_email": "multiserviciosleblanc@gmail.com",
-    "company_name": "sss",
-    "sync_interval_minutes": "5",
+    "company_rif": "J505261940",
+    "company_email": "elgranjm3000@gmail.com",
+    "company_name": "empresa prueba",
+    "sync_interval_minutes": "2",
     "configured": true,
     "first_run": false
 }
