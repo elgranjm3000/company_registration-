@@ -131,7 +131,7 @@ def log(mensaje="", nivel="INFO"):
 
 def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     """
-    Muestra notificación Banner prominente de Windows
+    Muestra notificación nativa de Windows 10/11 (Action Center)
 
     Args:
         titulo: Título de la notificación
@@ -140,8 +140,9 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
         icono: Ruta al icono (opcional)
 
     Características:
-    - Banner prominente en esquina superior derecha
-    - Más visible que toast básico
+    - Notificación nativa de Windows 10/11
+    - Aparece en esquina superior derecha
+    - Se guarda en Centro de Acción
     - Icono personalizado si está disponible
     - Threaded para no bloquear
     """
@@ -167,20 +168,29 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
             except:
                 pass
 
-        # Mostrar banner con formato mejorado
-        toast.show_toast(
+        # Mostrar notificación nativa de Windows
+        # threaded=True es CRÍTICO para no bloquear el programa
+        result = toast.show_toast(
             titulo,
             mensaje,
             duration=duracion,
             icon_path=icon_path,
             threaded=True,
         )
+
+        # Log para debugging
+        if result:
+            log(f"✅ Notificación Windows mostrada: {titulo}", "INFO")
+        else:
+            log(f"⚠️ Notificación Windows falló: {titulo}", "WARNING")
+
     except ImportError:
-        # Fallback silencioso si no hay win10toast
-        pass
+        log("❌ ERROR: win10toast no está instalado", "ERROR")
+        log("   Ejecuta: pip install win10toast", "ERROR")
     except Exception as e:
-        # Fallback silencioso si hay error
-        pass
+        log(f"❌ Error mostrando notificación: {e}", "ERROR")
+        import traceback
+        log(f"Traceback: {traceback.format_exc()}", "ERROR")
 
 def crear_config_default():
     """Crea configuración por defecto"""
