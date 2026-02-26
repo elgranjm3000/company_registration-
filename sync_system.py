@@ -1384,15 +1384,19 @@ class ManagerWindow:
         txt.pack(fill="both", expand=True)
 
         try:
-            with open(LOG_FILE, "r", encoding="utf-8") as f:
+            # Obtener el archivo de log dinámicamente según la empresa configurada
+            current_log_file = get_log_file()
+            with open(current_log_file, "r", encoding="utf-8") as f:
                 txt.insert("1.0", f.read())
-        except:
-            txt.insert("1.0", "No hay logs disponibles")
+        except Exception as e:
+            txt.insert("1.0", f"No hay logs disponibles\n\nError: {e}")
 
     def cargar_logs(self):
         """Carga últimos logs"""
         try:
-            with open(LOG_FILE, "r", encoding="utf-8") as f:
+            # Obtener el archivo de log dinámicamente según la empresa configurada
+            current_log_file = get_log_file()
+            with open(current_log_file, "r", encoding="utf-8") as f:
                 lineas = f.readlines()
                 ultimas = lineas[-20:] if len(lineas) > 20 else lineas
                 self.txt_logs.config(state="normal")
