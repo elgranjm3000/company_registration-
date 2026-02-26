@@ -852,10 +852,7 @@ class ConfigWindow:
             if not acceso:
                 mb.showerror(
                     "❌ Error de Validación",
-                    f"La empresa NO está registrada en la tabla 'acceso' de MySQL.\n\n"
-                    f"RIF: {config_nuevo['company_rif']}\n"
-                    f"Email: {config_nuevo['company_email']}\n\n"
-                    f"La empresa debe estar registrada primero en el sistema."
+                    "La Empresa configurada no se encuentra registrada en el portal de Chrystal Mobile."
                 )
                 return
 
