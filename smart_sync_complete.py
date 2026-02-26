@@ -3298,7 +3298,14 @@ class SmartSyncComplete:
 
                 # No existe en PostgreSQL - verificar si tenía hash guardado
                 # (significa que estaba sincronizado y fue eliminado de PG)
-                hash_guardado = self._obtener_hash_guardado('products_mysql', str(product_id))
+
+                # Buscar hash de dos formas:
+                # 1. Como 'products' (sincronizado desde PostgreSQL hacia MySQL)
+                hash_guardado = self._obtener_hash_guardado('products', product_code)
+
+                # 2. Como 'products_mysql' (sincronizado desde MySQL hacia PostgreSQL)
+                if not hash_guardado:
+                    hash_guardado = self._obtener_hash_guardado('products_mysql', str(product_id))
 
                 if hash_guardado:
                     # Tenía hash pero ya no está en PG = fue eliminado de PG
@@ -3306,7 +3313,7 @@ class SmartSyncComplete:
                     self._log(f"   🗑️ Producto {product_code} (ID: {product_id}) eliminado de PG, se eliminará de MySQL", "debug")
                 else:
                     # Nunca tuvo hash = es nuevo, no se sincronizó aún
-                    self._log(f"   ℹ️ Producto {product_code} (ID: {product_id}) nunca se sincronizó a PG", "debug")
+                    self._log(f"   ℹ️ Producto {product_code} (ID: {product_id}) nunca se sincronizó", "debug")
 
             # Eliminar productos de MySQL
             if productos_a_eliminar:
@@ -3321,9 +3328,15 @@ class SmartSyncComplete:
                         """
                         self.mysql_cursor.execute(delete_query, (product_id, self.company_id))
 
-                        # Eliminar hash de sync_hashes
+                        # Eliminar hashes de sync_hashes (ambas direcciones)
+                        # 1. Hash de 'products' (PostgreSQL → MySQL)
                         self.pg_cursor.execute(
-                            "DELETE FROM sync_hashes WHERE entity_type = %s AND entity_id = %s",
+                            "DELETE FROM sync_hashes WHERE table_name = %s AND record_key = %s",
+                            ('products', product_code)
+                        )
+                        # 2. Hash de 'products_mysql' (MySQL → PostgreSQL)
+                        self.pg_cursor.execute(
+                            "DELETE FROM sync_hashes WHERE table_name = %s AND record_key = %s",
                             ('products_mysql', str(product_id))
                         )
 
