@@ -1997,31 +1997,7 @@ class SystemTrayService:
 
             # Variables de control
             log_running = [True]  # Usar lista para mutable en closure
-            current_log_file = [None]
-
-            def buscar_log_mas_reciente():
-                """Busca el archivo de log más reciente"""
-                try:
-                    log_dir = os.path.join(BASE_DIR, "logs")
-                    if not os.path.exists(log_dir):
-                        return None
-
-                    # Buscar todos los archivos de log (.txt y .log)
-                    all_files = []
-                    for f in os.listdir(log_dir):
-                        if f.endswith('.txt') or f.endswith('.log'):
-                            full_path = os.path.join(log_dir, f)
-                            # Obtener fecha de modificación
-                            mtime = os.path.getmtime(full_path)
-                            all_files.append((mtime, full_path))
-
-                    if all_files:
-                        # Ordenar por fecha de modificación (más reciente primero)
-                        all_files.sort(reverse=True)
-                        return all_files[0][1]  # Retornar el archivo más reciente
-                    return None
-                except Exception:
-                    return None
+            current_log_file = [get_log_file()]  # Usar archivo de log de la empresa configurada
 
             def actualizar_logs():
                 """Actualiza el contenido de logs periódicamente"""
@@ -2030,18 +2006,9 @@ class SystemTrayService:
                 def update_loop():
                     while log_running[0]:
                         try:
-                            log_file = buscar_log_mas_reciente()
+                            log_file = current_log_file[0]
 
-                            if log_file:
-                                if current_log_file[0] != log_file:
-                                    # Nuevo archivo de log
-                                    current_log_file[0] = log_file
-                                    last_size[0] = 0
-                                    txt.config(state="normal")
-                                    txt.delete("1.0", "end")
-                                    txt.insert("1.0", f"📄 Archivo: {os.path.basename(log_file)}\n" + "="*80 + "\n\n")
-                                    last_size[0] = os.path.getsize(log_file)
-
+                            if log_file and os.path.exists(log_file):
                                 # Leer solo el contenido nuevo
                                 try:
                                     current_size = os.path.getsize(log_file)
@@ -2129,9 +2096,8 @@ class SystemTrayService:
             actualizar_logs()
 
             # Cargar contenido inicial
-            log_file = buscar_log_mas_reciente()
-            if log_file:
-                current_log_file[0] = log_file
+            log_file = current_log_file[0]
+            if log_file and os.path.exists(log_file):
                 try:
                     with open(log_file, 'r', encoding='utf-8') as f:
                         content = f.read()
