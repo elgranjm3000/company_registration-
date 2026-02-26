@@ -2103,16 +2103,32 @@ Clic derecho → Ver Logs (tiempo real)"""
             # Iniciar sincronización automática en thread
             log("Iniciando thread de sincronización automática...", "INFO")
             import threading
-            sync_thread = threading.Thread(target=self.bucle_sincronizacion)
+            sync_thread = threading.Thread(target=self.bucle_sincronizacion_con_restart)
             sync_thread.daemon = True
             sync_thread.start()
 
-            # Ejecutar icono (bloqueante)
+            # Ejecutar icono (bloqueante) con protección contra cierres inesperados
             log("✅ Servicio iniciado en la bandeja del sistema", "INFO")
             log("💡 El icono está en la barra de tareas (junto al reloj)", "INFO")
             log("💡 Clic derecho para ver opciones", "INFO")
             log("", "INFO")
-            self.icon.run()
+
+            # Wrapper para proteger icon.run() contra excepciones
+            try:
+                self.icon.run()
+            except KeyboardInterrupt:
+                log("⚠️ Interrupción por teclado (Ctrl+C)", "WARNING")
+            except Exception as e:
+                log(f"❌ ERROR CRÍTICO en icon.run(): {type(e).__name__}: {e}", "ERROR")
+                log("💡 El icono se cerró inesperadamente. Reiniciando...", "INFO")
+                # Intentar reiniciar el icono automáticamente
+                try:
+                    import time
+                    time.sleep(2)  # Esperar un momento antes de reiniciar
+                    self.iniciar()  # Reiniciar el servicio
+                except Exception as restart_error:
+                    log(f"❌ No se pudo reiniciar el icono: {restart_error}", "ERROR")
+                    raise  # Si no se puede reiniciar, relanzar la excepción
 
         except ImportError as e:
             # Error específico si falta pystray o Pillow
@@ -2123,6 +2139,8 @@ Clic derecho → Ver Logs (tiempo real)"""
         except Exception as e:
             # Cualquier otro error
             log(f"Error iniciando servicio: {e}", "ERROR")
+            import traceback
+            log(f"Traceback completo:\n{traceback.format_exc()}", "ERROR")
             raise  # Re-lanzar para que el código que llama pueda manejar el error
 
     def bucle_sincronizacion(self):
@@ -2151,6 +2169,62 @@ Clic derecho → Ver Logs (tiempo real)"""
 
             except Exception as e:
                 log(f"Error en bucle de sincronización: {e}", "ERROR")
+
+    def bucle_sincronizacion_con_restart(self):
+        """
+        Bucle de sincronización con auto-restart en caso de errores
+        Previene que el thread de sincronización muera silenciosamente
+        """
+        import traceback
+
+        while self.sync_running:
+            try:
+                # Ejecutar un ciclo completo de sincronización
+                self.bucle_sincronizacion_un_ciclo()
+
+            except Exception as e:
+                # Log del error con traceback completo
+                log(f"❌ Error en thread de sincronización: {type(e).__name__}: {e}", "ERROR")
+                log(f"📋 Traceback:\n{traceback.format_exc()}", "ERROR")
+
+                # Esperar antes de reintentar para evitar loop rápido de errores
+                log("⏳ Esperando 30 segundos antes de reintentar...", "WARNING")
+                import time
+                time.sleep(30)
+
+                # Verificar si debemos seguir corriendo
+                if not self.sync_running:
+                    break
+
+    def bucle_sincronizacion_un_ciclo(self):
+        """Ejecuta un ciclo completo de sincronización"""
+        # Primera sincronización (solo la primera vez)
+        if not hasattr(self, '_primera_sync_ejecutada'):
+            self._primera_sync_ejecutada = True
+            if self.sync_running:
+                log("🔄 Ejecutando primera sincronización al inicio...", "INFO")
+                self.ejecutar_sincronizacion()
+
+        # Bucle de sincronización periódica
+        while self.sync_running:
+            try:
+                # Recargar configuración al inicio de cada ciclo
+                self.config = cargar_config()
+                intervalo_minutos = int(self.config.get('sync_interval_minutes', 30))
+                intervalo_segundos = intervalo_minutos * 60
+
+                log(f"Sincronización automática cada {intervalo_minutos} minutos", "INFO")
+                log(f"Próxima sincronización en {intervalo_minutos} minutos...", "INFO")
+
+                time.sleep(intervalo_segundos)
+
+                if self.sync_running:
+                    log(f"🔄 Iniciando sincronización programada...", "INFO")
+                    self.ejecutar_sincronizacion()
+
+            except Exception as e:
+                log(f"Error en ciclo de sincronización: {e}", "ERROR")
+                raise  # Relanzar para que lo maneje bucle_sincronizacion_con_restart
 
     def abrir_config(self):
         """Abre ventana de configuración"""
@@ -2232,8 +2306,35 @@ def main():
         print("❌ Para salir: Clic derecho → Salir")
         print("")
 
-        tray = SystemTrayService(config)
-        tray.iniciar()
+        # Wrapper robusto para el System Tray con auto-restart
+        max_retries = 3  # Máximo de intentos de reinicio
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                tray = SystemTrayService(config)
+                tray.iniciar()
+                # Si iniciar() retorna normalmente, salimos del loop
+                break
+            except KeyboardInterrupt:
+                print("\n⚠️ Interrupción por usuario (Ctrl+C)")
+                break
+            except Exception as e:
+                retry_count += 1
+                print(f"\n❌ Error en System Tray (intento {retry_count}/{max_retries}):")
+                print(f"   {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+
+                if retry_count < max_retries:
+                    print(f"⏳ Esperando 5 segundos antes de reintentar...")
+                    import time
+                    time.sleep(5)
+                    print("🔄 Reiniciando System Tray...\n")
+                else:
+                    print("❌ Se alcanzó el máximo de reintentos. Saliendo.")
+                    import sys
+                    sys.exit(1)
 
     elif args.mode == "sync":
         # Modo sincronización única
