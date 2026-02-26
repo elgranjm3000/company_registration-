@@ -3996,7 +3996,7 @@ class SmartSyncComplete:
                 parts = []
                 parts.append(f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} nuevos/modificados")
                 if self.stats['products'].get('eliminados', 0) > 0:
-                    parts.append(f"{self.stats['products'].get('eliminados', 0} eliminados")
+                    parts.append(f"{self.stats['products'].get('eliminados', 0)} eliminados")
 
                 customers_eliminados = self.stats['customers'].get('eliminados', 0)
                 parts.append(f"Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} nuevos/modificados")
