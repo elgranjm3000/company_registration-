@@ -873,6 +873,21 @@ class ConfigWindow:
         if guardar_config(config_nuevo):
             self.estado.config(text="✅ Configuración guardada exitosamente", fg="green")
 
+            # Mostrar notificación toast de configuración guardada
+            try:
+                from win10toast import ToastNotifier
+                toast = ToastNotifier()
+                toast.show_toast(
+                    "✅ Configuración Guardada",
+                    "La configuración se ha guardado correctamente. Iniciando sincronización...",
+                    duration=3,
+                    threaded=True
+                )
+            except ImportError:
+                pass  # Si no hay win10toast, continuar sin toast
+            except Exception:
+                pass  # Si hay error con toast, continuar sin él
+
             # Crear ventana de progreso
             progreso = tk.Toplevel(self.root)
             progreso.title("Sincronizando...")
