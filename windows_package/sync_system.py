@@ -1107,32 +1107,19 @@ class ConfigWindow:
                 # Cerrar ventana de progreso después de un momento
                 progreso.after(1000, progreso.destroy)
 
-                # Mostrar notificación toast en la barra de tareas (tipo Avast/AVG)
-                try:
-                    from win10toast import ToastNotifier
-                    toast = ToastNotifier()
-
-                    if resultado_sync['exito']:
-                        toast.show_toast(
-                            "✅ Sincronización Exitosa",
-                            "Los datos se han sincronizado correctamente",
-                            duration=5,
-                            threaded=True,
-                            icon_path=None  # Usa icono por defecto de la app
-                        )
-                    else:
-                        toast.show_toast(
-                            "⚠️ Advertencia",
-                            resultado_sync['mensaje'][:100] + "..." if len(resultado_sync['mensaje']) > 100 else resultado_sync['mensaje'],
-                            duration=7,
-                            threaded=True
-                        )
-                except ImportError:
-                    # Fallback a messagebox si no hay win10toast
-                    if resultado_sync['exito']:
-                        messagebox.showinfo("Éxito", resultado_sync['mensaje'])
-                    else:
-                        messagebox.showwarning("Advertencia", resultado_sync['mensaje'])
+                # Mostrar notificación BANNER prominente
+                if resultado_sync['exito']:
+                    mostrar_banner(
+                        "✅ Sincronización Exitosa",
+                        "Los datos se han sincronizado correctamente",
+                        duracion=7
+                    )
+                else:
+                    mostrar_banner(
+                        "⚠️ Sincronización con Advertencias",
+                        resultado_sync['mensaje'][:100] + "..." if len(resultado_sync['mensaje']) > 100 else resultado_sync['mensaje'],
+                        duracion=10
+                    )
 
                 # Destruir ventana de configuración e iniciar system tray
                 self.root.destroy()
@@ -1381,28 +1368,20 @@ class ManagerWindow:
             self.lbl_progress.config(text="✅ Sincronización completada", fg="green")
             self.agregar_log("✅ Sincronización completada")
 
-            # Mostrar notificación toast tipo Avast/AVG
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
+            # Mostrar notificación BANNER con estadísticas
+            mensaje_stats = (
+                f"Products: {stats['products']['nuevos']} nuevos\n"
+                f"Customers: {stats['customers']['nuevos']} nuevos\n"
+                f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
+                f"Quotes: {stats['quotes']['nuevos']} nuevos"
+            )
 
-                # Crear mensaje con estadísticas
-                mensaje_stats = (
-                    f"Products: {stats['products']['nuevos']} nuevos\n"
-                    f"Customers: {stats['customers']['nuevos']} nuevos\n"
-                    f"Categories: {stats['categories']['nuevos']} nuevos\n"
-                    f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
-                    f"Quotes: {stats['quotes']['nuevos']} nuevos"
-                )
-
-                toast.show_toast(
-                    "✅ Sincronización Exitosa",
-                    mensaje_stats,
-                    duration=5,
-                    threaded=True
-                )
-            except ImportError:
-                pass  # Si no hay win10toast, no mostrar nada
+            mostrar_banner(
+                "✅ Sincronización Exitosa",
+                mensaje_stats,
+                duracion=7
+            )
         else:
             self.agregar_log("❌ Error en sincronización")
             self.lbl_progress.config(text="❌ Error en sincronización", fg="red")
@@ -1418,18 +1397,12 @@ class ManagerWindow:
                 # Limpiar el mensaje después de mostrarlo
                 self.sync_module.error_message = None
             else:
-                # Mostrar notificación genérica de error
-                try:
-                    from win10toast import ToastNotifier
-                    toast = ToastNotifier()
-                    toast.show_toast(
-                        "⚠️ Error de Sincronización",
-                        "Verifica los logs para más detalles",
-                        duration=7,
-                        threaded=True
-                    )
-                except ImportError:
-                    pass
+                # Mostrar notificación BANNER de error
+                mostrar_banner(
+                    "⚠️ Error de Sincronización",
+                    "Verifica los logs para más detalles",
+                    duracion=10
+                )
 
     def _sync_completed_old(self, resultado):
         """Callback cuando la sincronización antigua termina (SyncModule)"""
@@ -1448,27 +1421,20 @@ class ManagerWindow:
             self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.agregar_log("✅ Sincronización completada")
 
-            # Mostrar notificación toast
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
+            # Mostrar notificación BANNER con estadísticas
+            mensaje_stats = (
+                f"Products: {stats['products']['nuevos']} nuevos\n"
+                f"Customers: {stats['customers']['nuevos']} nuevos\n"
+                f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
+                f"Quotes: {stats['quotes']['nuevos']} nuevos"
+            )
 
-                mensaje_stats = (
-                    f"Products: {stats['products']['nuevos']} nuevos\n"
-                    f"Customers: {stats['customers']['nuevos']} nuevos\n"
-                    f"Categories: {stats['categories']['nuevos']} nuevos\n"
-                    f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
-                    f"Quotes: {stats['quotes']['nuevos']} nuevos"
-                )
-
-                toast.show_toast(
-                    "✅ Sincronización Exitosa",
-                    mensaje_stats,
-                    duration=5,
-                    threaded=True
-                )
-            except ImportError:
-                pass
+            mostrar_banner(
+                "✅ Sincronización Exitosa",
+                mensaje_stats,
+                duracion=7
+            )
         else:
             self.agregar_log("❌ Error en sincronización")
             self.lbl_progress.config(text="❌ Error en sincronización", fg="red")
@@ -1485,18 +1451,12 @@ class ManagerWindow:
         self.agregar_log(f"❌ Error: {error_msg}")
         self.lbl_progress.config(text=f"❌ Error: {error_msg[:50]}", fg="red")
 
-        # Mostrar notificación de error
-        try:
-            from win10toast import ToastNotifier
-            toast = ToastNotifier()
-            toast.show_toast(
-                "⚠️ Error de Sincronización",
-                error_msg[:100],
-                duration=7,
-                threaded=True
-            )
-        except ImportError:
-            pass
+        # Mostrar notificación BANNER de error
+        mostrar_banner(
+            "⚠️ Error de Sincronización",
+            error_msg[:100],
+            duracion=10
+        )
 
     def _start_progress_updates(self):
         """Iniciar actualizaciones periódicas del progreso en la UI"""
@@ -1803,17 +1763,13 @@ class SystemTrayService:
             except Exception as e:
                 log(f"⚠️ No se pudo reproducir beep: {e}", "WARNING")
 
-        # Opción 2: Toast notification de Windows (sutil pero visible)
-        try:
-            from win10toast import ToastNotifier
-            toast = ToastNotifier()
-            # Aumentar duración y threaded=False para que se vea mejor
-            toast.show_toast(f"🔄 {titulo}", mensaje, duration=8, threaded=False)
-            log(f"✅ Notificación toast mostrada: {titulo}", "INFO")
-        except ImportError:
-            log("⚠️ win10toast no está instalado", "WARNING")
-        except Exception as e:
-            log(f"⚠️ Error mostrando toast: {e}", "WARNING")
+        # Opción 2: Banner notification de Windows (prominente)
+        mostrar_banner(
+            f"🔄 {titulo}",
+            mensaje,
+            duracion=8
+        )
+        log(f"✅ Notificación banner mostrada: {titulo}", "INFO")
 
         # Opción 3: Toast Widget dentro de la ventana (moderno, no intrusivo)
         try:
