@@ -13,6 +13,7 @@ import pymysql  # Cambiado de mysql.connector a pymysql (100% Python puro)
 import hashlib
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 import sys
@@ -2772,7 +2773,7 @@ class SmartSyncComplete:
     # ====================================================================
 
     def sincronizar_products_mysql(self, cambios: Dict[str, List]):
-        """Sincronizar cambios de products a MySQL"""
+        """Sincronizar cambios de products a MySQL usando BATCH INSERTS para mejor rendimiento"""
         if not any(cambios.values()):
             return
 
@@ -2800,187 +2801,79 @@ class SmartSyncComplete:
 
             products_sin_categoria = 0
 
-            # Nuevos
+            # ====================================================================
+            # NUEVOS - BATCH INSERT
+            # ====================================================================
             total_nuevos = len(cambios['nuevos'])
-            self._log(f"  📦 Insertando {total_nuevos} productos NUEVOS...", "info")
+            if total_nuevos > 0:
+                self._log(f"  📦 Preparando BATCH INSERT de {total_nuevos} productos NUEVOS...", "info")
 
-            for idx, producto in enumerate(cambios['nuevos'], 1):
-                if not self.sync_running:
-                    break
+                # Recolectar todos los datos para batch insert
+                batch_data = []
+                productos_a_procesar = []
 
-                try:
-                    # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
-                    (code, description, short_name, department, stock, product_type,
-                     coin, description_coin, price, cost, higher_price, min_stock, status,
-                     image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                for idx, producto in enumerate(cambios['nuevos'], 1):
+                    if not self.sync_running:
+                        break
 
-                    # Verificar que la categoría existe en MySQL
-                    if department not in category_mapping:
-                        self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
-                        products_sin_categoria += 1
-                        # Reportar progreso aunque se omita el producto
-                        self._reportar_progreso('products', idx, total_cambios)
-                        continue
+                    try:
+                        # Desempaquetar con todos los campos
+                        (code, description, short_name, department, stock, product_type,
+                         coin, description_coin, price, cost, higher_price, min_stock, status,
+                         image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
-                    category_id = category_mapping[department]
+                        # Verificar que la categoría existe en MySQL
+                        if department not in category_mapping:
+                            self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
+                            products_sin_categoria += 1
+                            continue
 
-                    # Crear JSON de imagen
-                    image_json = self._create_image_json(image_type, product_image)
+                        category_id = category_mapping[department]
 
-                    # INSERT con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
-                    insert_query = """
-                    INSERT INTO products (
-                        company_id,
-                        code,
-                        name,
-                        description,
-                        price,
-                        cost,
-                        stock,
-                        min_stock,
-                        category_id,
-                        status,
-                        product_type,
-                        images,
-                        higher_price,
-                        sale_tax,
-                        aliquot,
-                        coin,
-                        description_coin,
-                        unitary_cost,
-                        buy_tax,
-                        buy_aliquot,
-                        created_at,
-                        updated_at
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
-                    )
-                    ON DUPLICATE KEY UPDATE
-                        name = VALUES(name),
-                        description = VALUES(description),
-                        price = VALUES(price),
-                        cost = VALUES(cost),
-                        stock = VALUES(stock),
-                        min_stock = VALUES(min_stock),
-                        category_id = VALUES(category_id),
-                        status = VALUES(status),
-                        product_type = VALUES(product_type),
-                        images = VALUES(images),
-                        higher_price = VALUES(higher_price),
-                        sale_tax = VALUES(sale_tax),
-                        aliquot = VALUES(aliquot),
-                        coin = VALUES(coin),
-                        description_coin = VALUES(description_coin),
-                        unitary_cost = VALUES(unitary_cost),
-                        buy_tax = VALUES(buy_tax),
-                        buy_aliquot = VALUES(buy_aliquot),
-                        updated_at = NOW()
-                    """
+                        # Crear JSON de imagen
+                        image_json = self._create_image_json(image_type, product_image)
 
-                    self.mysql_cursor.execute(insert_query, (
-                        self.company_id,
-                        code,
-                        short_name,  # El nombre del producto es short_name
-                        description if description else None,
-                        safe_float(price),
-                        safe_float(cost),
-                        float(stock) if stock else 0,  # Convertir Decimal a float
-                        int(min_stock) if min_stock else 0,
-                        category_id,
-                        status,  # Usar el status calculado del SELECT
-                        product_type,
-                        image_json,
-                        safe_float(higher_price),
-                        sale_tax,
-                        aliquot,
-                        coin if coin else None,  # Moneda
-                        description_coin if description_coin else None,  # Descripción de moneda
-                        safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
-                        buy_tax if buy_tax else None,  # buy_tax de products
-                        buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
-                    ))
+                        # Preparar datos para batch insert
+                        batch_data.append((
+                            self.company_id,
+                            code,
+                            short_name,
+                            description if description else None,
+                            safe_float(price),
+                            safe_float(cost),
+                            float(stock) if stock else 0,
+                            int(min_stock) if min_stock else 0,
+                            category_id,
+                            status,
+                            product_type,
+                            image_json,
+                            safe_float(higher_price),
+                            sale_tax,
+                            aliquot,
+                            coin if coin else None,
+                            description_coin if description_coin else None,
+                            safe_float(unitary_cost) if unitary_cost else 0,
+                            buy_tax if buy_tax else None,
+                            buy_aliquot if buy_aliquot else 0
+                        ))
 
-                    self.stats['products']['nuevos'] += 1
-                    # Commit cada 50 productos para no acumular transacción enorme
-                    if idx % 50 == 0:
-                        self.mysql_conn.commit()
-                        # No imprimir log aquí para no interferir con el contador
+                        productos_a_procesar.append((idx, code))
 
-                    # Reportar progreso después de insertar exitosamente
-                    self._reportar_progreso('products', idx, total_cambios)
-
-                except Exception as e:
-                    # Error con un producto específico - continuar con los demás
-                    error_msg = str(e).lower()
-                    if 'duplicate' in error_msg or 'unique' in error_msg:
-                        # Para ON DUPLICATE KEY UPDATE, esto es normal
-                        pass
-                    else:
-                        self._log(f"  ⚠️ Error insertando producto: {str(e)[:100]}", "warning")
+                    except Exception as e:
+                        self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
                         self.stats['products']['errores'] += 1
 
-                    # Reportar progreso aunque haya error
-                    self._reportar_progreso('products', idx, total_cambios)
+                # Ejecutar BATCH INSERT
+                if batch_data:
+                    self._log(f"  🚀 Ejecutando BATCH INSERT de {len(batch_data)} productos...", "info")
+                    start_time = time.time()
 
-            # Commit final de los nuevos
-            if total_nuevos > 0:
-                self.mysql_conn.commit()
-                self._log(f"  ✅ Commit final: {self.stats['products']['nuevos']}/{total_nuevos} productos nuevos insertados", "success")
-
-            # Modificados
-            total_modificados = len(cambios['modificados'])
-            if total_modificados > 0:
-                self._log(f"  📦 Actualizando {total_modificados} productos MODIFICADOS...", "info")
-
-            for idx, producto in enumerate(cambios['modificados'], 1):
-                if not self.sync_running:
-                    break
-
-                try:
-                    # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
-                    (code, description, short_name, department, stock, product_type,
-                     coin, description_coin, price, cost, higher_price, min_stock, status,
-                     image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
-
-                    # Verificar que la categoría existe en MySQL
-                    if department not in category_mapping:
-                        self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
-                        products_sin_categoria += 1
-                        # Reportar progreso incluso si se omite (ajustar idx para continuar desde los nuevos)
-                        idx_adjusted = total_nuevos + idx
-                        self._reportar_progreso('products', idx_adjusted, total_cambios)
-                        continue
-
-                    category_id = category_mapping[department]
-
-                    # Crear JSON de imagen
-                    image_json = self._create_image_json(image_type, product_image)
-
-                    # UPDATE con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
-                    update_query = """
+                    insert_query = """
                     INSERT INTO products (
-                        company_id,
-                        code,
-                        name,
-                        description,
-                        price,
-                        cost,
-                        stock,
-                        min_stock,
-                        category_id,
-                        status,
-                        product_type,
-                        images,
-                        higher_price,
-                        sale_tax,
-                        aliquot,
-                        coin,
-                        description_coin,
-                        unitary_cost,
-                        buy_tax,
-                        buy_aliquot,
-                        created_at,
-                        updated_at
+                        company_id, code, name, description, price, cost, stock, min_stock,
+                        category_id, status, product_type, images, higher_price, sale_tax,
+                        aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
+                        created_at, updated_at
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
@@ -3006,52 +2899,127 @@ class SmartSyncComplete:
                         updated_at = NOW()
                     """
 
-                    self.mysql_cursor.execute(update_query, (
-                        self.company_id,
-                        code,
-                        short_name,
-                        description if description else None,
-                        safe_float(price),
-                        safe_float(cost),
-                        float(stock) if stock else 0,  # Convertir Decimal a float
-                        int(min_stock) if min_stock else 0,
-                        category_id,
-                        status,
-                        product_type,
-                        image_json,
-                        safe_float(higher_price),
-                        sale_tax,
-                        aliquot,
-                        coin if coin else None,  # Moneda
-                        description_coin if description_coin else None,  # Descripción de moneda
-                        safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
-                        buy_tax if buy_tax else None,  # buy_tax de products
-                        buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
-                    ))
+                    self.mysql_cursor.executemany(insert_query, batch_data)
+                    self.mysql_conn.commit()
 
-                    self.stats['products']['modificados'] += 1
-                    # Commit cada 50 productos
-                    if idx % 50 == 0:
-                        self.mysql_conn.commit()
-                        # No imprimir log aquí para no interferir con el contador
+                    elapsed = time.time() - start_time
+                    self.stats['products']['nuevos'] += len(batch_data)
+                    self._log(f"  ✅ BATCH INSERT completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso después de actualizar exitosamente (ajustar idx para continuar desde los nuevos)
-                    idx_adjusted = total_nuevos + idx
-                    self._reportar_progreso('products', idx_adjusted, total_cambios)
+                    # Reportar progreso
+                    for idx, code in productos_a_procesar:
+                        self._reportar_progreso('products', idx, total_cambios)
 
-                except Exception as e:
-                    # Error con un producto específico - continuar con los demás
-                    self._log(f"  ⚠️ Error actualizando producto: {str(e)[:100]}", "warning")
-                    self.stats['products']['errores'] += 1
-
-                    # Reportar progreso aunque haya error
-                    idx_adjusted = total_nuevos + idx
-                    self._reportar_progreso('products', idx_adjusted, total_cambios)
-
-            # Commit final de los modificados
+            # ====================================================================
+            # MODIFICADOS - BATCH UPDATE
+            # ====================================================================
+            total_modificados = len(cambios['modificados'])
             if total_modificados > 0:
-                self.mysql_conn.commit()
-                self._log(f"  ✅ Commit final: {self.stats['products']['modificados']}/{total_modificados} productos modificados actualizados", "success")
+                self._log(f"  📦 Preparando BATCH UPDATE de {total_modificados} productos MODIFICADOS...", "info")
+
+                # Recolectar todos los datos para batch update
+                batch_data = []
+                productos_a_procesar = []
+
+                for idx, producto in enumerate(cambios['modificados'], 1):
+                    if not self.sync_running:
+                        break
+
+                    try:
+                        # Desempaquetar con todos los campos
+                        (code, description, short_name, department, stock, product_type,
+                         coin, description_coin, price, cost, higher_price, min_stock, status,
+                         image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+
+                        # Verificar que la categoría existe en MySQL
+                        if department not in category_mapping:
+                            self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
+                            products_sin_categoria += 1
+                            continue
+
+                        category_id = category_mapping[department]
+
+                        # Crear JSON de imagen
+                        image_json = self._create_image_json(image_type, product_image)
+
+                        # Preparar datos para batch update (mismo formato que insert)
+                        batch_data.append((
+                            self.company_id,
+                            code,
+                            short_name,
+                            description if description else None,
+                            safe_float(price),
+                            safe_float(cost),
+                            float(stock) if stock else 0,
+                            int(min_stock) if min_stock else 0,
+                            category_id,
+                            status,
+                            product_type,
+                            image_json,
+                            safe_float(higher_price),
+                            sale_tax,
+                            aliquot,
+                            coin if coin else None,
+                            description_coin if description_coin else None,
+                            safe_float(unitary_cost) if unitary_cost else 0,
+                            buy_tax if buy_tax else None,
+                            buy_aliquot if buy_aliquot else 0
+                        ))
+
+                        productos_a_procesar.append((idx, code))
+
+                    except Exception as e:
+                        self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
+                        self.stats['products']['errores'] += 1
+
+                # Ejecutar BATCH UPDATE
+                if batch_data:
+                    self._log(f"  🚀 Ejecutando BATCH UPDATE de {len(batch_data)} productos...", "info")
+                    start_time = time.time()
+
+                    # Usamos INSERT ... ON DUPLICATE KEY UPDATE para actualizar
+                    update_query = """
+                    INSERT INTO products (
+                        company_id, code, name, description, price, cost, stock, min_stock,
+                        category_id, status, product_type, images, higher_price, sale_tax,
+                        aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
+                        created_at, updated_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        description = VALUES(description),
+                        price = VALUES(price),
+                        cost = VALUES(cost),
+                        stock = VALUES(stock),
+                        min_stock = VALUES(min_stock),
+                        category_id = VALUES(category_id),
+                        status = VALUES(status),
+                        product_type = VALUES(product_type),
+                        images = VALUES(images),
+                        higher_price = VALUES(higher_price),
+                        sale_tax = VALUES(sale_tax),
+                        aliquot = VALUES(aliquot),
+                        coin = VALUES(coin),
+                        description_coin = VALUES(description_coin),
+                        unitary_cost = VALUES(unitary_cost),
+                        buy_tax = VALUES(buy_tax),
+                        buy_aliquot = VALUES(buy_aliquot),
+                        updated_at = NOW()
+                    """
+
+                    self.mysql_cursor.executemany(update_query, batch_data)
+                    self.mysql_conn.commit()
+
+                    elapsed = time.time() - start_time
+                    self.stats['products']['modificados'] += len(batch_data)
+                    self._log(f"  ✅ BATCH UPDATE completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
+
+                    # Reportar progreso
+                    for idx, code in productos_a_procesar:
+                        idx_adjusted = total_nuevos + idx
+                        self._reportar_progreso('products', idx_adjusted, total_cambios)
 
             # Reportar productos omitidos
             if products_sin_categoria > 0:
