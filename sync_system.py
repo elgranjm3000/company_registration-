@@ -975,6 +975,11 @@ class ConfigWindow:
             def ejecutar_sincronizacion_thread():
                 """Ejecuta la sincronización en un thread separado"""
                 import threading
+                from datetime import datetime
+
+                # Guardar hora de inicio
+                resultado_sync['hora_inicio'] = datetime.now()
+
                 def sync_worker():
                     try:
                         # Ejecutar primera sincronización
@@ -1011,6 +1016,23 @@ class ConfigWindow:
 
             def on_sync_complete(event):
                 """Callback cuando termina la sincronización"""
+                from datetime import datetime
+                from tkinter import messagebox as mb
+
+                # Guardar hora de fin y calcular duración
+                resultado_sync['hora_fin'] = datetime.now()
+                hora_inicio = resultado_sync.get('hora_inicio')
+                hora_fin = resultado_sync['hora_fin']
+
+                # Calcular duración
+                duracion_segundos = (hora_fin - hora_inicio).total_seconds()
+                minutos = int(duracion_segundos // 60)
+                segundos = int(duracion_segundos % 60)
+
+                # Formatear horas
+                hora_inicio_str = hora_inicio.strftime("%H:%M:%S")
+                hora_fin_str = hora_fin.strftime("%H:%M:%S")
+
                 # Cerrar ventana de progreso después de un momento
                 progreso.after(1000, progreso.destroy)
 
@@ -1021,12 +1043,35 @@ class ConfigWindow:
                         "Los datos se han sincronizado correctamente",
                         duracion=7
                     )
+
+                    # Mostrar MESSAGEBOX con detalles del tiempo
+                    duracion_str = f"{minutos}m {segundos}s" if minutos > 0 else f"{segundos}s"
+
+                    mensaje_completo = (
+                        "✅ SINCRONIZACIÓN COMPLETADA\n\n"
+                        f"🕐 Hora de inicio: {hora_inicio_str}\n"
+                        f"🕑 Hora de fin: {hora_fin_str}\n"
+                        f"⏱️ Duración total: {duracion_str}\n\n"
+                        "El sistema continuará trabajando en segundo plano."
+                    )
+
+                    # Esperar un momento antes de mostrar el messagebox
+                    progreso.after(1500, lambda: mb.showinfo(
+                        "✅ Sincronización Completada",
+                        mensaje_completo
+                    ))
                 else:
                     mostrar_banner(
                         "⚠️ Sincronización con Advertencias",
                         resultado_sync['mensaje'][:100] + "..." if len(resultado_sync['mensaje']) > 100 else resultado_sync['mensaje'],
                         duracion=10
                     )
+
+                    # Mostrar messagebox de error también
+                    progreso.after(1500, lambda: mb.showwarning(
+                        "⚠️ Sincronización con Advertencias",
+                        resultado_sync['mensaje']
+                    ))
 
                 # Destruir ventana de configuración e iniciar system tray
                 self.root.destroy()
