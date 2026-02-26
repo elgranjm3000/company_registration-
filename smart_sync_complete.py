@@ -3381,6 +3381,204 @@ class SmartSyncComplete:
             import traceback
             self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
 
+    def _eliminar_customers_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina customers de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica:
+        1. Obtiene todos los customers de MySQL
+        2. Para cada customer, verifica si existe en PostgreSQL
+        3. Si NO existe en PostgreSQL Y tenía un hash guardado (estaba sincronizado)
+        4. Lo elimina de MySQL
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO CUSTOMERS ELIMINADOS EN POSTGRESQL...", "info")
+
+            # Obtener todos los customers de MySQL
+            query = """
+            SELECT id, document_number
+            FROM customers
+            WHERE company_id = %s
+            ORDER BY document_number
+            """
+            self.mysql_cursor.execute(query, (self.company_id,))
+            customers_mysql = self.mysql_cursor.fetchall()
+
+            if not customers_mysql:
+                self._log("   ℹ️ No hay customers en MySQL para verificar", "info")
+                return
+
+            self._log(f"   📋 Verificando {len(customers_mysql)} customers de MySQL...", "info")
+
+            customers_a_eliminar = []
+
+            for customer_id, document_number in customers_mysql:
+                if not self.sync_running:
+                    break
+
+                # Verificar si existe en PostgreSQL (por code = document_number)
+                self.pg_cursor.execute(
+                    "SELECT code FROM customers WHERE code = %s",
+                    (document_number,)
+                )
+                existe_en_pg = self.pg_cursor.fetchone()
+
+                if existe_en_pg:
+                    # Customer existe en PostgreSQL, OK
+                    continue
+
+                # No existe en PostgreSQL - verificar si tenía hash guardado
+                hash_guardado = self._obtener_hash_guardado('customers_mysql', str(customer_id))
+
+                if hash_guardado:
+                    # Tenía hash pero ya no está en PG = fue eliminado de PG
+                    customers_a_eliminar.append((customer_id, document_number))
+                    self._log(f"   🗑️ Customer {document_number} (ID: {customer_id}) eliminado de PG, se eliminará de MySQL", "debug")
+                else:
+                    # Nunca tuvo hash = es nuevo, no se sincronizó aún
+                    self._log(f"   ℹ️ Customer {document_number} (ID: {customer_id}) nunca se sincronizó a PG", "debug")
+
+            # Eliminar customers de MySQL
+            if customers_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(customers_a_eliminar)} customers de MySQL...", "info")
+
+                for customer_id, document_number in customers_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM customers
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (customer_id, self.company_id))
+
+                        # Eliminar hash de sync_hashes
+                        self.pg_cursor.execute(
+                            "DELETE FROM sync_hashes WHERE entity_type = %s AND entity_id = %s",
+                            ('customers_mysql', str(customer_id))
+                        )
+
+                        self._log(f"   ✅ Customer {document_number} eliminado de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando customer {document_number} de MySQL: {e}", "error")
+                        self.stats['customers']['errores'] += 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+                self.pg_conn.commit()
+
+                self._log(f"   ✅ {len(customers_a_eliminar)} customers eliminados de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['customers']['eliminados'] = self.stats.get('customers', {}).get('eliminados', 0) + len(customers_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay customers que eliminar", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando customers eliminados: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+
+    def _eliminar_sellers_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina sellers de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica:
+        1. Obtiene todos los sellers de MySQL
+        2. Para cada seller, verifica si existe en PostgreSQL
+        3. Si NO existe en PostgreSQL Y tenía un hash guardado (estaba sincronizado)
+        4. Lo elimina de MySQL
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO SELLERS ELIMINADOS EN POSTGRESQL...", "info")
+
+            # Obtener todos los sellers de MySQL
+            query = """
+            SELECT id, code
+            FROM sellers
+            WHERE company_id = %s
+            ORDER BY code
+            """
+            self.mysql_cursor.execute(query, (self.company_id,))
+            sellers_mysql = self.mysql_cursor.fetchall()
+
+            if not sellers_mysql:
+                self._log("   ℹ️ No hay sellers en MySQL para verificar", "info")
+                return
+
+            self._log(f"   📋 Verificando {len(sellers_mysql)} sellers de MySQL...", "info")
+
+            sellers_a_eliminar = []
+
+            for seller_id, seller_code in sellers_mysql:
+                if not self.sync_running:
+                    break
+
+                # Verificar si existe en PostgreSQL
+                self.pg_cursor.execute(
+                    "SELECT code FROM sellers WHERE code = %s",
+                    (seller_code,)
+                )
+                existe_en_pg = self.pg_cursor.fetchone()
+
+                if existe_en_pg:
+                    # Seller existe en PostgreSQL, OK
+                    continue
+
+                # No existe en PostgreSQL - verificar si tenía hash guardado
+                hash_guardado = self._obtener_hash_guardado('sellers_mysql', str(seller_id))
+
+                if hash_guardado:
+                    # Tenía hash pero ya no está en PG = fue eliminado de PG
+                    sellers_a_eliminar.append((seller_id, seller_code))
+                    self._log(f"   🗑️ Seller {seller_code} (ID: {seller_id}) eliminado de PG, se eliminará de MySQL", "debug")
+                else:
+                    # Nunca tuvo hash = es nuevo, no se sincronizó aún
+                    self._log(f"   ℹ️ Seller {seller_code} (ID: {seller_id}) nunca se sincronizó a PG", "debug")
+
+            # Eliminar sellers de MySQL
+            if sellers_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(sellers_a_eliminar)} sellers de MySQL...", "info")
+
+                for seller_id, seller_code in sellers_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM sellers
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (seller_id, self.company_id))
+
+                        # Eliminar hash de sync_hashes
+                        self.pg_cursor.execute(
+                            "DELETE FROM sync_hashes WHERE entity_type = %s AND entity_id = %s",
+                            ('sellers_mysql', str(seller_id))
+                        )
+
+                        self._log(f"   ✅ Seller {seller_code} eliminado de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando seller {seller_code} de MySQL: {e}", "error")
+                        self.stats['sellers']['errores'] += 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+                self.pg_conn.commit()
+
+                self._log(f"   ✅ {len(sellers_a_eliminar)} sellers eliminados de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['sellers']['eliminados'] = self.stats.get('sellers', {}).get('eliminados', 0) + len(sellers_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay sellers que eliminar", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando sellers eliminados: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+
     def sincronizar_products_postgresql(self, cambios: Dict[str, List]):
         """
         Sincronizar products de MySQL a PostgreSQL
@@ -3754,6 +3952,8 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("👤 SINCRONIZANDO SELLERS...", "info")
             self._sincronizar_sellers()
+            # Eliminar de MySQL los sellers que fueron eliminados de PostgreSQL
+            self._eliminar_sellers_mysql_cuando_faltan_en_postgresql()
 
             # Verificar si hay cambios
             total_cambios = (
@@ -3783,6 +3983,8 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("👥 SINCRONIZANDO CUSTOMERS...", "info")
             self.sincronizar_customers_mysql(cambios_customers)
+            # Eliminar de MySQL los customers que fueron eliminados de PostgreSQL
+            self._eliminar_customers_mysql_cuando_faltan_en_postgresql()
 
             # 4. Products de MySQL → PostgreSQL (ANTES de quotes para que existan)
             # Primero eliminar de MySQL los que fueron eliminados de PostgreSQL
@@ -3808,11 +4010,13 @@ class SmartSyncComplete:
                       f"{self.stats['products']['modificados']} modificados, "
                       f"{self.stats['products'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Customers:  {self.stats['customers']['nuevos']} nuevos, "
-                      f"{self.stats['customers']['modificados']} modificados", "success")
+                      f"{self.stats['customers']['modificados']} modificados, "
+                      f"{self.stats['customers'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Categories: {self.stats['categories']['nuevos']} nuevos, "
                       f"{self.stats['categories']['modificados']} modificados", "success")
             self._log(f"Sellers:    {self.stats['sellers']['nuevos']} nuevos, "
-                      f"{self.stats['sellers']['modificados']} actualizados", "success")
+                      f"{self.stats['sellers']['modificados']} actualizados, "
+                      f"{self.stats['sellers'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Quotes:     {self.stats['quotes']['nuevos']} nuevos (MySQL→PG), "
                       f"{self.stats['quotes']['estados_actualizados']} estados actualizados", "success")
             self._log(f"Duración:   {duracion:.2f} segundos", "info")
@@ -3821,11 +4025,21 @@ class SmartSyncComplete:
             if sum(s['errores'] for s in self.stats.values()) == 0:
                 self._log("✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO", "success")
                 # Mostrar notificación toast de Windows
-                eliminados = self.stats['products'].get('eliminados', 0)
-                mensaje = f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} nuevos/modificados"
-                if eliminados > 0:
-                    mensaje += f" | {eliminados} eliminados"
-                mensaje += f" | Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} | Duración: {duracion:.1f}s"
+                parts = []
+                parts.append(f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} nuevos/modificados")
+                if self.stats['products'].get('eliminados', 0) > 0:
+                    parts.append(f"{self.stats['products'].get('eliminados', 0} eliminados")
+
+                customers_eliminados = self.stats['customers'].get('eliminados', 0)
+                parts.append(f"Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} nuevos/modificados")
+                if customers_eliminados > 0:
+                    parts.append(f"{customers_eliminados} eliminados")
+
+                sellers_eliminados = self.stats['sellers'].get('eliminados', 0)
+                if sellers_eliminados > 0:
+                    parts.append(f"Sellers: {sellers_eliminados} eliminados")
+
+                mensaje = " | ".join(parts) + f" | Duración: {duracion:.1f}s"
 
                 self._mostrar_notificacion(
                     titulo="✅ Sincronización Completada",
