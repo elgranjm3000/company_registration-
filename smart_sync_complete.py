@@ -3246,67 +3246,58 @@ class SmartSyncComplete:
         """
         Elimina productos de MySQL cuando fueron eliminados de PostgreSQL
 
-        Lógica:
-        1. Obtiene todos los productos de MySQL
-        2. Para cada producto, verifica si existe en PostgreSQL
-        3. Si NO existe en PostgreSQL Y tenía un hash guardado (estaba sincronizado)
-        4. Lo elimina de MySQL
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente los productos eliminados
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esos productos de MySQL
+        4. Limpiamos el registro de sync_hashes
+
+        Esto es MUY eficiente porque:
+        - No recorre todos los productos de MySQL
+        - Solo procesa los productos que realmente fueron eliminados
+        - El trigger hace el trabajo automáticamente
         """
         try:
             self._log("", "info")
             self._log("🗑️ VERIFICANDO PRODUCTOS ELIMINADOS EN POSTGRESQL...", "info")
 
-            # Obtener todos los productos de MySQL
+            # Consulta eficiente: solo productos marcados como eliminados por el trigger
             query = """
-            SELECT id, code
-            FROM products
-            WHERE company_id = %s
-            ORDER BY code
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'products'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
             """
-            self.mysql_cursor.execute(query, (self.company_id,))
-            productos_mysql = self.mysql_cursor.fetchall()
+            self.pg_cursor.execute(query)
+            productos_eliminados = self.pg_cursor.fetchall()
 
-            if not productos_mysql:
-                self._log("   ℹ️ No hay productos en MySQL para verificar", "info")
+            if not productos_eliminados:
+                self._log("   ℹ️ No hay productos eliminados que procesar", "info")
                 return
 
-            self._log(f"   📋 Verificando {len(productos_mysql)} productos de MySQL...", "info")
+            self._log(f"   📋 Encontrados {len(productos_eliminados)} productos eliminados en PostgreSQL", "info")
 
             productos_a_eliminar = []
 
-            for product_id, product_code in productos_mysql:
+            for product_code, record_data in productos_eliminados:
                 if not self.sync_running:
                     break
 
-                # Verificar si existe en PostgreSQL
-                self.pg_cursor.execute(
-                    "SELECT code FROM products WHERE code = %s",
-                    (product_code,)
+                # Buscar el producto en MySQL
+                self.mysql_cursor.execute(
+                    "SELECT id FROM products WHERE code = %s AND company_id = %s",
+                    (product_code, self.company_id)
                 )
-                existe_en_pg = self.pg_cursor.fetchone()
+                producto_mysql = self.mysql_cursor.fetchone()
 
-                if existe_en_pg:
-                    # Producto existe en PostgreSQL, OK
-                    continue
-
-                # No existe en PostgreSQL - verificar si tenía hash guardado
-                # (significa que estaba sincronizado y fue eliminado de PG)
-
-                # Buscar hash de dos formas:
-                # 1. Como 'products' (sincronizado desde PostgreSQL hacia MySQL)
-                hash_guardado = self._obtener_hash_guardado('products', product_code)
-
-                # 2. Como 'products_mysql' (sincronizado desde MySQL hacia PostgreSQL)
-                if not hash_guardado:
-                    hash_guardado = self._obtener_hash_guardado('products_mysql', str(product_id))
-
-                if hash_guardado:
-                    # Tenía hash pero ya no está en PG = fue eliminado de PG
+                if producto_mysql:
+                    product_id = producto_mysql[0]
                     productos_a_eliminar.append((product_id, product_code))
-                    self._log(f"   🗑️ Producto {product_code} (ID: {product_id}) eliminado de PG, se eliminará de MySQL", "debug")
+                    self._log(f"   🗑️ Producto {product_code} (ID: {product_id}) será eliminado de MySQL", "debug")
                 else:
-                    # Nunca tuvo hash = es nuevo, no se sincronizó aún
-                    self._log(f"   ℹ️ Producto {product_code} (ID: {product_id}) nunca se sincronizó", "debug")
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Producto {product_code} ya no existe en MySQL", "debug")
 
             # Eliminar productos de MySQL
             if productos_a_eliminar:
@@ -3321,18 +3312,6 @@ class SmartSyncComplete:
                         """
                         self.mysql_cursor.execute(delete_query, (product_id, self.company_id))
 
-                        # Eliminar hashes de sync_hashes (ambas direcciones)
-                        # 1. Hash de 'products' (PostgreSQL → MySQL)
-                        self.pg_cursor.execute(
-                            "DELETE FROM sync_hashes WHERE table_name = %s AND record_key = %s",
-                            ('products', product_code)
-                        )
-                        # 2. Hash de 'products_mysql' (MySQL → PostgreSQL)
-                        self.pg_cursor.execute(
-                            "DELETE FROM sync_hashes WHERE table_name = %s AND record_key = %s",
-                            ('products_mysql', str(product_id))
-                        )
-
                         self._log(f"   ✅ Producto {product_code} eliminado de MySQL", "info")
 
                     except Exception as e:
@@ -3341,14 +3320,22 @@ class SmartSyncComplete:
 
                 # Commit cambios en MySQL
                 self.mysql_conn.commit()
-                self.pg_conn.commit()
 
                 self._log(f"   ✅ {len(productos_a_eliminar)} productos eliminados de MySQL", "success")
 
                 # Actualizar estadísticas
                 self.stats['products']['eliminados'] = self.stats.get('products', {}).get('eliminados', 0) + len(productos_a_eliminar)
             else:
-                self._log("   ℹ️ No hay productos que eliminar", "info")
+                self._log("   ℹ️ No hay productos que eliminar de MySQL (ya fueron limpiados)", "info")
+
+            # Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'products' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
 
         except Exception as e:
             self._log(f"Error verificando productos eliminados: {e}", "error")
