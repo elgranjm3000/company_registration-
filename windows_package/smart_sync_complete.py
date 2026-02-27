@@ -483,24 +483,26 @@ class SmartSyncComplete:
 
     def _crear_trigger_eliminacion_categories(self):
         """
-        Crea el trigger que marca categories como eliminados en sync_hashes
+        Crea el trigger que marca department (categories en MySQL) como eliminados en sync_hashes
+
+        NOTA: En PostgreSQL la tabla se llama 'department', en MySQL es 'categories'
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_category_deleted_sync_hashes()
+            CREATE OR REPLACE FUNCTION trigger_mark_department_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
                 UPDATE sync_hashes
                 SET deleted_at = NOW()
                 WHERE table_name = 'categories'
-                AND record_key = OLD.code::text;
+                AND record_key = OLD.code;
 
                 -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
                 IF NOT FOUND THEN
                     INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
-                    VALUES ('categories', OLD.code::text, md5(OLD.code::text), NOW());
+                    VALUES ('categories', OLD.code, md5(OLD.code::text), NOW());
                 END IF;
 
                 RETURN OLD;
@@ -510,14 +512,14 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_function_query)
 
-            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
+            # Crear trigger en tabla department (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_categories_mark_deleted_sync_hashes ON categories;
+            DROP TRIGGER IF EXISTS tr_department_mark_deleted_sync_hashes ON department;
 
-            CREATE TRIGGER tr_categories_mark_deleted_sync_hashes
-                AFTER DELETE ON categories
+            CREATE TRIGGER tr_department_mark_deleted_sync_hashes
+                AFTER DELETE ON department
                 FOR EACH ROW
-                EXECUTE PROCEDURE trigger_mark_category_deleted_sync_hashes();
+                EXECUTE PROCEDURE trigger_mark_department_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -530,12 +532,14 @@ class SmartSyncComplete:
 
     def _crear_trigger_eliminacion_customers(self):
         """
-        Crea el trigger que marca customers como eliminados en sync_hashes
+        Crea el trigger que marca clients (customers en MySQL) como eliminados en sync_hashes
+
+        NOTA: En PostgreSQL la tabla se llama 'clients', en MySQL es 'customers'
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted_sync_hashes()
+            CREATE OR REPLACE FUNCTION trigger_mark_client_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
@@ -557,14 +561,14 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_function_query)
 
-            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
+            # Crear trigger en tabla clients (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_customers_mark_deleted_sync_hashes ON customers;
+            DROP TRIGGER IF EXISTS tr_clients_mark_deleted_sync_hashes ON clients;
 
-            CREATE TRIGGER tr_customers_mark_deleted_sync_hashes
-                AFTER DELETE ON customers
+            CREATE TRIGGER tr_clients_mark_deleted_sync_hashes
+                AFTER DELETE ON clients
                 FOR EACH ROW
-                EXECUTE PROCEDURE trigger_mark_customer_deleted_sync_hashes();
+                EXECUTE PROCEDURE trigger_mark_client_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
