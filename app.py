@@ -545,7 +545,8 @@ class CompleteSyncApp:
                 company_rif=company_rif,
                 company_email=company_email,
                 company_name='',  # Opcional
-                progress_callback=None  # Usaremos polling en lugar de callback
+                progress_callback=None,  # Usaremos polling en lugar de callback
+                log_callback=self.log_message  # Conectar logs a la UI
             )
 
             # Inicializar tabla de hashes

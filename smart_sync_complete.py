@@ -53,7 +53,7 @@ class SmartSyncComplete:
         sync.ejecutar_sync_completa()
     """
 
-    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str, company_name: str = '', progress_callback=None):
+    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str, company_name: str = '', progress_callback=None, log_callback=None):
         """
         Inicializar módulo de sincronización
 
@@ -66,6 +66,8 @@ class SmartSyncComplete:
             company_name: Nombre de la empresa (opcional)
             progress_callback: Función callback para reportar progreso (opcional)
                               Recibe dict: {'entity': 'products', 'current': 8, 'total': 1800}
+            log_callback: Función callback para enviar logs a la UI (opcional)
+                         Recibe: (message: str, log_type: str)
         """
         self.app = app
         self.postgresql_config = postgresql_config
@@ -76,6 +78,7 @@ class SmartSyncComplete:
         self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
         self.progress_callback = progress_callback  # Callback para reportar progreso
+        self.log_callback = log_callback  # Callback para enviar logs a la UI
         self.progress_active = False  # Flag para saber si hay un contador activo
 
         # Mensaje de error específico para mostrar en messagebox
@@ -332,8 +335,11 @@ class SmartSyncComplete:
             mensaje: Mensaje a loggear
             tipo: Tipo de log (info, success, warning, error, debug)
         """
+        # Enviar al callback si existe (método directo)
+        if self.log_callback:
+            self.log_callback(mensaje, tipo)
         # Enviar a la interfaz gráfica (si existe)
-        if hasattr(self.app, 'log_message'):
+        elif hasattr(self.app, 'log_message'):
             self.app.log_message(mensaje, tipo)
         else:
             # Fallback para uso sin interfaz gráfica

@@ -332,8 +332,11 @@ class SmartSyncComplete:
             mensaje: Mensaje a loggear
             tipo: Tipo de log (info, success, warning, error, debug)
         """
+        # Enviar al callback si existe (método directo)
+        if self.log_callback:
+            self.log_callback(mensaje, tipo)
         # Enviar a la interfaz gráfica (si existe)
-        if hasattr(self.app, 'log_message'):
+        elif hasattr(self.app, 'log_message'):
             self.app.log_message(mensaje, tipo)
         else:
             # Fallback para uso sin interfaz gráfica
