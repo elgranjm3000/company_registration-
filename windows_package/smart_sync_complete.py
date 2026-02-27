@@ -112,6 +112,10 @@ class SmartSyncComplete:
         self.notificaciones_habilitadas = True
         self._verificar_sistema_notificaciones()
 
+        # Tipo de cambio VES a USD (paralelo)
+        self.tipo_cambio_ves_usd = None  # Se obtendrá de pyDolarVenezuela
+        self.tipo_cambio_obtenido_at = None  # Timestamp de cuando se obtuvo el tipo de cambio
+
     def _reportar_progreso(self, entity: str, current: int, total: int):
         """
         Reporta progreso de sincronización al callback
@@ -1142,6 +1146,86 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"Error creando JSON de imagen: {str(e)}", "warning")
             return None
+
+    def _obtener_tipo_cambio_ves_usd(self, forzar_actualizacion=False):
+        """
+        Obtener tipo de cambio VES a USD usando API de ExchangeRate
+
+        Args:
+            forzar_actualizacion: Si True, actualiza el caché aunque sea reciente
+
+        Returns:
+            float con el tipo de cambio (ej: 417.36) o None si hay error
+        """
+        from datetime import datetime, timedelta
+        import requests
+
+        try:
+            # Verificar si tenemos un tipo de cambio válido y reciente (menos de 1 hora)
+            if not forzar_actualizacion and self.tipo_cambio_ves_usd and self.tipo_cambio_obtenido_at:
+                edad = datetime.now() - self.tipo_cambio_obtenido_at
+                if edad < timedelta(hours=1):
+                    self._log(f"  💰 Usando tipo de cambio en caché: {self.tipo_cambio_ves_usd:.2f} VES/USD (edad: {edad.seconds//60} min)", "debug")
+                    return self.tipo_cambio_ves_usd
+
+            self._log("  💰 Obteniendo tipo de cambio VES→USD desde ExchangeRate API...", "info")
+
+            # Usar ExchangeRate API (gratis, sin API key)
+            url = "https://api.exchangerate-api.com/v4/latest/USD"
+            response = requests.get(url, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if 'rates' in data and 'VES' in data['rates']:
+                    tipo_cambio = float(data['rates']['VES'])
+
+                    if tipo_cambio > 0:
+                        self.tipo_cambio_ves_usd = tipo_cambio
+                        self.tipo_cambio_obtenido_at = datetime.now()
+                        self._log(f"  ✅ Tipo de cambio obtenido: {tipo_cambio:.2f} VES/USD", "success")
+                        return tipo_cambio
+                    else:
+                        self._log(f"  ⚠️ Tipo de cambio inválido: {tipo_cambio}", "warning")
+                else:
+                    self._log("  ⚠️ La API no devolvió la tasa VES", "warning")
+            else:
+                self._log(f"  ⚠️ Error en API: status {response.status_code}", "warning")
+
+            self._log("  ❌ No se pudo obtener el tipo de cambio", "error")
+            return None
+
+        except Exception as e:
+            self._log(f"  ❌ Error en _obtener_tipo_cambio_ves_usd: {str(e)}", "error")
+            return None
+
+    def _convertir_ves_a_usd(self, monto_ves: float, tipo_cambio: float = None) -> float:
+        """
+        Convertir monto de VES a USD
+
+        Args:
+            monto_ves: Monto en Bolívares
+            tipo_cambio: Tipo de cambio (opcional, usa el caché si no se proporciona)
+
+        Returns:
+            float con el monto en USD o el monto original si no se puede convertir
+        """
+        if monto_ves is None or monto_ves <= 0:
+            return monto_ves
+
+        try:
+            # Obtener tipo de cambio si no se proporciona
+            if tipo_cambio is None:
+                tipo_cambio = self._obtener_tipo_cambio_ves_usd()
+
+            if tipo_cambio and tipo_cambio > 0:
+                monto_usd = monto_ves / tipo_cambio
+                return round(monto_usd, 4)  # 4 decimales para precios
+            else:
+                return monto_ves
+        except Exception as e:
+            self._log(f"  ⚠️ Error convirtiendo {monto_ves} VES a USD: {str(e)}", "warning")
+            return monto_ves
 
     # ====================================================================
     # SYSTEM LOGS - REGISTRO DE ACTIVIDAD
@@ -3025,6 +3109,17 @@ class SmartSyncComplete:
 
             products_sin_categoria = 0
 
+            # Verificar si hay productos en Bolívares (coin='01') para obtener tipo de cambio
+            hay_productos_ves = any(
+                p[7] == '01'  # coin es el índice 7
+                for p in cambios['nuevos'] + cambios['modificados']
+            )
+
+            tipo_cambio = None
+            if hay_productos_ves:
+                self._log("  💰 Detectados productos en Bolívares, obteniendo tipo de cambio...", "info")
+                tipo_cambio = self._obtener_tipo_cambio_ves_usd()
+
             # ====================================================================
             # NUEVOS - BATCH INSERT
             # ====================================================================
@@ -3057,26 +3152,41 @@ class SmartSyncComplete:
                         # Crear JSON de imagen
                         image_json = self._create_image_json(image_type, product_image)
 
+                        # 💰 CONVERTIR DE VES A USD si coin='01'
+                        final_price = safe_float(price)
+                        final_cost = safe_float(cost)
+                        final_higher_price = safe_float(higher_price)
+                        final_unitary_cost = safe_float(unitary_cost) if unitary_cost else 0
+
+                        if coin == '01' and tipo_cambio:
+                            final_price = self._convertir_ves_a_usd(final_price, tipo_cambio)
+                            final_cost = self._convertir_ves_a_usd(final_cost, tipo_cambio)
+                            final_higher_price = self._convertir_ves_a_usd(final_higher_price, tipo_cambio)
+                            final_unitary_cost = self._convertir_ves_a_usd(final_unitary_cost, tipo_cambio)
+
+                            if idx == 1:  # Solo mostrar el primer producto como ejemplo
+                                self._log(f"  💱 Conversión VES→USD: {code} - {price:.2f} VES → {final_price:.4f} USD (tasa: {tipo_cambio:.2f})", "info")
+
                         # Preparar datos para batch insert
                         batch_data.append((
                             self.company_id,
                             code,
                             short_name,
                             description if description else None,
-                            safe_float(price),
-                            safe_float(cost),
+                            final_price,
+                            final_cost,
                             float(stock) if stock else 0,
                             int(min_stock) if min_stock else 0,
                             category_id,
                             status,
                             product_type,
                             image_json,
-                            safe_float(higher_price),
+                            final_higher_price,
                             sale_tax,
                             aliquot,
                             coin if coin else None,
                             description_coin if description_coin else None,
-                            safe_float(unitary_cost) if unitary_cost else 0,
+                            final_unitary_cost,
                             buy_tax if buy_tax else None,
                             buy_aliquot if buy_aliquot else 0
                         ))
@@ -3166,26 +3276,38 @@ class SmartSyncComplete:
                         # Crear JSON de imagen
                         image_json = self._create_image_json(image_type, product_image)
 
+                        # 💰 CONVERTIR DE VES A USD si coin='01'
+                        final_price = safe_float(price)
+                        final_cost = safe_float(cost)
+                        final_higher_price = safe_float(higher_price)
+                        final_unitary_cost = safe_float(unitary_cost) if unitary_cost else 0
+
+                        if coin == '01' and tipo_cambio:
+                            final_price = self._convertir_ves_a_usd(final_price, tipo_cambio)
+                            final_cost = self._convertir_ves_a_usd(final_cost, tipo_cambio)
+                            final_higher_price = self._convertir_ves_a_usd(final_higher_price, tipo_cambio)
+                            final_unitary_cost = self._convertir_ves_a_usd(final_unitary_cost, tipo_cambio)
+
                         # Preparar datos para batch update (mismo formato que insert)
                         batch_data.append((
                             self.company_id,
                             code,
                             short_name,
                             description if description else None,
-                            safe_float(price),
-                            safe_float(cost),
+                            final_price,
+                            final_cost,
                             float(stock) if stock else 0,
                             int(min_stock) if min_stock else 0,
                             category_id,
                             status,
                             product_type,
                             image_json,
-                            safe_float(higher_price),
+                            final_higher_price,
                             sale_tax,
                             aliquot,
                             coin if coin else None,
                             description_coin if description_coin else None,
-                            safe_float(unitary_cost) if unitary_cost else 0,
+                            final_unitary_cost,
                             buy_tax if buy_tax else None,
                             buy_aliquot if buy_aliquot else 0
                         ))
