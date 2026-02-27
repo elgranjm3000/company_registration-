@@ -53,7 +53,7 @@ class SmartSyncComplete:
         sync.ejecutar_sync_completa()
     """
 
-    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str, company_name: str = '', progress_callback=None):
+    def __init__(self, app, postgresql_config: dict, mysql_config: dict, company_rif: str, company_email: str, company_name: str = '', progress_callback=None, log_callback=None):
         """
         Inicializar módulo de sincronización
 
@@ -66,6 +66,8 @@ class SmartSyncComplete:
             company_name: Nombre de la empresa (opcional)
             progress_callback: Función callback para reportar progreso (opcional)
                               Recibe dict: {'entity': 'products', 'current': 8, 'total': 1800}
+            log_callback: Función callback para enviar logs a la UI (opcional)
+                         Recibe: (message: str, log_type: str)
         """
         self.app = app
         self.postgresql_config = postgresql_config
@@ -76,6 +78,7 @@ class SmartSyncComplete:
         self.company_id = None  # Se obtendrá dinámicamente de MySQL
         self.sync_running = True
         self.progress_callback = progress_callback  # Callback para reportar progreso
+        self.log_callback = log_callback  # Callback para enviar logs a la UI
         self.progress_active = False  # Flag para saber si hay un contador activo
 
         # Mensaje de error específico para mostrar en messagebox
@@ -873,6 +876,39 @@ class SmartSyncComplete:
 
             return False
 
+    def _get_company_id_from_companies(self) -> Optional[int]:
+        """
+        Obtener company_id directamente desde tabla companies de MySQL
+        Se usa en todas las funciones EXCEPTO al crear la empresa nueva
+
+        Returns:
+            company_id o None si no existe
+        """
+        try:
+            if not self.mysql_cursor:
+                self._log("❌ No hay conexión a MySQL para obtener company_id", "error")
+                return None
+
+            query = """
+            SELECT id
+            FROM companies
+            WHERE rif = %s AND email = %s
+            LIMIT 1
+            """
+
+            self.mysql_cursor.execute(query, (self.company_rif, self.company_email.lower()))
+            result = self.mysql_cursor.fetchone()
+
+            if result:
+                return result[0]
+            else:
+                self._log(f"❌ No se encontró company_id en companies para RIF={self.company_rif}, Email={self.company_email}", "error")
+                return None
+
+        except Exception as e:
+            self._log(f"❌ Error obteniendo company_id desde companies: {e}", "error")
+            return None
+
     def _obtener_datos_postgres_para_empresa(self) -> Optional[dict]:
         """
         Obtener datos adicionales de PostgreSQL para la empresa
@@ -1052,7 +1088,10 @@ class SmartSyncComplete:
               AND company_id = %s
             """
 
-            self.pg_cursor.execute(query, (table_name, record_key, self.company_id))
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                return False
+            self.pg_cursor.execute(query, (table_name, record_key, company_id))
             return self.pg_cursor.fetchone()
         except Exception as e:
             self._log(f"Error obteniendo hash guardado: {str(e)}", "error")
@@ -1092,7 +1131,7 @@ class SmartSyncComplete:
             """
 
             self.pg_cursor.execute(update_query,
-                                 (record_hash, data_json, table_name, record_key, self.company_id))
+                                 (record_hash, data_json, table_name, record_key, self._get_company_id_from_companies()))
 
             # Si el UPDATE no afectó ninguna fila, hacer INSERT
             if self.pg_cursor.rowcount == 0:
@@ -1101,7 +1140,7 @@ class SmartSyncComplete:
                 VALUES (%s, %s, %s, %s, %s, NOW())
                 """
                 self.pg_cursor.execute(insert_query,
-                                     (table_name, record_key, record_hash, data_json, self.company_id))
+                                     (table_name, record_key, record_hash, data_json, self._get_company_id_from_companies()))
 
         except Exception as e:
             self._log(f"Error guardando hash: {str(e)}", "error")
@@ -1115,7 +1154,10 @@ class SmartSyncComplete:
               AND record_key = %s
               AND company_id = %s
             """
-            self.pg_cursor.execute(query, (table_name, record_key, self.company_id))
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                return False
+            self.pg_cursor.execute(query, (table_name, record_key, company_id))
         except Exception as e:
             self._log(f"Error eliminando hash: {str(e)}", "error")
 
@@ -1472,6 +1514,12 @@ class SmartSyncComplete:
         Returns:
             Dict con 'nuevos', 'modificados', 'eliminados'
         """
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return {'nuevos': [], 'modificados': [], 'eliminados': []}
+
         self._log("Detectando cambios en products...", "info")
 
         cambios = {'nuevos': [], 'modificados': [], 'eliminados': []}
@@ -1555,7 +1603,7 @@ class SmartSyncComplete:
                   AND record_key = %s
                   AND company_id = %s
                 """
-                self.pg_cursor.execute(query_hash, (code, self.company_id))
+                self.pg_cursor.execute(query_hash, (code, company_id))
                 hash_guardado_full = self.pg_cursor.fetchone()
 
                 hash_guardado = hash_guardado_full[0] if hash_guardado_full else None
@@ -1611,7 +1659,7 @@ class SmartSyncComplete:
                       AND record_key = %s
                       AND company_id = %s
                     """
-                    self.pg_cursor.execute(update_query, ('products', code, self.company_id))
+                    self.pg_cursor.execute(update_query, ('products', code, company_id))
 
             # Detectar productos inactivos (eliminados del query pero con hash guardado)
             if claves_actuales:
@@ -1624,7 +1672,7 @@ class SmartSyncComplete:
                   AND record_key NOT IN ({placeholders})
                 """
 
-                self.pg_cursor.execute(query_eliminados, [self.company_id] + claves_actuales)
+                self.pg_cursor.execute(query_eliminados, [company_id] + claves_actuales)
                 eliminados = self.pg_cursor.fetchall()
 
                 for (code, last_sync_data) in eliminados:
@@ -1678,6 +1726,12 @@ class SmartSyncComplete:
         Returns:
             Dict con 'nuevos', 'modificados'
         """
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return {'nuevos': [], 'modificados': []}
+
         self._log("Detectando cambios en products (MySQL → PostgreSQL)...", "info")
 
         cambios = {
@@ -1711,7 +1765,7 @@ class SmartSyncComplete:
             ORDER BY id
             """
 
-            self.mysql_cursor.execute(query, (self.company_id,))
+            self.mysql_cursor.execute(query, (company_id,))
             products_mysql = self.mysql_cursor.fetchall()
 
             # Convertir a diccionarios
@@ -1811,6 +1865,12 @@ class SmartSyncComplete:
 
     def detectar_cambios_customers(self) -> Dict[str, List]:
         """Detectar cambios en customers"""
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return {'nuevos': [], 'modificados': [], 'eliminados': []}
+
         self._log("Detectando cambios en customers...", "info")
 
         cambios = {'nuevos': [], 'modificados': [], 'eliminados': []}
@@ -1866,7 +1926,7 @@ class SmartSyncComplete:
                   AND record_key NOT IN ({placeholders})
                 """
 
-                self.pg_cursor.execute(query_eliminados, [self.company_id] + claves_actuales)
+                self.pg_cursor.execute(query_eliminados, [company_id] + claves_actuales)
                 eliminados = self.pg_cursor.fetchall()
 
                 for (eliminado,) in eliminados:
@@ -1891,6 +1951,12 @@ class SmartSyncComplete:
 
     def detectar_cambios_categories(self) -> Dict[str, List]:
         """Detectar cambios en categories"""
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return {'nuevos': [], 'modificados': [], 'eliminados': []}
+
         self._log("Detectando cambios en categories...", "info")
 
         cambios = {'nuevos': [], 'modificados': [], 'eliminados': []}
@@ -1938,7 +2004,7 @@ class SmartSyncComplete:
                   AND record_key NOT IN ({placeholders})
                 """
 
-                self.pg_cursor.execute(query_eliminados, [self.company_id] + claves_actuales)
+                self.pg_cursor.execute(query_eliminados, [company_id] + claves_actuales)
                 eliminados = self.pg_cursor.fetchall()
 
                 for (eliminado,) in eliminados:
@@ -2161,7 +2227,7 @@ class SmartSyncComplete:
             ORDER BY id
             """
 
-            self.mysql_cursor.execute(query, (self.company_id,))
+            self.mysql_cursor.execute(query, (company_id,))
             quotes_mysql = self.mysql_cursor.fetchall()
 
             # Convertir a diccionarios para facilitar manejo
@@ -3096,6 +3162,12 @@ class SmartSyncComplete:
         if not any(cambios.values()):
             return
 
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return
+
         self._log("Sincronizando changes de products a MySQL...", "info")
 
         # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
@@ -3115,7 +3187,7 @@ class SmartSyncComplete:
         try:
             # Crear mapeo de categorías existentes en MySQL
             self.mysql_cursor.execute("SELECT name, id FROM categories WHERE company_id = %s",
-                                     (self.company_id,))
+                                     (company_id,))
             category_mapping = dict(self.mysql_cursor.fetchall())
 
             products_sin_categoria = 0
@@ -3182,7 +3254,7 @@ class SmartSyncComplete:
 
                         # Preparar datos para batch insert
                         batch_data.append((
-                            self.company_id,
+                            company_id,
                             code,
                             short_name,
                             description if description else None,
@@ -3303,7 +3375,7 @@ class SmartSyncComplete:
 
                         # Preparar datos para batch update (mismo formato que insert)
                         batch_data.append((
-                            self.company_id,
+                            company_id,
                             code,
                             short_name,
                             description if description else None,
@@ -3426,7 +3498,7 @@ class SmartSyncComplete:
                   AND code = %s
                 """
 
-                self.mysql_cursor.execute(update_query, (self.company_id, code))
+                self.mysql_cursor.execute(update_query, (company_id, code))
 
                 if self.mysql_cursor.rowcount > 0:
                     self._log(f"  🔄 Status actualizado: {code} → inactive", "debug")
@@ -3441,6 +3513,12 @@ class SmartSyncComplete:
     def sincronizar_customers_mysql(self, cambios: Dict[str, List]):
         """Sincronizar cambios de customers a MySQL"""
         if not any(cambios.values()):
+            return
+
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
             return
 
         self._log("Sincronizando cambios de customers a MySQL...", "info")
@@ -3481,7 +3559,7 @@ class SmartSyncComplete:
                     FROM customers
                     WHERE company_id = %s AND document_number = %s
                     """
-                    self.mysql_cursor.execute(check_query, (self.company_id, code))
+                    self.mysql_cursor.execute(check_query, (company_id, code))
                     existe = self.mysql_cursor.fetchone()
 
                     if existe:
@@ -3499,7 +3577,7 @@ class SmartSyncComplete:
                         self.mysql_cursor.execute(update_query, (
                             description, email, address if address else None,
                             phone if phone else None, contact if contact else None,
-                            self.company_id, code
+                            company_id, code
                         ))
                         self._log(f"  🔄 Customer {code} ya existía, actualizado", "debug")
                         self.stats['customers']['modificados'] += 1
@@ -3512,7 +3590,7 @@ class SmartSyncComplete:
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                         """
                         self.mysql_cursor.execute(insert_query, (
-                            self.company_id, description, email, code,
+                            company_id, description, email, code,
                             address if address else None, phone if phone else None,
                             contact if contact else None, 'active'
                         ))
@@ -3564,7 +3642,7 @@ class SmartSyncComplete:
                     self.mysql_cursor.execute(update_query, (
                         description, email, address if address else None,
                         phone if phone else None, contact if contact else None,
-                        self.company_id, code
+                        company_id, code
                     ))
 
                     self.stats['customers']['modificados'] += 1
@@ -3624,6 +3702,12 @@ class SmartSyncComplete:
         - El trigger hace el trabajo automáticamente
         """
         try:
+            # Obtener company_id desde companies
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                self._log("   ❌ No se pudo obtener company_id", "error")
+                return
+
             self._log("", "info")
             self._log("🗑️ VERIFICANDO PRODUCTOS ELIMINADOS EN POSTGRESQL...", "info")
 
@@ -3653,7 +3737,7 @@ class SmartSyncComplete:
                 # Buscar el producto en MySQL
                 self.mysql_cursor.execute(
                     "SELECT id FROM products WHERE code = %s AND company_id = %s",
-                    (product_code, self.company_id)
+                    (product_code, company_id)
                 )
                 producto_mysql = self.mysql_cursor.fetchone()
 
@@ -3676,7 +3760,7 @@ class SmartSyncComplete:
                         DELETE FROM products
                         WHERE id = %s AND company_id = %s
                         """
-                        self.mysql_cursor.execute(delete_query, (product_id, self.company_id))
+                        self.mysql_cursor.execute(delete_query, (product_id, company_id))
 
                         self._log(f"   ✅ Producto {product_code} eliminado de MySQL", "info")
 
@@ -3719,6 +3803,12 @@ class SmartSyncComplete:
         4. Limpiamos el registro de sync_hashes
         """
         try:
+            # Obtener company_id desde companies
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                self._log("   ❌ No se pudo obtener company_id", "error")
+                return
+
             self._log("", "info")
             self._log("🗑️ VERIFICANDO CUSTOMERS ELIMINADOS EN POSTGRESQL...", "info")
 
@@ -3748,7 +3838,7 @@ class SmartSyncComplete:
                 # Buscar el customer en MySQL por document_number (email en PG)
                 self.mysql_cursor.execute(
                     "SELECT id FROM customers WHERE document_number = %s AND company_id = %s",
-                    (customer_email, self.company_id)
+                    (customer_email, company_id)
                 )
                 customer_mysql = self.mysql_cursor.fetchone()
 
@@ -3771,7 +3861,7 @@ class SmartSyncComplete:
                         DELETE FROM customers
                         WHERE id = %s AND company_id = %s
                         """
-                        self.mysql_cursor.execute(delete_query, (customer_id, self.company_id))
+                        self.mysql_cursor.execute(delete_query, (customer_id, company_id))
 
                         self._log(f"   ✅ Customer {customer_email} eliminado de MySQL", "info")
 
@@ -3814,6 +3904,12 @@ class SmartSyncComplete:
         4. Limpiamos el registro de sync_hashes
         """
         try:
+            # Obtener company_id desde companies
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                self._log("   ❌ No se pudo obtener company_id", "error")
+                return
+
             self._log("", "info")
             self._log("🗑️ VERIFICANDO SELLERS ELIMINADOS EN POSTGRESQL...", "info")
 
@@ -3843,7 +3939,7 @@ class SmartSyncComplete:
                 # Buscar el seller en MySQL por code (email en PG)
                 self.mysql_cursor.execute(
                     "SELECT id FROM sellers WHERE code = %s AND company_id = %s",
-                    (seller_email, self.company_id)
+                    (seller_email, company_id)
                 )
                 seller_mysql = self.mysql_cursor.fetchone()
 
@@ -3866,7 +3962,7 @@ class SmartSyncComplete:
                         DELETE FROM sellers
                         WHERE id = %s AND company_id = %s
                         """
-                        self.mysql_cursor.execute(delete_query, (seller_id, self.company_id))
+                        self.mysql_cursor.execute(delete_query, (seller_id, company_id))
 
                         self._log(f"   ✅ Seller {seller_email} eliminado de MySQL", "info")
 
@@ -4037,6 +4133,12 @@ class SmartSyncComplete:
         if not any(cambios.values()):
             return
 
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return
+
         self._log("Sincronizando cambios de categories a MySQL...", "info")
 
         # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
@@ -4070,7 +4172,7 @@ class SmartSyncComplete:
                     """
 
                     self.mysql_cursor.execute(insert_query, (
-                        self.company_id, code, description if description else None
+                        company_id, code, description if description else None
                     ))
 
                     self.stats['categories']['nuevos'] += 1
@@ -4112,7 +4214,7 @@ class SmartSyncComplete:
                     """
 
                     self.mysql_cursor.execute(update_query, (
-                        description if description else None, self.company_id, code
+                        description if description else None, company_id, code
                     ))
 
                     self.stats['categories']['modificados'] += 1
@@ -4398,6 +4500,12 @@ class SmartSyncComplete:
         4. Limpiamos el registro de sync_hashes
         """
         try:
+            # Obtener company_id desde companies
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                self._log("   ❌ No se pudo obtener company_id", "error")
+                return
+
             self._log("", "info")
             self._log("🗑️ VERIFICANDO CATEGORIES ELIMINADAS EN POSTGRESQL...", "info")
 
@@ -4427,7 +4535,7 @@ class SmartSyncComplete:
                 # Buscar la category en MySQL por code
                 self.mysql_cursor.execute(
                     "SELECT id FROM categories WHERE code = %s AND company_id = %s",
-                    (category_code, self.company_id)
+                    (category_code, company_id)
                 )
                 category_mysql = self.mysql_cursor.fetchone()
 
@@ -4450,7 +4558,7 @@ class SmartSyncComplete:
                         DELETE FROM categories
                         WHERE id = %s AND company_id = %s
                         """
-                        self.mysql_cursor.execute(delete_query, (category_id, self.company_id))
+                        self.mysql_cursor.execute(delete_query, (category_id, company_id))
 
                         self._log(f"   ✅ Category {category_code} eliminada de MySQL", "info")
 
