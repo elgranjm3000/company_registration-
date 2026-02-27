@@ -1779,8 +1779,14 @@ class SystemTrayService:
         # Guardar en log pero no mostrar nada (servicio transparente)
         log(f"[TRAY] {mensaje}", tipo.upper())
 
-    def ejecutar_sincronizacion(self):
-        """Ejecuta una sincronización"""
+    def ejecutar_sincronizacion(self, es_manual=False):
+        """
+        Ejecuta una sincronización
+
+        Args:
+            es_manual: True si es iniciada por el usuario (Sincronizar Ahora),
+                      False si es sincronización automática
+        """
         from datetime import datetime
         from tkinter import messagebox as mb
         import threading
@@ -1843,35 +1849,36 @@ class SystemTrayService:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "✅ Exitosa"
 
-                # Mostrar notificación BANNER
-                mostrar_banner(
-                    "✅ Sincronización Exitosa",
-                    f"Products: {sync_system.stats['products']['nuevos']} nuevos, "
-                    f"{sync_system.stats['products']['modificados']} modificados",
-                    duracion=7
-                )
+                # Mostrar notificación BANNER solo si es manual
+                if es_manual:
+                    mostrar_banner(
+                        "✅ Sincronización Exitosa",
+                        f"Products: {sync_system.stats['products']['nuevos']} nuevos, "
+                        f"{sync_system.stats['products']['modificados']} modificados",
+                        duracion=7
+                    )
 
-                # Mostrar MESSAGEBOX con detalles del tiempo
-                mensaje_completo = (
-                    "✅ SINCRONIZACIÓN COMPLETADA\n\n"
-                    f"🕐 Hora de inicio: {hora_inicio_str}\n"
-                    f"🕑 Hora de fin: {hora_fin_str}\n"
-                    f"⏱️ Duración total: {duracion_str}\n\n"
-                    f"Products: {sync_system.stats['products']['nuevos']} nuevos, "
-                    f"{sync_system.stats['products']['modificados']} modificados\n\n"
-                    "El sistema continuará trabajando en segundo plano."
-                )
+                    # Mostrar MESSAGEBOX con detalles del tiempo (solo si es manual)
+                    mensaje_completo = (
+                        "✅ SINCRONIZACIÓN COMPLETADA\n\n"
+                        f"🕐 Hora de inicio: {hora_inicio_str}\n"
+                        f"🕑 Hora de fin: {hora_fin_str}\n"
+                        f"⏱️ Duración total: {duracion_str}\n\n"
+                        f"Products: {sync_system.stats['products']['nuevos']} nuevos, "
+                        f"{sync_system.stats['products']['modificados']} modificados\n\n"
+                        "El sistema continuará trabajando en segundo plano."
+                    )
 
-                # Mostrar messagebox en un thread separado para no bloquear
-                def mostrar_messagebox():
-                    import tkinter as tk
-                    root = tk.Tk()
-                    root.withdraw()
-                    mb.showinfo("✅ Sincronización Completada", mensaje_completo)
-                    root.destroy()
+                    # Mostrar messagebox en un thread separado para no bloquear
+                    def mostrar_messagebox():
+                        import tkinter as tk
+                        root = tk.Tk()
+                        root.withdraw()
+                        mb.showinfo("✅ Sincronización Completada", mensaje_completo)
+                        root.destroy()
 
-                thread_mb = threading.Thread(target=mostrar_messagebox, daemon=True)
-                thread_mb.start()
+                    thread_mb = threading.Thread(target=mostrar_messagebox, daemon=True)
+                    thread_mb.start()
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error"
@@ -2135,7 +2142,7 @@ class SystemTrayService:
     def sincronizar_ahora(self):
         """Sincronización manual desde el menú"""
         import threading
-        thread = threading.Thread(target=self.ejecutar_sincronizacion)
+        thread = threading.Thread(target=lambda: self.ejecutar_sincronizacion(es_manual=True))
         thread.daemon = True
         thread.start()
 
