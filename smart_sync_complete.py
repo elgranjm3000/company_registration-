@@ -357,6 +357,10 @@ class SmartSyncComplete:
         """
         Crear tabla sync_hashes si no existe
 
+        También crea:
+        - Columna deleted_at para tracking de eliminaciones
+        - Trigger para marcar productos eliminados automáticamente
+
         Returns:
             True si se creó o ya existía, False si hubo error
         """
@@ -386,6 +390,16 @@ class SmartSyncComplete:
             # (PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS)
             self._crear_indice_sync_hashes()
 
+            # Agregar columna deleted_at si no existe
+            self._agregar_columna_deleted_at()
+
+            # Crear trigger de eliminación si no existe
+            self._crear_trigger_eliminacion()
+
+            # Crear triggers para customers y sellers también
+            self._crear_trigger_eliminacion_customers()
+            self._crear_trigger_eliminacion_sellers()
+
             self.pg_conn.commit()
 
             # No mostrar mensaje de éxito - es transparente para el usuario
@@ -394,6 +408,173 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"❌ Error creando tabla sync_hashes: {str(e)}", "error")
             return False
+
+    def _agregar_columna_deleted_at(self):
+        """
+        Agrega la columna deleted_at a sync_hashes si no existe
+        """
+        try:
+            # Verificar si la columna existe
+            self.pg_cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'sync_hashes'
+                AND column_name = 'deleted_at'
+            """)
+            existe = self.pg_cursor.fetchone()
+
+            if not existe:
+                # Agregar columna
+                self.pg_cursor.execute("""
+                    ALTER TABLE sync_hashes
+                    ADD COLUMN deleted_at TIMESTAMP NULL
+                """)
+                self.pg_conn.commit()
+                # Silencioso - transparente para el usuario
+        except Exception as e:
+            # Si hay error, continuar (la columna podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion(self):
+        """
+        Crea el trigger que marca productos como eliminados
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_product_deleted()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'products'
+                AND record_key = OLD.code;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('products', OLD.code, md5(OLD.code::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_products_mark_deleted ON products;
+
+            CREATE TRIGGER tr_products_mark_deleted
+                AFTER DELETE ON products
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_product_deleted();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_customers(self):
+        """
+        Crea el trigger que marca customers como eliminados
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'customers'
+                AND record_key = OLD.email;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('customers', OLD.email, md5(OLD.email::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_customers_mark_deleted ON customers;
+
+            CREATE TRIGGER tr_customers_mark_deleted
+                AFTER DELETE ON customers
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_customer_deleted();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_sellers(self):
+        """
+        Crea el trigger que marca sellers como eliminados
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'sellers'
+                AND record_key = OLD.email;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('sellers', OLD.email, md5(OLD.email::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted ON sellers;
+
+            CREATE TRIGGER tr_sellers_mark_deleted
+                AFTER DELETE ON sellers
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_seller_deleted();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
 
     def _crear_indice_sync_hashes(self):
         """
@@ -3346,65 +3527,59 @@ class SmartSyncComplete:
         """
         Elimina customers de MySQL cuando fueron eliminados de PostgreSQL
 
-        Lógica:
-        1. Obtiene todos los customers de MySQL
-        2. Para cada customer, verifica si existe en PostgreSQL
-        3. Si NO existe en PostgreSQL Y tenía un hash guardado (estaba sincronizado)
-        4. Lo elimina de MySQL
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente los customers eliminados
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esos customers de MySQL
+        4. Limpiamos el registro de sync_hashes
         """
         try:
             self._log("", "info")
             self._log("🗑️ VERIFICANDO CUSTOMERS ELIMINADOS EN POSTGRESQL...", "info")
 
-            # Obtener todos los customers de MySQL
+            # Consulta eficiente: solo customers marcados como eliminados por el trigger
             query = """
-            SELECT id, document_number
-            FROM customers
-            WHERE company_id = %s
-            ORDER BY document_number
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'customers'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
             """
-            self.mysql_cursor.execute(query, (self.company_id,))
-            customers_mysql = self.mysql_cursor.fetchall()
+            self.pg_cursor.execute(query)
+            customers_eliminados = self.pg_cursor.fetchall()
 
-            if not customers_mysql:
-                self._log("   ℹ️ No hay customers en MySQL para verificar", "info")
+            if not customers_eliminados:
+                self._log("   ℹ️ No hay customers eliminados que procesar", "info")
                 return
 
-            self._log(f"   📋 Verificando {len(customers_mysql)} customers de MySQL...", "info")
+            self._log(f"   📋 Encontrados {len(customers_eliminados)} customers eliminados en PostgreSQL", "info")
 
             customers_a_eliminar = []
 
-            for customer_id, document_number in customers_mysql:
+            for customer_email, record_data in customers_eliminados:
                 if not self.sync_running:
                     break
 
-                # Verificar si existe en PostgreSQL (por code = document_number)
-                self.pg_cursor.execute(
-                    "SELECT code FROM customers WHERE code = %s",
-                    (document_number,)
+                # Buscar el customer en MySQL por document_number (email en PG)
+                self.mysql_cursor.execute(
+                    "SELECT id FROM customers WHERE document_number = %s AND company_id = %s",
+                    (customer_email, self.company_id)
                 )
-                existe_en_pg = self.pg_cursor.fetchone()
+                customer_mysql = self.mysql_cursor.fetchone()
 
-                if existe_en_pg:
-                    # Customer existe en PostgreSQL, OK
-                    continue
-
-                # No existe en PostgreSQL - verificar si tenía hash guardado
-                hash_guardado = self._obtener_hash_guardado('customers_mysql', str(customer_id))
-
-                if hash_guardado:
-                    # Tenía hash pero ya no está en PG = fue eliminado de PG
-                    customers_a_eliminar.append((customer_id, document_number))
-                    self._log(f"   🗑️ Customer {document_number} (ID: {customer_id}) eliminado de PG, se eliminará de MySQL", "debug")
+                if customer_mysql:
+                    customer_id = customer_mysql[0]
+                    customers_a_eliminar.append((customer_id, customer_email))
+                    self._log(f"   🗑️ Customer {customer_email} (ID: {customer_id}) será eliminado de MySQL", "debug")
                 else:
-                    # Nunca tuvo hash = es nuevo, no se sincronizó aún
-                    self._log(f"   ℹ️ Customer {document_number} (ID: {customer_id}) nunca se sincronizó a PG", "debug")
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Customer {customer_email} ya no existe en MySQL", "debug")
 
             # Eliminar customers de MySQL
             if customers_a_eliminar:
                 self._log(f"   🗑️ Eliminando {len(customers_a_eliminar)} customers de MySQL...", "info")
 
-                for customer_id, document_number in customers_a_eliminar:
+                for customer_id, customer_email in customers_a_eliminar:
                     try:
                         # Eliminar de MySQL
                         delete_query = """
@@ -3413,28 +3588,30 @@ class SmartSyncComplete:
                         """
                         self.mysql_cursor.execute(delete_query, (customer_id, self.company_id))
 
-                        # Eliminar hash de sync_hashes
-                        self.pg_cursor.execute(
-                            "DELETE FROM sync_hashes WHERE entity_type = %s AND entity_id = %s",
-                            ('customers_mysql', str(customer_id))
-                        )
-
-                        self._log(f"   ✅ Customer {document_number} eliminado de MySQL", "info")
+                        self._log(f"   ✅ Customer {customer_email} eliminado de MySQL", "info")
 
                     except Exception as e:
-                        self._log(f"   ❌ Error eliminando customer {document_number} de MySQL: {e}", "error")
+                        self._log(f"   ❌ Error eliminando customer {customer_email} de MySQL: {e}", "error")
                         self.stats['customers']['errores'] += 1
 
                 # Commit cambios en MySQL
                 self.mysql_conn.commit()
-                self.pg_conn.commit()
 
                 self._log(f"   ✅ {len(customers_a_eliminar)} customers eliminados de MySQL", "success")
 
                 # Actualizar estadísticas
                 self.stats['customers']['eliminados'] = self.stats.get('customers', {}).get('eliminados', 0) + len(customers_a_eliminar)
             else:
-                self._log("   ℹ️ No hay customers que eliminar", "info")
+                self._log("   ℹ️ No hay customers que eliminar de MySQL (ya fueron limpiados)", "info")
+
+            # Limpiar registros de sync_hashes
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'customers' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
 
         except Exception as e:
             self._log(f"Error verificando customers eliminados: {e}", "error")
@@ -3445,65 +3622,59 @@ class SmartSyncComplete:
         """
         Elimina sellers de MySQL cuando fueron eliminados de PostgreSQL
 
-        Lógica:
-        1. Obtiene todos los sellers de MySQL
-        2. Para cada seller, verifica si existe en PostgreSQL
-        3. Si NO existe en PostgreSQL Y tenía un hash guardado (estaba sincronizado)
-        4. Lo elimina de MySQL
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente los sellers eliminados
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esos sellers de MySQL
+        4. Limpiamos el registro de sync_hashes
         """
         try:
             self._log("", "info")
             self._log("🗑️ VERIFICANDO SELLERS ELIMINADOS EN POSTGRESQL...", "info")
 
-            # Obtener todos los sellers de MySQL
+            # Consulta eficiente: solo sellers marcados como eliminados por el trigger
             query = """
-            SELECT id, code
-            FROM sellers
-            WHERE company_id = %s
-            ORDER BY code
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'sellers'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
             """
-            self.mysql_cursor.execute(query, (self.company_id,))
-            sellers_mysql = self.mysql_cursor.fetchall()
+            self.pg_cursor.execute(query)
+            sellers_eliminados = self.pg_cursor.fetchall()
 
-            if not sellers_mysql:
-                self._log("   ℹ️ No hay sellers en MySQL para verificar", "info")
+            if not sellers_eliminados:
+                self._log("   ℹ️ No hay sellers eliminados que procesar", "info")
                 return
 
-            self._log(f"   📋 Verificando {len(sellers_mysql)} sellers de MySQL...", "info")
+            self._log(f"   📋 Encontrados {len(sellers_eliminados)} sellers eliminados en PostgreSQL", "info")
 
             sellers_a_eliminar = []
 
-            for seller_id, seller_code in sellers_mysql:
+            for seller_email, record_data in sellers_eliminados:
                 if not self.sync_running:
                     break
 
-                # Verificar si existe en PostgreSQL
-                self.pg_cursor.execute(
-                    "SELECT code FROM sellers WHERE code = %s",
-                    (seller_code,)
+                # Buscar el seller en MySQL por code (email en PG)
+                self.mysql_cursor.execute(
+                    "SELECT id FROM sellers WHERE code = %s AND company_id = %s",
+                    (seller_email, self.company_id)
                 )
-                existe_en_pg = self.pg_cursor.fetchone()
+                seller_mysql = self.mysql_cursor.fetchone()
 
-                if existe_en_pg:
-                    # Seller existe en PostgreSQL, OK
-                    continue
-
-                # No existe en PostgreSQL - verificar si tenía hash guardado
-                hash_guardado = self._obtener_hash_guardado('sellers_mysql', str(seller_id))
-
-                if hash_guardado:
-                    # Tenía hash pero ya no está en PG = fue eliminado de PG
-                    sellers_a_eliminar.append((seller_id, seller_code))
-                    self._log(f"   🗑️ Seller {seller_code} (ID: {seller_id}) eliminado de PG, se eliminará de MySQL", "debug")
+                if seller_mysql:
+                    seller_id = seller_mysql[0]
+                    sellers_a_eliminar.append((seller_id, seller_email))
+                    self._log(f"   🗑️ Seller {seller_email} (ID: {seller_id}) será eliminado de MySQL", "debug")
                 else:
-                    # Nunca tuvo hash = es nuevo, no se sincronizó aún
-                    self._log(f"   ℹ️ Seller {seller_code} (ID: {seller_id}) nunca se sincronizó a PG", "debug")
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Seller {seller_email} ya no existe en MySQL", "debug")
 
             # Eliminar sellers de MySQL
             if sellers_a_eliminar:
                 self._log(f"   🗑️ Eliminando {len(sellers_a_eliminar)} sellers de MySQL...", "info")
 
-                for seller_id, seller_code in sellers_a_eliminar:
+                for seller_id, seller_email in sellers_a_eliminar:
                     try:
                         # Eliminar de MySQL
                         delete_query = """
@@ -3512,28 +3683,30 @@ class SmartSyncComplete:
                         """
                         self.mysql_cursor.execute(delete_query, (seller_id, self.company_id))
 
-                        # Eliminar hash de sync_hashes
-                        self.pg_cursor.execute(
-                            "DELETE FROM sync_hashes WHERE entity_type = %s AND entity_id = %s",
-                            ('sellers_mysql', str(seller_id))
-                        )
-
-                        self._log(f"   ✅ Seller {seller_code} eliminado de MySQL", "info")
+                        self._log(f"   ✅ Seller {seller_email} eliminado de MySQL", "info")
 
                     except Exception as e:
-                        self._log(f"   ❌ Error eliminando seller {seller_code} de MySQL: {e}", "error")
+                        self._log(f"   ❌ Error eliminando seller {seller_email} de MySQL: {e}", "error")
                         self.stats['sellers']['errores'] += 1
 
                 # Commit cambios en MySQL
                 self.mysql_conn.commit()
-                self.pg_conn.commit()
 
                 self._log(f"   ✅ {len(sellers_a_eliminar)} sellers eliminados de MySQL", "success")
 
                 # Actualizar estadísticas
                 self.stats['sellers']['eliminados'] = self.stats.get('sellers', {}).get('eliminados', 0) + len(sellers_a_eliminar)
             else:
-                self._log("   ℹ️ No hay sellers que eliminar", "info")
+                self._log("   ℹ️ No hay sellers que eliminar de MySQL (ya fueron limpiados)", "info")
+
+            # Limpiar registros de sync_hashes
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'sellers' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
 
         except Exception as e:
             self._log(f"Error verificando sellers eliminados: {e}", "error")
