@@ -3110,8 +3110,10 @@ class SmartSyncComplete:
             products_sin_categoria = 0
 
             # Verificar si hay productos en Bolívares (coin='01') para obtener tipo de cambio
+            # Índices del producto: 0=code, 1=description, 2=short_name, 3=department, 4=stock,
+            #                       5=product_type, 6=coin, 7=description_coin, 8=price, ...
             hay_productos_ves = any(
-                p[7] == '01'  # coin es el índice 7
+                p[6] == '01'  # coin es el índice 6
                 for p in cambios['nuevos'] + cambios['modificados']
             )
 
@@ -3616,7 +3618,7 @@ class SmartSyncComplete:
 
             # Consulta eficiente: solo productos marcados como eliminados por el trigger
             query = """
-            SELECT record_key, record_data
+            SELECT record_key
             FROM sync_hashes
             WHERE table_name = 'products'
             AND deleted_at IS NOT NULL
@@ -3633,7 +3635,7 @@ class SmartSyncComplete:
 
             productos_a_eliminar = []
 
-            for product_code, record_data in productos_eliminados:
+            for (product_code,) in productos_eliminados:
                 if not self.sync_running:
                     break
 
@@ -3711,7 +3713,7 @@ class SmartSyncComplete:
 
             # Consulta eficiente: solo customers marcados como eliminados por el trigger
             query = """
-            SELECT record_key, record_data
+            SELECT record_key
             FROM sync_hashes
             WHERE table_name = 'customers'
             AND deleted_at IS NOT NULL
@@ -3728,7 +3730,7 @@ class SmartSyncComplete:
 
             customers_a_eliminar = []
 
-            for customer_email, record_data in customers_eliminados:
+            for (customer_email,) in customers_eliminados:
                 if not self.sync_running:
                     break
 
@@ -3806,7 +3808,7 @@ class SmartSyncComplete:
 
             # Consulta eficiente: solo sellers marcados como eliminados por el trigger
             query = """
-            SELECT record_key, record_data
+            SELECT record_key
             FROM sync_hashes
             WHERE table_name = 'sellers'
             AND deleted_at IS NOT NULL
@@ -3823,7 +3825,7 @@ class SmartSyncComplete:
 
             sellers_a_eliminar = []
 
-            for seller_email, record_data in sellers_eliminados:
+            for (seller_email,) in sellers_eliminados:
                 if not self.sync_running:
                     break
 
@@ -4390,7 +4392,7 @@ class SmartSyncComplete:
 
             # Consulta eficiente: solo categories marcadas como eliminadas por el trigger
             query = """
-            SELECT record_key, record_data
+            SELECT record_key
             FROM sync_hashes
             WHERE table_name = 'categories'
             AND deleted_at IS NOT NULL
@@ -4407,7 +4409,7 @@ class SmartSyncComplete:
 
             categories_a_eliminar = []
 
-            for category_code, record_data in categories_eliminadas:
+            for (category_code,) in categories_eliminadas:
                 if not self.sync_running:
                     break
 
