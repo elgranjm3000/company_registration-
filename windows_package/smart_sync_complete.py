@@ -13,6 +13,7 @@ import pymysql  # Cambiado de mysql.connector a pymysql (100% Python puro)
 import hashlib
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 import sys
@@ -392,10 +393,9 @@ class SmartSyncComplete:
             # Agregar columna deleted_at si no existe
             self._agregar_columna_deleted_at()
 
-            # Crear trigger de eliminación si no existe
-            self._crear_trigger_eliminacion()
-
-            # Crear triggers para customers y sellers también
+            # Crear triggers de eliminación para todas las entidades
+            self._crear_trigger_eliminacion_products()
+            self._crear_trigger_eliminacion_categories()
             self._crear_trigger_eliminacion_customers()
             self._crear_trigger_eliminacion_sellers()
 
@@ -434,14 +434,14 @@ class SmartSyncComplete:
             # Si hay error, continuar (la columna podría ya existir)
             self.pg_conn.rollback()
 
-    def _crear_trigger_eliminacion(self):
+    def _crear_trigger_eliminacion_products(self):
         """
-        Crea el trigger que marca productos como eliminados
+        Crea el trigger que marca productos como eliminados en sync_hashes
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_product_deleted()
+            CREATE OR REPLACE FUNCTION trigger_mark_product_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
@@ -465,12 +465,59 @@ class SmartSyncComplete:
 
             # Crear trigger
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_products_mark_deleted ON products;
+            DROP TRIGGER IF EXISTS tr_products_mark_deleted_sync_hashes ON products;
 
-            CREATE TRIGGER tr_products_mark_deleted
+            CREATE TRIGGER tr_products_mark_deleted_sync_hashes
                 AFTER DELETE ON products
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_product_deleted();
+                EXECUTE FUNCTION trigger_mark_product_deleted_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_categories(self):
+        """
+        Crea el trigger que marca categories como eliminados en sync_hashes
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_category_deleted_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'categories'
+                AND record_key = OLD.code::text;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('categories', OLD.code::text, md5(OLD.code::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_categories_mark_deleted_sync_hashes ON categories;
+
+            CREATE TRIGGER tr_categories_mark_deleted_sync_hashes
+                AFTER DELETE ON categories
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_category_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -483,12 +530,12 @@ class SmartSyncComplete:
 
     def _crear_trigger_eliminacion_customers(self):
         """
-        Crea el trigger que marca customers como eliminados
+        Crea el trigger que marca customers como eliminados en sync_hashes
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted()
+            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
@@ -512,12 +559,12 @@ class SmartSyncComplete:
 
             # Crear trigger
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_customers_mark_deleted ON customers;
+            DROP TRIGGER IF EXISTS tr_customers_mark_deleted_sync_hashes ON customers;
 
-            CREATE TRIGGER tr_customers_mark_deleted
+            CREATE TRIGGER tr_customers_mark_deleted_sync_hashes
                 AFTER DELETE ON customers
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_customer_deleted();
+                EXECUTE FUNCTION trigger_mark_customer_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -530,12 +577,12 @@ class SmartSyncComplete:
 
     def _crear_trigger_eliminacion_sellers(self):
         """
-        Crea el trigger que marca sellers como eliminados
+        Crea el trigger que marca sellers como eliminados en sync_hashes
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted()
+            CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
@@ -559,12 +606,12 @@ class SmartSyncComplete:
 
             # Crear trigger
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted ON sellers;
+            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted_sync_hashes ON sellers;
 
-            CREATE TRIGGER tr_sellers_mark_deleted
+            CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
                 AFTER DELETE ON sellers
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_seller_deleted();
+                EXECUTE FUNCTION trigger_mark_seller_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -574,7 +621,6 @@ class SmartSyncComplete:
         except Exception as e:
             # Si hay error, continuar (el trigger podría ya existir)
             self.pg_conn.rollback()
-
 
     def _crear_indice_sync_hashes(self):
         """
@@ -2947,7 +2993,7 @@ class SmartSyncComplete:
     # ====================================================================
 
     def sincronizar_products_mysql(self, cambios: Dict[str, List]):
-        """Sincronizar cambios de products a MySQL"""
+        """Sincronizar cambios de products a MySQL usando BATCH INSERTS para mejor rendimiento"""
         if not any(cambios.values()):
             return
 
@@ -2975,187 +3021,79 @@ class SmartSyncComplete:
 
             products_sin_categoria = 0
 
-            # Nuevos
+            # ====================================================================
+            # NUEVOS - BATCH INSERT
+            # ====================================================================
             total_nuevos = len(cambios['nuevos'])
-            self._log(f"  📦 Insertando {total_nuevos} productos NUEVOS...", "info")
+            if total_nuevos > 0:
+                self._log(f"  📦 Preparando BATCH INSERT de {total_nuevos} productos NUEVOS...", "info")
 
-            for idx, producto in enumerate(cambios['nuevos'], 1):
-                if not self.sync_running:
-                    break
+                # Recolectar todos los datos para batch insert
+                batch_data = []
+                productos_a_procesar = []
 
-                try:
-                    # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
-                    (code, description, short_name, department, stock, product_type,
-                     coin, description_coin, price, cost, higher_price, min_stock, status,
-                     image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                for idx, producto in enumerate(cambios['nuevos'], 1):
+                    if not self.sync_running:
+                        break
 
-                    # Verificar que la categoría existe en MySQL
-                    if department not in category_mapping:
-                        self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
-                        products_sin_categoria += 1
-                        # Reportar progreso aunque se omita el producto
-                        self._reportar_progreso('products', idx, total_cambios)
-                        continue
+                    try:
+                        # Desempaquetar con todos los campos
+                        (code, description, short_name, department, stock, product_type,
+                         coin, description_coin, price, cost, higher_price, min_stock, status,
+                         image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
-                    category_id = category_mapping[department]
+                        # Verificar que la categoría existe en MySQL
+                        if department not in category_mapping:
+                            self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
+                            products_sin_categoria += 1
+                            continue
 
-                    # Crear JSON de imagen
-                    image_json = self._create_image_json(image_type, product_image)
+                        category_id = category_mapping[department]
 
-                    # INSERT con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
-                    insert_query = """
-                    INSERT INTO products (
-                        company_id,
-                        code,
-                        name,
-                        description,
-                        price,
-                        cost,
-                        stock,
-                        min_stock,
-                        category_id,
-                        status,
-                        product_type,
-                        images,
-                        higher_price,
-                        sale_tax,
-                        aliquot,
-                        coin,
-                        description_coin,
-                        unitary_cost,
-                        buy_tax,
-                        buy_aliquot,
-                        created_at,
-                        updated_at
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
-                    )
-                    ON DUPLICATE KEY UPDATE
-                        name = VALUES(name),
-                        description = VALUES(description),
-                        price = VALUES(price),
-                        cost = VALUES(cost),
-                        stock = VALUES(stock),
-                        min_stock = VALUES(min_stock),
-                        category_id = VALUES(category_id),
-                        status = VALUES(status),
-                        product_type = VALUES(product_type),
-                        images = VALUES(images),
-                        higher_price = VALUES(higher_price),
-                        sale_tax = VALUES(sale_tax),
-                        aliquot = VALUES(aliquot),
-                        coin = VALUES(coin),
-                        description_coin = VALUES(description_coin),
-                        unitary_cost = VALUES(unitary_cost),
-                        buy_tax = VALUES(buy_tax),
-                        buy_aliquot = VALUES(buy_aliquot),
-                        updated_at = NOW()
-                    """
+                        # Crear JSON de imagen
+                        image_json = self._create_image_json(image_type, product_image)
 
-                    self.mysql_cursor.execute(insert_query, (
-                        self.company_id,
-                        code,
-                        short_name,  # El nombre del producto es short_name
-                        description if description else None,
-                        safe_float(price),
-                        safe_float(cost),
-                        float(stock) if stock else 0,  # Convertir Decimal a float
-                        int(min_stock) if min_stock else 0,
-                        category_id,
-                        status,  # Usar el status calculado del SELECT
-                        product_type,
-                        image_json,
-                        safe_float(higher_price),
-                        sale_tax,
-                        aliquot,
-                        coin if coin else None,  # Moneda
-                        description_coin if description_coin else None,  # Descripción de moneda
-                        safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
-                        buy_tax if buy_tax else None,  # buy_tax de products
-                        buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
-                    ))
+                        # Preparar datos para batch insert
+                        batch_data.append((
+                            self.company_id,
+                            code,
+                            short_name,
+                            description if description else None,
+                            safe_float(price),
+                            safe_float(cost),
+                            float(stock) if stock else 0,
+                            int(min_stock) if min_stock else 0,
+                            category_id,
+                            status,
+                            product_type,
+                            image_json,
+                            safe_float(higher_price),
+                            sale_tax,
+                            aliquot,
+                            coin if coin else None,
+                            description_coin if description_coin else None,
+                            safe_float(unitary_cost) if unitary_cost else 0,
+                            buy_tax if buy_tax else None,
+                            buy_aliquot if buy_aliquot else 0
+                        ))
 
-                    self.stats['products']['nuevos'] += 1
-                    # Commit cada 50 productos para no acumular transacción enorme
-                    if idx % 50 == 0:
-                        self.mysql_conn.commit()
-                        # No imprimir log aquí para no interferir con el contador
+                        productos_a_procesar.append((idx, code))
 
-                    # Reportar progreso después de insertar exitosamente
-                    self._reportar_progreso('products', idx, total_cambios)
-
-                except Exception as e:
-                    # Error con un producto específico - continuar con los demás
-                    error_msg = str(e).lower()
-                    if 'duplicate' in error_msg or 'unique' in error_msg:
-                        # Para ON DUPLICATE KEY UPDATE, esto es normal
-                        pass
-                    else:
-                        self._log(f"  ⚠️ Error insertando producto: {str(e)[:100]}", "warning")
+                    except Exception as e:
+                        self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
                         self.stats['products']['errores'] += 1
 
-                    # Reportar progreso aunque haya error
-                    self._reportar_progreso('products', idx, total_cambios)
+                # Ejecutar BATCH INSERT
+                if batch_data:
+                    self._log(f"  🚀 Ejecutando BATCH INSERT de {len(batch_data)} productos...", "info")
+                    start_time = time.time()
 
-            # Commit final de los nuevos
-            if total_nuevos > 0:
-                self.mysql_conn.commit()
-                self._log(f"  ✅ Commit final: {self.stats['products']['nuevos']}/{total_nuevos} productos nuevos insertados", "success")
-
-            # Modificados
-            total_modificados = len(cambios['modificados'])
-            if total_modificados > 0:
-                self._log(f"  📦 Actualizando {total_modificados} productos MODIFICADOS...", "info")
-
-            for idx, producto in enumerate(cambios['modificados'], 1):
-                if not self.sync_running:
-                    break
-
-                try:
-                    # Desempaquetar con todos los campos (incluye buy_tax, buy_aliquot, unitary_cost)
-                    (code, description, short_name, department, stock, product_type,
-                     coin, description_coin, price, cost, higher_price, min_stock, status,
-                     image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
-
-                    # Verificar que la categoría existe en MySQL
-                    if department not in category_mapping:
-                        self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
-                        products_sin_categoria += 1
-                        # Reportar progreso incluso si se omite (ajustar idx para continuar desde los nuevos)
-                        idx_adjusted = total_nuevos + idx
-                        self._reportar_progreso('products', idx_adjusted, total_cambios)
-                        continue
-
-                    category_id = category_mapping[department]
-
-                    # Crear JSON de imagen
-                    image_json = self._create_image_json(image_type, product_image)
-
-                    # UPDATE con coin, description_coin, buy_tax, buy_aliquot, unitary_cost
-                    update_query = """
+                    insert_query = """
                     INSERT INTO products (
-                        company_id,
-                        code,
-                        name,
-                        description,
-                        price,
-                        cost,
-                        stock,
-                        min_stock,
-                        category_id,
-                        status,
-                        product_type,
-                        images,
-                        higher_price,
-                        sale_tax,
-                        aliquot,
-                        coin,
-                        description_coin,
-                        unitary_cost,
-                        buy_tax,
-                        buy_aliquot,
-                        created_at,
-                        updated_at
+                        company_id, code, name, description, price, cost, stock, min_stock,
+                        category_id, status, product_type, images, higher_price, sale_tax,
+                        aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
+                        created_at, updated_at
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
@@ -3181,52 +3119,127 @@ class SmartSyncComplete:
                         updated_at = NOW()
                     """
 
-                    self.mysql_cursor.execute(update_query, (
-                        self.company_id,
-                        code,
-                        short_name,
-                        description if description else None,
-                        safe_float(price),
-                        safe_float(cost),
-                        float(stock) if stock else 0,  # Convertir Decimal a float
-                        int(min_stock) if min_stock else 0,
-                        category_id,
-                        status,
-                        product_type,
-                        image_json,
-                        safe_float(higher_price),
-                        sale_tax,
-                        aliquot,
-                        coin if coin else None,  # Moneda
-                        description_coin if description_coin else None,  # Descripción de moneda
-                        safe_float(unitary_cost) if unitary_cost else 0,  # unitary_cost de products_units
-                        buy_tax if buy_tax else None,  # buy_tax de products
-                        buy_aliquot if buy_aliquot else 0  # buy_aliquot de taxes
-                    ))
+                    self.mysql_cursor.executemany(insert_query, batch_data)
+                    self.mysql_conn.commit()
 
-                    self.stats['products']['modificados'] += 1
-                    # Commit cada 50 productos
-                    if idx % 50 == 0:
-                        self.mysql_conn.commit()
-                        # No imprimir log aquí para no interferir con el contador
+                    elapsed = time.time() - start_time
+                    self.stats['products']['nuevos'] += len(batch_data)
+                    self._log(f"  ✅ BATCH INSERT completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso después de actualizar exitosamente (ajustar idx para continuar desde los nuevos)
-                    idx_adjusted = total_nuevos + idx
-                    self._reportar_progreso('products', idx_adjusted, total_cambios)
+                    # Reportar progreso
+                    for idx, code in productos_a_procesar:
+                        self._reportar_progreso('products', idx, total_cambios)
 
-                except Exception as e:
-                    # Error con un producto específico - continuar con los demás
-                    self._log(f"  ⚠️ Error actualizando producto: {str(e)[:100]}", "warning")
-                    self.stats['products']['errores'] += 1
-
-                    # Reportar progreso aunque haya error
-                    idx_adjusted = total_nuevos + idx
-                    self._reportar_progreso('products', idx_adjusted, total_cambios)
-
-            # Commit final de los modificados
+            # ====================================================================
+            # MODIFICADOS - BATCH UPDATE
+            # ====================================================================
+            total_modificados = len(cambios['modificados'])
             if total_modificados > 0:
-                self.mysql_conn.commit()
-                self._log(f"  ✅ Commit final: {self.stats['products']['modificados']}/{total_modificados} productos modificados actualizados", "success")
+                self._log(f"  📦 Preparando BATCH UPDATE de {total_modificados} productos MODIFICADOS...", "info")
+
+                # Recolectar todos los datos para batch update
+                batch_data = []
+                productos_a_procesar = []
+
+                for idx, producto in enumerate(cambios['modificados'], 1):
+                    if not self.sync_running:
+                        break
+
+                    try:
+                        # Desempaquetar con todos los campos
+                        (code, description, short_name, department, stock, product_type,
+                         coin, description_coin, price, cost, higher_price, min_stock, status,
+                         image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+
+                        # Verificar que la categoría existe en MySQL
+                        if department not in category_mapping:
+                            self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
+                            products_sin_categoria += 1
+                            continue
+
+                        category_id = category_mapping[department]
+
+                        # Crear JSON de imagen
+                        image_json = self._create_image_json(image_type, product_image)
+
+                        # Preparar datos para batch update (mismo formato que insert)
+                        batch_data.append((
+                            self.company_id,
+                            code,
+                            short_name,
+                            description if description else None,
+                            safe_float(price),
+                            safe_float(cost),
+                            float(stock) if stock else 0,
+                            int(min_stock) if min_stock else 0,
+                            category_id,
+                            status,
+                            product_type,
+                            image_json,
+                            safe_float(higher_price),
+                            sale_tax,
+                            aliquot,
+                            coin if coin else None,
+                            description_coin if description_coin else None,
+                            safe_float(unitary_cost) if unitary_cost else 0,
+                            buy_tax if buy_tax else None,
+                            buy_aliquot if buy_aliquot else 0
+                        ))
+
+                        productos_a_procesar.append((idx, code))
+
+                    except Exception as e:
+                        self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
+                        self.stats['products']['errores'] += 1
+
+                # Ejecutar BATCH UPDATE
+                if batch_data:
+                    self._log(f"  🚀 Ejecutando BATCH UPDATE de {len(batch_data)} productos...", "info")
+                    start_time = time.time()
+
+                    # Usamos INSERT ... ON DUPLICATE KEY UPDATE para actualizar
+                    update_query = """
+                    INSERT INTO products (
+                        company_id, code, name, description, price, cost, stock, min_stock,
+                        category_id, status, product_type, images, higher_price, sale_tax,
+                        aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
+                        created_at, updated_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        description = VALUES(description),
+                        price = VALUES(price),
+                        cost = VALUES(cost),
+                        stock = VALUES(stock),
+                        min_stock = VALUES(min_stock),
+                        category_id = VALUES(category_id),
+                        status = VALUES(status),
+                        product_type = VALUES(product_type),
+                        images = VALUES(images),
+                        higher_price = VALUES(higher_price),
+                        sale_tax = VALUES(sale_tax),
+                        aliquot = VALUES(aliquot),
+                        coin = VALUES(coin),
+                        description_coin = VALUES(description_coin),
+                        unitary_cost = VALUES(unitary_cost),
+                        buy_tax = VALUES(buy_tax),
+                        buy_aliquot = VALUES(buy_aliquot),
+                        updated_at = NOW()
+                    """
+
+                    self.mysql_cursor.executemany(update_query, batch_data)
+                    self.mysql_conn.commit()
+
+                    elapsed = time.time() - start_time
+                    self.stats['products']['modificados'] += len(batch_data)
+                    self._log(f"  ✅ BATCH UPDATE completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
+
+                    # Reportar progreso
+                    for idx, code in productos_a_procesar:
+                        idx_adjusted = total_nuevos + idx
+                        self._reportar_progreso('products', idx_adjusted, total_cambios)
 
             # Reportar productos omitidos
             if products_sin_categoria > 0:
@@ -3456,6 +3469,296 @@ class SmartSyncComplete:
     # SINCRONIZACIÓN DE PRODUCTS (MYSQL → POSTGRESQL)
     # ====================================================================
 
+    def _eliminar_productos_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina productos de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente los productos eliminados
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esos productos de MySQL
+        4. Limpiamos el registro de sync_hashes
+
+        Esto es MUY eficiente porque:
+        - No recorre todos los productos de MySQL
+        - Solo procesa los productos que realmente fueron eliminados
+        - El trigger hace el trabajo automáticamente
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO PRODUCTOS ELIMINADOS EN POSTGRESQL...", "info")
+
+            # Consulta eficiente: solo productos marcados como eliminados por el trigger
+            query = """
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'products'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            """
+            self.pg_cursor.execute(query)
+            productos_eliminados = self.pg_cursor.fetchall()
+
+            if not productos_eliminados:
+                self._log("   ℹ️ No hay productos eliminados que procesar", "info")
+                return
+
+            self._log(f"   📋 Encontrados {len(productos_eliminados)} productos eliminados en PostgreSQL", "info")
+
+            productos_a_eliminar = []
+
+            for product_code, record_data in productos_eliminados:
+                if not self.sync_running:
+                    break
+
+                # Buscar el producto en MySQL
+                self.mysql_cursor.execute(
+                    "SELECT id FROM products WHERE code = %s AND company_id = %s",
+                    (product_code, self.company_id)
+                )
+                producto_mysql = self.mysql_cursor.fetchone()
+
+                if producto_mysql:
+                    product_id = producto_mysql[0]
+                    productos_a_eliminar.append((product_id, product_code))
+                    self._log(f"   🗑️ Producto {product_code} (ID: {product_id}) será eliminado de MySQL", "debug")
+                else:
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Producto {product_code} ya no existe en MySQL", "debug")
+
+            # Eliminar productos de MySQL
+            if productos_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(productos_a_eliminar)} productos de MySQL...", "info")
+
+                for product_id, product_code in productos_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM products
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (product_id, self.company_id))
+
+                        self._log(f"   ✅ Producto {product_code} eliminado de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando product {product_code} de MySQL: {e}", "error")
+                        self.stats['products']['errores'] += 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+
+                self._log(f"   ✅ {len(productos_a_eliminar)} productos eliminados de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['products']['eliminados'] = self.stats.get('products', {}).get('eliminados', 0) + len(productos_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay productos que eliminar de MySQL (ya fueron limpiados)", "info")
+
+            # Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'products' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando productos eliminados: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+
+    def _eliminar_customers_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina customers de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente los customers eliminados
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esos customers de MySQL
+        4. Limpiamos el registro de sync_hashes
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO CUSTOMERS ELIMINADOS EN POSTGRESQL...", "info")
+
+            # Consulta eficiente: solo customers marcados como eliminados por el trigger
+            query = """
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'customers'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            """
+            self.pg_cursor.execute(query)
+            customers_eliminados = self.pg_cursor.fetchall()
+
+            if not customers_eliminados:
+                self._log("   ℹ️ No hay customers eliminados que procesar", "info")
+                return
+
+            self._log(f"   📋 Encontrados {len(customers_eliminados)} customers eliminados en PostgreSQL", "info")
+
+            customers_a_eliminar = []
+
+            for customer_email, record_data in customers_eliminados:
+                if not self.sync_running:
+                    break
+
+                # Buscar el customer en MySQL por document_number (email en PG)
+                self.mysql_cursor.execute(
+                    "SELECT id FROM customers WHERE document_number = %s AND company_id = %s",
+                    (customer_email, self.company_id)
+                )
+                customer_mysql = self.mysql_cursor.fetchone()
+
+                if customer_mysql:
+                    customer_id = customer_mysql[0]
+                    customers_a_eliminar.append((customer_id, customer_email))
+                    self._log(f"   🗑️ Customer {customer_email} (ID: {customer_id}) será eliminado de MySQL", "debug")
+                else:
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Customer {customer_email} ya no existe en MySQL", "debug")
+
+            # Eliminar customers de MySQL
+            if customers_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(customers_a_eliminar)} customers de MySQL...", "info")
+
+                for customer_id, customer_email in customers_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM customers
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (customer_id, self.company_id))
+
+                        self._log(f"   ✅ Customer {customer_email} eliminado de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando customer {customer_email} de MySQL: {e}", "error")
+                        self.stats['customers']['errores'] += 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+
+                self._log(f"   ✅ {len(customers_a_eliminar)} customers eliminados de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['customers']['eliminados'] = self.stats.get('customers', {}).get('eliminados', 0) + len(customers_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay customers que eliminar de MySQL (ya fueron limpiados)", "info")
+
+            # Limpiar registros de sync_hashes
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'customers' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando customers eliminados: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+
+    def _eliminar_sellers_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina sellers de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente los sellers eliminados
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esos sellers de MySQL
+        4. Limpiamos el registro de sync_hashes
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO SELLERS ELIMINADOS EN POSTGRESQL...", "info")
+
+            # Consulta eficiente: solo sellers marcados como eliminados por el trigger
+            query = """
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'sellers'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            """
+            self.pg_cursor.execute(query)
+            sellers_eliminados = self.pg_cursor.fetchall()
+
+            if not sellers_eliminados:
+                self._log("   ℹ️ No hay sellers eliminados que procesar", "info")
+                return
+
+            self._log(f"   📋 Encontrados {len(sellers_eliminados)} sellers eliminados en PostgreSQL", "info")
+
+            sellers_a_eliminar = []
+
+            for seller_email, record_data in sellers_eliminados:
+                if not self.sync_running:
+                    break
+
+                # Buscar el seller en MySQL por code (email en PG)
+                self.mysql_cursor.execute(
+                    "SELECT id FROM sellers WHERE code = %s AND company_id = %s",
+                    (seller_email, self.company_id)
+                )
+                seller_mysql = self.mysql_cursor.fetchone()
+
+                if seller_mysql:
+                    seller_id = seller_mysql[0]
+                    sellers_a_eliminar.append((seller_id, seller_email))
+                    self._log(f"   🗑️ Seller {seller_email} (ID: {seller_id}) será eliminado de MySQL", "debug")
+                else:
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Seller {seller_email} ya no existe en MySQL", "debug")
+
+            # Eliminar sellers de MySQL
+            if sellers_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(sellers_a_eliminar)} sellers de MySQL...", "info")
+
+                for seller_id, seller_email in sellers_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM sellers
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (seller_id, self.company_id))
+
+                        self._log(f"   ✅ Seller {seller_email} eliminado de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando seller {seller_email} de MySQL: {e}", "error")
+                        self.stats['sellers']['errores'] += 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+
+                self._log(f"   ✅ {len(sellers_a_eliminar)} sellers eliminados de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['sellers']['eliminados'] = self.stats.get('sellers', {}).get('eliminados', 0) + len(sellers_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay sellers que eliminar de MySQL (ya fueron limpiados)", "info")
+
+            # Limpiar registros de sync_hashes
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'sellers' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando sellers eliminados: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+
     def sincronizar_products_postgresql(self, cambios: Dict[str, List]):
         """
         Sincronizar products de MySQL a PostgreSQL
@@ -3523,6 +3826,27 @@ class SmartSyncComplete:
 
                     # No existe - INSERTAR
                     self._log(f"  ✨ Insertando product {product_code}...", "debug")
+
+                    # Manejar valores NULL correctamente
+                    description = product.get('description') or ''
+                    cost = product.get('cost')
+                    price = product.get('price')
+                    product_type = product.get('product_type') or 'finished'
+
+                    # Convertir a float, usar 0 si es None
+                    try:
+                        cost_val = float(cost) if cost is not None else 0.0
+                    except (ValueError, TypeError):
+                        cost_val = 0.0
+
+                    try:
+                        price_val = float(price) if price is not None else 0.0
+                    except (ValueError, TypeError):
+                        price_val = 0.0
+
+                    # Calcular sale_price (en centimos)
+                    sale_price_cents = int(price_val * 100) if price_val > 0 else 0
+
                     sql_insert = """
                     INSERT INTO products (
                         code, description, minimal_sale, maximal_sale,
@@ -3532,12 +3856,12 @@ class SmartSyncComplete:
                     """
                     self.pg_cursor.execute(sql_insert, (
                         product_code,
-                        product.get('description', '')[:255],
-                        float(product.get('cost', 0)),
-                        float(product.get('price', 0)),
+                        description[:255] if description else '',
+                        cost_val,
+                        price_val,
                         status_valido,
-                        product.get('product_type', 'finished'),
-                        int(float(product.get('price', 0)) * 100)  # sale_price está en centimos
+                        product_type,
+                        sale_price_cents
                     ))
 
                     self.pg_conn.commit()
@@ -3808,6 +4132,8 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("👤 SINCRONIZANDO SELLERS...", "info")
             self._sincronizar_sellers()
+            # Eliminar de MySQL los sellers que fueron eliminados de PostgreSQL
+            self._eliminar_sellers_mysql_cuando_faltan_en_postgresql()
 
             # Verificar si hay cambios
             total_cambios = (
@@ -3827,6 +4153,8 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("📦 SINCRONIZANDO CATEGORIES...", "info")
             self.sincronizar_categories_mysql(cambios_categories)
+            # Eliminar de MySQL las categories que fueron eliminadas de PostgreSQL
+            self._eliminar_categories_mysql_cuando_faltan_en_postgresql()
 
             # 2. Products (dependen de categories)
             self._log("", "info")
@@ -3837,8 +4165,13 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("👥 SINCRONIZANDO CUSTOMERS...", "info")
             self.sincronizar_customers_mysql(cambios_customers)
+            # Eliminar de MySQL los customers que fueron eliminados de PostgreSQL
+            self._eliminar_customers_mysql_cuando_faltan_en_postgresql()
 
             # 4. Products de MySQL → PostgreSQL (ANTES de quotes para que existan)
+            # Primero eliminar de MySQL los que fueron eliminados de PostgreSQL
+            self._eliminar_productos_mysql_cuando_faltan_en_postgresql()
+            # Luego sincronizar nuevos productos
             self.sincronizar_products_postgresql(cambios_products_mysql)
 
             # 5. Quotes a PostgreSQL (dirección opuesta, requiere products y customers)
@@ -3857,13 +4190,15 @@ class SmartSyncComplete:
             self._log("╚════════════════════════════════════════════════════════════════╝", "info")
             self._log(f"Products:   {self.stats['products']['nuevos']} nuevos, "
                       f"{self.stats['products']['modificados']} modificados, "
-                      f"{self.stats['products']['eliminados']} inactivados", "success")
+                      f"{self.stats['products'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Customers:  {self.stats['customers']['nuevos']} nuevos, "
-                      f"{self.stats['customers']['modificados']} modificados", "success")
+                      f"{self.stats['customers']['modificados']} modificados, "
+                      f"{self.stats['customers'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Categories: {self.stats['categories']['nuevos']} nuevos, "
                       f"{self.stats['categories']['modificados']} modificados", "success")
             self._log(f"Sellers:    {self.stats['sellers']['nuevos']} nuevos, "
-                      f"{self.stats['sellers']['modificados']} actualizados", "success")
+                      f"{self.stats['sellers']['modificados']} actualizados, "
+                      f"{self.stats['sellers'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Quotes:     {self.stats['quotes']['nuevos']} nuevos (MySQL→PG), "
                       f"{self.stats['quotes']['estados_actualizados']} estados actualizados", "success")
             self._log(f"Duración:   {duracion:.2f} segundos", "info")
@@ -3872,11 +4207,25 @@ class SmartSyncComplete:
             if sum(s['errores'] for s in self.stats.values()) == 0:
                 self._log("✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO", "success")
                 # Mostrar notificación toast de Windows
+                parts = []
+                parts.append(f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} nuevos/modificados")
+                if self.stats['products'].get('eliminados', 0) > 0:
+                    parts.append(f"{self.stats['products'].get('eliminados', 0)} eliminados")
+
+                customers_eliminados = self.stats['customers'].get('eliminados', 0)
+                parts.append(f"Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} nuevos/modificados")
+                if customers_eliminados > 0:
+                    parts.append(f"{customers_eliminados} eliminados")
+
+                sellers_eliminados = self.stats['sellers'].get('eliminados', 0)
+                if sellers_eliminados > 0:
+                    parts.append(f"Sellers: {sellers_eliminados} eliminados")
+
+                mensaje = " | ".join(parts) + f" | Duración: {duracion:.1f}s"
+
                 self._mostrar_notificacion(
                     titulo="✅ Sincronización Completada",
-                    mensaje=f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} | "
-                           f"Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} | "
-                           f"Duración: {duracion:.1f}s",
+                    mensaje=mensaje,
                     duracion=5
                 )
             else:
@@ -3898,6 +4247,101 @@ class SmartSyncComplete:
         finally:
             self._cerrar_conexiones()
             self._close_log_file()  # Cerrar archivo de log
+
+    def _eliminar_categories_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina categories de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente las categories eliminadas
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esas categories de MySQL
+        4. Limpiamos el registro de sync_hashes
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO CATEGORIES ELIMINADAS EN POSTGRESQL...", "info")
+
+            # Consulta eficiente: solo categories marcadas como eliminadas por el trigger
+            query = """
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'categories'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            """
+            self.pg_cursor.execute(query)
+            categories_eliminadas = self.pg_cursor.fetchall()
+
+            if not categories_eliminadas:
+                self._log("   ℹ️ No hay categories eliminadas que procesar", "info")
+                return
+
+            self._log(f"   📋 Encontradas {len(categories_eliminadas)} categories eliminadas en PostgreSQL", "info")
+
+            categories_a_eliminar = []
+
+            for category_code, record_data in categories_eliminadas:
+                if not self.sync_running:
+                    break
+
+                # Buscar la category en MySQL por code
+                self.mysql_cursor.execute(
+                    "SELECT id FROM categories WHERE code = %s AND company_id = %s",
+                    (category_code, self.company_id)
+                )
+                category_mysql = self.mysql_cursor.fetchone()
+
+                if category_mysql:
+                    category_id = category_mysql[0]
+                    categories_a_eliminar.append((category_id, category_code))
+                    self._log(f"   🗑️ Category {category_code} (ID: {category_id}) será eliminada de MySQL", "debug")
+                else:
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Category {category_code} ya no existe en MySQL", "debug")
+
+            # Eliminar categories de MySQL
+            if categories_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(categories_a_eliminar)} categories de MySQL...", "info")
+
+                for category_id, category_code in categories_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM categories
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (category_id, self.company_id))
+
+                        self._log(f"   ✅ Category {category_code} eliminada de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando category {category_code} de MySQL: {e}", "error")
+                        self.stats['categories']['errores'] = self.stats.get('categories', {}).get('errores', 0) + 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+
+                self._log(f"   ✅ {len(categories_a_eliminar)} categories eliminadas de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['categories']['eliminados'] = self.stats.get('categories', {}).get('eliminados', 0) + len(categories_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay categories que eliminar de MySQL (ya fueron limpiadas)", "info")
+
+            # Limpiar registros de sync_hashes
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'categories' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando categories eliminadas: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
 
 
 # ====================================================================

@@ -393,10 +393,9 @@ class SmartSyncComplete:
             # Agregar columna deleted_at si no existe
             self._agregar_columna_deleted_at()
 
-            # Crear trigger de eliminación si no existe
-            self._crear_trigger_eliminacion()
-
-            # Crear triggers para customers y sellers también
+            # Crear triggers de eliminación para todas las entidades
+            self._crear_trigger_eliminacion_products()
+            self._crear_trigger_eliminacion_categories()
             self._crear_trigger_eliminacion_customers()
             self._crear_trigger_eliminacion_sellers()
 
@@ -435,14 +434,14 @@ class SmartSyncComplete:
             # Si hay error, continuar (la columna podría ya existir)
             self.pg_conn.rollback()
 
-    def _crear_trigger_eliminacion(self):
+    def _crear_trigger_eliminacion_products(self):
         """
-        Crea el trigger que marca productos como eliminados
+        Crea el trigger que marca productos como eliminados en sync_hashes
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_product_deleted()
+            CREATE OR REPLACE FUNCTION trigger_mark_product_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
@@ -466,12 +465,59 @@ class SmartSyncComplete:
 
             # Crear trigger
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_products_mark_deleted ON products;
+            DROP TRIGGER IF EXISTS tr_products_mark_deleted_sync_hashes ON products;
 
-            CREATE TRIGGER tr_products_mark_deleted
+            CREATE TRIGGER tr_products_mark_deleted_sync_hashes
                 AFTER DELETE ON products
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_product_deleted();
+                EXECUTE FUNCTION trigger_mark_product_deleted_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_categories(self):
+        """
+        Crea el trigger que marca categories como eliminados en sync_hashes
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_category_deleted_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'categories'
+                AND record_key = OLD.code::text;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('categories', OLD.code::text, md5(OLD.code::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_categories_mark_deleted_sync_hashes ON categories;
+
+            CREATE TRIGGER tr_categories_mark_deleted_sync_hashes
+                AFTER DELETE ON categories
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_category_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -484,12 +530,12 @@ class SmartSyncComplete:
 
     def _crear_trigger_eliminacion_customers(self):
         """
-        Crea el trigger que marca customers como eliminados
+        Crea el trigger que marca customers como eliminados en sync_hashes
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted()
+            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
@@ -513,12 +559,12 @@ class SmartSyncComplete:
 
             # Crear trigger
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_customers_mark_deleted ON customers;
+            DROP TRIGGER IF EXISTS tr_customers_mark_deleted_sync_hashes ON customers;
 
-            CREATE TRIGGER tr_customers_mark_deleted
+            CREATE TRIGGER tr_customers_mark_deleted_sync_hashes
                 AFTER DELETE ON customers
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_customer_deleted();
+                EXECUTE FUNCTION trigger_mark_customer_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -531,12 +577,12 @@ class SmartSyncComplete:
 
     def _crear_trigger_eliminacion_sellers(self):
         """
-        Crea el trigger que marca sellers como eliminados
+        Crea el trigger que marca sellers como eliminados en sync_hashes
         """
         try:
             # Crear función del trigger
             create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted()
+            CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
@@ -560,12 +606,12 @@ class SmartSyncComplete:
 
             # Crear trigger
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted ON sellers;
+            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted_sync_hashes ON sellers;
 
-            CREATE TRIGGER tr_sellers_mark_deleted
+            CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
                 AFTER DELETE ON sellers
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_seller_deleted();
+                EXECUTE FUNCTION trigger_mark_seller_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -4107,6 +4153,8 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("📦 SINCRONIZANDO CATEGORIES...", "info")
             self.sincronizar_categories_mysql(cambios_categories)
+            # Eliminar de MySQL las categories que fueron eliminadas de PostgreSQL
+            self._eliminar_categories_mysql_cuando_faltan_en_postgresql()
 
             # 2. Products (dependen de categories)
             self._log("", "info")
@@ -4199,6 +4247,101 @@ class SmartSyncComplete:
         finally:
             self._cerrar_conexiones()
             self._close_log_file()  # Cerrar archivo de log
+
+    def _eliminar_categories_mysql_cuando_faltan_en_postgresql(self):
+        """
+        Elimina categories de MySQL cuando fueron eliminados de PostgreSQL
+
+        Lógica MEJORADA con TRIGGER:
+        1. El trigger en PostgreSQL marca automáticamente las categories eliminadas
+        2. Solo leemos sync_hashes donde deleted_at IS NOT NULL
+        3. Eliminamos esas categories de MySQL
+        4. Limpiamos el registro de sync_hashes
+        """
+        try:
+            self._log("", "info")
+            self._log("🗑️ VERIFICANDO CATEGORIES ELIMINADAS EN POSTGRESQL...", "info")
+
+            # Consulta eficiente: solo categories marcadas como eliminadas por el trigger
+            query = """
+            SELECT record_key, record_data
+            FROM sync_hashes
+            WHERE table_name = 'categories'
+            AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            """
+            self.pg_cursor.execute(query)
+            categories_eliminadas = self.pg_cursor.fetchall()
+
+            if not categories_eliminadas:
+                self._log("   ℹ️ No hay categories eliminadas que procesar", "info")
+                return
+
+            self._log(f"   📋 Encontradas {len(categories_eliminadas)} categories eliminadas en PostgreSQL", "info")
+
+            categories_a_eliminar = []
+
+            for category_code, record_data in categories_eliminadas:
+                if not self.sync_running:
+                    break
+
+                # Buscar la category en MySQL por code
+                self.mysql_cursor.execute(
+                    "SELECT id FROM categories WHERE code = %s AND company_id = %s",
+                    (category_code, self.company_id)
+                )
+                category_mysql = self.mysql_cursor.fetchone()
+
+                if category_mysql:
+                    category_id = category_mysql[0]
+                    categories_a_eliminar.append((category_id, category_code))
+                    self._log(f"   🗑️ Category {category_code} (ID: {category_id}) será eliminada de MySQL", "debug")
+                else:
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Category {category_code} ya no existe en MySQL", "debug")
+
+            # Eliminar categories de MySQL
+            if categories_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(categories_a_eliminar)} categories de MySQL...", "info")
+
+                for category_id, category_code in categories_a_eliminar:
+                    try:
+                        # Eliminar de MySQL
+                        delete_query = """
+                        DELETE FROM categories
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (category_id, self.company_id))
+
+                        self._log(f"   ✅ Category {category_code} eliminada de MySQL", "info")
+
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando category {category_code} de MySQL: {e}", "error")
+                        self.stats['categories']['errores'] = self.stats.get('categories', {}).get('errores', 0) + 1
+
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+
+                self._log(f"   ✅ {len(categories_a_eliminar)} categories eliminadas de MySQL", "success")
+
+                # Actualizar estadísticas
+                self.stats['categories']['eliminados'] = self.stats.get('categories', {}).get('eliminados', 0) + len(categories_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay categories que eliminar de MySQL (ya fueron limpiadas)", "info")
+
+            # Limpiar registros de sync_hashes
+            self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+            self.pg_cursor.execute(
+                "DELETE FROM sync_hashes WHERE table_name = 'categories' AND deleted_at IS NOT NULL"
+            )
+            filas_limpias = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
+
+        except Exception as e:
+            self._log(f"Error verificando categories eliminadas: {e}", "error")
+            import traceback
+            self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
 
 
 # ====================================================================
