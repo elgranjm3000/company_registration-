@@ -2194,6 +2194,12 @@ class SmartSyncComplete:
         Returns:
             Dict con 'nuevos', 'modificados', 'actualizaciones_estado'
         """
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return {'nuevos': [], 'modificados': [], 'actualizaciones_estado': []}
+
         self._log("", "info")
         self._log("💰 DETECTANDO CAMBIOS EN QUOTES (MySQL → PostgreSQL)...", "info")
 
