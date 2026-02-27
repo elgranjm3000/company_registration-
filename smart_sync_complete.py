@@ -249,7 +249,15 @@ class SmartSyncComplete:
         print(mensaje)
 
     def _verificar_sistema_notificaciones(self):
-        """Verifica si el sistema de notificaciones está disponible"""
+        """Verifica si el sistema de notificaciones está disponible (solo Windows)"""
+        import platform
+
+        # Solo intentar cargar notificaciones en Windows
+        if platform.system() != 'Windows':
+            self.toast = None
+            self.notificaciones_habilitadas = False
+            return  # Silencioso en Linux/Mac - no es un error
+
         try:
             from win10toast import ToastNotifier
             self.toast = ToastNotifier()
@@ -257,11 +265,11 @@ class SmartSyncComplete:
         except ImportError:
             self.toast = None
             self.notificaciones_habilitadas = False
-            self._log("Sistema de notificaciones no disponible (pip install win10toast)", "warning")
+            # No mostrar warning en Windows si no está instalado - es opcional
         except Exception as e:
             self.toast = None
             self.notificaciones_habilitadas = False
-            self._log(f"Sistema de notificaciones no disponible: {str(e)}", "warning")
+            # Silencioso - las notificaciones son opcionales
 
     def _mostrar_notificacion(self, titulo: str, mensaje: str, duracion: int = 5):
         """

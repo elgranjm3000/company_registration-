@@ -564,6 +564,11 @@ class CompleteSyncApp:
 
     def _update_progress_from_sync(self):
         """Actualizar la UI con la información de progreso de SmartSyncComplete"""
+        # Verificar que la ventana todavía existe
+        if not hasattr(self, 'root') or not self.root.winfo_exists():
+            self.progress_update_job = None
+            return
+
         if self.smart_sync and self.sync_running:
             try:
                 progress = self.smart_sync.get_progress_info()
@@ -589,15 +594,24 @@ class CompleteSyncApp:
             except Exception as e:
                 pass  # Silencioso para no interrumpir
 
-        # Programar próxima actualización en 200ms
-        if self.sync_running:
-            self.progress_update_job = self.root.after(200, self._update_progress_from_sync)
+        # Programar próxima actualización en 200ms solo si sigue corriendo
+        if self.sync_running and hasattr(self, 'root') and self.root.winfo_exists():
+            try:
+                self.progress_update_job = self.root.after(200, self._update_progress_from_sync)
+            except Exception:
+                # La ventana fue destruida, ignorar
+                self.progress_update_job = None
 
     def _stop_progress_updates(self):
         """Detener actualizaciones de progreso"""
         if self.progress_update_job:
-            self.root.after_cancel(self.progress_update_job)
-            self.progress_update_job = None
+            try:
+                if hasattr(self, 'root') and self.root.winfo_exists():
+                    self.root.after_cancel(self.progress_update_job)
+            except Exception:
+                pass  # Ignorar errores al cancelar
+            finally:
+                self.progress_update_job = None
 
     # ====================================================================
     # MÉTODOS DE SINCRONIZACIÓN ANTIGUOS (Mantenidos por compatibilidad)
