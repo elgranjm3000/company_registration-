@@ -87,9 +87,12 @@ def get_log_file():
             with open(config_path, "r", encoding="utf-8") as f:
                 contenido = f.read()
 
-            # Intentar desencriptar
+            # Intentar desencriptar (si la función existe)
             try:
-                config = desencriptar_config_json(contenido)
+                if 'desencriptar_config_json' in globals():
+                    config = desencriptar_config_json(contenido)
+                else:
+                    config = json.loads(contenido)
             except:
                 config = json.loads(contenido)
 
@@ -252,32 +255,6 @@ def desencriptar_credencial(texto_encriptado):
         # Fallback: base64
         return base64.b64decode(texto_encriptado.encode()).decode()
 
-def encriptar_config_json(config_dict):
-    """
-    Encripta un diccionario de configuración completo
-
-    Args:
-        config_dict: Diccionario con la configuración
-
-    Returns:
-        String encriptado (base64 del JSON encriptado)
-    """
-    json_str = json.dumps(config_dict)
-    return encriptar_credencial(json_str)
-
-def desencriptar_config_json(config_encrypted):
-    """
-    Desencripta un string de configuración encriptado
-
-    Args:
-        config_encrypted: String encriptado
-
-    Returns:
-        Diccionario con la configuración
-    """
-    json_str = desencriptar_credencial(config_encrypted)
-    return json.loads(json_str)
-
 def obtener_config_mysql():
     """
     Retorna la configuración de MySQL con credenciales encriptadas
@@ -292,102 +269,22 @@ def obtener_config_mysql():
     }
 
 def cargar_config():
-    """Carga configuración desde archivo (encriptado o plano)"""
-    # Buscar CONFIG_FILE en múltiples ubicaciones (prioridad: externo > empaquetado)
-    config_path = buscar_config_externo()
-
-    if not config_path or not os.path.exists(config_path):
-        log(f"⚠️ No se encontró config externo, usando por defecto", "WARNING")
+    """Carga configuración desde archivo"""
+    if not os.path.exists(CONFIG_FILE):
         return crear_config_default()
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            contenido = f.read()
-
-        try:
-            # Intentar desencriptar (archivo .enc encriptado)
-            config = desencriptar_config_json(contenido)
-            log(f"✅ Config encriptada cargada desde: {config_path}", "INFO")
-            return config
-        except Exception:
-            # Fallback: intentar como JSON plano (backward compatibility)
-            config = json.loads(contenido)
-            log(f"✅ Config plano cargada desde: {config_path}", "INFO")
-            return config
-
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
     except Exception as e:
         log(f"Error cargando config: {e}", "ERROR")
         return crear_config_default()
 
-def buscar_config_externo():
-    """
-    Busca sync_config.enc (encriptado) o sync_config.json (plano) en ubicaciones externas
-    Prioridad:
-    1. Busca sync_config.enc (encriptado) primero
-    2. Si no existe, busca sync_config.json (plano, backward compatibility)
-    3. Directorio del .exe (sys._MEIPASS cuando está compilado)
-    4. Directorio del script (modo desarrollo)
-    5. Directorio actual de trabajo
-
-    Returns:
-        Ruta al config externo o None
-    """
-    # Ubicaciones a buscar (en orden de prioridad)
-    posibles_rutas = []
-
-    if getattr(sys, 'frozen', False):
-        # Modo .exe compilado
-        # sys._MEIPASS es donde PyInstaller desempaqueta los archivos
-        # El directorio del .exe es sys.executable
-        exe_dir = os.path.dirname(sys.executable)
-
-        # Primero buscar .enc (encriptado)
-        posibles_rutas.append(os.path.join(exe_dir, "sync_config.enc"))
-        posibles_rutas.append(os.path.join(sys._MEIPASS, "sync_config.enc"))
-        # Luego buscar .json (plano, backward compatibility)
-        posibles_rutas.append(os.path.join(exe_dir, "sync_config.json"))
-        posibles_rutas.append(os.path.join(sys._MEIPASS, "sync_config.json"))
-    else:
-        # Modo desarrollo (Python)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Primero buscar .enc (encriptado)
-        posibles_rutas.append(os.path.join(script_dir, "sync_config.enc"))
-        # Luego buscar .json (plano, backward compatibility)
-        posibles_rutas.append(os.path.join(script_dir, "sync_config.json"))
-
-    # Agregar directorio de trabajo actual
-    posibles_rutas.append(os.path.join(os.getcwd(), "sync_config.enc"))
-    posibles_rutas.append(os.path.join(os.getcwd(), "sync_config.json"))
-
-    # Buscar la primera que exista
-    for ruta in posibles_rutas:
-        if os.path.exists(ruta):
-            return ruta
-
-    # No se encontró ninguna
-    return None
-
 def guardar_config(config):
-    """Guarda configuración encriptada a archivo externo"""
+    """Guarda configuración a archivo"""
     try:
-        # Buscar ubicación externa para guardar
-        if getattr(sys, 'frozen', False):
-            # Modo .exe: guardar al lado del .exe
-            config_dir = os.path.dirname(sys.executable)
-        else:
-            # Modo desarrollo: guardar al lado del script
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Usar extensión .enc para archivo encriptado
-        config_path = os.path.join(config_dir, "sync_config.enc")
-
-        # Encriptar y guardar
-        config_encriptado = encriptar_config_json(config)
-        with open(config_path, "w", encoding="utf-8") as f:
-            f.write(config_encriptado)
-
-        log(f"✅ Config encriptada guardada en: {config_path}", "INFO")
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4)
         return True
     except Exception as e:
         log(f"Error guardando config: {e}", "ERROR")
@@ -518,7 +415,8 @@ class SyncModule:
                 company_rif=self.config['company_rif'],
                 company_email=self.config['company_email'],
                 company_name=self.config.get('company_name', ''),  # ✅ Agregado
-                progress_callback=self.progress_callback  # ✅ Callback de progreso
+                progress_callback=self.progress_callback,  # ✅ Callback de progreso
+                log_callback=self.log_message  # ✅ Callback de logs
             )
 
             # Inicializar tabla sync_hashes si no existe
@@ -1442,7 +1340,7 @@ class ManagerWindow:
             self.lbl_progress.config(text="✅ Sincronización completada", fg="green")
             self.agregar_log("✅ Sincronización completada")
 
-            # Mostrar notificación BANNER con estadísticas
+            # Mostrar notificación BANNER prominente con estadísticas
             mensaje_stats = (
                 f"Products: {stats['products']['nuevos']} nuevos\n"
                 f"Customers: {stats['customers']['nuevos']} nuevos\n"
@@ -2362,6 +2260,8 @@ def main():
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
     parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
                        default="manager", help="Modo de ejecución")  # CAMBIADO: default="manager"
+    parser.add_argument("--once", action="store_true",
+                       help="Ejecutar una sola sincronización y salir (solo para modo service)")
 
     args = parser.parse_args()
     config = cargar_config()
@@ -2373,11 +2273,8 @@ def main():
         else:
             args.mode = "manager"  # CAMBIADO: Por defecto mostrar ventana manager, no tray
 
-    # Verificar si necesita configuración (primera vez o configured=false)
-    necesita_config = not config.get('configured', False) or config.get('first_run', False)
-
     # Ejecutar según modo
-    if args.mode == "config" or necesita_config:
+    if args.mode == "config":
         # Modo configuración
         root = tk.Tk()
         app = ConfigWindow(root)
@@ -2428,7 +2325,6 @@ def main():
                     import sys
                     sys.exit(1)
 
-
     elif args.mode == "sync":
         # Modo sincronización única
         print("=== SINCRONIZACIÓN ÚNICA ===")
@@ -2441,27 +2337,40 @@ def main():
             sys.exit(1)
 
     elif args.mode == "service":
-        # Modo servicio (loop infinito)
-        print("=== MODO SERVICIO ===")
-        print(f"Intervalo: {config.get('sync_interval_minutes', 30)} minutos")
-        print("Presione Ctrl+C para detener")
+        # Modo servicio (loop infinito o una sola ejecución con --once)
+        if args.once:
+            print("=== MODO SERVICIO (UNA SOLA EJECUCIÓN) ===")
+        else:
+            print("=== MODO SERVICIO ===")
+            print(f"Intervalo: {config.get('sync_interval_minutes', 30)} minutos")
+            print("Presione Ctrl+C para detener")
 
         sync = SyncModule(config)
 
         try:
-            while True:
-                log("=== INICIANDO CICLO DE SINCRONIZACIÓN ===")
+            if args.once:
+                # Ejecutar una sola vez
+                log("=== INICIANDO SINCRONIZACIÓN ÚNICA ===")
                 sync.verificar_conexiones()
                 sync.sincronizar()
+                log("=== SINCRONIZACIÓN COMPLETADA ===")
+                sync.cerrar()
+            else:
+                # Loop infinito normal
+                while True:
+                    log("=== INICIANDO CICLO DE SINCRONIZACIÓN ===")
+                    sync.verificar_conexiones()
+                    sync.sincronizar()
 
-                intervalo = int(config.get('sync_interval_minutes', 30))
-                log(f"Próxima sync en {intervalo} minutos")
-                log(f"=== CICLO COMPLETADO ===\n")
+                    intervalo = int(config.get('sync_interval_minutes', 30))
+                    log(f"Próxima sync en {intervalo} minutos")
+                    log(f"=== CICLO COMPLETADO ===\n")
 
-                time.sleep(intervalo * 60)
+                    time.sleep(intervalo * 60)
 
         except KeyboardInterrupt:
-            log("\n=== SERVICIO DETENIDO ===")
+            if not args.once:
+                log("\n=== SERVICIO DETENIDO ===")
             sync.cerrar()
 
 if __name__ == "__main__":

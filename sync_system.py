@@ -415,7 +415,8 @@ class SyncModule:
                 company_rif=self.config['company_rif'],
                 company_email=self.config['company_email'],
                 company_name=self.config.get('company_name', ''),  # ✅ Agregado
-                progress_callback=self.progress_callback  # ✅ Callback de progreso
+                progress_callback=self.progress_callback,  # ✅ Callback de progreso
+                log_callback=self.log_message  # ✅ Callback de logs
             )
 
             # Inicializar tabla sync_hashes si no existe
@@ -2259,6 +2260,8 @@ def main():
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
     parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
                        default="manager", help="Modo de ejecución")  # CAMBIADO: default="manager"
+    parser.add_argument("--once", action="store_true",
+                       help="Ejecutar una sola sincronización y salir (solo para modo service)")
 
     args = parser.parse_args()
     config = cargar_config()
@@ -2334,27 +2337,40 @@ def main():
             sys.exit(1)
 
     elif args.mode == "service":
-        # Modo servicio (loop infinito)
-        print("=== MODO SERVICIO ===")
-        print(f"Intervalo: {config.get('sync_interval_minutes', 30)} minutos")
-        print("Presione Ctrl+C para detener")
+        # Modo servicio (loop infinito o una sola ejecución con --once)
+        if args.once:
+            print("=== MODO SERVICIO (UNA SOLA EJECUCIÓN) ===")
+        else:
+            print("=== MODO SERVICIO ===")
+            print(f"Intervalo: {config.get('sync_interval_minutes', 30)} minutos")
+            print("Presione Ctrl+C para detener")
 
         sync = SyncModule(config)
 
         try:
-            while True:
-                log("=== INICIANDO CICLO DE SINCRONIZACIÓN ===")
+            if args.once:
+                # Ejecutar una sola vez
+                log("=== INICIANDO SINCRONIZACIÓN ÚNICA ===")
                 sync.verificar_conexiones()
                 sync.sincronizar()
+                log("=== SINCRONIZACIÓN COMPLETADA ===")
+                sync.cerrar()
+            else:
+                # Loop infinito normal
+                while True:
+                    log("=== INICIANDO CICLO DE SINCRONIZACIÓN ===")
+                    sync.verificar_conexiones()
+                    sync.sincronizar()
 
-                intervalo = int(config.get('sync_interval_minutes', 30))
-                log(f"Próxima sync en {intervalo} minutos")
-                log(f"=== CICLO COMPLETADO ===\n")
+                    intervalo = int(config.get('sync_interval_minutes', 30))
+                    log(f"Próxima sync en {intervalo} minutos")
+                    log(f"=== CICLO COMPLETADO ===\n")
 
-                time.sleep(intervalo * 60)
+                    time.sleep(intervalo * 60)
 
         except KeyboardInterrupt:
-            log("\n=== SERVICIO DETENIDO ===")
+            if not args.once:
+                log("\n=== SERVICIO DETENIDO ===")
             sync.cerrar()
 
 if __name__ == "__main__":
