@@ -4,9 +4,13 @@
 # Conexión a bases de datos
 mysql-connector-python==8.2.0
 psycopg2-binary==2.9.7
+pymysql>=1.0.0              # MySQL adapter alternativo (pure Python)
 
 # Variables de entorno
 python-dotenv==1.0.0
+
+# HTTP client para API de tipo de cambio
+requests>=2.31.0
 
 # Servicios de Windows (necesario para sync_service.py)
 pywin32==306
