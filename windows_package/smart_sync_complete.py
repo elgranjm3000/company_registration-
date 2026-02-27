@@ -463,14 +463,14 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_function_query)
 
-            # Crear trigger
+            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
             DROP TRIGGER IF EXISTS tr_products_mark_deleted_sync_hashes ON products;
 
             CREATE TRIGGER tr_products_mark_deleted_sync_hashes
                 AFTER DELETE ON products
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_product_deleted_sync_hashes();
+                EXECUTE PROCEDURE trigger_mark_product_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -510,14 +510,14 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_function_query)
 
-            # Crear trigger
+            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
             DROP TRIGGER IF EXISTS tr_categories_mark_deleted_sync_hashes ON categories;
 
             CREATE TRIGGER tr_categories_mark_deleted_sync_hashes
                 AFTER DELETE ON categories
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_category_deleted_sync_hashes();
+                EXECUTE PROCEDURE trigger_mark_category_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -557,14 +557,14 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_function_query)
 
-            # Crear trigger
+            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
             DROP TRIGGER IF EXISTS tr_customers_mark_deleted_sync_hashes ON customers;
 
             CREATE TRIGGER tr_customers_mark_deleted_sync_hashes
                 AFTER DELETE ON customers
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_customer_deleted_sync_hashes();
+                EXECUTE PROCEDURE trigger_mark_customer_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)
@@ -604,14 +604,14 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_function_query)
 
-            # Crear trigger
+            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
             DROP TRIGGER IF EXISTS tr_sellers_mark_deleted_sync_hashes ON sellers;
 
             CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
                 AFTER DELETE ON sellers
                 FOR EACH ROW
-                EXECUTE FUNCTION trigger_mark_seller_deleted_sync_hashes();
+                EXECUTE PROCEDURE trigger_mark_seller_deleted_sync_hashes();
             """
 
             self.pg_cursor.execute(create_trigger_query)

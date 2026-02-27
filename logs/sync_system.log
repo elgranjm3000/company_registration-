@@ -25019,3 +25019,215 @@ psycopg2.errors.InFailedSqlTransaction: transacción abortada, las órdenes ser�
 [2026-02-26 20:09:35] [ERROR] ERROR: Falta dependencia: No module named 'pystray'
 [2026-02-26 20:09:35] [ERROR] Ejecute: pip install pystray Pillow
 [2026-02-26 20:09:35] [ERROR] Error iniciando System Tray: Falta dependencia: No module named 'pystray'
+[2026-02-27 06:56:03] [ERROR] ❌ ERROR: win10toast no está instalado
+[2026-02-27 06:56:03] [ERROR]    Ejecuta: pip install win10toast
+[2026-02-27 06:56:03] [INFO] Conectado a PostgreSQL
+[2026-02-27 06:56:04] [INFO] Conectado a MySQL
+[2026-02-27 06:56:04] [INFO] === INICIANDO SINCRONIZACIÓN ===
+[2026-02-27 06:56:04] [WARNING] Sistema de notificaciones no disponible (pip install win10toast)
+[2026-02-27 06:56:04] [INFO] 
+[2026-02-27 06:56:04] [INFO] ╔════════════════════════════════════════════════════════════════╗
+[2026-02-27 06:56:04] [INFO] ║          SINCRONIZACIÓN INTELIGENTE CON TABLA DE HASHES          ║
+[2026-02-27 06:56:04] [INFO] ╚════════════════════════════════════════════════════════════════╝
+[2026-02-27 06:56:04] [INFO] 
+[2026-02-27 06:56:04] [SUCCESS] ✅ Conectado a PostgreSQL
+[2026-02-27 06:56:04] [SUCCESS] ✅ Conectado a MySQL (pymysql)
+[2026-02-27 06:56:04] [INFO] 🔍 Buscando empresa: RIF=J505261940, Email=elgranjm3000@gmail.com
+[2026-02-27 06:56:04] [DEBUG]   🔍 Verificando tabla 'acceso' (RIF y email)...
+[2026-02-27 06:56:04] [SUCCESS]   ✅ Empresa encontrada en tabla 'acceso' (RIF y email coinciden)
+[2026-02-27 06:56:04] [DEBUG]   🔍 Verificando tabla 'company' en PostgreSQL (por email)...
+[2026-02-27 06:56:04] [SUCCESS]   ✅ Empresa encontrada en tabla 'company' de PostgreSQL
+[2026-02-27 06:56:04] [DEBUG]      ID: gfy8eC9JqM62jUZcFq670X9XvCANrdx3OcHzFP5GVLzt78f28v9YreoBhYoVuBtHpK1421Il4BWouwE9QTgPwmXH5pm56xR4O5hMlGBNaek1Tk9pKJsdto2FhOxLqpmzWurYTzPTLpIaQdtXITitY+AMimYfOK+5oYwvaTxIyi/CZNO3wgFyDExpwLUvGv7dZV7L2VCnKACn5Lh/oJ2lDKJ3zAaDZ+pQzd7Qh/IJSrGhXAm0zoVE1V8rtTNrd23ruj/G1PuyPrHGJchZR5ZiXqzTZLp54hQ3BH6DPznnCmR+nMrAr5JroedfwjIaaGmk6tmkYbj4feZ7OOqiRm5HKQ==
+[2026-02-27 06:56:04] [DEBUG]   🔍 Buscando en tabla 'companies'...
+[2026-02-27 06:56:05] [SUCCESS] ✅ Empresa encontrada: sdds (ID: 94)
+[2026-02-27 06:56:05] [INFO] Detectando cambios en products...
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 00001
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 001
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 002
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 003
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 004
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 005
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 01
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 02
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 03
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 04
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 05
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 06
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: FLETE
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: PRODUCTO
+[2026-02-27 06:56:05] [INFO] Products: 14 nuevos, 0 modificados, 0 eliminados
+[2026-02-27 06:56:05] [INFO] Detectando cambios en customers...
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 00
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: V01
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: V02
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: V03
+[2026-02-27 06:56:05] [INFO] Customers: 4 nuevos, 0 modificados, 0 eliminados
+[2026-02-27 06:56:05] [INFO] Detectando cambios en categories...
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 00
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 01
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 02
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 03
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 04
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 05
+[2026-02-27 06:56:05] [DEBUG]   ✨ NUEVO: 06
+[2026-02-27 06:56:05] [INFO] Categories: 7 nuevos, 0 modificados, 0 eliminados
+[2026-02-27 06:56:05] [INFO] Detectando cambios en products (MySQL → PostgreSQL)...
+[2026-02-27 06:56:05] [INFO]    📋 Products encontrados en MySQL: 15
+[2026-02-27 06:56:05] [DEBUG]    🔍 Códigos: ['00001', '001', '002', '003', '004', '005', '01', '02', '03', '04']...
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180089 (00001): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180089 (00001)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180090 (001): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180090 (001)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180091 (002): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180091 (002)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180092 (003): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180092 (003)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180093 (004): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180093 (004)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180094 (005): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180094 (005)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180095 (01): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180095 (01)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180096 (02): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180096 (02)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180097 (03): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180097 (03)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180098 (04): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180098 (04)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180099 (05): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180099 (05)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180100 (06): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180100 (06)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180101 (FLETE): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180101 (FLETE)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180102 (PRODUCTO): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180102 (PRODUCTO)
+[2026-02-27 06:56:05] [DEBUG]    🔍 Product #180103 (894): hash_guardado=None
+[2026-02-27 06:56:05] [INFO]   ✨ NUEVO: Product #180103 (894)
+[2026-02-27 06:56:05] [INFO] ✅ Products detectados: 15 nuevos, 0 modificados
+[2026-02-27 06:56:05] [INFO] 
+[2026-02-27 06:56:05] [INFO] 💰 DETECTANDO CAMBIOS EN QUOTES (MySQL → PostgreSQL)...
+[2026-02-27 06:56:05] [INFO]    📋 Quotes encontrados en MySQL: 0
+[2026-02-27 06:56:05] [INFO]    ℹ️ No hay quotes en MySQL para esta empresa
+[2026-02-27 06:56:05] [INFO] 
+[2026-02-27 06:56:05] [INFO] 👤 SINCRONIZANDO SELLERS...
+[2026-02-27 06:56:06] [SUCCESS] ✅ Sellers sincronizados correctamente
+[2026-02-27 06:56:06] [INFO] 
+[2026-02-27 06:56:06] [INFO] 🗑️ VERIFICANDO SELLERS ELIMINADOS EN POSTGRESQL...
+[2026-02-27 06:56:06] [ERROR] Error verificando sellers eliminados: no existe la columna «record_data»
+LINE 2:             SELECT record_key, record_data
+                                       ^
+HINT:  Probablemente quiera hacer referencia a la columna «sync_hashes.record_hash».
+
+[2026-02-27 06:56:06] [ERROR] TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 3689, in _eliminar_sellers_mysql_cuando_faltan_en_postgresql
+    self.pg_cursor.execute(query)
+psycopg2.errors.UndefinedColumn: no existe la columna «record_data»
+LINE 2:             SELECT record_key, record_data
+                                       ^
+HINT:  Probablemente quiera hacer referencia a la columna «sync_hashes.record_hash».
+
+
+[2026-02-27 06:56:06] [INFO] 
+[2026-02-27 06:56:06] [INFO] 📦 SINCRONIZANDO CATEGORIES...
+[2026-02-27 06:56:06] [INFO] Sincronizando cambios de categories a MySQL...
+[2026-02-27 06:56:06] [INFO]   📁 Insertando 7 categories NUEVAS...
+[2026-02-27 06:56:07] [SUCCESS]   ✅ Commit final: 7/7 categories nuevas insertadas
+[2026-02-27 06:56:07] [SUCCESS] ✅ Categories sincronizados: 7 nuevos, 0 modificados, 0 errores
+[2026-02-27 06:56:07] [INFO] 
+[2026-02-27 06:56:07] [INFO] 🗑️ VERIFICANDO CATEGORIES ELIMINADAS EN POSTGRESQL...
+[2026-02-27 06:56:07] [ERROR] Error verificando categories eliminadas: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+[2026-02-27 06:56:07] [ERROR] TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 4273, in _eliminar_categories_mysql_cuando_faltan_en_postgresql
+    self.pg_cursor.execute(query)
+psycopg2.errors.InFailedSqlTransaction: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+
+[2026-02-27 06:56:07] [INFO] 
+[2026-02-27 06:56:07] [INFO] 📦 SINCRONIZANDO PRODUCTS...
+[2026-02-27 06:56:07] [INFO] Sincronizando changes de products a MySQL...
+[2026-02-27 06:56:07] [INFO]   📦 Preparando BATCH INSERT de 14 productos NUEVOS...
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product 00001 omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product 001 omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product 002 omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product 003 omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product 004 omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product 005 omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product 06 omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product FLETE omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [WARNING]   ⚠️ Product PRODUCTO omitido: categoría 'None' no existe en MySQL
+[2026-02-27 06:56:07] [INFO]   🚀 Ejecutando BATCH INSERT de 5 productos...
+[2026-02-27 06:56:08] [SUCCESS]   ✅ BATCH INSERT completado: 5 productos en 0.90s (180.6 ms/promedio)
+[2026-02-27 06:56:08] [WARNING]   ⚠️ 9 productos omitidos por categoría inexistente
+[2026-02-27 06:56:08] [SUCCESS] ✅ Products sincronizados: 5 nuevos, 0 modificados
+[2026-02-27 06:56:08] [INFO] 
+[2026-02-27 06:56:08] [INFO] 👥 SINCRONIZANDO CUSTOMERS...
+[2026-02-27 06:56:08] [INFO] Sincronizando cambios de customers a MySQL...
+[2026-02-27 06:56:08] [INFO]   👥 Insertando 4 customers NUEVOS...
+[2026-02-27 06:56:08] [DEBUG]   🔄 Customer 00 ya existía, actualizado
+[2026-02-27 06:56:10] [SUCCESS]   ✅ Commit final: 3/4 customers nuevos insertados
+[2026-02-27 06:56:10] [SUCCESS] ✅ Customers sincronizados: 3 nuevos, 1 modificados, 0 errores
+[2026-02-27 06:56:10] [INFO] 
+[2026-02-27 06:56:10] [INFO] 🗑️ VERIFICANDO CUSTOMERS ELIMINADOS EN POSTGRESQL...
+[2026-02-27 06:56:10] [ERROR] Error verificando customers eliminados: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+[2026-02-27 06:56:10] [ERROR] TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 3594, in _eliminar_customers_mysql_cuando_faltan_en_postgresql
+    self.pg_cursor.execute(query)
+psycopg2.errors.InFailedSqlTransaction: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+
+[2026-02-27 06:56:10] [INFO] 
+[2026-02-27 06:56:10] [INFO] 🗑️ VERIFICANDO PRODUCTOS ELIMINADOS EN POSTGRESQL...
+[2026-02-27 06:56:10] [ERROR] Error verificando productos eliminados: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+[2026-02-27 06:56:10] [ERROR] TRACEBACK:
+Traceback (most recent call last):
+  File "/home/muentes/company_registration/smart_sync_complete.py", line 3499, in _eliminar_productos_mysql_cuando_faltan_en_postgresql
+    self.pg_cursor.execute(query)
+psycopg2.errors.InFailedSqlTransaction: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+
+[2026-02-27 06:56:10] [INFO] 
+[2026-02-27 06:56:10] [INFO] 📦 SINCRONIZANDO PRODUCTS NUEVOS (MySQL → PostgreSQL)...
+[2026-02-27 06:56:10] [INFO]    📋 Nuevos: 15 (modificados ignorados)
+[2026-02-27 06:56:10] [ERROR] Error sincronizando products a PostgreSQL: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+[2026-02-27 06:56:10] [INFO] ✅ Quotes: No hay cambios para sincronizar
+[2026-02-27 06:56:10] [INFO] 
+[2026-02-27 06:56:10] [INFO] 🔄 SINCRONIZANDO ESTADOS DE QUOTES...
+[2026-02-27 06:56:10] [INFO] Sincronizando estados de quotes (PostgreSQL → MySQL)...
+[2026-02-27 06:56:10] [ERROR] Error sincronizando estados de quotes: transacción abortada, las órdenes serán ignoradas hasta el fin de bloque de transacción
+
+[2026-02-27 06:56:10] [INFO] 
+[2026-02-27 06:56:10] [INFO] ╔════════════════════════════════════════════════════════════════╗
+[2026-02-27 06:56:10] [INFO] ║                    RESUMEN DE SINCRONIZACIÓN                    ║
+[2026-02-27 06:56:10] [INFO] ╚════════════════════════════════════════════════════════════════╝
+[2026-02-27 06:56:10] [SUCCESS] Products:   5 nuevos, 0 modificados, 0 eliminados
+[2026-02-27 06:56:10] [SUCCESS] Customers:  3 nuevos, 1 modificados, 0 eliminados
+[2026-02-27 06:56:10] [SUCCESS] Categories: 7 nuevos, 0 modificados
+[2026-02-27 06:56:10] [SUCCESS] Sellers:    0 nuevos, 0 actualizados, 0 eliminados
+[2026-02-27 06:56:10] [SUCCESS] Quotes:     0 nuevos (MySQL→PG), 0 estados actualizados
+[2026-02-27 06:56:10] [INFO] Duración:   5.93 segundos
+[2026-02-27 06:56:10] [INFO] 
+[2026-02-27 06:56:10] [WARNING] ⚠️ SINCRONIZACIÓN COMPLETADA CON ERRORES
+[2026-02-27 06:56:10] [INFO] === SINCRONIZACIÓN COMPLETADA ===
+[2026-02-27 06:56:10] [SUCCESS] ✅ Sincronización completada exitosamente
+[2026-02-27 06:56:10] [ERROR] ❌ ERROR: win10toast no está instalado
+[2026-02-27 06:56:10] [ERROR]    Ejecuta: pip install win10toast
+[2026-02-27 06:56:10] [INFO] Iniciando System Tray...
+[2026-02-27 06:56:10] [WARNING] ⚠️ winreg no disponible (solo Windows)
+[2026-02-27 06:56:10] [INFO] ======================================================================
+[2026-02-27 06:56:10] [INFO] INICIANDO SYSTEM TRAY SERVICE
+[2026-02-27 06:56:10] [INFO] ======================================================================
+[2026-02-27 06:56:10] [INFO] RIF: J505261940
+[2026-02-27 06:56:10] [INFO] Email: elgranjm3000@gmail.com
+[2026-02-27 06:56:10] [INFO] Intervalo: 2 minutos
+[2026-02-27 06:56:10] [INFO] 
+[2026-02-27 06:56:10] [ERROR] ERROR: Falta dependencia: No module named 'pystray'
+[2026-02-27 06:56:10] [ERROR] Ejecute: pip install pystray Pillow
+[2026-02-27 06:56:10] [ERROR] Error iniciando System Tray: Falta dependencia: No module named 'pystray'
