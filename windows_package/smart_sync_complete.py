@@ -356,6 +356,10 @@ class SmartSyncComplete:
         """
         Crear tabla sync_hashes si no existe
 
+        También crea:
+        - Columna deleted_at para tracking de eliminaciones
+        - Trigger para marcar productos eliminados automáticamente
+
         Returns:
             True si se creó o ya existía, False si hubo error
         """
@@ -385,6 +389,16 @@ class SmartSyncComplete:
             # (PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS)
             self._crear_indice_sync_hashes()
 
+            # Agregar columna deleted_at si no existe
+            self._agregar_columna_deleted_at()
+
+            # Crear trigger de eliminación si no existe
+            self._crear_trigger_eliminacion()
+
+            # Crear triggers para customers y sellers también
+            self._crear_trigger_eliminacion_customers()
+            self._crear_trigger_eliminacion_sellers()
+
             self.pg_conn.commit()
 
             # No mostrar mensaje de éxito - es transparente para el usuario
@@ -393,6 +407,174 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"❌ Error creando tabla sync_hashes: {str(e)}", "error")
             return False
+
+    def _agregar_columna_deleted_at(self):
+        """
+        Agrega la columna deleted_at a sync_hashes si no existe
+        """
+        try:
+            # Verificar si la columna existe
+            self.pg_cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'sync_hashes'
+                AND column_name = 'deleted_at'
+            """)
+            existe = self.pg_cursor.fetchone()
+
+            if not existe:
+                # Agregar columna
+                self.pg_cursor.execute("""
+                    ALTER TABLE sync_hashes
+                    ADD COLUMN deleted_at TIMESTAMP NULL
+                """)
+                self.pg_conn.commit()
+                # Silencioso - transparente para el usuario
+        except Exception as e:
+            # Si hay error, continuar (la columna podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion(self):
+        """
+        Crea el trigger que marca productos como eliminados
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_product_deleted()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'products'
+                AND record_key = OLD.code;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('products', OLD.code, md5(OLD.code::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_products_mark_deleted ON products;
+
+            CREATE TRIGGER tr_products_mark_deleted
+                AFTER DELETE ON products
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_product_deleted();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_customers(self):
+        """
+        Crea el trigger que marca customers como eliminados
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'customers'
+                AND record_key = OLD.email;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('customers', OLD.email, md5(OLD.email::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_customers_mark_deleted ON customers;
+
+            CREATE TRIGGER tr_customers_mark_deleted
+                AFTER DELETE ON customers
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_customer_deleted();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_sellers(self):
+        """
+        Crea el trigger que marca sellers como eliminados
+        """
+        try:
+            # Crear función del trigger
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Marcar el registro en sync_hashes como eliminado
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'sellers'
+                AND record_key = OLD.email;
+
+                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('sellers', OLD.email, md5(OLD.email::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted ON sellers;
+
+            CREATE TRIGGER tr_sellers_mark_deleted
+                AFTER DELETE ON sellers
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_mark_seller_deleted();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            # Silencioso - transparente para el usuario
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+
 
     def _crear_indice_sync_hashes(self):
         """
