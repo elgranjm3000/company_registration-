@@ -12,3 +12,4 @@ logs/
 *.log
 sync_service.log
 sync_system.log
+sync_output.log
