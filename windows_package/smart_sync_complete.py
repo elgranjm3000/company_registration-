@@ -4382,7 +4382,15 @@ class SmartSyncComplete:
             # Eliminar de MySQL los sellers que fueron eliminados de PostgreSQL
             self._eliminar_sellers_mysql_cuando_faltan_en_postgresql()
 
-            # Verificar si hay cambios
+            # IMPORTANTE: Eliminar productos ANTES de verificar si hay cambios
+            # Los productos marcados con deleted_at en sync_hashes siempre deben eliminarse
+            self._log("", "info")
+            self._log("🗑️ ELIMINANDO PRODUCTOS MARCADOS COMO BORRADOS...", "info")
+            self._eliminar_productos_mysql_cuando_faltan_en_postgresql()
+            self._eliminar_customers_mysql_cuando_faltan_en_postgresql()
+            self._eliminar_categories_mysql_cuando_faltan_en_postgresql()
+
+            # Verificar si hay cambios (después de eliminar)
             total_cambios = (
                 len(cambios_products['nuevos']) + len(cambios_products['modificados']) +
                 len(cambios_customers['nuevos']) + len(cambios_customers['modificados']) +
@@ -4400,8 +4408,6 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("📦 SINCRONIZANDO CATEGORIES...", "info")
             self.sincronizar_categories_mysql(cambios_categories)
-            # Eliminar de MySQL las categories que fueron eliminadas de PostgreSQL
-            self._eliminar_categories_mysql_cuando_faltan_en_postgresql()
 
             # 2. Products (dependen de categories)
             self._log("", "info")
@@ -4412,13 +4418,9 @@ class SmartSyncComplete:
             self._log("", "info")
             self._log("👥 SINCRONIZANDO CUSTOMERS...", "info")
             self.sincronizar_customers_mysql(cambios_customers)
-            # Eliminar de MySQL los customers que fueron eliminados de PostgreSQL
-            self._eliminar_customers_mysql_cuando_faltan_en_postgresql()
 
             # 4. Products de MySQL → PostgreSQL (ANTES de quotes para que existan)
-            # Primero eliminar de MySQL los que fueron eliminados de PostgreSQL
-            self._eliminar_productos_mysql_cuando_faltan_en_postgresql()
-            # Luego sincronizar nuevos productos
+            # Sincronizar nuevos productos
             self.sincronizar_products_postgresql(cambios_products_mysql)
 
             # 5. Quotes a PostgreSQL (dirección opuesta, requiere products y customers)
