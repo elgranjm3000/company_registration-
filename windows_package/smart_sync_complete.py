@@ -4365,15 +4365,23 @@ class SmartSyncComplete:
                 return False
 
             # Detectar cambios en cada entidad
+            self._log("🔍 STEP 1: Detectando cambios en products...", "debug")
             cambios_products = self.detectar_cambios_products()
+
+            self._log("🔍 STEP 2: Detectando cambios en customers...", "debug")
             cambios_customers = self.detectar_cambios_customers()
+
+            self._log("🔍 STEP 3: Detectando cambios en categories...", "debug")
             cambios_categories = self.detectar_cambios_categories()
 
             # Detectar cambios en products de MySQL (para sincronizar a PostgreSQL)
+            self._log("🔍 STEP 4: Detectando cambios en products (MySQL → PostgreSQL)...", "debug")
             cambios_products_mysql = self.detectar_cambios_products_mysql()
 
             # Detectar cambios en quotes (MySQL → PostgreSQL)
+            self._log("🔍 STEP 5: Detectando cambios en quotes...", "debug")
             cambios_quotes = self.detectar_cambios_quotes()
+            self._log("🔍 STEP 5 COMPLETADO", "debug")
 
             # Sincronizar sellers siempre (no usa hash, sincronización completa)
             self._log("", "info")
@@ -4389,6 +4397,7 @@ class SmartSyncComplete:
             self._eliminar_productos_mysql_cuando_faltan_en_postgresql()
             self._eliminar_customers_mysql_cuando_faltan_en_postgresql()
             self._eliminar_categories_mysql_cuando_faltan_en_postgresql()
+            self._log("🗑️ ELIMINACIÓN COMPLETADA", "debug")
 
             # Verificar si hay cambios (después de eliminar)
             total_cambios = (
