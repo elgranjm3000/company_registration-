@@ -12,7 +12,7 @@ REM Paso 1: Instalar TODAS las dependencias necesarias
 echo [1/5] Instalando dependencias de Python...
 echo.
 
-pip install pyinstaller psycopg2-binary pymysql pystray Pillow bcrypt win10toast 2>nul
+pip install pyinstaller psycopg2-binary pymysql pystray Pillow bcrypt win10toast cryptography 2>nul
 if %errorlevel% neq 0 (
     echo ERROR instalando dependencias
     pause
@@ -44,7 +44,17 @@ if not exist "smart_sellers_sync_module.py" (
     exit /b 1
 )
 
+if not exist "config_encryption.py" (
+    echo ERROR: No existe config_encryption.py
+    echo.
+    echo ⚠️ CRITICO: Sin config_encryption.py las contrasenas quedaran expuestas
+    pause
+    exit /b 1
+)
+
 echo Todos los archivos necesarios existen
+echo.
+echo ✅ config_encryption.py encontrado - Las contrasenas seran encriptadas
 echo.
 
 REM Paso 3: Limpiar builds anteriores
@@ -90,6 +100,11 @@ if exist "dist\SyncSystem\sync_system.exe" (
     echo.
     echo Ubicacion: dist\SyncSystem\sync_system.exe
     echo.
+    echo ⚠️ IMPORTANTE - Encriptacion de contrasenas:
+    echo   - El .exe incluye config_encryption.py
+    echo   - Las contrasenas se guardaran con el prefijo 'enc:'
+    echo   - Verifica que sync_config.json tenga 'enc:' en las contrasenas
+    echo.
     echo Para ejecutar:
     echo   - Modo Manager (ventana con contadores):
     echo     dist\SyncSystem\sync_system.exe --mode manager
@@ -100,6 +115,18 @@ if exist "dist\SyncSystem\sync_system.exe" (
     echo   - Modo Configuracion:
     echo     dist\SyncSystem\sync_system.exe --mode config
     echo.
+
+    REM Verificar tamano del exe (debe ser grande por incluir cryptography)
+    for %%A in ("dist\SyncSystem\sync_system.exe") do set size=%%~zA
+    set /a sizeMB=%size%/1048576
+    echo Tamaño del .exe: %sizeMB% MB
+    if %sizeMB% LSS 20 (
+        echo.
+        echo ⚠️ ADVERTENCIA: El .exe parece pequeno (%sizeMB% MB)
+        echo    Puede que no incluya todas las dependencias
+        echo    Verifica que cryptography este instalado
+        echo.
+    )
 
     REM Preguntar si quiere ejecutar ahora
     set /p ejecutar="¿Deseas ejecutar el .exe ahora en modo manager? (s/n): "
