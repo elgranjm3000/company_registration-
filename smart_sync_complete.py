@@ -993,36 +993,37 @@ class SmartSyncComplete:
         Generar hash MD5 para un producto
 
         Args:
-            product: Tupla con (code, description, short_name, department, stock,
-                               product_type, coin, description_coin, price, cost,
-                               higher_price, min_stock, status, image_type,
-                               product_image, sale_tax, aliquot, buy_tax,
-                               buy_aliquot, unitary_cost)
+            product: Tupla con 23 campos (code, unit, description, short_name,
+                               department, product_code, unidad, stock, product_type,
+                               coin, description_coin, price, cost, higher_price,
+                               min_stock, status, image_type, product_image,
+                               sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost)
 
         Returns:
             Hash MD5 hexadecimal
         """
         try:
             # Campos clave para detectar cambios (todos los campos importantes)
+            # NUEVO ORDER con 23 campos (se agregaron unit, product_code, unidad)
             campos = (
                 str(product[0]) if product[0] else '',  # code
-                str(product[1]) if product[1] else '',  # description
-                str(product[2]) if product[2] else '',  # short_name
-                str(product[3]) if product[3] else '',  # department
-                str(float(product[4]) if product[4] else 0),  # stock
-                str(product[5]) if product[5] else '',  # product_type
-                str(product[6]) if product[6] else '',  # coin
-                str(product[7]) if product[7] else '',  # description_coin
-                str(safe_float(product[8])),            # price
-                str(safe_float(product[9])),            # cost
-                str(safe_float(product[10])),           # higher_price
-                str(safe_float(product[11])),           # min_stock
-                str(product[12]) if product[12] else '',  # status
-                str(product[15]) if product[15] else '',  # sale_tax
-                str(product[16]) if product[16] else '',  # aliquot
-                str(product[17]) if product[17] else '',  # buy_tax ✓ NUEVO
-                str(safe_float(product[18]) if product[18] else 0),  # buy_aliquot ✓ NUEVO
-                str(safe_float(product[19]) if product[19] else 0)   # unitary_cost ✓ NUEVO
+                str(product[2]) if product[2] else '',  # description
+                str(product[3]) if product[3] else '',  # short_name
+                str(product[4]) if product[4] else '',  # department
+                str(float(product[7]) if product[7] else 0),  # stock
+                str(product[8]) if product[8] else '',  # product_type
+                str(product[9]) if product[9] else '',  # coin
+                str(product[10]) if product[10] else '',  # description_coin
+                str(safe_float(product[11])),           # price
+                str(safe_float(product[12])),           # cost
+                str(safe_float(product[13])),           # higher_price
+                str(safe_float(product[14])),           # min_stock
+                str(product[15]) if product[15] else '',  # status
+                str(product[18]) if product[18] else '',  # sale_tax
+                str(product[19]) if product[19] else '',  # aliquot
+                str(product[20]) if product[20] else '',  # buy_tax
+                str(safe_float(product[21]) if product[21] else 0),  # buy_aliquot
+                str(safe_float(product[22]) if product[22] else 0)   # unitary_cost
             )
 
             datos = "|".join(campos)
