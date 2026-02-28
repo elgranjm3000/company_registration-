@@ -54,6 +54,9 @@ a = Analysis(
         # Incluir smart_sync_complete.py
         ('smart_sync_complete.py', '.'),
 
+        # Incluir smart_sellers_sync_module.py
+        ('smart_sellers_sync_module.py', '.'),
+
         # Incluir mysql_error_logger.py
         ('mysql_error_logger.py', '.'),
 
