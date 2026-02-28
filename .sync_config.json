@@ -1,7 +1,7 @@
 {
     "postgres_host": "localhost",
     "postgres_port": "5432",
-    "postgres_database": "nuevaprueba",
+    "postgres_database": "nueva",
     "postgres_user": "postgres",
     "postgres_password": "muentes123.",
     "mysql_host": "91.238.160.176",
@@ -11,8 +11,8 @@
     "mysql_password": "muentes123.",
     "company_rif": "J505261940",
     "company_email": "elgranjm3000@gmail.com",
-    "company_name": "3344",
-    "sync_interval_minutes": "2",
+    "company_name": "test",
+    "sync_interval_minutes": "30",
     "configured": true,
     "first_run": false
 }
