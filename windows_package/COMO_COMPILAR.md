@@ -2,7 +2,33 @@
 
 ## Opciones de Compilación
 
-Tienes 3 formas de compilar el .exe:
+Tienes 4 formas de compilar el .exe:
+
+### 0. **COMPILAR_DEBUG.bat** ⚠️ PARA DIAGNÓSTICO DE ERRORES
+
+**USO SOLO CUANDO EL .EXE NO FUNCIONA**
+
+```batch
+cd windows_package
+COMPILAR_DEBUG.bat
+```
+
+**¿Para qué sirve?**
+- El .exe muestra una CONSOLA con todos los mensajes
+- Puedes ver EXACTAMENTE qué error está ocurriendo
+- Sirve para diagnosticar problemas
+
+**Procedimiento:**
+1. Ejecuta `COMPILAR_DEBUG.bat`
+2. Ejecuta el .exe resultante: `dist\SyncSystem_DEBUG\sync_system_debug.exe --mode config`
+3. Ingresa los datos y click en Guardar
+4. **MIRA LA CONSOLA** - aparecerá el error exacto
+5. Toma una captura de pantalla de la consola
+6. Reporta el error
+
+**No uses este .exe para producción** - muestra una ventana de consola que no es profesional.
+
+---
 
 ### 1. **COMPILAR_COMPLETO.bat** (Recomendado)
 
@@ -112,6 +138,25 @@ python build_exe.py
 **Error: "config_encryption not found"**
 - Falta incluir `config_encryption.py`
 - Debería estar en `datas` del .spec
+
+---
+
+### Botón "Guardar" no hace nada en modo Config
+
+**SÍNTOMA:** Al hacer click en el botón Guardar de la ventana de configuración, no ocurre nada.
+
+**CAUSA:** Hay un error silencioso que no se ve porque el .exe está en modo windowed.
+
+**SOLUCIÓN:**
+1. Usa **COMPILAR_DEBUG.bat** para crear un .exe con consola
+2. Ejecuta el .exe resultante: `dist\SyncSystem_DEBUG\sync_system_debug.exe --mode config`
+3. Ingresa los datos y click en Guardar
+4. **MIRA LA CONSOLA** - aparecerá el error exacto
+5. Errores comunes:
+   - **"No module named 'X'"**: Falta dependencia en `build_exe.py`
+   - **"Cannot connect to PostgreSQL"**: Problema de conexión a BD
+   - **"Cannot connect to MySQL"**: Problema de conexión a BD
+   - **"Permission denied"**: No se puede escribir `sync_config.json`
 
 ---
 
