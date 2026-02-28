@@ -60,6 +60,14 @@ try:
 except ImportError:
     SmartSyncComplete = None
 
+# Importar módulo de encriptación de configuración
+try:
+    from config_encryption import encrypt_config, decrypt_config, is_encrypted
+    CONFIG_ENCRYPTION_AVAILABLE = True
+except ImportError:
+    CONFIG_ENCRYPTION_AVAILABLE = False
+    print("ADVERTENCIA: config_encryption.py no encontrado. Las contraseñas estarán visibles en sync_config.json")
+
 # ==============================================================================
 # CONFIGURACIÓN
 # ==============================================================================
@@ -71,6 +79,25 @@ import os
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
+
+def buscar_config_externo():
+    """
+    Busca el archivo de configuración en múltiples ubicaciones
+    Retorna la ruta si existe, None si no encuentra
+    """
+    # Posibles ubicaciones del config
+    posibles_rutas = [
+        CONFIG_FILE,  # Archivo normal
+        ".sync_config.json",  # Archivo oculto (Linux/Mac)
+        os.path.join(BASE_DIR, CONFIG_FILE),  # En el directorio base
+        os.path.join(BASE_DIR, ".sync_config.json"),  # Oculto en directorio base
+    ]
+
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            return ruta
+
+    return None
 
 # Función para obtener el archivo de log según la empresa configurada
 def get_log_file():
@@ -269,22 +296,56 @@ def obtener_config_mysql():
     }
 
 def cargar_config():
-    """Carga configuración desde archivo"""
+    """Carga configuración desde archivo y desencripta campos sensibles"""
     if not os.path.exists(CONFIG_FILE):
         return crear_config_default()
 
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            config = json.load(f)
+
+        # Desencriptar campos sensibles si hay módulo de encriptación
+        if CONFIG_ENCRYPTION_AVAILABLE:
+            try:
+                config = decrypt_config(config)
+                log("✅ Configuración cargada (contraseñas desencriptadas)", "DEBUG")
+            except Exception as e:
+                log(f"ADVERTENCIA: Error desencriptando config: {e}", "WARNING")
+                # Si falla, continuar con config plano
+        else:
+            log("⚠️ Configuración cargada sin encriptación (instale cryptography)", "WARNING")
+
+        return config
     except Exception as e:
         log(f"Error cargando config: {e}", "ERROR")
         return crear_config_default()
 
 def guardar_config(config):
-    """Guarda configuración a archivo"""
+    """Guarda configuración a archivo encriptando campos sensibles"""
     try:
+        # Encriptar campos sensibles si hay módulo de encriptación
+        if CONFIG_ENCRYPTION_AVAILABLE:
+            try:
+                config = encrypt_config(config)
+                log("✅ Configuración guardada (contraseñas encriptadas)", "DEBUG")
+            except Exception as e:
+                log(f"ADVERTENCIA: Error encriptando config: {e}. Guardando en texto plano.", "WARNING")
+                # Si falla, guardar en texto plano
+
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
+
+        # En Linux/Mac, hacer el archivo oculto
+        if os.name != 'nt':  # Linux/Mac
+            try:
+                hidden_file = CONFIG_FILE.replace("sync_config.json", ".sync_config.json")
+                if os.path.exists(CONFIG_FILE):
+                    import shutil
+                    shutil.move(CONFIG_FILE, hidden_file)
+                    log(f"Archivo de configuración oculto: {hidden_file}", "DEBUG")
+            except Exception as e:
+                log(f"No se pudo ocultar archivo de configuración: {e}", "WARNING")
+
         return True
     except Exception as e:
         log(f"Error guardando config: {e}", "ERROR")
