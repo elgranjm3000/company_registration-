@@ -570,7 +570,18 @@ class SmartSyncComplete:
         NOTA: En PostgreSQL la tabla se llama 'clients', en MySQL es 'customers'
         """
         try:
-            # Crear función del trigger
+            # Eliminar trigger y función antiguos si existen
+            # Esto asegura que siempre se use la versión más reciente
+            drop_query = """
+            -- Eliminar el trigger primero (depende de la función)
+            DROP TRIGGER IF EXISTS tr_clients_mark_deleted_sync_hashes ON clients;
+
+            -- Eliminar la función antigua completamente
+            DROP FUNCTION IF EXISTS trigger_mark_client_deleted_sync_hashes();
+            """
+            self.pg_cursor.execute(drop_query)
+
+            # Crear función del trigger con la versión corregida
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_client_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
@@ -604,8 +615,6 @@ class SmartSyncComplete:
 
             # Crear trigger en tabla clients (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_clients_mark_deleted_sync_hashes ON clients;
-
             CREATE TRIGGER tr_clients_mark_deleted_sync_hashes
                 AFTER DELETE ON clients
                 FOR EACH ROW
@@ -614,7 +623,9 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_trigger_query)
             self.pg_conn.commit()
-            # Silencioso - transparente para el usuario
+
+            # Log de éxito
+            self._log("   ✅ Trigger de eliminación de clientes creado/actualizado", "info")
 
         except Exception as e:
             # Si hay error, continuar (el trigger podría ya existir)
@@ -625,7 +636,18 @@ class SmartSyncComplete:
         Crea el trigger que marca sellers como eliminados en sync_hashes
         """
         try:
-            # Crear función del trigger
+            # Eliminar trigger y función antiguos si existen
+            # Esto asegura que siempre se use la versión más reciente
+            drop_query = """
+            -- Eliminar el trigger primero (depende de la función)
+            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted_sync_hashes ON sellers;
+
+            -- Eliminar la función antigua completamente
+            DROP FUNCTION IF EXISTS trigger_mark_seller_deleted_sync_hashes();
+            """
+            self.pg_cursor.execute(drop_query)
+
+            # Crear función del trigger con la versión corregida
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
@@ -659,8 +681,6 @@ class SmartSyncComplete:
 
             # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
             create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted_sync_hashes ON sellers;
-
             CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
                 AFTER DELETE ON sellers
                 FOR EACH ROW
@@ -669,7 +689,9 @@ class SmartSyncComplete:
 
             self.pg_cursor.execute(create_trigger_query)
             self.pg_conn.commit()
-            # Silencioso - transparente para el usuario
+
+            # Log de éxito
+            self._log("   ✅ Trigger de eliminación de vendedores creado/actualizado", "info")
 
         except Exception as e:
             # Si hay error, continuar (el trigger podría ya existir)
