@@ -2056,34 +2056,41 @@ class SmartSyncComplete:
             # No existe, insertar
             self._log(f"  ✨ Sincronizando customer {customer_doc} a PostgreSQL...", "info")
 
-            # Usar valores genéricos para columnas con restricciones
-            sql_insert = """
-            INSERT INTO clients (
-                code, description, address, email, phone, contact,
-                country, province, city, client_type, area_sales,
-                seller, client_group
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (code) DO NOTHING
-            """
+            # Compatible con PostgreSQL 9.1 - Verificar si existe antes de insertar
+            self.pg_cursor.execute(
+                "SELECT code FROM clients WHERE code = %s",
+                (customer_doc,)
+            )
+            if not self.pg_cursor.fetchone():
+                # Usar valores genéricos para columnas con restricciones
+                sql_insert = """
+                INSERT INTO clients (
+                    code, description, address, email, phone, contact,
+                    country, province, city, client_type, area_sales,
+                    seller, client_group
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
 
-            self.pg_cursor.execute(sql_insert, (
-                customer_doc,        # code
-                customer_name[:255], # description
-                customer_address[:255] if customer_address else '',
-                customer_email[:255] if customer_email else '',
-                customer_phone[:50] if customer_phone else '',
-                customer_name[:100],  # contact
-                '00',                # country (LOCAL)
-                '00',                # province (LOCAL)
-                '00',                # city (LOCAL)
-                '01',                # client_type (Juridico)
-                '00',                # area_sales
-                '00',                # seller
-                '00'                 # client_group (GENERICO)
-            ))
+                self.pg_cursor.execute(sql_insert, (
+                    customer_doc,        # code
+                    customer_name[:255], # description
+                    customer_address[:255] if customer_address else '',
+                    customer_email[:255] if customer_email else '',
+                    customer_phone[:50] if customer_phone else '',
+                    customer_name[:100],  # contact
+                    '00',                # country (LOCAL)
+                    '00',                # province (LOCAL)
+                    '00',                # city (LOCAL)
+                    '01',                # client_type (Juridico)
+                    '00',                # area_sales
+                    '00',                # seller
+                    '00'                 # client_group (GENERICO)
+                ))
 
-            self.pg_conn.commit()
-            self._log(f"  ✅ Customer {customer_doc} sincronizado a PostgreSQL", "info")
+                self.pg_conn.commit()
+                self._log(f"  ✅ Customer {customer_doc} sincronizado a PostgreSQL", "info")
+            else:
+                self._log(f"  ℹ️ Customer {customer_doc} ya existe en PostgreSQL (omitiendo)", "debug")
 
         except Exception as e:
             self._log(f"  ⚠️ Error sincronizando customer {customer_doc}: {str(e)}", "warning")
@@ -2130,6 +2137,7 @@ class SmartSyncComplete:
                 # No existe, sincronizar
                 self._log(f"  ✨ Sincronizando product {product_code} a PostgreSQL...", "info")
 
+                # Compatible con PostgreSQL 9.1 - Ya verificamos arriba que no existe
                 # Obtener valores válidos para columnas con restricciones
                 self.pg_cursor.execute("SELECT code FROM status WHERE code != '00' LIMIT 1")
                 status_row = self.pg_cursor.fetchone()
@@ -2141,7 +2149,6 @@ class SmartSyncComplete:
                     code, description, minimal_sale, maximal_sale,
                     status, product_type, sale_price
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (code) DO NOTHING
                 """
 
                 self.pg_cursor.execute(sql_insert, (
@@ -4088,12 +4095,12 @@ class SmartSyncComplete:
                     # Calcular sale_price (en centimos)
                     sale_price_cents = int(price_val * 100) if price_val > 0 else 0
 
+                    # Compatible con PostgreSQL 9.1 - Ya verificamos arriba que no existe
                     sql_insert = """
                     INSERT INTO products (
                         code, description, minimal_sale, maximal_sale,
                         status, product_type, sale_price
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (code) DO NOTHING
                     """
                     self.pg_cursor.execute(sql_insert, (
                         product_code,
