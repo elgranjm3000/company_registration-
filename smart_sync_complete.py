@@ -19,6 +19,13 @@ from typing import Dict, List, Tuple, Optional, Any
 import sys
 import os
 
+# Importar logger de errores de MySQL (SILENCIOSO - solo guarda en archivo)
+try:
+    from mysql_error_logger import get_mysql_error_logger, log_mysql_error, log_mysql_batch_error
+    MYSQL_ERROR_LOGGER_AVAILABLE = True
+except ImportError:
+    MYSQL_ERROR_LOGGER_AVAILABLE = False
+
 # Importar funciones existentes de app.py
 def laravel_hash_make(password):
     """Generar hash compatible con Laravel Hash::make()"""
@@ -100,6 +107,14 @@ class SmartSyncComplete:
             'categories': {'nuevos': 0, 'modificados': 0, 'eliminados': 0, 'errores': 0},
             'quotes': {'nuevos': 0, 'modificados': 0, 'eliminados': 0, 'errores': 0, 'estados_actualizados': 0}
         }
+
+        # 🔍 Logger de errores de MySQL (SILENCIOSO - solo guarda en archivo)
+        self.mysql_error_logger = None
+        if MYSQL_ERROR_LOGGER_AVAILABLE:
+            try:
+                self.mysql_error_logger = get_mysql_error_logger()
+            except Exception:
+                pass
 
         # Conexiones a bases de datos
         self.pg_conn = None
@@ -3381,8 +3396,16 @@ class SmartSyncComplete:
                         self._log(f"  ✅ Commit ejecutado correctamente", "info")
 
                     except Exception as insert_error:
-                        self._log(f"  ❌ ERROR en BATCH INSERT: {str(insert_error)}", "error")
-                        self._log(f"     Error type: {type(insert_error).__name__}", "error")
+                        # 🔍 GUARDAR ERROR EN ARCHIVO (SILENCIOSO - no mostrar al usuario)
+                        if self.mysql_error_logger:
+                            self.mysql_error_logger.log_batch_error(
+                                operation="BATCH INSERT products",
+                                batch_data=batch_data,
+                                error=insert_error
+                            )
+
+                        # Mostrar mensaje simple al usuario
+                        self._log(f"  ⚠️ Error al insertar productos en MySQL (ver log en carpeta logs/mysql_errors/)", "warning")
                         self.mysql_conn.rollback()
                         raise
 
@@ -3546,8 +3569,16 @@ class SmartSyncComplete:
                         self._log(f"  ✅ Commit ejecutado correctamente", "info")
 
                     except Exception as update_error:
-                        self._log(f"  ❌ ERROR en BATCH UPDATE: {str(update_error)}", "error")
-                        self._log(f"     Error type: {type(update_error).__name__}", "error")
+                        # 🔍 GUARDAR ERROR EN ARCHIVO (SILENCIOSO - no mostrar al usuario)
+                        if self.mysql_error_logger:
+                            self.mysql_error_logger.log_batch_error(
+                                operation="BATCH UPDATE products",
+                                batch_data=batch_data,
+                                error=update_error
+                            )
+
+                        # Mostrar mensaje simple al usuario
+                        self._log(f"  ⚠️ Error al actualizar productos en MySQL (ver log en carpeta logs/mysql_errors/)", "warning")
                         self.mysql_conn.rollback()
                         raise
 
@@ -3572,7 +3603,17 @@ class SmartSyncComplete:
             self._sincronizar_status_products_mysql(cambios['eliminados'])
 
         except Exception as e:
-            self._log(f"Error sincronizando products a MySQL: {str(e)}", "error")
+            # 🔍 GUARDAR ERROR EN ARCHIVO (SILENCIOSO - no mostrar al usuario)
+            if self.mysql_error_logger:
+                self.mysql_error_logger.log_error(
+                    operation="Sincronización products a MySQL",
+                    error=e,
+                    context=f"Productos nuevos: {len(cambios.get('nuevos', []))}, "
+                           f"Productos modificados: {len(cambios.get('modificados', []))}"
+                )
+
+            # Mostrar mensaje simple al usuario
+            self._log(f"⚠️ Error al sincronizar products (ver log en carpeta logs/mysql_errors/)", "warning")
             self.stats['products']['errores'] += 1
 
             # Si es un error de conexión, propagar hacia arriba para detener la sincronización
