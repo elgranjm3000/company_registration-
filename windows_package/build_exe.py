@@ -29,13 +29,16 @@ def limpiar_build():
 def crear_spec_file():
     """Crea el archivo .spec para PyInstaller con todas las dependencias"""
 
+    # Convertir ruta a formato seguro para Python string (usar forward slashes)
+    base_dir_safe = str(BASE_DIR).replace('\\', '/')
+
     spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
 a = Analysis(
     ['sync_system.py'],
-    pathex=['{BASE_DIR}'],
+    pathex=['{base_dir_safe}'],
     binaries=[],
     datas=[
         # Incluir módulo de encriptación
@@ -44,12 +47,18 @@ a = Analysis(
         # Incluir smart_sync_complete.py
         ('smart_sync_complete.py', '.'),
 
+        # Incluir mysql_error_logger.py
+        ('mysql_error_logger.py', '.'),
+
         # Incluir templates de GUI si existen
         # ('templates', 'templates'),
     ],
     hiddenimports=[
         # Módulo de encriptación
         'config_encryption',
+
+        # Logger de errores de MySQL
+        'mysql_error_logger',
 
         # Librerías de criptografía
         'cryptography',
