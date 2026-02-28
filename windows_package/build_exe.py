@@ -133,7 +133,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # True para ver logs en consola
+    console=False,  # False para NO mostrar terminal (solo GUI)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -179,6 +179,11 @@ def construir_exe():
     print("\n✅ Executable creado exitosamente!")
     exe_path = BASE_DIR / 'dist' / 'SyncSystem.exe'
     print(f"📍 Ubicación: {exe_path}")
+
+    print("\n📝 NOTA: El .exe se ejecuta SIN terminal (solo GUI)")
+    print("   Para ver logs de sincronización:")
+    print("   - Logs normales: logs/sync_log_*.txt")
+    print("   - Errores de MySQL: logs/mysql_errors/mysql_errors_*.log")
 
     return True
 
