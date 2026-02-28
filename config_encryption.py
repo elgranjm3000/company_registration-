@@ -97,20 +97,35 @@ def decrypt_password(encrypted_password: str) -> str:
 
 def encrypt_config(config: dict) -> dict:
     """
-    Encripta campos sensibles del config
+    Encripta TODOS los campos sensibles del config
 
     Args:
-        config: Diccionario de configuración con contraseñas en texto plano
+        config: Diccionario de configuración con datos en texto plano
 
     Returns:
-        Diccionario con contraseñas encriptadas
+        Diccionario con datos encriptados
     """
     encrypted_config = config.copy()
 
-    # Campos sensibles a encriptar
+    # Campos sensibles a encriptar - TODOS los datos de conexión y empresa
     sensitive_fields = [
+        # PostgreSQL - TODOS los campos de conexión
+        'postgres_host',
+        'postgres_port',
+        'postgres_database',
+        'postgres_user',
         'postgres_password',
+        # MySQL - TODOS los campos de conexión
+        'mysql_host',
+        'mysql_port',
+        'mysql_database',
+        'mysql_user',
         'mysql_password',
+        # Empresa - información sensible
+        'company_rif',
+        'company_email',
+        'company_name',
+        # Otros campos sensibles
         'api_key',
         'secret_key',
         'access_token',
@@ -120,29 +135,44 @@ def encrypt_config(config: dict) -> dict:
     for field in sensitive_fields:
         if field in encrypted_config and encrypted_config[field]:
             # Encriptar solo si no está ya encriptado (no empieza con 'enc:')
-            password = encrypted_config[field]
-            if isinstance(password, str) and not password.startswith('enc:'):
-                encrypted_config[field] = 'enc:' + encrypt_password(password)
+            value = encrypted_config[field]
+            if isinstance(value, str) and not value.startswith('enc:'):
+                encrypted_config[field] = 'enc:' + encrypt_password(value)
 
     return encrypted_config
 
 
 def decrypt_config(config: dict) -> dict:
     """
-    Desencripta campos sensibles del config
+    Desencripta TODOS los campos sensibles del config
 
     Args:
-        config: Diccionario de configuración con contraseñas encriptadas
+        config: Diccionario de configuración con datos encriptados
 
     Returns:
-        Diccionario con contraseñas en texto plano
+        Diccionario con datos en texto plano
     """
     decrypted_config = config.copy()
 
-    # Campos sensibles a desencriptar
+    # Campos sensibles a desencriptar - TODOS los datos de conexión y empresa
     sensitive_fields = [
+        # PostgreSQL - TODOS los campos de conexión
+        'postgres_host',
+        'postgres_port',
+        'postgres_database',
+        'postgres_user',
         'postgres_password',
+        # MySQL - TODOS los campos de conexión
+        'mysql_host',
+        'mysql_port',
+        'mysql_database',
+        'mysql_user',
         'mysql_password',
+        # Empresa - información sensible
+        'company_rif',
+        'company_email',
+        'company_name',
+        # Otros campos sensibles
         'api_key',
         'secret_key',
         'access_token',
