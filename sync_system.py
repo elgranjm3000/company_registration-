@@ -273,14 +273,26 @@ def encriptar_credencial(texto_plano):
         return base64.b64encode(texto_plano.encode()).decode()
 
 def desencriptar_credencial(texto_encriptado):
-    """Desencripta una credencial"""
+    """Desencripta una credencial (intenta Fernet, si falla usa base64)"""
     if CRYPTO_AVAILABLE:
-        key = _generar_key()
-        f = Fernet(key)
-        return f.decrypt(texto_encriptado.encode()).decode()
+        try:
+            # Primero intentar Fernet (para configs encriptados)
+            key = _generar_key()
+            f = Fernet(key)
+            return f.decrypt(texto_encriptado.encode()).decode()
+        except Exception:
+            # Si falla, es probable que sea base64 (para credenciales hardcoded)
+            try:
+                return base64.b64decode(texto_encriptado.encode()).decode()
+            except Exception:
+                # Si todo falla, retornar el texto tal cual
+                return texto_encriptado
     else:
         # Fallback: base64
-        return base64.b64decode(texto_encriptado.encode()).decode()
+        try:
+            return base64.b64decode(texto_encriptado.encode()).decode()
+        except Exception:
+            return texto_encriptado
 
 def obtener_config_mysql():
     """
