@@ -4,6 +4,10 @@ Script para crear el ejecutable .exe del sistema de sincronización
 Asegura que todos los módulos necesarios estén incluidos, especialmente:
 - config_encryption.py (encriptación de contraseñas)
 - cryptography (librería de encriptación)
+
+USO:
+    python build_exe.py              # Crea .exe SIN consola (producción)
+    python build_exe.py --console    # Crea .exe CON consola (debug)
 """
 
 import os
@@ -13,6 +17,9 @@ from pathlib import Path
 
 # Directorio actual
 BASE_DIR = Path(__file__).parent.absolute()
+
+# Verificar si se quiere consola o no
+CONSOLE_MODE = '--console' in sys.argv or '-c' in sys.argv
 
 def limpiar_build():
     """Limpia directorios de build anteriores"""
@@ -133,7 +140,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,  # False para NO mostrar terminal (solo GUI)
+    console={CONSOLE_MODE},  # True=con consola (debug), False=sin consola (producción)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -180,10 +187,15 @@ def construir_exe():
     exe_path = BASE_DIR / 'dist' / 'SyncSystem.exe'
     print(f"📍 Ubicación: {exe_path}")
 
-    print("\n📝 NOTA: El .exe se ejecuta SIN terminal (solo GUI)")
-    print("   Para ver logs de sincronización:")
-    print("   - Logs normales: logs/sync_log_*.txt")
-    print("   - Errores de MySQL: logs/mysql_errors/mysql_errors_*.log")
+    if CONSOLE_MODE:
+        print("\n📝 Modo: CON CONSOLE (se ve terminal)")
+        print("   Útil para debug y ver errores")
+    else:
+        print("\n📝 Modo: SIN CONSOLE (solo GUI)")
+        print("   Para ver logs de sincronización:")
+        print("   - Logs normales: logs/sync_log_*.txt")
+        print("   - Errores de MySQL: logs/mysql_errors/mysql_errors_*.log")
+        print("\n   💡 Si tienes problemas, compila con --console para debug")
 
     return True
 
