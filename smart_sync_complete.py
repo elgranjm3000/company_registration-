@@ -4072,7 +4072,7 @@ class SmartSyncComplete:
             # Eliminar customers de MySQL directamente por document_number y company_id
             self._log(f"   🗑️ Eliminando {len(customers_eliminados)} customers de MySQL...", "info")
 
-            for (customer_code,) in customers_eliminados:
+            for customer_code, deleted_at in customers_eliminados:
                 if not self.sync_running:
                     break
 
