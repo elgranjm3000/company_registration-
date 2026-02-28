@@ -4012,55 +4012,39 @@ class SmartSyncComplete:
 
             self._log(f"   📋 Encontrados {len(customers_eliminados)} customers eliminados en PostgreSQL", "info")
 
-            customers_a_eliminar = []
+            # Eliminar customers de MySQL directamente por document_number y company_id
+            self._log(f"   🗑️ Eliminando {len(customers_eliminados)} customers de MySQL...", "info")
 
             for (customer_code,) in customers_eliminados:
                 if not self.sync_running:
                     break
 
-                # Buscar el customer en MySQL por document_number (que es el code de PostgreSQL)
-                self.mysql_cursor.execute(
-                    "SELECT id FROM customers WHERE document_number = %s AND company_id = %s",
-                    (customer_code, company_id)
-                )
-                customer_mysql = self.mysql_cursor.fetchone()
+                try:
+                    # Eliminar directamente por document_number (code de PG) y company_id
+                    delete_query = """
+                    DELETE FROM customers
+                    WHERE document_number = %s AND company_id = %s
+                    """
+                    self.mysql_cursor.execute(delete_query, (customer_code, company_id))
 
-                if customer_mysql:
-                    customer_id = customer_mysql[0]
-                    customers_a_eliminar.append((customer_id, customer_code))
-                    self._log(f"   🗑️ Customer con code={customer_code} (ID: {customer_id}) será eliminado de MySQL", "debug")
-                else:
-                    # Ya no existe en MySQL, solo limpiar sync_hashes
-                    self._log(f"   ℹ️ Customer con code={customer_code} ya no existe en MySQL", "debug")
+                    filas_afectadas = self.mysql_cursor.rowcount
+                    if filas_afectadas > 0:
+                        self._log(f"   ✅ Customer con code={customer_code} eliminado de MySQL ({filas_afectadas} fila)", "debug")
+                    else:
+                        self._log(f"   ℹ️ Customer con code={customer_code} no existe en MySQL", "debug")
 
-            # Eliminar customers de MySQL
-            if customers_a_eliminar:
-                self._log(f"   🗑️ Eliminando {len(customers_a_eliminar)} customers de MySQL...", "info")
+                except Exception as e:
+                    self._log(f"   ❌ Error eliminando customer con code={customer_code} de MySQL: {e}", "error")
+                    self.stats['customers']['errores'] += 1
 
-                for customer_id, customer_code in customers_a_eliminar:
-                    try:
-                        # Eliminar de MySQL
-                        delete_query = """
-                        DELETE FROM customers
-                        WHERE id = %s AND company_id = %s
-                        """
-                        self.mysql_cursor.execute(delete_query, (customer_id, company_id))
+            # Commit cambios en MySQL
+            self.mysql_conn.commit()
 
-                        self._log(f"   ✅ Customer con code={customer_code} eliminado de MySQL", "info")
+            total_eliminados = len([c for c in customers_eliminados if self.sync_running])
+            self._log(f"   ✅ Proceso completado: {total_eliminados} customers procesados", "success")
 
-                    except Exception as e:
-                        self._log(f"   ❌ Error eliminando customer con code={customer_code} de MySQL: {e}", "error")
-                        self.stats['customers']['errores'] += 1
-
-                # Commit cambios en MySQL
-                self.mysql_conn.commit()
-
-                self._log(f"   ✅ {len(customers_a_eliminar)} customers eliminados de MySQL", "success")
-
-                # Actualizar estadísticas
-                self.stats['customers']['eliminados'] = self.stats.get('customers', {}).get('eliminados', 0) + len(customers_a_eliminar)
-            else:
-                self._log("   ℹ️ No hay customers que eliminar de MySQL (ya fueron limpiados)", "info")
+            # Actualizar estadísticas
+            self.stats['customers']['eliminados'] = self.stats.get('customers', {}).get('eliminados', 0) + total_eliminados
 
             # Limpiar registros de sync_hashes
             self._log("   🧹 Limpiando registros de sync_hashes...", "info")
