@@ -3203,6 +3203,15 @@ class SmartSyncComplete:
                                      (company_id,))
             category_mapping = dict(self.mysql_cursor.fetchall())
 
+            # 🔍 DEBUG: Verificar si hay categorías en MySQL
+            self._log(f"  🔍 Categorías encontradas en MySQL: {len(category_mapping)}", "info")
+            if not category_mapping:
+                self._log("  ❌ ERROR CRÍTICO: NO hay categorías en MySQL", "error")
+                self._log("     Los productos NO se pueden insertar sin una categoría", "error")
+                self._log("     Solución: Sincroniza categories primero o crea al menos una categoría en MySQL", "error")
+            else:
+                self._log(f"  ✅ Categorías disponibles: {', '.join(list(category_mapping.keys())[:5])}{'...' if len(category_mapping) > 5 else ''}", "info")
+
             products_sin_categoria = 0
 
             # Verificar si hay productos en Bolívares (coin='01') para obtener tipo de cambio
@@ -3363,8 +3372,19 @@ class SmartSyncComplete:
                         updated_at = NOW()
                     """
 
-                    self.mysql_cursor.executemany(insert_query, batch_data)
-                    self.mysql_conn.commit()
+                    try:
+                        self.mysql_cursor.executemany(insert_query, batch_data)
+                        rows_affected = self.mysql_cursor.rowcount
+                        self._log(f"  📊 executemany afectó {rows_affected} filas", "info")
+
+                        self.mysql_conn.commit()
+                        self._log(f"  ✅ Commit ejecutado correctamente", "info")
+
+                    except Exception as insert_error:
+                        self._log(f"  ❌ ERROR en BATCH INSERT: {str(insert_error)}", "error")
+                        self._log(f"     Error type: {type(insert_error).__name__}", "error")
+                        self.mysql_conn.rollback()
+                        raise
 
                     elapsed = time.time() - start_time
                     self.stats['products']['nuevos'] += len(batch_data)
@@ -3517,8 +3537,19 @@ class SmartSyncComplete:
                         updated_at = NOW()
                     """
 
-                    self.mysql_cursor.executemany(update_query, batch_data)
-                    self.mysql_conn.commit()
+                    try:
+                        self.mysql_cursor.executemany(update_query, batch_data)
+                        rows_affected = self.mysql_cursor.rowcount
+                        self._log(f"  📊 executemany afectó {rows_affected} filas", "info")
+
+                        self.mysql_conn.commit()
+                        self._log(f"  ✅ Commit ejecutado correctamente", "info")
+
+                    except Exception as update_error:
+                        self._log(f"  ❌ ERROR en BATCH UPDATE: {str(update_error)}", "error")
+                        self._log(f"     Error type: {type(update_error).__name__}", "error")
+                        self.mysql_conn.rollback()
+                        raise
 
                     elapsed = time.time() - start_time
                     self.stats['products']['modificados'] += len(batch_data)
