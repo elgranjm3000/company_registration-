@@ -1307,6 +1307,7 @@ class ManagerWindow:
         self.btn_sync = ttk.Button(btn_frame, text="🔄 Sincronizar Ahora", command=self.sincronizar, width=20)
         self.btn_sync.pack(side="left", padx=5)
         ttk.Button(btn_frame, text="⚙️ Configuración", command=self.configurar, width=20).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="🔄 Reconfigurar", command=self.reconfigurar, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="📋 Ver Logs", command=self.ver_logs, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="❌ Salir", command=self.cerrar_ventana, width=20).pack(side="right", padx=5)
 
@@ -1531,6 +1532,63 @@ class ManagerWindow:
         self.config = cargar_config()
         self.sync_module = SyncModule(self.config)
         self.actualizar_estado()
+
+    def reconfigurar(self):
+        """Reconfigurar desde cero - Borra config actual y abre ventana de configuración"""
+        # Confirmar con el usuario
+        confirmar = messagebox.askyesno(
+            "🔄 Reconfigurar Sistema",
+            "¿Estás seguro de que quieres RECONFIGURAR todo el sistema?\n\n"
+            "Esto borrará la configuración actual y podrás configurar:\n"
+            "• Nuevas bases de datos PostgreSQL y MySQL\n"
+            "• Nueva empresa\n"
+            "• Nuevos parámetros de sincronización\n\n"
+            "Se hará un backup de la configuración actual.\n\n"
+            "¿Continuar?",
+            icon='warning'
+        )
+
+        if not confirmar:
+            return
+
+        try:
+            # Hacer backup del config anterior
+            if os.path.exists(CONFIG_FILE):
+                backup_file = CONFIG_FILE.replace(".json", f"_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                import shutil
+                shutil.copy2(CONFIG_FILE, backup_file)
+                self.agregar_log(f"✅ Backup guardado en: {backup_file}")
+                log(f"✅ Backup guardado en: {backup_file}", "INFO")
+
+            # Borrar config
+            try:
+                os.remove(CONFIG_FILE)
+                self.agregar_log("✅ Configuración anterior eliminada")
+                log("✅ Configuración anterior eliminada", "INFO")
+            except:
+                pass
+
+            # También borrar versión oculta si existe
+            for hidden_file in [".sync_config.json", os.path.join(BASE_DIR, ".sync_config.json")]:
+                if os.path.exists(hidden_file):
+                    try:
+                        os.remove(hidden_file)
+                        self.agregar_log(f"✅ Archivo oculto eliminado: {hidden_file}")
+                    except:
+                        pass
+
+            # Cerrar ventana actual
+            self.root.destroy()
+
+            # Abrir nueva ventana de configuración
+            time.sleep(0.5)  # Pequeña pausa para asegurar que todo se cerró
+            root = tk.Tk()
+            app = ConfigWindow(root)
+            root.mainloop()
+
+        except Exception as e:
+            messagebox.showerror("❌ Error", f"Error al reconfigurar: {str(e)}")
+            log(f"Error reconfigurando: {e}", "ERROR")
 
     def ver_logs(self):
         """Abre ventana de logs"""
@@ -2319,20 +2377,56 @@ Clic derecho → Ver Logs (tiempo real)"""
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description="Sistema de Sincronización Inteligente")
-    parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray"],
-                       default="manager", help="Modo de ejecución")  # CAMBIADO: default="manager"
+    parser.add_argument("--mode", choices=["config", "manager", "service", "sync", "tray", "reconfig"],
+                       default="manager", help="Modo de ejecución")
+    parser.add_argument("--reconfig", action="store_true",
+                       help="Fuerza reconfiguración desde cero (borra config actual)")
     parser.add_argument("--once", action="store_true",
                        help="Ejecutar una sola sincronización y salir (solo para modo service)")
 
     args = parser.parse_args()
     config = cargar_config()
 
+    # Si --reconfig, borrar config y cambiar a modo config
+    if args.reconfig or args.mode == "reconfig":
+        log("🔄 Reconfiguración forzada - Borrando configuración actual...", "INFO")
+
+        # Hacer backup del config anterior
+        if os.path.exists(CONFIG_FILE):
+            backup_file = CONFIG_FILE.replace(".json", "_backup.json")
+            import shutil
+            try:
+                shutil.copy2(CONFIG_FILE, backup_file)
+                log(f"✅ Backup guardado en: {backup_file}", "INFO")
+            except Exception as e:
+                log(f"⚠️ No se pudo hacer backup: {e}", "WARNING")
+
+        # Borrar config
+        try:
+            os.remove(CONFIG_FILE)
+            log("✅ Configuración anterior eliminada", "INFO")
+        except:
+            pass
+
+        # También borrar versión oculta si existe
+        for hidden_file in [".sync_config.json", os.path.join(BASE_DIR, ".sync_config.json")]:
+            if os.path.exists(hidden_file):
+                try:
+                    os.remove(hidden_file)
+                    log(f"✅ Archivo oculto eliminado: {hidden_file}", "INFO")
+                except:
+                    pass
+
+        # Cargar config default
+        config = crear_config_default()
+        args.mode = "config"
+
     # Auto-detectar modo
     if args.mode == "auto":
         if not config.get('configured') or config.get('first_run'):
             args.mode = "config"
         else:
-            args.mode = "manager"  # CAMBIADO: Por defecto mostrar ventana manager, no tray
+            args.mode = "manager"
 
     # Ejecutar según modo
     if args.mode == "config":
