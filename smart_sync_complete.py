@@ -3994,10 +3994,21 @@ class SmartSyncComplete:
 
             self._log("", "info")
             self._log("🗑️ VERIFICANDO CUSTOMERS ELIMINADOS EN POSTGRESQL...", "info")
+            self._log(f"   🔍 Company ID: {company_id}", "debug")
+
+            # 🔍 DIAGNÓSTICO: Verificar si el trigger existe
+            self.pg_cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_trigger
+                    WHERE tgname = 'tr_clients_mark_deleted_sync_hashes'
+                )
+            """)
+            trigger_existe = self.pg_cursor.fetchone()[0]
+            self._log(f"   🔍 Trigger existe: {trigger_existe}", "debug")
 
             # Consulta eficiente: solo customers marcados como eliminados por el trigger
             query = """
-            SELECT record_key
+            SELECT record_key, deleted_at
             FROM sync_hashes
             WHERE table_name = 'customers'
             AND deleted_at IS NOT NULL
@@ -4006,8 +4017,17 @@ class SmartSyncComplete:
             self.pg_cursor.execute(query)
             customers_eliminados = self.pg_cursor.fetchall()
 
+            self._log(f"   🔍 Total customers marcados como eliminados: {len(customers_eliminados)}", "debug")
+            if customers_eliminados:
+                for code, deleted_at in customers_eliminados[:5]:  # Mostrar primeros 5
+                    self._log(f"      - code={code}, deleted_at={deleted_at}", "debug")
+
             if not customers_eliminados:
                 self._log("   ℹ️ No hay customers eliminados que procesar", "info")
+                self._log("   💡 Si borraste un cliente en PostgreSQL y no aparece aquí:", "info")
+                self._log("      1. Verifica que el trigger esté creado", "info")
+                self._log("      2. Verifica que el cliente realmente se borró (DELETE FROM clients)", "info")
+                self._log("      3. Revisa la tabla sync_hashes manualmente", "info")
                 return
 
             self._log(f"   📋 Encontrados {len(customers_eliminados)} customers eliminados en PostgreSQL", "info")
@@ -4020,6 +4040,17 @@ class SmartSyncComplete:
                     break
 
                 try:
+                    # 🔍 DIAGNÓSTICO: Verificar si el cliente existe en MySQL antes de eliminar
+                    self.mysql_cursor.execute(
+                        "SELECT id, name FROM customers WHERE document_number = %s AND company_id = %s",
+                        (customer_code, company_id)
+                    )
+                    cliente_mysql = self.mysql_cursor.fetchone()
+
+                    if cliente_mysql:
+                        mysql_id, mysql_name = cliente_mysql
+                        self._log(f"   🔍 Cliente encontrado en MySQL: id={mysql_id}, name={mysql_name}, code={customer_code}", "debug")
+
                     # Eliminar directamente por document_number (code de PG) y company_id
                     delete_query = """
                     DELETE FROM customers
@@ -4029,9 +4060,9 @@ class SmartSyncComplete:
 
                     filas_afectadas = self.mysql_cursor.rowcount
                     if filas_afectadas > 0:
-                        self._log(f"   ✅ Customer con code={customer_code} eliminado de MySQL ({filas_afectadas} fila)", "debug")
+                        self._log(f"   ✅ Customer con code={customer_code} eliminado de MySQL ({filas_afectadas} fila)", "info")
                     else:
-                        self._log(f"   ℹ️ Customer con code={customer_code} no existe en MySQL", "debug")
+                        self._log(f"   ⚠️ Customer con code={customer_code} NO se eliminó (0 filas afectadas)", "warning")
 
                 except Exception as e:
                     self._log(f"   ❌ Error eliminando customer con code={customer_code} de MySQL: {e}", "error")
@@ -4039,6 +4070,7 @@ class SmartSyncComplete:
 
             # Commit cambios en MySQL
             self.mysql_conn.commit()
+            self._log(f"   ✅ Commit ejecutado en MySQL", "debug")
 
             total_eliminados = len([c for c in customers_eliminados if self.sync_running])
             self._log(f"   ✅ Proceso completado: {total_eliminados} customers procesados", "success")
