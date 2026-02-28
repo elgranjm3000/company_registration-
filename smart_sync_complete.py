@@ -1597,6 +1597,7 @@ class SmartSyncComplete:
             LEFT JOIN units h ON h.code = b.unit
             WHERE a.code IS NOT NULL
               AND a.code != ''
+              AND a.product_type <> 'C'
             ORDER BY a.code, b.maximum_price DESC;
             """
 
