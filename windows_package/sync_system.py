@@ -19,6 +19,7 @@ import json
 import argparse
 import base64
 import hashlib
+import re
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -112,27 +113,41 @@ def get_log_file():
         if config_path and os.path.exists(config_path):
             # Leer archivo (puede estar encriptado o plano)
             with open(config_path, "r", encoding="utf-8") as f:
-                contenido = f.read()
+                config = json.load(f)
 
-            # Intentar desencriptar (si la función existe)
-            try:
-                if 'desencriptar_config_json' in globals():
-                    config = desencriptar_config_json(contenido)
-                else:
-                    config = json.loads(contenido)
-            except:
-                config = json.loads(contenido)
+            # Desencriptar si está disponible el módulo
+            if CONFIG_ENCRYPTION_AVAILABLE:
+                try:
+                    config = decrypt_config(config)
+                except:
+                    pass  # Usar config tal cual si falla desencriptación
 
             # Obtener email de la empresa para usar como nombre de archivo
             company_email = config.get('company_email', '')
             if company_email:
-                # Limpiar email para usar como nombre de archivo (reemplazar @ y .)
+                # Limpiar email para usar como nombre de archivo
+                # Reemplazar caracteres inválidos: @ . : y otros
                 email_safe = company_email.replace('@', '_').replace('.', '_')
+                # Eliminar cualquier caracter que no sea alfanumérico, guión o guion bajo
+                email_safe = re.sub(r'[^\w\-]', '_', email_safe)
+                # Limitar longitud a 50 caracteres para evitar problemas con Windows
+                email_safe = email_safe[:50]
+
+                # Asegurar que el directorio de logs existe
+                if not os.path.exists(LOGS_DIR):
+                    os.makedirs(LOGS_DIR)
+
                 return os.path.join(LOGS_DIR, f"sync_system_{email_safe}.log")
     except:
         pass
 
     # Si no hay configuración o hay error, usar archivo general
+    # Asegurar que el directorio de logs existe
+    try:
+        if not os.path.exists(LOGS_DIR):
+            os.makedirs(LOGS_DIR)
+    except:
+        pass
     return os.path.join(LOGS_DIR, "sync_system.log")
 
 # Archivo de log principal (se obtiene dinámicamente según la empresa)
