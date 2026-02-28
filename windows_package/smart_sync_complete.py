@@ -1552,10 +1552,26 @@ class SmartSyncComplete:
                 a.product_type,
                 a.coin,
                 f.description AS description_coin,
-                b.maximum_price AS price,
-                b.offer_price AS cost,
-                b.higher_price,
-                a.minimal_stock AS min_stock,
+                CASE
+                    WHEN b.maximum_price IS NULL
+                    THEN 0
+                    ELSE b.maximum_price
+                END AS price,
+                CASE
+                    WHEN b.offer_price IS NULL
+                    THEN 0
+                    ELSE b.offer_price
+                END AS cost,
+                CASE
+                    WHEN b.higher_price IS NULL
+                    THEN 0
+                    ELSE b.higher_price
+                END AS higher_price,
+                CASE
+                    WHEN a.minimal_stock IS NULL
+                    THEN 0
+                    ELSE a.minimal_stock
+                END AS min_stock,
                 CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END AS status,
                 d.image_type,
                 d.product_image,
