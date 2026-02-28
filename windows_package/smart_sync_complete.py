@@ -3239,6 +3239,18 @@ class SmartSyncComplete:
                          coin, description_coin, price, cost, higher_price, min_stock, status,
                          image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
+                        # 🔧 MANEJO DE VALORES NULL - Usar valores por defecto
+                        # Si department es NULL o vacío, intentar usar una categoría por defecto
+                        if not department or department.strip() == '':
+                            # Buscar la primera categoría disponible en MySQL
+                            if category_mapping:
+                                department = list(category_mapping.keys())[0]
+                                self._log(f"  ℹ️ Product {code}: usando categoría por defecto '{department}'", "debug")
+                            else:
+                                self._log(f"  ⚠️ Product {code} omitido: no hay categorías disponibles en MySQL", "warning")
+                                products_sin_categoria += 1
+                                continue
+
                         # Verificar que la categoría existe en MySQL
                         if department not in category_mapping:
                             self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
@@ -3246,6 +3258,26 @@ class SmartSyncComplete:
                             continue
 
                         category_id = category_mapping[department]
+
+                        # Si coin es NULL o vacío, usar '02' (USD) como valor por defecto
+                        if not coin or coin.strip() == '':
+                            coin = '02'  # USD por defecto
+                            self._log(f"  ℹ️ Product {code}: usando moneda por defecto '02' (USD)", "debug")
+
+                        # Si description_coin es NULL, usar descripción genérica
+                        if not description_coin or description_coin.strip() == '':
+                            description_coin = 'USD' if coin == '02' else 'VES'
+                            self._log(f"  ℹ️ Product {code}: usando descripción de moneda por defecto '{description_coin}'", "debug")
+
+                        # Manejar campos NULL que son NOT NULL en MySQL
+                        if not sale_tax or sale_tax.strip() == '':
+                            sale_tax = ''  # Valor vacío permitido
+                        if aliquot is None or aliquot == 0:
+                            aliquot = 16  # 16% IVA por defecto
+                        if not buy_tax or buy_tax.strip() == '':
+                            buy_tax = ''  # Valor vacío permitido
+                        if buy_aliquot is None or buy_aliquot == 0:
+                            buy_aliquot = 16  # 16% IVA por defecto
 
                         # Crear JSON de imagen
                         image_json = self._create_image_json(image_type, product_image)
@@ -3280,13 +3312,13 @@ class SmartSyncComplete:
                             product_type,
                             image_json,
                             final_higher_price,
-                            sale_tax,
-                            aliquot,
-                            coin if coin else None,
-                            description_coin if description_coin else None,
+                            sale_tax,  # Ya tiene valor por defecto si era NULL
+                            aliquot,   # Ya tiene valor por defecto si era NULL
+                            coin,  # Ya tiene valor por defecto si era NULL
+                            description_coin,  # Ya tiene valor por defecto si era NULL
                             final_unitary_cost,
-                            buy_tax if buy_tax else None,
-                            buy_aliquot if buy_aliquot else 0
+                            buy_tax,  # Ya tiene valor por defecto si era NULL
+                            buy_aliquot  # Ya tiene valor por defecto si era NULL
                         ))
 
                         productos_a_procesar.append((idx, code))
@@ -3363,6 +3395,18 @@ class SmartSyncComplete:
                          coin, description_coin, price, cost, higher_price, min_stock, status,
                          image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
+                        # 🔧 MANEJO DE VALORES NULL - Usar valores por defecto
+                        # Si department es NULL o vacío, intentar usar una categoría por defecto
+                        if not department or department.strip() == '':
+                            # Buscar la primera categoría disponible en MySQL
+                            if category_mapping:
+                                department = list(category_mapping.keys())[0]
+                                self._log(f"  ℹ️ Product {code} (modificado): usando categoría por defecto '{department}'", "debug")
+                            else:
+                                self._log(f"  ⚠️ Product {code} omitido: no hay categorías disponibles en MySQL", "warning")
+                                products_sin_categoria += 1
+                                continue
+
                         # Verificar que la categoría existe en MySQL
                         if department not in category_mapping:
                             self._log(f"  ⚠️ Product {code} omitido: categoría '{department}' no existe en MySQL", "warning")
@@ -3370,6 +3414,26 @@ class SmartSyncComplete:
                             continue
 
                         category_id = category_mapping[department]
+
+                        # Si coin es NULL o vacío, usar '02' (USD) como valor por defecto
+                        if not coin or coin.strip() == '':
+                            coin = '02'  # USD por defecto
+                            self._log(f"  ℹ️ Product {code} (modificado): usando moneda por defecto '02' (USD)", "debug")
+
+                        # Si description_coin es NULL, usar descripción genérica
+                        if not description_coin or description_coin.strip() == '':
+                            description_coin = 'USD' if coin == '02' else 'VES'
+                            self._log(f"  ℹ️ Product {code} (modificado): usando descripción de moneda por defecto '{description_coin}'", "debug")
+
+                        # Manejar campos NULL que son NOT NULL en MySQL
+                        if not sale_tax or sale_tax.strip() == '':
+                            sale_tax = ''  # Valor vacío permitido
+                        if aliquot is None or aliquot == 0:
+                            aliquot = 16  # 16% IVA por defecto
+                        if not buy_tax or buy_tax.strip() == '':
+                            buy_tax = ''  # Valor vacío permitido
+                        if buy_aliquot is None or buy_aliquot == 0:
+                            buy_aliquot = 16  # 16% IVA por defecto
 
                         # Crear JSON de imagen
                         image_json = self._create_image_json(image_type, product_image)
@@ -3401,13 +3465,13 @@ class SmartSyncComplete:
                             product_type,
                             image_json,
                             final_higher_price,
-                            sale_tax,
-                            aliquot,
-                            coin if coin else None,
-                            description_coin if description_coin else None,
+                            sale_tax,  # Ya tiene valor por defecto si era NULL
+                            aliquot,   # Ya tiene valor por defecto si era NULL
+                            coin,  # Ya tiene valor por defecto si era NULL
+                            description_coin,  # Ya tiene valor por defecto si era NULL
                             final_unitary_cost,
-                            buy_tax if buy_tax else None,
-                            buy_aliquot if buy_aliquot else 0
+                            buy_tax,  # Ya tiene valor por defecto si era NULL
+                            buy_aliquot  # Ya tiene valor por defecto si era NULL
                         ))
 
                         productos_a_procesar.append((idx, code))
