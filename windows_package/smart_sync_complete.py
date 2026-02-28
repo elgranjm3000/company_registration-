@@ -4045,7 +4045,7 @@ class SmartSyncComplete:
 
             # Consulta eficiente: solo customers marcados como eliminados por el trigger
             query = """
-            SELECT record_key, deleted_at
+            SELECT record_key
             FROM sync_hashes
             WHERE table_name = 'customers'
             AND deleted_at IS NOT NULL
@@ -4056,8 +4056,8 @@ class SmartSyncComplete:
 
             self._log(f"   🔍 Total customers marcados como eliminados: {len(customers_eliminados)}", "debug")
             if customers_eliminados:
-                for code, deleted_at in customers_eliminados[:5]:  # Mostrar primeros 5
-                    self._log(f"      - code={code}, deleted_at={deleted_at}", "debug")
+                for (code,) in customers_eliminados[:5]:  # Mostrar primeros 5
+                    self._log(f"      - code={code}", "debug")
 
             if not customers_eliminados:
                 self._log("   ℹ️ No hay customers eliminados que procesar", "info")
@@ -4072,7 +4072,7 @@ class SmartSyncComplete:
             # Eliminar customers de MySQL directamente por document_number y company_id
             self._log(f"   🗑️ Eliminando {len(customers_eliminados)} customers de MySQL...", "info")
 
-            for customer_code, deleted_at in customers_eliminados:
+            for (customer_code,) in customers_eliminados:
                 if not self.sync_running:
                     break
 
