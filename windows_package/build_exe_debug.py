@@ -77,6 +77,7 @@ def build_exe_debug():
         '--collect-all=psycopg2',
         '--collect-all=pystray',
         '--collect-all=Pillow',
+        '--collect-all=win10toast',
     ]
 
     print("Opciones de PyInstaller:")
