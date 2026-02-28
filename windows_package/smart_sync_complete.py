@@ -1003,13 +1003,16 @@ class SmartSyncComplete:
             Hash MD5 hexadecimal
         """
         try:
-            # Campos clave para detectar cambios (todos los campos importantes)
+            # Campos clave para detectar cambios (TODOS los campos del producto)
             # NUEVO ORDER con 23 campos (se agregaron unit, product_code, unidad)
             campos = (
                 str(product[0]) if product[0] else '',  # code
+                str(product[1]) if product[1] else '',  # unit (AGREGADO)
                 str(product[2]) if product[2] else '',  # description
                 str(product[3]) if product[3] else '',  # short_name
                 str(product[4]) if product[4] else '',  # department
+                str(product[5]) if product[5] else '',  # product_code (AGREGADO)
+                str(product[6]) if product[6] else '',  # unidad (AGREGADO)
                 str(float(product[7]) if product[7] else 0),  # stock
                 str(product[8]) if product[8] else '',  # product_type
                 str(product[9]) if product[9] else '',  # coin
@@ -1019,6 +1022,8 @@ class SmartSyncComplete:
                 str(safe_float(product[13])),           # higher_price
                 str(safe_float(product[14])),           # min_stock
                 str(product[15]) if product[15] else '',  # status
+                str(product[16]) if product[16] else '',  # image_type (AGREGADO)
+                str(product[17]) if product[17] else '',  # product_image (AGREGADO)
                 str(product[18]) if product[18] else '',  # sale_tax
                 str(product[19]) if product[19] else '',  # aliquot
                 str(product[20]) if product[20] else '',  # buy_tax
