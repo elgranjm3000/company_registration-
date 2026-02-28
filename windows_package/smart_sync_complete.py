@@ -574,16 +574,23 @@ class SmartSyncComplete:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_client_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_exists INTEGER;
             BEGIN
-                -- Marcar el registro en sync_hashes como eliminado
-                -- USAR CODE en lugar de EMAIL (code es el identificador único)
-                UPDATE sync_hashes
-                SET deleted_at = NOW()
+                -- Verificar si ya existe el registro en sync_hashes
+                SELECT COUNT(*) INTO v_exists
+                FROM sync_hashes
                 WHERE table_name = 'customers'
                 AND record_key = OLD.code;
 
-                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
-                IF NOT FOUND THEN
+                -- Si existe, actualizar deleted_at
+                IF v_exists > 0 THEN
+                    UPDATE sync_hashes
+                    SET deleted_at = NOW()
+                    WHERE table_name = 'customers'
+                    AND record_key = OLD.code;
+                ELSE
+                    -- Si no existe, insertar nuevo registro con deleted_at
                     INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
                     VALUES ('customers', OLD.code, md5(OLD.code::text), NOW());
                 END IF;
@@ -622,15 +629,23 @@ class SmartSyncComplete:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_exists INTEGER;
             BEGIN
-                -- Marcar el registro en sync_hashes como eliminado
-                UPDATE sync_hashes
-                SET deleted_at = NOW()
+                -- Verificar si ya existe el registro en sync_hashes
+                SELECT COUNT(*) INTO v_exists
+                FROM sync_hashes
                 WHERE table_name = 'sellers'
                 AND record_key = OLD.email;
 
-                -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
-                IF NOT FOUND THEN
+                -- Si existe, actualizar deleted_at
+                IF v_exists > 0 THEN
+                    UPDATE sync_hashes
+                    SET deleted_at = NOW()
+                    WHERE table_name = 'sellers'
+                    AND record_key = OLD.email;
+                ELSE
+                    -- Si no existe, insertar nuevo registro con deleted_at
                     INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
                     VALUES ('sellers', OLD.email, md5(OLD.email::text), NOW());
                 END IF;
