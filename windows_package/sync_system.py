@@ -487,6 +487,10 @@ class SyncModule:
 
             resultado = sync_system.ejecutar_sync_completa()
 
+            # ✅ CAPTURAR ESTADÍSTICAS de SmartSyncComplete
+            if hasattr(sync_system, 'stats'):
+                self.stats = sync_system.stats.copy()
+
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
 
             # El toast notification ya se muestra en ejecutar_sync_completa()
@@ -1053,6 +1057,10 @@ class ConfigWindow:
                         if sync.verificar_conexiones():
                             actualizar_estado("🔄 Sincronizando...", "Products, Customers, Categories, Quotes")
                             sync.sincronizar()
+
+                            # ✅ CAPTURAR ESTADÍSTICAS antes de cerrar
+                            resultado_sync['stats'] = sync.stats.copy() if hasattr(sync, 'stats') else {}
+
                             sync.cerrar()
 
                             actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
@@ -1098,27 +1106,61 @@ class ConfigWindow:
                 # Cerrar ventana de progreso después de un momento
                 progreso.after(1000, progreso.destroy)
 
-                # Mostrar notificación BANNER prominente
+                # Construir mensaje de resumen con estadísticas
                 if resultado_sync['exito']:
+                    # Obtener estadísticas de la sincronización
+                    stats = resultado_sync.get('stats', {})
+                    products_stats = stats.get('products', {})
+                    customers_stats = stats.get('customers', {})
+                    categories_stats = stats.get('categories', {})
+                    sellers_stats = stats.get('sellers', {})
+                    quotes_stats = stats.get('quotes', {})
+
+                    # Construir mensaje detallado
+                    mensaje_lines = [
+                        "✅ SINCRONIZACIÓN COMPLETADA",
+                        "",
+                        f"📊 Productos:",
+                        f"   • Nuevos: {products_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {products_stats.get('modificados', 0)}",
+                        f"   • Eliminados: {products_stats.get('eliminados', 0)}",
+                        "",
+                        f"👥 Customers:",
+                        f"   • Nuevos: {customers_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {customers_stats.get('modificados', 0)}",
+                        f"   • Eliminados: {customers_stats.get('eliminados', 0)}",
+                        "",
+                        f"📁 Categories:",
+                        f"   • Nuevos: {categories_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {categories_stats.get('modificados', 0)}",
+                        "",
+                        f"👤 Sellers:",
+                        f"   • Nuevos: {sellers_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {sellers_stats.get('modificados', 0)}",
+                        f"   • Eliminados: {sellers_stats.get('eliminados', 0)}",
+                        "",
+                        f"📋 Quotes:",
+                        f"   • Nuevos: {quotes_stats.get('nuevos', 0)} (MySQL → PostgreSQL)",
+                        f"   • Estados actualizados: {quotes_stats.get('estados_actualizados', 0)}",
+                        "",
+                        f"⏱️  Duración: {minutos}m {segundos}s",
+                        f"⏰ Inicio: {hora_inicio_str}",
+                        f"⏰ Fin: {hora_fin_str}"
+                    ]
+
+                    mensaje_completo = "\n".join(mensaje_lines)
+
+                    # Mostrar notificación BANNER
                     mostrar_banner(
                         "✅ Sincronización Exitosa",
-                        "Los datos se han sincronizado correctamente",
+                        f"Productos: {products_stats.get('nuevos', 0)} nuevos, "
+                        f"{products_stats.get('modificados', 0)} modificados, "
+                        f"{products_stats.get('eliminados', 0)} eliminados",
                         duracion=7
                     )
 
-                    # Mostrar MESSAGEBOX con detalles del tiempo
-                    duracion_str = f"{minutos}m {segundos}s" if minutos > 0 else f"{segundos}s"
-
-                    mensaje_completo = (
-                        "✅ SINCRONIZACIÓN COMPLETADA\n\n"
-                        f"🕐 Hora de inicio: {hora_inicio_str}\n"
-                        f"🕑 Hora de fin: {hora_fin_str}\n"
-                        f"⏱️ Duración total: {duracion_str}\n\n"
-                        "El sistema continuará trabajando en segundo plano."
-                    )
-
                     # Esperar un momento antes de mostrar el messagebox
-                    progreso.after(1500, lambda: mb.showinfo(
+                    progreso.after(1000, lambda: mb.showinfo(
                         "✅ Sincronización Completada",
                         mensaje_completo
                     ))
@@ -1866,24 +1908,58 @@ class SystemTrayService:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "✅ Exitosa"
 
-                # Mostrar notificación BANNER solo si es manual
+                # Mostrar notificaciones SOLO si es manual (es_manual=True)
+                # En modo automático, solo log sin alertas
                 if es_manual:
+                    # Obtener estadísticas de SmartSyncComplete
+                    stats = sync_system.stats
+                    products_stats = stats.get('products', {})
+                    customers_stats = stats.get('customers', {})
+                    categories_stats = stats.get('categories', {})
+                    sellers_stats = stats.get('sellers', {})
+                    quotes_stats = stats.get('quotes', {})
+
+                    # Construir mensaje detallado
+                    mensaje_lines = [
+                        "✅ SINCRONIZACIÓN COMPLETADA",
+                        "",
+                        f"📊 Productos:",
+                        f"   • Nuevos: {products_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {products_stats.get('modificados', 0)}",
+                        f"   • Eliminados: {products_stats.get('eliminados', 0)}",
+                        "",
+                        f"👥 Customers:",
+                        f"   • Nuevos: {customers_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {customers_stats.get('modificados', 0)}",
+                        f"   • Eliminados: {customers_stats.get('eliminados', 0)}",
+                        "",
+                        f"📁 Categories:",
+                        f"   • Nuevos: {categories_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {categories_stats.get('modificados', 0)}",
+                        "",
+                        f"👤 Sellers:",
+                        f"   • Nuevos: {sellers_stats.get('nuevos', 0)}",
+                        f"   • Modificados: {sellers_stats.get('modificados', 0)}",
+                        f"   • Eliminados: {sellers_stats.get('eliminados', 0)}",
+                        "",
+                        f"📋 Quotes:",
+                        f"   • Nuevos: {quotes_stats.get('nuevos', 0)} (MySQL → PostgreSQL)",
+                        f"   • Estados actualizados: {quotes_stats.get('estados_actualizados', 0)}",
+                        "",
+                        f"⏱️  Duración: {minutos}m {segundos}s",
+                        f"⏰ Inicio: {hora_inicio_str}",
+                        f"⏰ Fin: {hora_fin_str}"
+                    ]
+
+                    mensaje_completo = "\n".join(mensaje_lines)
+
+                    # Mostrar notificación BANNER
                     mostrar_banner(
                         "✅ Sincronización Exitosa",
-                        f"Products: {sync_system.stats['products']['nuevos']} nuevos, "
-                        f"{sync_system.stats['products']['modificados']} modificados",
+                        f"Productos: {products_stats.get('nuevos', 0)} nuevos, "
+                        f"{products_stats.get('modificados', 0)} modificados, "
+                        f"{products_stats.get('eliminados', 0)} eliminados",
                         duracion=7
-                    )
-
-                    # Mostrar MESSAGEBOX con detalles del tiempo (solo si es manual)
-                    mensaje_completo = (
-                        "✅ SINCRONIZACIÓN COMPLETADA\n\n"
-                        f"🕐 Hora de inicio: {hora_inicio_str}\n"
-                        f"🕑 Hora de fin: {hora_fin_str}\n"
-                        f"⏱️ Duración total: {duracion_str}\n\n"
-                        f"Products: {sync_system.stats['products']['nuevos']} nuevos, "
-                        f"{sync_system.stats['products']['modificados']} modificados\n\n"
-                        "El sistema continuará trabajando en segundo plano."
                     )
 
                     # Mostrar messagebox en un thread separado para no bloquear
@@ -1896,28 +1972,39 @@ class SystemTrayService:
 
                     thread_mb = threading.Thread(target=mostrar_messagebox, daemon=True)
                     thread_mb.start()
+                else:
+                    # Modo automático - Solo log, sin alertas
+                    log(f"✅ Sincronización automática completada en {duracion_str} - "
+                        f"Productos: {sync_system.stats.get('products', {}).get('nuevos', 0)} nuevos, "
+                        f"{sync_system.stats.get('products', {}).get('modificados', 0)} modificados", "INFO")
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error"
 
-                # Mostrar notificación BANNER de error
-                mostrar_banner(
-                    "⚠️ Error en Sincronización",
-                    "Revisa los logs para más detalles",
-                    duracion=10
-                )
+                # Mostrar notificación BANNER de error SOLO si es manual
+                if es_manual:
+                    mostrar_banner(
+                        "⚠️ Error en Sincronización",
+                        "Revisa los logs para más detalles",
+                        duracion=10
+                    )
+                else:
+                    log("⚠️ Sincronización automática falló - Revisa los logs para más detalles", "WARNING")
 
         except Exception as e:
             log(f"Error en sincronización: {e}", "ERROR")
             self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.last_sync_status = f"❌ Error: {str(e)[:30]}"
 
-            # Mostrar notificación BANNER de error
-            mostrar_banner(
-                "⚠️ Error en Sincronización",
-                str(e)[:100],
-                duracion=10
-            )
+            # Mostrar notificación BANNER de error SOLO si es manual
+            if es_manual:
+                mostrar_banner(
+                    "⚠️ Error en Sincronización",
+                    str(e)[:100],
+                    duracion=10
+                )
+            else:
+                log(f"⚠️ Sincronización automática con error: {e}", "ERROR")
         finally:
             self.is_syncing = False
 
