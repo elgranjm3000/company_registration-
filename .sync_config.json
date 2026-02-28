@@ -1,0 +1,18 @@
+{
+    "postgres_host": "localhost",
+    "postgres_port": "5432",
+    "postgres_database": "nuevaprueba",
+    "postgres_user": "postgres",
+    "postgres_password": "muentes123.",
+    "mysql_host": "91.238.160.176",
+    "mysql_port": "3306",
+    "mysql_database": "chrystal_movil",
+    "mysql_user": "chrystal_app",
+    "mysql_password": "muentes123.",
+    "company_rif": "J505261940",
+    "company_email": "elgranjm3000@gmail.com",
+    "company_name": "3344",
+    "sync_interval_minutes": "2",
+    "configured": true,
+    "first_run": false
+}
