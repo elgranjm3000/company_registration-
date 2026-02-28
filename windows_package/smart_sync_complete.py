@@ -3303,6 +3303,16 @@ class SmartSyncComplete:
                         if buy_aliquot is None or buy_aliquot == 0:
                             buy_aliquot = 16  # 16% IVA por defecto
 
+                        # 🔧 MANEJO DE short_name NULL - Usar description como fallback
+                        # MySQL exige que 'name' no sea NULL
+                        if not short_name or (isinstance(short_name, str) and short_name.strip() == ''):
+                            if description and description.strip():
+                                short_name = description[:100]  # Usar description (max 100 chars)
+                                self._log(f"  ℹ️ Product {code}: usando description como short_name", "debug")
+                            else:
+                                short_name = code  # Último recurso: usar el code
+                                self._log(f"  ℹ️ Product {code}: usando code como short_name (último recurso)", "debug")
+
                         # Crear JSON de imagen
                         image_json = self._create_image_json(image_type, product_image)
 
@@ -3477,6 +3487,16 @@ class SmartSyncComplete:
                             buy_tax = ''  # Valor vacío permitido
                         if buy_aliquot is None or buy_aliquot == 0:
                             buy_aliquot = 16  # 16% IVA por defecto
+
+                        # 🔧 MANEJO DE short_name NULL - Usar description como fallback
+                        # MySQL exige que 'name' no sea NULL
+                        if not short_name or (isinstance(short_name, str) and short_name.strip() == ''):
+                            if description and description.strip():
+                                short_name = description[:100]  # Usar description (max 100 chars)
+                                self._log(f"  ℹ️ Product {code}: usando description como short_name", "debug")
+                            else:
+                                short_name = code  # Último recurso: usar el code
+                                self._log(f"  ℹ️ Product {code}: usando code como short_name (último recurso)", "debug")
 
                         # Crear JSON de imagen
                         image_json = self._create_image_json(image_type, product_image)
