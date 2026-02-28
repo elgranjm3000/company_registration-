@@ -28,38 +28,7 @@ if exist "*.spec" del /q *.spec
 
 REM Compilar CON consola
 echo [3/3] Compilando con consola...
-python -c "
-import PyInstaller.__main__
-
-pyinstaller_opts = [
-    'sync_system.py',
-    '--name=SyncSystem_DEBUG',
-    '--onedir',
-    '--console',  # <-- CONSOLA VISIBLE
-    '--add-data=smart_sync_complete.py;.',
-    '--add-data=smart_sellers_sync_module.py;.',
-    '--add-data=config_encryption.py;.',
-    '--add-data=mysql_error_logger.py;.',
-    '--clean',
-    '--noconfirm',
-    '--hidden-import=pymysql',
-    '--hidden-import=psycopg2',
-    '--hidden-import=pystray',
-    '--hidden-import=PIL',
-    '--hidden-import=win10toast',
-    '--hidden-import=tkinter',
-    '--hidden-import=bcrypt',
-    '--hidden-import=config_encryption',
-    '--hidden-import=cryptography',
-    '--hidden-import=mysql_error_logger',
-    '--collect-all=psycopg2',
-    '--collect-all=pystray',
-    '--collect-all=Pillow',
-]
-
-print('Ejecutando PyInstaller con consola...')
-PyInstaller.__main__.run(pyinstaller_opts)
-"
+python build_exe_debug.py
 
 if %errorlevel% neq 0 (
     echo.
@@ -75,10 +44,10 @@ echo ========================================
 echo.
 echo El .exe se creo CON CONSOLA para DEBUG
 echo.
-echo Ubicacion: dist\SyncSystem_DEBUG\sync_system_debug.exe
+echo Ubicacion: dist\SyncSystem_DEBUG\SyncSystem_DEBUG.exe
 echo.
 echo INSTRUCCIONES:
-echo   1. Ejecuta: dist\SyncSystem_DEBUG\sync_system_debug.exe --mode config
+echo   1. Ejecuta: dist\SyncSystem_DEBUG\SyncSystem_DEBUG.exe --mode config
 echo   2. Ingresa los datos
 echo   3. Click en GUARDAR
 echo   4. MIRA LA CONSOLA - aparecera el error

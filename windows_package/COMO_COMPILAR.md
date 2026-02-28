@@ -20,7 +20,7 @@ COMPILAR_DEBUG.bat
 
 **Procedimiento:**
 1. Ejecuta `COMPILAR_DEBUG.bat`
-2. Ejecuta el .exe resultante: `dist\SyncSystem_DEBUG\sync_system_debug.exe --mode config`
+2. Ejecuta el .exe resultante: `dist\SyncSystem_DEBUG\SyncSystem_DEBUG.exe --mode config`
 3. Ingresa los datos y click en Guardar
 4. **MIRA LA CONSOLA** - aparecerá el error exacto
 5. Toma una captura de pantalla de la consola
@@ -149,7 +149,7 @@ python build_exe.py
 
 **SOLUCIÓN:**
 1. Usa **COMPILAR_DEBUG.bat** para crear un .exe con consola
-2. Ejecuta el .exe resultante: `dist\SyncSystem_DEBUG\sync_system_debug.exe --mode config`
+2. Ejecuta el .exe resultante: `dist\SyncSystem_DEBUG\SyncSystem_DEBUG.exe --mode config`
 3. Ingresa los datos y click en Guardar
 4. **MIRA LA CONSOLA** - aparecerá el error exacto
 5. Errores comunes:
