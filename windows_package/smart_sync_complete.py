@@ -576,15 +576,16 @@ class SmartSyncComplete:
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Marcar el registro en sync_hashes como eliminado
+                -- USAR CODE en lugar de EMAIL (code es el identificador único)
                 UPDATE sync_hashes
                 SET deleted_at = NOW()
                 WHERE table_name = 'customers'
-                AND record_key = OLD.email;
+                AND record_key = OLD.code;
 
                 -- Si no existe en sync_hashes, insertar el registro marcado como eliminado
                 IF NOT FOUND THEN
                     INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
-                    VALUES ('customers', OLD.email, md5(OLD.email::text), NOW());
+                    VALUES ('customers', OLD.code, md5(OLD.code::text), NOW());
                 END IF;
 
                 RETURN OLD;
@@ -4000,30 +4001,30 @@ class SmartSyncComplete:
 
             customers_a_eliminar = []
 
-            for (customer_email,) in customers_eliminados:
+            for (customer_code,) in customers_eliminados:
                 if not self.sync_running:
                     break
 
-                # Buscar el customer en MySQL por document_number (email en PG)
+                # Buscar el customer en MySQL por document_number (que es el code de PostgreSQL)
                 self.mysql_cursor.execute(
                     "SELECT id FROM customers WHERE document_number = %s AND company_id = %s",
-                    (customer_email, company_id)
+                    (customer_code, company_id)
                 )
                 customer_mysql = self.mysql_cursor.fetchone()
 
                 if customer_mysql:
                     customer_id = customer_mysql[0]
-                    customers_a_eliminar.append((customer_id, customer_email))
-                    self._log(f"   🗑️ Customer {customer_email} (ID: {customer_id}) será eliminado de MySQL", "debug")
+                    customers_a_eliminar.append((customer_id, customer_code))
+                    self._log(f"   🗑️ Customer con code={customer_code} (ID: {customer_id}) será eliminado de MySQL", "debug")
                 else:
                     # Ya no existe en MySQL, solo limpiar sync_hashes
-                    self._log(f"   ℹ️ Customer {customer_email} ya no existe en MySQL", "debug")
+                    self._log(f"   ℹ️ Customer con code={customer_code} ya no existe en MySQL", "debug")
 
             # Eliminar customers de MySQL
             if customers_a_eliminar:
                 self._log(f"   🗑️ Eliminando {len(customers_a_eliminar)} customers de MySQL...", "info")
 
-                for customer_id, customer_email in customers_a_eliminar:
+                for customer_id, customer_code in customers_a_eliminar:
                     try:
                         # Eliminar de MySQL
                         delete_query = """
@@ -4032,10 +4033,10 @@ class SmartSyncComplete:
                         """
                         self.mysql_cursor.execute(delete_query, (customer_id, company_id))
 
-                        self._log(f"   ✅ Customer {customer_email} eliminado de MySQL", "info")
+                        self._log(f"   ✅ Customer con code={customer_code} eliminado de MySQL", "info")
 
                     except Exception as e:
-                        self._log(f"   ❌ Error eliminando customer {customer_email} de MySQL: {e}", "error")
+                        self._log(f"   ❌ Error eliminando customer con code={customer_code} de MySQL: {e}", "error")
                         self.stats['customers']['errores'] += 1
 
                 # Commit cambios en MySQL
