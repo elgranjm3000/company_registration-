@@ -1545,9 +1545,12 @@ class SmartSyncComplete:
             query = """
             SELECT DISTINCT ON (a.code)
                 a.code,
+                b.unit,
                 a.description,
                 a.short_name,
                 a.department,
+                b.product_code,
+                h.description as unidad,
                 COALESCE(c.total_stock, 0) AS stock,
                 a.product_type,
                 a.coin,
@@ -1586,11 +1589,12 @@ class SmartSyncComplete:
                 FROM products_stock
                 GROUP BY product_code
             ) c ON a.code = c.product_code
-            LEFT JOIN products_units b ON a.code = b.product_code and unit = '00'
+            LEFT JOIN products_units b ON a.code = b.product_code
             LEFT JOIN products_image d ON d.main_code = a.code
             LEFT JOIN taxes e ON e.code = a.sale_tax
             LEFT JOIN taxes g ON g.code = a.buy_tax
             LEFT JOIN coin f ON f.code = a.coin
+            LEFT JOIN units h ON h.code = b.unit
             WHERE a.code IS NOT NULL
               AND a.code != ''
             ORDER BY a.code, b.maximum_price DESC;
@@ -3260,9 +3264,9 @@ class SmartSyncComplete:
 
                     try:
                         # Desempaquetar con todos los campos
-                        (code, description, short_name, department, stock, product_type,
-                         coin, description_coin, price, cost, higher_price, min_stock, status,
-                         image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                        (code, unit_code, description, short_name, department, product_code_pg,
+                         unidad, stock, product_type, coin, description_coin, price, cost, higher_price,
+                         min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
                         # 🔧 MANEJO DE VALORES NULL - Usar valores por defecto
                         # Si department es NULL o vacío, intentar usar una categoría por defecto
@@ -3353,7 +3357,8 @@ class SmartSyncComplete:
                             description_coin,  # Ya tiene valor por defecto si era NULL
                             final_unitary_cost,
                             buy_tax,  # Ya tiene valor por defecto si era NULL
-                            buy_aliquot  # Ya tiene valor por defecto si era NULL
+                            buy_aliquot,  # Ya tiene valor por defecto si era NULL
+                            unidad  # Unidad de medida
                         ))
 
                         productos_a_procesar.append((idx, code))
@@ -3372,9 +3377,9 @@ class SmartSyncComplete:
                         company_id, code, name, description, price, cost, stock, min_stock,
                         category_id, status, product_type, images, higher_price, sale_tax,
                         aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
-                        created_at, updated_at
+                        unidad, created_at, updated_at
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
                     ON DUPLICATE KEY UPDATE
                         name = VALUES(name),
@@ -3395,6 +3400,7 @@ class SmartSyncComplete:
                         unitary_cost = VALUES(unitary_cost),
                         buy_tax = VALUES(buy_tax),
                         buy_aliquot = VALUES(buy_aliquot),
+                        unidad = VALUES(unidad),
                         updated_at = NOW()
                     """
 
@@ -3445,9 +3451,9 @@ class SmartSyncComplete:
 
                     try:
                         # Desempaquetar con todos los campos
-                        (code, description, short_name, department, stock, product_type,
-                         coin, description_coin, price, cost, higher_price, min_stock, status,
-                         image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                        (code, unit_code, description, short_name, department, product_code_pg,
+                         unidad, stock, product_type, coin, description_coin, price, cost, higher_price,
+                         min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
 
                         # 🔧 MANEJO DE VALORES NULL - Usar valores por defecto
                         # Si department es NULL o vacío, intentar usar una categoría por defecto
