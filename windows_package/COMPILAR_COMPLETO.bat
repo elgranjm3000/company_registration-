@@ -12,7 +12,7 @@ REM Paso 1: Instalar TODAS las dependencias necesarias
 echo [1/5] Instalando dependencias de Python...
 echo.
 
-pip install pyinstaller psycopg2-binary pymysql pystray Pillow bcrypt win10toast cryptography 2>nul
+pip install pyinstaller psycopg2-binary pymysql pystray Pillow bcrypt win10toast cryptography requests 2>nul
 if %errorlevel% neq 0 (
     echo ERROR instalando dependencias
     pause

@@ -79,6 +79,9 @@ def build_exe():
         '--hidden-import=cryptography.hazmat.backends',
         # Para logging de errores de MySQL
         '--hidden-import=mysql_error_logger',
+        # Para obtener tipo de cambio VES/USD
+        '--hidden-import=requests',
+        '--hidden-import=urllib3',
 
         # Incluir paquetes completos
         '--collect-all=psycopg2',

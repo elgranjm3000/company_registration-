@@ -18,7 +18,7 @@ pause
 
 REM Instalar dependencias
 echo [1/3] Instalando dependencias...
-pip install pyinstaller psycopg2-binary pymysql pystray Pillow bcrypt win10toast cryptography 2>nul
+pip install pyinstaller psycopg2-binary pymysql pystray Pillow bcrypt win10toast cryptography requests 2>nul
 
 REM Limpiar builds anteriores
 echo [2/3] Limpiando compilaciones anteriores...

@@ -69,6 +69,9 @@ def build_exe_debug():
         '--hidden-import=cryptography.hazmat.primitives',
         '--hidden-import=cryptography.hazmat.backends',
         '--hidden-import=mysql_error_logger',
+        # Para obtener tipo de cambio VES/USD
+        '--hidden-import=requests',
+        '--hidden-import=urllib3',
 
         # Incluir paquetes completos
         '--collect-all=psycopg2',
