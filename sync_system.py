@@ -34,6 +34,13 @@ except ImportError:
     import warnings
     warnings.warn("cryptography no está instalado. Las credenciales estarán en base64 (menos seguro)")
 
+# Importar win10toast para notificaciones (opcional)
+try:
+    from win10toast import ToastNotifier
+    TOAST_AVAILABLE = True
+except ImportError:
+    TOAST_AVAILABLE = False
+
 # Detectar si estamos corriendo en PyInstaller
 if getattr(sys, 'frozen', False):
     # Si está empaquetado, usar el directorio temporal de PyInstaller
@@ -521,10 +528,49 @@ class SyncModule:
             if hasattr(sync_system, 'stats'):
                 self.stats = sync_system.stats.copy()
 
+                # 📢 Mostrar notificación toast con resumen
+                if TOAST_AVAILABLE:
+                    try:
+                        toast = ToastNotifier()
+
+                        # Calcular duración
+                        duracion = getattr(sync_system, 'duracion_sync', 0)
+
+                        # Construir mensaje con estadísticas
+                        cambios = []
+                        stats = self.stats
+                        if stats['products']['nuevos'] > 0 or stats['products']['modificados'] > 0:
+                            cambios.append(f"Prod: {stats['products']['nuevos']}+ {stats['products']['modificados']}~")
+
+                        if stats['customers']['nuevos'] > 0 or stats['customers']['modificados'] > 0:
+                            cambios.append(f"Cust: {stats['customers']['nuevos']}+ {stats['customers']['modificados']}~")
+
+                        if stats['categories']['nuevos'] > 0 or stats['categories']['modificados'] > 0:
+                            cambios.append(f"Cat: {stats['categories']['nuevos']}+ {stats['categories']['modificados']}~")
+
+                        if stats['quotes']['nuevos'] > 0:
+                            cambios.append(f"Quote: {stats['quotes']['nuevos']}+")
+
+                        # Si no hubo cambios
+                        if not cambios:
+                            mensaje = f"Sin cambios | Duration: {duracion:.1f}s"
+                        else:
+                            mensaje = " | ".join(cambios) + f" | Duration: {duracion:.1f}s"
+
+                        # Mostrar notificación (duración 8 segundos)
+                        toast.show_toast(
+                            "✅ Sincronización Completada",
+                            mensaje,
+                            duration=8,
+                            threaded=True
+                        )
+                    except Exception as e:
+                        # Si falla la notificación, no interrumpir el flujo
+                        log(f"Error mostrando notificación: {e}", "WARNING")
+
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
 
-            # El toast notification ya se muestra en ejecutar_sync_completa()
-            # No mostramos messagebox para no ser intrusivos
+            # No mostramos messagebox para no ser intrusivos en segundo plano
             if resultado:
                 log("✅ Sincronización completada exitosamente", "SUCCESS")
             else:

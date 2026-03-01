@@ -18,6 +18,13 @@ from dotenv import load_dotenv
 from smart_sellers_sync_module import SmartSellersSyncModule
 from smart_sync_complete import SmartSyncComplete
 
+# Importar win10toast para notificaciones (opcional)
+try:
+    from win10toast import ToastNotifier
+    TOAST_AVAILABLE = True
+except ImportError:
+    TOAST_AVAILABLE = False
+
 load_dotenv()
 
 
@@ -469,6 +476,52 @@ class CompleteSyncApp:
         self.status_var.set("Sincronización detenida")
         self.log_message("Sincronización detenida por el usuario", "warning")
     
+    def _mostrar_notificacion_sync(self, duration, stats):
+        """
+        Mostrar notificación tipo toast con resumen de sincronización
+
+        Args:
+            duration: Duración de la sincronización en segundos
+            stats: Diccionario con estadísticas de sincronización
+        """
+        if not TOAST_AVAILABLE:
+            return
+
+        try:
+            toast = ToastNotifier()
+
+            # Construir mensaje con estadísticas
+            cambios = []
+            if stats['products']['nuevos'] > 0 or stats['products']['modificados'] > 0:
+                cambios.append(f"Products: {stats['products']['nuevos']}+ {stats['products']['modificados']}~")
+
+            if stats['customers']['nuevos'] > 0 or stats['customers']['modificados'] > 0:
+                cambios.append(f"Customers: {stats['customers']['nuevos']}+ {stats['customers']['modificados']}~")
+
+            if stats['categories']['nuevos'] > 0 or stats['categories']['modificados'] > 0:
+                cambios.append(f"Categories: {stats['categories']['nuevos']}+ {stats['categories']['modificados']}~")
+
+            if stats['quotes']['nuevos'] > 0:
+                cambios.append(f"Quotes: {stats['quotes']['nuevos']}+")
+
+            # Si no hubo cambios
+            if not cambios:
+                mensaje = "Sin cambios | Duration: {:.1f}s".format(duration)
+            else:
+                mensaje = " | ".join(cambios) + f" | Duration: {duration:.1f}s"
+
+            # Mostrar notificación (duracion 8 segundos)
+            toast.show_toast(
+                "✅ Sincronización Completada",
+                mensaje,
+                duration=8,
+                threaded=True
+            )
+
+        except Exception as e:
+            # Si falla la notificación, no interrumpir el flujo
+            print(f"Error mostrando notificación: {e}")
+
     def complete_sync_process(self):
         """Proceso completo de sincronización usando SmartSyncComplete"""
         start_time = datetime.now()
@@ -509,6 +562,10 @@ class CompleteSyncApp:
                 self.status_var.set("Sincronización completada exitosamente")
                 self.progress_var.set(100)
 
+                # Mostrar notificación toast (no invasiva)
+                self._mostrar_notificacion_sync(duration, stats)
+
+                # Mostrar messagebox tradicional (modal)
                 messagebox.showinfo("Éxito", f"Sincronización completada en {duration:.1f} segundos")
             else:
                 raise Exception("La sincronización devolvió False")

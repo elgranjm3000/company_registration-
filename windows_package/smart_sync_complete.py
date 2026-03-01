@@ -4950,6 +4950,9 @@ class SmartSyncComplete:
 
             # Reporte final
             duracion = (datetime.now() - inicio).total_seconds()
+
+            # Guardar duración para que esté disponible para notificaciones externas
+            self.duracion_sync = duracion
             self._log("", "info")
             self._log("╔════════════════════════════════════════════════════════════════╗", "info")
             self._log("║                    RESUMEN DE SINCRONIZACIÓN                    ║", "info")
