@@ -4899,11 +4899,25 @@ class SmartSyncComplete:
             self._log("🔍 STEP 3: Detectando cambios en categories...", "debug")
             cambios_categories = self.detectar_cambios_categories()
 
+            # IMPORTANTE: Eliminar de MySQL ANTES de detectar cambios desde MySQL
+            # Esto evita que se re-sincronicen elementos que fueron eliminados de PostgreSQL
+            self._log("", "info")
+            self._log("🗑️ ELIMINANDO DE MYSQL LO QUE FALTA EN POSTGRESQL...", "info")
+            self._log("🗑️ ELIMINANDO PRODUCTOS MARCADOS COMO BORRADOS...", "info")
+            self._eliminar_productos_mysql_cuando_faltan_en_postgresql()
+            self._log("🗑️ ELIMINANDO CUSTOMERS MARCADOS COMO BORRADOS...", "info")
+            self._eliminar_customers_mysql_cuando_faltan_en_postgresql()
+            self._log("🗑️ ELIMINANDO CATEGORIES MARCADAS COMO BORRADAS...", "info")
+            self._eliminar_categories_mysql_cuando_faltan_en_postgresql()
+            self._log("🗑️ ELIMINACIÓN DE MYSQL COMPLETADA", "debug")
+
             # Detectar cambios en products de MySQL (para sincronizar a PostgreSQL)
+            # AHORA se detecta DESPUÉS de eliminar, así no se detectan los eliminados
             self._log("🔍 STEP 4: Detectando cambios en products (MySQL → PostgreSQL)...", "debug")
             cambios_products_mysql = self.detectar_cambios_products_mysql()
 
             # Detectar cambios en customers de MySQL (para sincronizar a PostgreSQL)
+            # AHORA se detecta DESPUÉS de eliminar, así no se detectan los eliminados
             self._log("🔍 STEP 5: Detectando cambios en customers (MySQL → PostgreSQL)...", "debug")
             cambios_customers_mysql = self.detectar_cambios_customers_mysql()
 
@@ -4918,15 +4932,6 @@ class SmartSyncComplete:
             self._sincronizar_sellers()
             # Eliminar de MySQL los sellers que fueron eliminados de PostgreSQL
             self._eliminar_sellers_mysql_cuando_faltan_en_postgresql()
-
-            # IMPORTANTE: Eliminar productos ANTES de verificar si hay cambios
-            # Los productos marcados con deleted_at en sync_hashes siempre deben eliminarse
-            self._log("", "info")
-            self._log("🗑️ ELIMINANDO PRODUCTOS MARCADOS COMO BORRADOS...", "info")
-            self._eliminar_productos_mysql_cuando_faltan_en_postgresql()
-            self._eliminar_customers_mysql_cuando_faltan_en_postgresql()
-            self._eliminar_categories_mysql_cuando_faltan_en_postgresql()
-            self._log("🗑️ ELIMINACIÓN COMPLETADA", "debug")
 
             # Verificar si hay cambios (después de eliminar)
             total_cambios = (
