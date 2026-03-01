@@ -4247,12 +4247,38 @@ class SmartSyncComplete:
 
             # PASO 3: Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
             self._log("   🧹 Limpiando registros de sync_hashes...", "info")
+
+            # 3.1 Limpiar registros de customers (PostgreSQL → MySQL)
             self.pg_cursor.execute(
                 "DELETE FROM sync_hashes WHERE table_name = 'customers' AND deleted_at IS NOT NULL"
             )
-            filas_limpias = self.pg_cursor.rowcount
+            filas_limpias_customers = self.pg_cursor.rowcount
             self.pg_conn.commit()
-            self._log(f"   ✅ {filas_limpias} registros eliminados de sync_hashes", "info")
+            self._log(f"   ✅ {filas_limpias_customers} registros 'customers' eliminados de sync_hashes", "debug")
+
+            # 3.2 También limpiar registros de customers_mysql para evitar re-sincronización desde MySQL
+            # Buscar los IDs de MySQL correspondientes a los códigos eliminados
+            filas_limpias_customers_mysql = 0
+            if customers_a_eliminar:
+                # Obtener los customer_ids que eliminamos de MySQL
+                customer_ids_eliminados = [str(cid) for (cid, _) in customers_a_eliminar]
+
+                if customer_ids_eliminados:
+                    # Eliminar registros de customers_mysql correspondientes
+                    placeholders_ids = ','.join(['%s'] * len(customer_ids_eliminados))
+                    query_delete_mysql = f"""
+                    DELETE FROM sync_hashes
+                    WHERE table_name = 'customers_mysql'
+                    AND record_key IN ({placeholders_ids})
+                    """
+                    self.pg_cursor.execute(query_delete_mysql, customer_ids_eliminados)
+                    filas_limpias_customers_mysql = self.pg_cursor.rowcount
+                    self.pg_conn.commit()
+                    if filas_limpias_customers_mysql > 0:
+                        self._log(f"   ✅ {filas_limpias_customers_mysql} registros 'customers_mysql' eliminados de sync_hashes", "info")
+
+            filas_limpias = filas_limpias_customers + filas_limpias_customers_mysql
+            self._log(f"   ✅ Total {filas_limpias} registros eliminados de sync_hashes", "info")
 
         except Exception as e:
             self._log(f"Error verificando customers eliminados: {e}", "error")
