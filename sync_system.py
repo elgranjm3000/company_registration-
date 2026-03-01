@@ -324,11 +324,14 @@ def obtener_config_mysql():
 
 def cargar_config():
     """Carga configuración desde archivo y desencripta campos sensibles"""
-    if not os.path.exists(CONFIG_FILE):
+    # Buscar archivo de configuración (prioriza archivo oculto)
+    config_path = buscar_config_externo()
+
+    if not config_path:
         return crear_config_default()
 
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
         # Desencriptar campos sensibles si hay módulo de encriptación
@@ -2591,7 +2594,6 @@ def main():
                     print("🔄 Reiniciando System Tray...\n")
                 else:
                     print("❌ Se alcanzó el máximo de reintentos. Saliendo.")
-                    import sys
                     sys.exit(1)
 
     elif args.mode == "sync":
