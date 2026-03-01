@@ -1891,6 +1891,104 @@ class SmartSyncComplete:
 
         return cambios
 
+    def detectar_cambios_customers_mysql(self) -> Dict[str, List]:
+        """
+        Detectar cambios en customers de MySQL para sincronizar a PostgreSQL
+
+        Returns:
+            Dict con 'nuevos', 'modificados'
+        """
+        # Obtener company_id desde companies
+        company_id = self._get_company_id_from_companies()
+        if not company_id:
+            self._log("   ❌ No se pudo obtener company_id", "error")
+            return {'nuevos': [], 'modificados': []}
+
+        self._log("Detectando cambios en customers (MySQL → PostgreSQL)...", "info")
+
+        cambios = {
+            'nuevos': [],
+            'modificados': []
+        }
+
+        try:
+            # Obtener customers de MySQL
+            query = """
+            SELECT
+                id,
+                document_number,
+                name,
+                address,
+                email,
+                phone,
+                contact,
+                created_at,
+                updated_at
+            FROM customers
+            WHERE company_id = %s
+            ORDER BY id
+            """
+
+            self.mysql_cursor.execute(query, (company_id,))
+            customers_mysql = self.mysql_cursor.fetchall()
+
+            # Convertir a diccionarios
+            columnas = [
+                'id', 'document_number', 'name', 'address', 'email', 'phone', 'contact',
+                'created_at', 'updated_at'
+            ]
+
+            customers_dict = []
+            for fila in customers_mysql:
+                customer_dict = dict(zip(columnas, fila))
+                customers_dict.append(customer_dict)
+
+            self._log(f"   📋 Customers encontrados en MySQL: {len(customers_dict)}", "info")
+
+            if not customers_dict:
+                self._log("   ℹ️ No hay customers en MySQL para esta empresa", "info")
+                return cambios
+
+            # Mostrar códigos de customers encontrados
+            codigos_encontrados = [c['document_number'] for c in customers_dict]
+            self._log(f"   🔍 Códigos: {codigos_encontrados[:10]}{'...' if len(codigos_encontrados) > 10 else ''}", "debug")
+
+            for customer in customers_dict:
+                if not self.sync_running:
+                    break
+
+                customer_id = customer['id']
+                customer_code = customer['document_number']
+
+                # Generar hash actual
+                hash_actual = self._generar_hash_customer_mysql(customer)
+
+                # Buscar hash guardado en sync_hashes (PostgreSQL)
+                hash_guardado = self._obtener_hash_guardado('customers_mysql', str(customer_id))
+
+                self._log(f"   🔍 Customer #{customer_id} ({customer_code}): hash_guardado={hash_guardado[0][:8] if hash_guardado else 'None'}", "debug")
+
+                if hash_guardado is None:
+                    # Nuevo customer
+                    cambios['nuevos'].append(customer)
+                    self._log(f"  ✨ NUEVO: Customer #{customer_id} ({customer_code})", "info")
+                elif hash_guardado[0] != hash_actual:
+                    # Customer modificado
+                    cambios['modificados'].append(customer)
+                    self._log(f"  🔄 MODIFICADO: Customer #{customer_id} ({customer_code})", "info")
+
+                # NOTA: El hash se guarda DESPUÉS de sincronizar exitosamente
+                # en sincronizar_customers_postgresql()
+
+            self._log(f"✅ Customers detectados: {len(cambios['nuevos'])} nuevos, "
+                      f"{len(cambios['modificados'])} modificados", "info")
+
+        except Exception as e:
+            self._log(f"Error detectando cambios en customers de MySQL: {str(e)}", "error")
+            self.stats['customers']['errores'] += 1
+
+        return cambios
+
     def _generar_hash_product_mysql(self, product: dict) -> str:
         """
         Generar hash MD5 de un product de MySQL
@@ -1918,6 +2016,31 @@ class SmartSyncComplete:
             product.get('product_type', 'finished'),
             product.get('sale_tax', ''),
             str(product.get('aliquot', 0))
+        ]
+
+        datos_hash = "|".join(str(c) for c in campos_hash)
+        return hashlib.md5(datos_hash.encode()).hexdigest()
+
+    def _generar_hash_customer_mysql(self, customer: dict) -> str:
+        """
+        Generar hash MD5 de un customer de MySQL
+
+        Args:
+            customer: Diccionario con datos del customer
+
+        Returns:
+            Hash MD5 hexadecimal
+        """
+        import hashlib
+
+        # Campos relevantes para el hash
+        campos_hash = [
+            customer['document_number'],  # code en PostgreSQL
+            customer['name'],  # description en PostgreSQL
+            customer.get('address', ''),
+            customer.get('email', ''),
+            customer.get('phone', ''),
+            customer.get('contact', '')
         ]
 
         datos_hash = "|".join(str(c) for c in campos_hash)
@@ -4372,6 +4495,124 @@ class SmartSyncComplete:
             self._log(f"Error sincronizando products a PostgreSQL: {str(e)}", "error")
             self.stats['products']['errores'] += 1
 
+    def sincronizar_customers_postgresql(self, cambios: Dict[str, List]):
+        """
+        Sincronizar customers de MySQL a PostgreSQL
+
+        NOTA: PostgreSQL es la fuente de verdad para customers.
+        Solo se INSERTAN customers que no existen,
+        pero NUNCA se ACTUALIZAN customers existentes desde MySQL.
+
+        Args:
+            cambios: Dict con 'nuevos' y 'modificados'
+        """
+        if not cambios.get('nuevos') and not cambios.get('modificados'):
+            self._log("✅ Customers: No hay cambios para sincronizar (MySQL → PG)", "info")
+            return
+
+        total_nuevos = len(cambios.get('nuevos', []))
+        total_modificados = len(cambios.get('modificados', []))
+
+        # IGNORAR modificados - PostgreSQL es la fuente de verdad
+        if total_modificados > 0:
+            self._log(f"   ℹ️ Ignorando {total_modificados} customers modificados en MySQL (PostgreSQL es la fuente de verdad)", "info")
+
+        if total_nuevos == 0:
+            return
+
+        self._log("", "info")
+        self._log("👥 SINCRONIZANDO CUSTOMERS NUEVOS (MySQL → PostgreSQL)...", "info")
+        self._log(f"   📋 Nuevos: {total_nuevos} (modificados ignorados)", "info")
+
+        try:
+            # Procesar SOLO customers nuevos (ignorar modificados)
+            customers_a_procesar = cambios.get('nuevos', [])
+            total_a_procesar = len(customers_a_procesar)
+            current_count = 0
+
+            for customer in customers_a_procesar:
+                if not self.sync_running:
+                    break
+
+                customer_id = customer['id']
+                customer_code = customer['document_number']
+                current_count += 1
+
+                try:
+                    # Verificar si ya existe
+                    self.pg_cursor.execute(
+                        "SELECT code FROM clients WHERE code = %s",
+                        (customer_code,)
+                    )
+                    existe = self.pg_cursor.fetchone()
+
+                    if existe:
+                        # Ya existe - IGNORAR (PostgreSQL es la fuente de verdad)
+                        self._log(f"  ℹ️ Customer {customer_code} ya existe en PostgreSQL (omitiendo)", "debug")
+
+                        # Guardar hash para no volver a procesarlo
+                        hash_nuevo = self._generar_hash_customer_mysql(customer)
+                        self._guardar_hash('customers_mysql', str(customer_id), hash_nuevo, customer)
+                        continue
+
+                    # No existe - INSERTAR
+                    self._log(f"  ✨ Insertando customer {customer_code}...", "debug")
+
+                    # Manejar valores NULL correctamente
+                    name = customer.get('name', '')
+                    address = customer.get('address')
+                    email = customer.get('email')
+                    phone = customer.get('phone')
+                    contact = customer.get('contact')
+
+                    # Generar email temporal si no existe
+                    if not email or email.strip() == '':
+                        email = f"customer_{customer_code}@temp.local"
+
+                    # Insertar en tabla clients de PostgreSQL
+                    sql_insert = """
+                    INSERT INTO clients (
+                        code, description, address, email, phone, contact
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """
+                    self.pg_cursor.execute(sql_insert, (
+                        customer_code,
+                        name[:255] if name else '',
+                        address,
+                        email,
+                        phone,
+                        contact
+                    ))
+
+                    self.pg_conn.commit()
+
+                    # Actualizar estadísticas y reportar progreso
+                    self.stats['customers']['nuevos'] += 1
+                    self._reportar_progreso('customers', current_count, total_a_procesar)
+
+                    # Guardar hash DESPUÉS de insertar
+                    hash_nuevo = self._generar_hash_customer_mysql(customer)
+                    self._guardar_hash('customers_mysql', str(customer_id), hash_nuevo, customer)
+
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if 'duplicate' in error_msg or 'unique' in error_msg:
+                        self._log(f"  ℹ️ Customer {customer_code} ya existe (omitiendo)", "debug")
+                        self.pg_conn.rollback()
+                    else:
+                        import traceback
+                        self._log(f"Error procesando customer {customer_code}: {str(e)}", "error")
+                        self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+                        self.pg_conn.rollback()
+                        self.stats['customers']['errores'] += 1
+
+            self._log(f"✅ Customers completados: {self.stats['customers']['nuevos']} nuevos insertados, "
+                      f"{self.stats['customers']['errores']} errores", "success")
+
+        except Exception as e:
+            self._log(f"Error sincronizando customers a PostgreSQL: {str(e)}", "error")
+            self.stats['customers']['errores'] += 1
+
     def sincronizar_categories_mysql(self, cambios: Dict[str, List]):
         """Sincronizar cambios de categories a MySQL"""
         if not any(cambios.values()):
@@ -4616,10 +4857,14 @@ class SmartSyncComplete:
             self._log("🔍 STEP 4: Detectando cambios en products (MySQL → PostgreSQL)...", "debug")
             cambios_products_mysql = self.detectar_cambios_products_mysql()
 
+            # Detectar cambios en customers de MySQL (para sincronizar a PostgreSQL)
+            self._log("🔍 STEP 5: Detectando cambios en customers (MySQL → PostgreSQL)...", "debug")
+            cambios_customers_mysql = self.detectar_cambios_customers_mysql()
+
             # Detectar cambios en quotes (MySQL → PostgreSQL)
-            self._log("🔍 STEP 5: Detectando cambios en quotes...", "debug")
+            self._log("🔍 STEP 6: Detectando cambios en quotes...", "debug")
             cambios_quotes = self.detectar_cambios_quotes()
-            self._log("🔍 STEP 5 COMPLETADO", "debug")
+            self._log("🔍 STEP 6 COMPLETADO", "debug")
 
             # Sincronizar sellers siempre (no usa hash, sincronización completa)
             self._log("", "info")
@@ -4643,7 +4888,8 @@ class SmartSyncComplete:
                 len(cambios_customers['nuevos']) + len(cambios_customers['modificados']) +
                 len(cambios_categories['nuevos']) + len(cambios_categories['modificados']) +
                 len(cambios_quotes['nuevos']) + len(cambios_quotes['modificados']) +
-                len(cambios_products_mysql['nuevos']) + len(cambios_products_mysql['modificados'])
+                len(cambios_products_mysql['nuevos']) + len(cambios_products_mysql['modificados']) +
+                len(cambios_customers_mysql['nuevos']) + len(cambios_customers_mysql['modificados'])
             )
 
             if total_cambios == 0:
@@ -4670,7 +4916,11 @@ class SmartSyncComplete:
             # Sincronizar nuevos productos
             self.sincronizar_products_postgresql(cambios_products_mysql)
 
-            # 5. Quotes a PostgreSQL (dirección opuesta, requiere products y customers)
+            # 5. Customers de MySQL → PostgreSQL (ANTES de quotes para que existan)
+            # Sincronizar nuevos customers
+            self.sincronizar_customers_postgresql(cambios_customers_mysql)
+
+            # 6. Quotes a PostgreSQL (dirección opuesta, requiere products y customers)
             self.sincronizar_quotes_postgresql(cambios_quotes)
 
             # Sincronizar estados de quotes (PostgreSQL → MySQL)
