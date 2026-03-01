@@ -2,7 +2,9 @@
 # Spec file para compilar sync_system.py con PyInstaller
 # Incluye todas las dependencias para System Tray y Notificaciones Banner
 
-block_cipher = None
+# Clave de encriptación para proteger el código
+# Generar nueva clave con: python -c "import secrets; print(secrets.token_hex(16))"
+block_cipher = bytes.fromhex('1c99a2c513420a908c50aa6bea5d914a')
 
 a = Analysis(
     ['sync_system.py'],
@@ -13,6 +15,8 @@ a = Analysis(
         ('icon.ico', '.'),  # Icono personalizado si existe
     ],
     hiddenimports=[
+        # Módulos principales de la aplicación
+        'smart_sync_complete',
         # MySQL
         'mysql.connector',
         'mysql.connector.pooling',
