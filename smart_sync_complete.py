@@ -4569,19 +4569,39 @@ class SmartSyncComplete:
                     if not email or email.strip() == '':
                         email = f"customer_{customer_code}@temp.local"
 
-                    # Insertar en tabla clients de PostgreSQL
+                    # Insertar en tabla clients de PostgreSQL con valores por defecto
                     sql_insert = """
                     INSERT INTO clients (
-                        code, description, address, email, phone, contact
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                        code, description, address, email, phone, contact,
+                        client_id, country, province, city, town, area_sales,
+                        seller, client_group, credit_days, credit_limit,
+                        discount, client_type, sale_price, status,
+                        name_fiscal, generic_client
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     self.pg_cursor.execute(sql_insert, (
-                        customer_code,
-                        name[:255] if name else '',
-                        address,
-                        email,
-                        phone,
-                        contact
+                        customer_code,                           # code
+                        name[:255] if name else '',              # description
+                        address,                                 # address
+                        email,                                   # email
+                        phone,                                   # phone
+                        contact,                                 # contact
+                        customer_code,                           # client_id = code
+                        '00',                                    # country
+                        '00',                                    # province
+                        '00',                                    # city
+                        '00',                                    # town
+                        '00',                                    # area_sales
+                        '00',                                    # seller
+                        '00',                                    # client_group
+                        0,                                       # credit_days
+                        0,                                       # credit_limit
+                        0,                                       # discount
+                        '01',                                    # client_type
+                        0,                                       # sale_price
+                        '01',                                    # status
+                        0,                                       # name_fiscal
+                        True                                     # generic_client
                     ))
 
                     self.pg_conn.commit()
