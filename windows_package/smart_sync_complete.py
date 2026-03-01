@@ -3950,6 +3950,7 @@ class SmartSyncComplete:
 
             productos_a_eliminar = []
 
+            # PASO 1: Verificar cuáles productos existen en MySQL
             for (product_code,) in productos_eliminados:
                 if not self.sync_running:
                     break
@@ -3969,7 +3970,7 @@ class SmartSyncComplete:
                     # Ya no existe en MySQL, solo limpiar sync_hashes
                     self._log(f"   ℹ️ Producto {product_code} ya no existe en MySQL", "debug")
 
-            # Eliminar productos de MySQL
+            # PASO 2: Eliminar productos de MySQL
             if productos_a_eliminar:
                 self._log(f"   🗑️ Eliminando {len(productos_a_eliminar)} productos de MySQL...", "info")
 
@@ -3998,7 +3999,7 @@ class SmartSyncComplete:
             else:
                 self._log("   ℹ️ No hay productos que eliminar de MySQL (ya fueron limpiados)", "info")
 
-            # Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
+            # PASO 3: Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
             self._log("   🧹 Limpiando registros de sync_hashes...", "info")
             self.pg_cursor.execute(
                 "DELETE FROM sync_hashes WHERE table_name = 'products' AND deleted_at IS NOT NULL"
@@ -4069,53 +4070,57 @@ class SmartSyncComplete:
 
             self._log(f"   📋 Encontrados {len(customers_eliminados)} customers eliminados en PostgreSQL", "info")
 
-            # Eliminar customers de MySQL directamente por document_number y company_id
-            self._log(f"   🗑️ Eliminando {len(customers_eliminados)} customers de MySQL...", "info")
+            customers_a_eliminar = []
 
+            # PASO 1: Verificar cuáles customers existen en MySQL
             for (customer_code,) in customers_eliminados:
                 if not self.sync_running:
                     break
 
-                try:
-                    # 🔍 DIAGNÓSTICO: Verificar si el cliente existe en MySQL antes de eliminar
-                    self.mysql_cursor.execute(
-                        "SELECT id, name FROM customers WHERE document_number = %s AND company_id = %s",
-                        (customer_code, company_id)
-                    )
-                    cliente_mysql = self.mysql_cursor.fetchone()
+                # Buscar el customer en MySQL
+                self.mysql_cursor.execute(
+                    "SELECT id, name FROM customers WHERE document_number = %s AND company_id = %s",
+                    (customer_code, company_id)
+                )
+                customer_mysql = self.mysql_cursor.fetchone()
 
-                    if cliente_mysql:
-                        mysql_id, mysql_name = cliente_mysql
-                        self._log(f"   🔍 Cliente encontrado en MySQL: id={mysql_id}, name={mysql_name}, code={customer_code}", "debug")
+                if customer_mysql:
+                    customer_id, customer_name = customer_mysql
+                    customers_a_eliminar.append((customer_id, customer_code))
+                    self._log(f"   🗑️ Customer {customer_code} (ID: {customer_id}, Name: {customer_name}) será eliminado de MySQL", "debug")
+                else:
+                    # Ya no existe en MySQL, solo limpiar sync_hashes
+                    self._log(f"   ℹ️ Customer {customer_code} ya no existe en MySQL", "debug")
 
-                    # Eliminar directamente por document_number (code de PG) y company_id
-                    delete_query = """
-                    DELETE FROM customers
-                    WHERE document_number = %s AND company_id = %s
-                    """
-                    self.mysql_cursor.execute(delete_query, (customer_code, company_id))
+            # PASO 2: Eliminar customers de MySQL
+            if customers_a_eliminar:
+                self._log(f"   🗑️ Eliminando {len(customers_a_eliminar)} customers de MySQL...", "info")
 
-                    filas_afectadas = self.mysql_cursor.rowcount
-                    if filas_afectadas > 0:
-                        self._log(f"   ✅ Customer con code={customer_code} eliminado de MySQL ({filas_afectadas} fila)", "info")
-                    else:
-                        self._log(f"   ⚠️ Customer con code={customer_code} NO se eliminó (0 filas afectadas)", "warning")
+                for customer_id, customer_code in customers_a_eliminar:
+                    try:
+                        # Eliminar de MySQL por ID (más eficiente)
+                        delete_query = """
+                        DELETE FROM customers
+                        WHERE id = %s AND company_id = %s
+                        """
+                        self.mysql_cursor.execute(delete_query, (customer_id, company_id))
 
-                except Exception as e:
-                    self._log(f"   ❌ Error eliminando customer con code={customer_code} de MySQL: {e}", "error")
-                    self.stats['customers']['errores'] += 1
+                        self._log(f"   ✅ Customer {customer_code} eliminado de MySQL", "info")
 
-            # Commit cambios en MySQL
-            self.mysql_conn.commit()
-            self._log(f"   ✅ Commit ejecutado en MySQL", "debug")
+                    except Exception as e:
+                        self._log(f"   ❌ Error eliminando customer {customer_code} de MySQL: {e}", "error")
+                        self.stats['customers']['errores'] += 1
 
-            total_eliminados = len([c for c in customers_eliminados if self.sync_running])
-            self._log(f"   ✅ Proceso completado: {total_eliminados} customers procesados", "success")
+                # Commit cambios en MySQL
+                self.mysql_conn.commit()
+                self._log(f"   ✅ {len(customers_a_eliminar)} customers eliminados de MySQL", "success")
 
-            # Actualizar estadísticas
-            self.stats['customers']['eliminados'] = self.stats.get('customers', {}).get('eliminados', 0) + total_eliminados
+                # Actualizar estadísticas
+                self.stats['customers']['eliminados'] = self.stats.get('customers', {}).get('eliminados', 0) + len(customers_a_eliminar)
+            else:
+                self._log("   ℹ️ No hay customers que eliminar de MySQL (ya fueron limpiados)", "info")
 
-            # Limpiar registros de sync_hashes
+            # PASO 3: Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
             self._log("   🧹 Limpiando registros de sync_hashes...", "info")
             self.pg_cursor.execute(
                 "DELETE FROM sync_hashes WHERE table_name = 'customers' AND deleted_at IS NOT NULL"
@@ -4168,6 +4173,7 @@ class SmartSyncComplete:
 
             sellers_a_eliminar = []
 
+            # PASO 1: Verificar cuáles sellers existen en MySQL
             for (seller_email,) in sellers_eliminados:
                 if not self.sync_running:
                     break
@@ -4187,7 +4193,7 @@ class SmartSyncComplete:
                     # Ya no existe en MySQL, solo limpiar sync_hashes
                     self._log(f"   ℹ️ Seller {seller_email} ya no existe en MySQL", "debug")
 
-            # Eliminar sellers de MySQL
+            # PASO 2: Eliminar sellers de MySQL
             if sellers_a_eliminar:
                 self._log(f"   🗑️ Eliminando {len(sellers_a_eliminar)} sellers de MySQL...", "info")
 
@@ -4216,7 +4222,7 @@ class SmartSyncComplete:
             else:
                 self._log("   ℹ️ No hay sellers que eliminar de MySQL (ya fueron limpiados)", "info")
 
-            # Limpiar registros de sync_hashes
+            # PASO 3: Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
             self._log("   🧹 Limpiando registros de sync_hashes...", "info")
             self.pg_cursor.execute(
                 "DELETE FROM sync_hashes WHERE table_name = 'sellers' AND deleted_at IS NOT NULL"
@@ -4775,6 +4781,7 @@ class SmartSyncComplete:
 
             categories_a_eliminar = []
 
+            # PASO 1: Verificar cuáles categories existen en MySQL
             for (category_code,) in categories_eliminadas:
                 if not self.sync_running:
                     break
@@ -4794,7 +4801,7 @@ class SmartSyncComplete:
                     # Ya no existe en MySQL, solo limpiar sync_hashes
                     self._log(f"   ℹ️ Category {category_code} ya no existe en MySQL", "debug")
 
-            # Eliminar categories de MySQL
+            # PASO 2: Eliminar categories de MySQL
             if categories_a_eliminar:
                 self._log(f"   🗑️ Eliminando {len(categories_a_eliminar)} categories de MySQL...", "info")
 
@@ -4823,7 +4830,7 @@ class SmartSyncComplete:
             else:
                 self._log("   ℹ️ No hay categories que eliminar de MySQL (ya fueron limpiadas)", "info")
 
-            # Limpiar registros de sync_hashes
+            # PASO 3: Limpiar registros de sync_hashes (incluyendo los que ya no existen en MySQL)
             self._log("   🧹 Limpiando registros de sync_hashes...", "info")
             self.pg_cursor.execute(
                 "DELETE FROM sync_hashes WHERE table_name = 'categories' AND deleted_at IS NOT NULL"
