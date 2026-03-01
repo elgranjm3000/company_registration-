@@ -1996,7 +1996,8 @@ class SmartSyncComplete:
                 for (eliminado,) in eliminados:
                     cambios['eliminados'].append({'code': eliminado})
                     self._log(f"  ❌ ELIMINADO: {eliminado}", "warning")
-                    self._eliminar_hash('customers', eliminado)
+                    # NO eliminar el hash aquí - dejar que _eliminar_customers_mysql_cuando_faltan_en_postgresql() lo haga
+                    # self._eliminar_hash('customers', eliminado)
 
             self.pg_conn.commit()
 
@@ -2074,7 +2075,8 @@ class SmartSyncComplete:
                 for (eliminado,) in eliminados:
                     cambios['eliminados'].append({'code': eliminado})
                     self._log(f"  ❌ ELIMINADO: {eliminado}", "warning")
-                    self._eliminar_hash('categories', eliminado)
+                    # NO eliminar el hash aquí - dejar que _eliminar_categories_mysql_cuando_faltan_en_postgresql() lo haga
+                    # self._eliminar_hash('categories', eliminado)
 
             self.pg_conn.commit()
 
