@@ -5420,20 +5420,37 @@ class SmartSyncComplete:
 
             if sum(s['errores'] for s in self.stats.values()) == 0:
                 self._log("✅ SINCRONIZACIÓN COMPLETADA CON ÉXITO", "success")
-                # Mostrar notificación toast de Windows
+                # Mostrar notificación toast de Windows con todas las entidades
                 parts = []
-                parts.append(f"Products: {self.stats['products']['nuevos'] + self.stats['products']['modificados']} nuevos/modificados")
-                if self.stats['products'].get('eliminados', 0) > 0:
-                    parts.append(f"{self.stats['products'].get('eliminados', 0)} eliminados")
 
-                customers_eliminados = self.stats['customers'].get('eliminados', 0)
-                parts.append(f"Customers: {self.stats['customers']['nuevos'] + self.stats['customers']['modificados']} nuevos/modificados")
-                if customers_eliminados > 0:
-                    parts.append(f"{customers_eliminados} eliminados")
+                # Products (productos)
+                products_total = self.stats['products']['nuevos'] + self.stats['products']['modificados']
+                if products_total > 0 or self.stats['products'].get('eliminados', 0) > 0:
+                    part = f"Products: {products_total} nuevos/modificados"
+                    if self.stats['products'].get('eliminados', 0) > 0:
+                        part += f", {self.stats['products'].get('eliminados', 0)} eliminados"
+                    parts.append(part)
 
-                sellers_eliminados = self.stats['sellers'].get('eliminados', 0)
-                if sellers_eliminados > 0:
-                    parts.append(f"Sellers: {sellers_eliminados} eliminados")
+                # Customers (clientes)
+                customers_total = self.stats['customers']['nuevos'] + self.stats['customers']['modificados']
+                if customers_total > 0 or self.stats['customers'].get('eliminados', 0) > 0:
+                    part = f"Customers: {customers_total} nuevos/modificados"
+                    if self.stats['customers'].get('eliminados', 0) > 0:
+                        part += f", {self.stats['customers'].get('eliminados', 0)} eliminados"
+                    parts.append(part)
+
+                # Sellers (vendedores)
+                sellers_total = self.stats['sellers']['nuevos'] + self.stats['sellers']['modificados']
+                if sellers_total > 0 or self.stats['sellers'].get('eliminados', 0) > 0:
+                    part = f"Sellers: {sellers_total} nuevos/modificados"
+                    if self.stats['sellers'].get('eliminados', 0) > 0:
+                        part += f", {self.stats['sellers'].get('eliminados', 0)} eliminados"
+                    parts.append(part)
+
+                # Categories (departamentos)
+                categories_total = self.stats['categories']['nuevos'] + self.stats['categories']['modificados']
+                if categories_total > 0:
+                    parts.append(f"Departamentos: {categories_total} nuevos/modificados")
 
                 mensaje = " | ".join(parts) + f" | Duración: {duracion:.1f}s"
 
