@@ -712,22 +712,19 @@ class SmartSyncComplete:
         """
         Crea el trigger que marca clientes como actualizados en sync_hashes
         Esto optimiza la detección de cambios: solo se sincronizan los clientes con pending_sync = true
+
+        NOTA: Usa company_id = 1 como valor temporal. El sistema lo corregirá al sincronizar.
         """
         try:
-            # Obtener company_id para usar en el trigger
-            company_id = self._get_company_id_from_companies()
-            if not company_id:
-                # No se puede crear el trigger sin company_id
-                return
-
             # Crear función del trigger
-            create_function_query = f"""
+            # Usamos company_id = 1 como valor temporal para evitar dependencia de MySQL
+            create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_client_updated_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
                 INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-                VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, {company_id}, NOW())
+                VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, 1, NOW())
                 ON CONFLICT (table_name, record_key, company_id)
                 DO UPDATE SET
                     pending_sync = TRUE,
@@ -759,27 +756,23 @@ class SmartSyncComplete:
             self.pg_conn.rollback()
             self._log(f"   ⚠️ Error creando trigger UPDATE de clients: {str(e)}", "warning")
 
-
     def _crear_trigger_actualizacion_products(self):
         """
         Crea el trigger que marca productos como actualizados en sync_hashes
         Esto optimiza la detección de cambios: solo se sincronizan los productos con pending_sync = true
+
+        NOTA: Usa company_id = 1 como valor temporal. El sistema lo corregirá al sincronizar.
         """
         try:
-            # Obtener company_id para usar en el trigger
-            company_id = self._get_company_id_from_companies()
-            if not company_id:
-                # No se puede crear el trigger sin company_id
-                return
-
             # Crear función del trigger
-            create_function_query = f"""
+            # Usamos company_id = 1 como valor temporal para evitar dependencia de MySQL
+            create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_product_updated_sync_hashes()
             RETURNS TRIGGER AS $$
             BEGIN
                 -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
                 INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-                VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, {company_id}, NOW())
+                VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, 1, NOW())
                 ON CONFLICT (table_name, record_key, company_id)
                 DO UPDATE SET
                     pending_sync = TRUE,
@@ -810,7 +803,6 @@ class SmartSyncComplete:
             # Si hay error, continuar (el trigger podría ya existir)
             self.pg_conn.rollback()
             self._log(f"   ⚠️ Error creando trigger UPDATE de products: {str(e)}", "warning")
-
 
     def _agregar_columna_pending_sync(self):
         """
