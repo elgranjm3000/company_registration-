@@ -428,6 +428,12 @@ class SmartSyncComplete:
             # Agregar columna pending_sync si no existe (para optimización de UPDATE)
             self._agregar_columna_pending_sync()
 
+            # Crear tabla de configuración para almacenar company_id
+            self._crear_tabla_sync_config()
+            # Actualizar company_id en sync_config con el valor correcto de MySQL
+            self._actualizar_company_id_en_config()
+
+
 
             # Crear triggers de eliminación para todas las entidades
             self._crear_trigger_eliminacion_products()
@@ -713,18 +719,30 @@ class SmartSyncComplete:
         Crea el trigger que marca clientes como actualizados en sync_hashes
         Esto optimiza la detección de cambios: solo se sincronizan los clientes con pending_sync = true
 
-        NOTA: Usa company_id = 1 como valor temporal. El sistema lo corregirá al sincronizar.
+        El trigger lee el company_id desde sync_config (se mantiene sincronizado con MySQL)
         """
         try:
             # Crear función del trigger
-            # Usamos company_id = 1 como valor temporal para evitar dependencia de MySQL
+            # Lee el company_id desde sync_config para usar el valor correcto
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_client_updated_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener el company_id desde sync_config
+                SELECT value INTO v_company_id
+                FROM sync_config
+                WHERE key = 'current_company_id';
+
+                -- Si no existe, usar 1 como fallback
+                IF v_company_id IS NULL THEN
+                    v_company_id := 1;
+                END IF;
+
                 -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
                 INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-                VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, 1, NOW())
+                VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
                 ON CONFLICT (table_name, record_key, company_id)
                 DO UPDATE SET
                     pending_sync = TRUE,
@@ -761,18 +779,30 @@ class SmartSyncComplete:
         Crea el trigger que marca productos como actualizados en sync_hashes
         Esto optimiza la detección de cambios: solo se sincronizan los productos con pending_sync = true
 
-        NOTA: Usa company_id = 1 como valor temporal. El sistema lo corregirá al sincronizar.
+        El trigger lee el company_id desde sync_config (se mantiene sincronizado con MySQL)
         """
         try:
             # Crear función del trigger
-            # Usamos company_id = 1 como valor temporal para evitar dependencia de MySQL
+            # Lee el company_id desde sync_config para usar el valor correcto
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_product_updated_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener el company_id desde sync_config
+                SELECT value INTO v_company_id
+                FROM sync_config
+                WHERE key = 'current_company_id';
+
+                -- Si no existe, usar 1 como fallback
+                IF v_company_id IS NULL THEN
+                    v_company_id := 1;
+                END IF;
+
                 -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
                 INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-                VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, 1, NOW())
+                VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
                 ON CONFLICT (table_name, record_key, company_id)
                 DO UPDATE SET
                     pending_sync = TRUE,
