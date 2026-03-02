@@ -2128,8 +2128,7 @@ class SmartSyncComplete:
             self.pg_conn.commit()
 
             self._log(f"Products: {len(cambios['nuevos'])} nuevos, "
-                      f"{len(cambios['modificados'])} modificados, "
-                      f"{len(cambios['eliminados'])} eliminados", "info")
+                      f"{len(cambios['modificados'])} modificados", "info")
 
         except Exception as e:
             self._log(f"Error detectando cambios en products: {str(e)}", "error")
@@ -2539,8 +2538,7 @@ class SmartSyncComplete:
             self.pg_conn.commit()
 
             self._log(f"Customers: {len(cambios['nuevos'])} nuevos, "
-                      f"{len(cambios['modificados'])} modificados, "
-                      f"{len(cambios['eliminados'])} eliminados", "info")
+                      f"{len(cambios['modificados'])} modificados", "info")
 
         except Exception as e:
             self._log(f"Error detectando cambios en customers: {str(e)}", "error")
@@ -2618,8 +2616,7 @@ class SmartSyncComplete:
             self.pg_conn.commit()
 
             self._log(f"Categories: {len(cambios['nuevos'])} nuevos, "
-                      f"{len(cambios['modificados'])} modificados, "
-                      f"{len(cambios['eliminados'])} eliminados", "info")
+                      f"{len(cambios['modificados'])} modificados", "info")
 
         except Exception as e:
             self._log(f"Error detectando cambios en categories: {str(e)}", "error")
