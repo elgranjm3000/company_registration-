@@ -1275,8 +1275,11 @@ class ConfigWindow:
 
                     # Categories (departamentos)
                     categories_total = categories_stats.get('nuevos', 0) + categories_stats.get('modificados', 0)
-                    if categories_total > 0:
-                        parts.append(f"Departamentos: {categories_total} nuevos/modificados")
+                    if categories_total > 0 or categories_stats.get('eliminados', 0) > 0:
+                        part = f"Departamentos: {categories_total} nuevos/modificados"
+                        if categories_stats.get('eliminados', 0) > 0:
+                            part += f", {categories_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
 
                     # Mostrar notificación con todas las entidades
                     if parts:
@@ -2117,8 +2120,11 @@ class SystemTrayService:
 
                     # Categories (departamentos)
                     categories_total = categories_stats.get('nuevos', 0) + categories_stats.get('modificados', 0)
-                    if categories_total > 0:
-                        parts.append(f"Departamentos: {categories_total} nuevos/modificados")
+                    if categories_total > 0 or categories_stats.get('eliminados', 0) > 0:
+                        part = f"Departamentos: {categories_total} nuevos/modificados"
+                        if categories_stats.get('eliminados', 0) > 0:
+                            part += f", {categories_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
 
                     # Mostrar notificación con todas las entidades
                     if parts:
@@ -2182,8 +2188,11 @@ class SystemTrayService:
 
                     # Categories (departamentos)
                     categories_total = sync_system.stats.get('categories', {}).get('nuevos', 0) + sync_system.stats.get('categories', {}).get('modificados', 0)
-                    if categories_total > 0:
-                        parts.append(f"Departamentos: {categories_total} nuevos/modificados")
+                    if categories_total > 0 or sync_system.stats.get('categories', {}).get('eliminados', 0) > 0:
+                        part = f"Departamentos: {categories_total} nuevos/modificados"
+                        if sync_system.stats.get('categories', {}).get('eliminados', 0) > 0:
+                            part += f", {sync_system.stats.get('categories', {}).get('eliminados', 0)} eliminados"
+                        parts.append(part)
 
                     # Mostrar notificación con todas las entidades
                     if parts:

@@ -5464,8 +5464,11 @@ class SmartSyncComplete:
 
                 # Categories (departamentos)
                 categories_total = self.stats['categories']['nuevos'] + self.stats['categories']['modificados']
-                if categories_total > 0:
-                    parts.append(f"Departamentos: {categories_total} nuevos/modificados")
+                if categories_total > 0 or self.stats['categories'].get('eliminados', 0) > 0:
+                    part = f"Departamentos: {categories_total} nuevos/modificados"
+                    if self.stats['categories'].get('eliminados', 0) > 0:
+                        part += f", {self.stats['categories'].get('eliminados', 0)} eliminados"
+                    parts.append(part)
 
                 mensaje = " | ".join(parts) + f" | Duración: {duracion:.1f}s"
 
