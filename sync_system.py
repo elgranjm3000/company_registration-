@@ -1246,14 +1246,53 @@ class ConfigWindow:
 
                     mensaje_completo = "\n".join(mensaje_lines)
 
-                    # Mostrar notificación BANNER
-                    mostrar_banner(
-                        "✅ Sincronización Exitosa",
-                        f"Productos: {products_stats.get('nuevos', 0)} nuevos, "
-                        f"{products_stats.get('modificados', 0)} modificados, "
-                        f"{products_stats.get('eliminados', 0)} eliminados",
-                        duracion=7
-                    )
+                    # Construir mensaje con todas las entidades
+                    parts = []
+
+                    # Products (productos)
+                    products_total = products_stats.get('nuevos', 0) + products_stats.get('modificados', 0)
+                    if products_total > 0 or products_stats.get('eliminados', 0) > 0:
+                        part = f"Productos: {products_total} nuevos/modificados"
+                        if products_stats.get('eliminados', 0) > 0:
+                            part += f", {products_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Customers (clientes)
+                    customers_total = customers_stats.get('nuevos', 0) + customers_stats.get('modificados', 0)
+                    if customers_total > 0 or customers_stats.get('eliminados', 0) > 0:
+                        part = f"Clientes: {customers_total} nuevos/modificados"
+                        if customers_stats.get('eliminados', 0) > 0:
+                            part += f", {customers_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Sellers (vendedores)
+                    sellers_total = sellers_stats.get('nuevos', 0) + sellers_stats.get('modificados', 0)
+                    if sellers_total > 0 or sellers_stats.get('eliminados', 0) > 0:
+                        part = f"Vendedores: {sellers_total} nuevos/modificados"
+                        if sellers_stats.get('eliminados', 0) > 0:
+                            part += f", {sellers_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Categories (departamentos)
+                    categories_total = categories_stats.get('nuevos', 0) + categories_stats.get('modificados', 0)
+                    if categories_total > 0:
+                        parts.append(f"Departamentos: {categories_total} nuevos/modificados")
+
+                    # Mostrar notificación con todas las entidades
+                    if parts:
+                        mensaje = " | ".join(parts)
+                        mostrar_banner(
+                            "✅ Sincronización Exitosa",
+                            mensaje,
+                            duracion=7
+                        )
+                    else:
+                        # Si no hay cambios, mostrar mensaje genérico
+                        mostrar_banner(
+                            "✅ Sincronización Exitosa",
+                            "No hubo cambios en esta sincronización",
+                            duracion=5
+                        )
 
                     # Esperar un momento antes de mostrar el messagebox
                     progreso.after(1000, lambda: mb.showinfo(
@@ -2049,14 +2088,53 @@ class SystemTrayService:
 
                     mensaje_completo = "\n".join(mensaje_lines)
 
-                    # Mostrar notificación BANNER
-                    mostrar_banner(
-                        "✅ Sincronización Exitosa",
-                        f"Productos: {products_stats.get('nuevos', 0)} nuevos, "
-                        f"{products_stats.get('modificados', 0)} modificados, "
-                        f"{products_stats.get('eliminados', 0)} eliminados",
-                        duracion=7
-                    )
+                    # Construir mensaje con todas las entidades
+                    parts = []
+
+                    # Products (productos)
+                    products_total = products_stats.get('nuevos', 0) + products_stats.get('modificados', 0)
+                    if products_total > 0 or products_stats.get('eliminados', 0) > 0:
+                        part = f"Productos: {products_total} nuevos/modificados"
+                        if products_stats.get('eliminados', 0) > 0:
+                            part += f", {products_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Customers (clientes)
+                    customers_total = customers_stats.get('nuevos', 0) + customers_stats.get('modificados', 0)
+                    if customers_total > 0 or customers_stats.get('eliminados', 0) > 0:
+                        part = f"Clientes: {customers_total} nuevos/modificados"
+                        if customers_stats.get('eliminados', 0) > 0:
+                            part += f", {customers_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Sellers (vendedores)
+                    sellers_total = sellers_stats.get('nuevos', 0) + sellers_stats.get('modificados', 0)
+                    if sellers_total > 0 or sellers_stats.get('eliminados', 0) > 0:
+                        part = f"Vendedores: {sellers_total} nuevos/modificados"
+                        if sellers_stats.get('eliminados', 0) > 0:
+                            part += f", {sellers_stats.get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Categories (departamentos)
+                    categories_total = categories_stats.get('nuevos', 0) + categories_stats.get('modificados', 0)
+                    if categories_total > 0:
+                        parts.append(f"Departamentos: {categories_total} nuevos/modificados")
+
+                    # Mostrar notificación con todas las entidades
+                    if parts:
+                        mensaje = " | ".join(parts)
+                        mostrar_banner(
+                            "✅ Sincronización Exitosa",
+                            mensaje,
+                            duracion=7
+                        )
+                    else:
+                        # Si no hay cambios, mostrar mensaje genérico
+                        mostrar_banner(
+                            "✅ Sincronización Exitosa",
+                            "No hubo cambios en esta sincronización",
+                            duracion=5
+                        )
 
                     # COMENTADO: Ya se muestra notificación toast
                     # # Mostrar messagebox en un thread separado para no bloquear
