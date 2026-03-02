@@ -481,6 +481,54 @@ class SmartSyncComplete:
             # Si hay error, continuar (la columna podría ya existir)
             self.pg_conn.rollback()
 
+    def _crear_tabla_sync_config(self):
+        """
+        Crea la tabla sync_config para almacenar configuración de sincronización
+        Incluye el company_id que deben usar los triggers UPDATE
+        """
+        try:
+            create_table_query = """
+            CREATE TABLE IF NOT EXISTS sync_config (
+                key VARCHAR(100) PRIMARY KEY,
+                value INTEGER NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+            """
+            self.pg_cursor.execute(create_table_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _actualizar_company_id_en_config(self):
+        """
+        Actualiza el company_id en sync_config desde MySQL
+        Los triggers UPDATE leen este valor para usar el company_id correcto
+        """
+        try:
+            # Obtener company_id desde MySQL
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                # Si no se puede obtener, usar un valor por defecto
+                company_id = 1
+
+            # Insertar o actualizar en sync_config
+            upsert_query = """
+            INSERT INTO sync_config (key, value, updated_at)
+            VALUES ('current_company_id', %s, NOW())
+            ON CONFLICT (key)
+            DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = NOW();
+            """
+            self.pg_cursor.execute(upsert_query, (company_id,))
+            self.pg_conn.commit()
+
+            self._log(f"   ✅ Company_id configurado en sync_config: {company_id}", "debug")
+        except Exception as e:
+            # Si hay error, continuar (no es crítico)
+            self.pg_conn.rollback()
+            self._log(f"   ⚠️ Error actualizando company_id en config: {str(e)}", "warning")
+
     def _crear_trigger_eliminacion_products(self):
         """
         Crea el trigger que marca productos como eliminados en sync_hashes
