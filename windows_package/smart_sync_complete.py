@@ -430,8 +430,8 @@ class SmartSyncComplete:
 
             # Crear tabla de configuración para almacenar company_id
             self._crear_tabla_sync_config()
-            # Actualizar company_id en sync_config con el valor correcto de MySQL
-            self._actualizar_company_id_en_config()
+            # NOTA: NO actualizamos company_id aquí porque aún no hay conexión a MySQL
+            # Se actualizará en ejecutar_sync_completa() después de conectar
 
 
 
@@ -5224,6 +5224,9 @@ class SmartSyncComplete:
             if not self._obtener_company_id():
                 self._log("❌ No se pudo obtener el company_id. Verifica RIF y email en la configuración.", "error")
                 return False
+
+            # Actualizar company_id en sync_config (ahora que ya hay conexión a MySQL)
+            self._actualizar_company_id_en_config()
 
             # Detectar cambios en cada entidad
             self._log("🔍 STEP 1: Detectando cambios en products...", "debug")
