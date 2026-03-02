@@ -1067,10 +1067,20 @@ class ConfigWindow:
                 Esta función se llama desde el thread de sincronización
                 """
                 def actualizar_gui():
-                    estado_label.config(text=mensaje)
-                    if detalles:
-                        detalles_label.config(text=detalles)
-                    progreso.update_idletasks()  # Actualizar GUI
+                    try:
+                        # Verificar si la ventana todavía existe
+                        if not progreso.winfo_exists():
+                            return
+
+                        # Verificar si los labels todavía existen
+                        if estado_label.winfo_exists():
+                            estado_label.config(text=mensaje)
+                        if detalles and detalles_label.winfo_exists():
+                            detalles_label.config(text=detalles)
+                        progreso.update_idletasks()  # Actualizar GUI
+                    except Exception:
+                        # Silenciosamente ignorar errores si la ventana fue cerrada
+                        pass
 
                 # Programar la actualización en el thread principal
                 progreso.after(0, actualizar_gui)
@@ -1095,21 +1105,31 @@ class ConfigWindow:
                     # Usar after() para ejecutar la actualización en el thread principal de Tkinter
                     # Esto es necesario porque Tkinter NO es thread-safe
                     def actualizar_gui():
-                        # Mapeo de entidades a labels y emojis
-                        entity_info = {
-                            'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
-                            'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
-                            'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'},
-                            'sellers': {'label': lbl_sellers, 'emoji': '👤', 'name': 'Sellers'}
-                        }
+                        try:
+                            # Verificar si la ventana todavía existe
+                            if not progreso.winfo_exists():
+                                return
 
-                        if entity in entity_info:
-                            info = entity_info[entity]
-                            percentage = round((current / total * 100), 1) if total > 0 else 0
-                            info['label'].config(
-                                text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
-                            )
-                            progreso.update_idletasks()  # Actualizar GUI
+                            # Mapeo de entidades a labels y emojis
+                            entity_info = {
+                                'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
+                                'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
+                                'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'},
+                                'sellers': {'label': lbl_sellers, 'emoji': '👤', 'name': 'Sellers'}
+                            }
+
+                            if entity in entity_info:
+                                info = entity_info[entity]
+                                # Verificar si el label todavía existe
+                                if info['label'].winfo_exists():
+                                    percentage = round((current / total * 100), 1) if total > 0 else 0
+                                    info['label'].config(
+                                        text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
+                                    )
+                                    progreso.update_idletasks()  # Actualizar GUI
+                        except Exception:
+                            # Silenciosamente ignorar errores si la ventana fue cerrada
+                            pass
 
                     # Programar la actualización en el thread principal
                     progreso.after(0, actualizar_gui)
