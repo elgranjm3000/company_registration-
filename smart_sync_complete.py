@@ -828,16 +828,20 @@ class SmartSyncComplete:
         Crea el trigger que marca productos como actualizados en sync_hashes
         Esto optimiza la detección de cambios: solo se sincronizan los productos con pending_sync = true
 
+        Compatible con PostgreSQL 9.1+ (no usa ON CONFLICT)
+
         El trigger lee el company_id desde sync_config (se mantiene sincronizado con MySQL)
         """
         try:
             # Crear función del trigger
             # Lee el company_id desde sync_config para usar el valor correcto
+            # Compatible con PostgreSQL 9.1: Usa SELECT + IF/THEN en lugar de ON CONFLICT
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_product_updated_sync_hashes()
             RETURNS TRIGGER AS $$
             DECLARE
                 v_company_id INTEGER;
+                v_exists INTEGER;
             BEGIN
                 -- Obtener el company_id desde sync_config
                 SELECT value INTO v_company_id
@@ -849,13 +853,27 @@ class SmartSyncComplete:
                     v_company_id := 1;
                 END IF;
 
-                -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
-                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-                VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
-                ON CONFLICT (table_name, record_key, company_id)
-                DO UPDATE SET
-                    pending_sync = TRUE,
-                    updated_at = NOW();
+                -- Verificar si ya existe el registro
+                SELECT 1 INTO v_exists
+                FROM sync_hashes
+                WHERE table_name = 'products'
+                  AND record_key = NEW.code
+                  AND company_id = v_company_id
+                LIMIT 1;
+
+                IF v_exists = 1 THEN
+                    -- Ya existe: Actualizar
+                    UPDATE sync_hashes
+                    SET pending_sync = TRUE,
+                        updated_at = NOW()
+                    WHERE table_name = 'products'
+                      AND record_key = NEW.code
+                      AND company_id = v_company_id;
+                ELSE
+                    -- No existe: Insertar
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                    VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
+                END IF;
 
                 RETURN NEW;
             END;
@@ -888,16 +906,19 @@ class SmartSyncComplete:
         Crea el trigger que marca clientes como actualizados en sync_hashes
         Esto optimiza la detección de cambios: solo se sincronizan los clientes con pending_sync = true
 
+        Compatible con PostgreSQL 9.1+ (no usa ON CONFLICT)
+
         El trigger lee el company_id desde sync_config (se mantiene sincronizado con MySQL)
         """
         try:
             # Crear función del trigger
-            # Lee el company_id desde sync_config para usar el valor correcto
+            # Compatible con PostgreSQL 9.1: Usa SELECT + IF/THEN en lugar de ON CONFLICT
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_client_updated_sync_hashes()
             RETURNS TRIGGER AS $$
             DECLARE
                 v_company_id INTEGER;
+                v_exists INTEGER;
             BEGIN
                 -- Obtener el company_id desde sync_config
                 SELECT value INTO v_company_id
@@ -909,13 +930,27 @@ class SmartSyncComplete:
                     v_company_id := 1;
                 END IF;
 
-                -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
-                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-                VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
-                ON CONFLICT (table_name, record_key, company_id)
-                DO UPDATE SET
-                    pending_sync = TRUE,
-                    updated_at = NOW();
+                -- Verificar si ya existe el registro
+                SELECT 1 INTO v_exists
+                FROM sync_hashes
+                WHERE table_name = 'customers'
+                  AND record_key = NEW.code
+                  AND company_id = v_company_id
+                LIMIT 1;
+
+                IF v_exists = 1 THEN
+                    -- Ya existe: Actualizar
+                    UPDATE sync_hashes
+                    SET pending_sync = TRUE,
+                        updated_at = NOW()
+                    WHERE table_name = 'customers'
+                      AND record_key = NEW.code
+                      AND company_id = v_company_id;
+                ELSE
+                    -- No existe: Insertar
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                    VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
+                END IF;
 
                 RETURN NEW;
             END;
