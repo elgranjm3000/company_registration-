@@ -5428,7 +5428,8 @@ class SmartSyncComplete:
                       f"{self.stats['customers']['modificados']} modificados, "
                       f"{self.stats['customers'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Departamentos: {self.stats['categories']['nuevos']} nuevos, "
-                      f"{self.stats['categories']['modificados']} modificados", "success")
+                      f"{self.stats['categories']['modificados']} modificados, "
+                      f"{self.stats['categories'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Vendedores:    {self.stats['sellers']['nuevos']} nuevos, "
                       f"{self.stats['sellers']['modificados']} actualizados, "
                       f"{self.stats['sellers'].get('eliminados', 0)} eliminados", "success")
