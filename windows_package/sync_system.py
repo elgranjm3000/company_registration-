@@ -1989,16 +1989,17 @@ class SystemTrayService:
                         duracion=7
                     )
 
-                    # Mostrar messagebox en un thread separado para no bloquear
-                    def mostrar_messagebox():
-                        import tkinter as tk
-                        root = tk.Tk()
-                        root.withdraw()
-                        mb.showinfo("✅ Sincronización Completada", mensaje_completo)
-                        root.destroy()
-
-                    thread_mb = threading.Thread(target=mostrar_messagebox, daemon=True)
-                    thread_mb.start()
+                    # COMENTADO: Ya se muestra notificación toast
+                    # # Mostrar messagebox en un thread separado para no bloquear
+                    # def mostrar_messagebox():
+                    #     import tkinter as tk
+                    #     root = tk.Tk()
+                    #     root.withdraw()
+                    #     mb.showinfo("✅ Sincronización Completada", mensaje_completo)
+                    #     root.destroy()
+                    #
+                    # thread_mb = threading.Thread(target=mostrar_messagebox, daemon=True)
+                    # thread_mb.start()
                 else:
                     # Modo automático - Solo log, sin alertas
                     log(f"✅ Sincronización automática completada en {duracion_str} - "

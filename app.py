@@ -565,15 +565,17 @@ class CompleteSyncApp:
                 # Mostrar notificación toast (no invasiva)
                 self._mostrar_notificacion_sync(duration, stats)
 
-                # Mostrar messagebox tradicional (modal)
-                messagebox.showinfo("Éxito", f"Sincronización completada en {duration:.1f} segundos")
+                # COMENTADO: Ya se muestra notificación toast
+                # # Mostrar messagebox tradicional (modal)
+                # messagebox.showinfo("Éxito", f"Sincronización completada en {duration:.1f} segundos")
             else:
                 raise Exception("La sincronización devolvió False")
 
         except Exception as e:
             self.log_message(f"Error durante sincronización: {str(e)}", "error")
             self.status_var.set("Error en sincronización")
-            messagebox.showerror("Error", f"Error en sincronización: {str(e)}")
+            # COMENTADO: Ya se muestra notificación toast de error
+            # messagebox.showerror("Error", f"Error en sincronización: {str(e)}")
         
         finally:
             self.sync_running = False
