@@ -426,11 +426,18 @@ class SmartSyncComplete:
             # Agregar columna deleted_at si no existe
             self._agregar_columna_deleted_at()
 
+            # Agregar columna pending_sync si no existe (para optimización de UPDATE)
+            self._agregar_columna_pending_sync()
+
             # Crear triggers de eliminación para todas las entidades
             self._crear_trigger_eliminacion_products()
             self._crear_trigger_eliminacion_categories()
             self._crear_trigger_eliminacion_customers()
             self._crear_trigger_eliminacion_sellers()
+
+            # Crear triggers de UPDATE para optimizar detección de cambios
+            self._crear_trigger_actualizacion_products()
+            self._crear_trigger_actualizacion_customers()
 
             self.pg_conn.commit()
 
@@ -463,6 +470,46 @@ class SmartSyncComplete:
                 """)
                 self.pg_conn.commit()
                 # Silencioso - transparente para el usuario
+        except Exception as e:
+            # Si hay error, continuar (la columna podría ya existir)
+            self.pg_conn.rollback()
+
+    def _agregar_columna_pending_sync(self):
+        """
+        Agrega la columna pending_sync a sync_hashes si no existe
+        Esta columna se usa para optimizar la detección de cambios con triggers UPDATE
+        """
+        try:
+            # Verificar si la columna existe
+            self.pg_cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'sync_hashes'
+                AND column_name = 'pending_sync'
+            """)
+            existe = self.pg_cursor.fetchone()
+
+            if not existe:
+                # Agregar columna
+                self.pg_cursor.execute("""
+                    ALTER TABLE sync_hashes
+                    ADD COLUMN pending_sync BOOLEAN DEFAULT FALSE
+                """)
+                self.pg_conn.commit()
+
+                # Crear índice para optimizar queries de pending_sync
+                try:
+                    self.pg_cursor.execute("""
+                        CREATE INDEX idx_sync_hashes_pending_sync
+                        ON sync_hashes(pending_sync, table_name, company_id)
+                        WHERE pending_sync = TRUE
+                    """)
+                    self.pg_conn.commit()
+                except Exception as idx_error:
+                    # El índice podría ya existir
+                    self.pg_conn.rollback()
+
+                self._log("   ✅ Campo pending_sync agregado para optimizar detección de cambios", "info")
         except Exception as e:
             # Si hay error, continuar (la columna podría ya existir)
             self.pg_conn.rollback()
@@ -721,6 +768,108 @@ class SmartSyncComplete:
                 else:
                     # Otro error de índice - silenciar también (no relevante para el usuario)
                     self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
+
+    def _crear_trigger_actualizacion_products(self):
+        """
+        Crea el trigger que marca productos como actualizados en sync_hashes
+        Esto optimiza la detección de cambios: solo se sincronizan los productos con pending_sync = true
+        """
+        try:
+            # Obtener company_id para usar en el trigger
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                # No se puede crear el trigger sin company_id
+                return
+
+            # Crear función del trigger
+            create_function_query = f"""
+            CREATE OR REPLACE FUNCTION trigger_mark_product_updated_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, {company_id}, NOW())
+                ON CONFLICT (table_name, record_key, company_id)
+                DO UPDATE SET
+                    pending_sync = TRUE,
+                    updated_at = NOW();
+
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_products_mark_updated_sync_hashes ON products;
+
+            CREATE TRIGGER tr_products_mark_updated_sync_hashes
+                AFTER UPDATE ON products
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_product_updated_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            self._log("   ✅ Trigger de actualización de productos creado", "info")
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+            self._log(f"   ⚠️ Error creando trigger UPDATE de products: {str(e)}", "warning")
+
+    def _crear_trigger_actualizacion_customers(self):
+        """
+        Crea el trigger que marca clientes como actualizados en sync_hashes
+        Esto optimiza la detección de cambios: solo se sincronizan los clientes con pending_sync = true
+        """
+        try:
+            # Obtener company_id para usar en el trigger
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                # No se puede crear el trigger sin company_id
+                return
+
+            # Crear función del trigger
+            create_function_query = f"""
+            CREATE OR REPLACE FUNCTION trigger_mark_client_updated_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                -- Insertar o actualizar en sync_hashes marcando como pendiente de sincronización
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, {company_id}, NOW())
+                ON CONFLICT (table_name, record_key, company_id)
+                DO UPDATE SET
+                    pending_sync = TRUE,
+                    updated_at = NOW();
+
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_clients_mark_updated_sync_hashes ON clients;
+
+            CREATE TRIGGER tr_clients_mark_updated_sync_hashes
+                AFTER UPDATE ON clients
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_client_updated_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            self._log("   ✅ Trigger de actualización de clientes creado", "info")
+
+        except Exception as e:
+            # Si hay error, continuar (el trigger podría ya existir)
+            self.pg_conn.rollback()
+            self._log(f"   ⚠️ Error creando trigger UPDATE de clients: {str(e)}", "warning")
 
     def _conectar_bases_datos(self) -> bool:
         """
@@ -1183,7 +1332,8 @@ class SmartSyncComplete:
             UPDATE sync_hashes
             SET record_hash = %s,
                 last_sync_data = %s,
-                updated_at = NOW()
+                updated_at = NOW(),
+                pending_sync = FALSE
             WHERE table_name = %s
               AND record_key = %s
               AND company_id = %s
@@ -1195,8 +1345,8 @@ class SmartSyncComplete:
             # Si el UPDATE no afectó ninguna fila, hacer INSERT
             if self.pg_cursor.rowcount == 0:
                 insert_query = """
-                INSERT INTO sync_hashes (table_name, record_key, record_hash, last_sync_data, company_id, updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, last_sync_data, company_id, updated_at, pending_sync)
+                VALUES (%s, %s, %s, %s, %s, NOW(), FALSE)
                 """
                 self.pg_cursor.execute(insert_query,
                                      (table_name, record_key, record_hash, data_json, self._get_company_id_from_companies()))
@@ -1570,6 +1720,9 @@ class SmartSyncComplete:
         """
         Detectar cambios en products comparando hashes
 
+        OPTIMIZADO: Si hay productos con pending_sync = true, solo procesa esos.
+        Si no hay ninguno (fallback), procesa todos los productos (compatibilidad).
+
         Returns:
             Dict con 'nuevos', 'modificados', 'eliminados'
         """
@@ -1579,73 +1732,168 @@ class SmartSyncComplete:
             self._log("   ❌ No se pudo obtener company_id", "error")
             return {'nuevos': [], 'modificados': [], 'eliminados': []}
 
-        self._log("Detectando cambios en products...", "info")
-
         cambios = {'nuevos': [], 'modificados': [], 'eliminados': []}
 
         try:
-            # Query para obtener productos de PostgreSQL con coin y description_coin
-            query = """
-            SELECT DISTINCT ON (a.code)
-                a.code,
-                b.unit,
-                a.description,
-                a.short_name,
-                a.department,
-                b.product_code,
-                h.description as unidad,
-                COALESCE(c.total_stock, 0) AS stock,
-                a.product_type,
-                a.coin,
-                f.description AS description_coin,
-                CASE
-                    WHEN b.maximum_price IS NULL
-                    THEN 0
-                    ELSE b.maximum_price
-                END AS price,
-                CASE
-                    WHEN b.offer_price IS NULL
-                    THEN 0
-                    ELSE b.offer_price
-                END AS cost,
-                CASE
-                    WHEN b.higher_price IS NULL
-                    THEN 0
-                    ELSE b.higher_price
-                END AS higher_price,
-                CASE
-                    WHEN a.minimal_stock IS NULL
-                    THEN 0
-                    ELSE a.minimal_stock
-                END AS min_stock,
-                CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END AS status,
-                d.image_type,
-                d.product_image,
-                a.sale_tax,
-                e.aliquot,
-                a.buy_tax,
-                g.aliquot AS buy_aliquot,
-                b.unitary_cost
-            FROM products a
-            LEFT JOIN (
-                SELECT product_code, SUM(stock) as total_stock
-                FROM products_stock
-                GROUP BY product_code
-            ) c ON a.code = c.product_code
-            LEFT JOIN products_units b ON a.code = b.product_code
-            LEFT JOIN products_image d ON d.main_code = a.code
-            LEFT JOIN taxes e ON e.code = a.sale_tax
-            LEFT JOIN taxes g ON g.code = a.buy_tax
-            LEFT JOIN coin f ON f.code = a.coin
-            LEFT JOIN units h ON h.code = b.unit
-            WHERE a.code IS NOT NULL
-              AND a.code != ''
-              AND a.product_type <> 'C'
-            ORDER BY a.code, b.maximum_price DESC;
-            """
+            # 🔍 PASO 1: Verificar si hay productos con pending_sync = true
+            self.pg_cursor.execute("""
+                SELECT COUNT(*)
+                FROM sync_hashes
+                WHERE table_name = 'products'
+                  AND company_id = %s
+                  AND pending_sync = TRUE
+                  AND deleted_at IS NULL
+            """, (company_id,))
+            count_pending = self.pg_cursor.fetchone()[0]
 
-            self.pg_cursor.execute(query)
-            productos = self.pg_cursor.fetchall()
+            # 📋 PASO 2: Obtener productos según estrategia
+            if count_pending > 0:
+                # Estrategia optimizada: Solo productos con pending_sync
+                self._log(f"Detectando cambios en products... ({count_pending} pendientes)", "info")
+
+                # Obtener códigos de productos pendientes
+                self.pg_cursor.execute("""
+                    SELECT record_key
+                    FROM sync_hashes
+                    WHERE table_name = 'products'
+                      AND company_id = %s
+                      AND pending_sync = TRUE
+                      AND deleted_at IS NULL
+                """, (company_id,))
+                pending_codes = [row[0] for row in self.pg_cursor.fetchall()]
+
+                # Construir filtro IN para query principal
+                placeholders = ','.join(['%s'] * len(pending_codes))
+
+                query = f"""
+                SELECT DISTINCT ON (a.code)
+                    a.code,
+                    b.unit,
+                    a.description,
+                    a.short_name,
+                    a.department,
+                    b.product_code,
+                    h.description as unidad,
+                    COALESCE(c.total_stock, 0) AS stock,
+                    a.product_type,
+                    a.coin,
+                    f.description AS description_coin,
+                    CASE
+                        WHEN b.maximum_price IS NULL
+                        THEN 0
+                        ELSE b.maximum_price
+                    END AS price,
+                    CASE
+                        WHEN b.offer_price IS NULL
+                        THEN 0
+                        ELSE b.offer_price
+                    END AS cost,
+                    CASE
+                        WHEN b.higher_price IS NULL
+                        THEN 0
+                        ELSE b.higher_price
+                    END AS higher_price,
+                    CASE
+                        WHEN a.minimal_stock IS NULL
+                        THEN 0
+                        ELSE a.minimal_stock
+                    END AS min_stock,
+                    CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END AS status,
+                    d.image_type,
+                    d.product_image,
+                    a.sale_tax,
+                    e.aliquot,
+                    a.buy_tax,
+                    g.aliquot AS buy_aliquot,
+                    b.unitary_cost
+                FROM products a
+                LEFT JOIN (
+                    SELECT product_code, SUM(stock) as total_stock
+                    FROM products_stock
+                    GROUP BY product_code
+                ) c ON a.code = c.product_code
+                LEFT JOIN products_units b ON a.code = b.product_code
+                LEFT JOIN products_image d ON d.main_code = a.code
+                LEFT JOIN taxes e ON e.code = a.sale_tax
+                LEFT JOIN taxes g ON g.code = a.buy_tax
+                LEFT JOIN coin f ON f.code = a.coin
+                LEFT JOIN units h ON h.code = b.unit
+                WHERE a.code IN ({placeholders})
+                  AND a.code IS NOT NULL
+                  AND a.code != ''
+                  AND a.product_type <> 'C'
+                ORDER BY a.code, b.maximum_price DESC;
+                """
+
+                self.pg_cursor.execute(query, pending_codes)
+                productos = self.pg_cursor.fetchall()
+
+                self._log(f"   🔍 Procesando {len(productos)} productos con cambios pendientes", "debug")
+            else:
+                # Fallback: Procesar todos los productos (comportamiento original)
+                self._log("Detectando cambios en products... (escaneo completo)", "info")
+
+                query = """
+                SELECT DISTINCT ON (a.code)
+                    a.code,
+                    b.unit,
+                    a.description,
+                    a.short_name,
+                    a.department,
+                    b.product_code,
+                    h.description as unidad,
+                    COALESCE(c.total_stock, 0) AS stock,
+                    a.product_type,
+                    a.coin,
+                    f.description AS description_coin,
+                    CASE
+                        WHEN b.maximum_price IS NULL
+                        THEN 0
+                        ELSE b.maximum_price
+                    END AS price,
+                    CASE
+                        WHEN b.offer_price IS NULL
+                        THEN 0
+                        ELSE b.offer_price
+                    END AS cost,
+                    CASE
+                        WHEN b.higher_price IS NULL
+                        THEN 0
+                        ELSE b.higher_price
+                    END AS higher_price,
+                    CASE
+                        WHEN a.minimal_stock IS NULL
+                        THEN 0
+                        ELSE a.minimal_stock
+                    END AS min_stock,
+                    CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END AS status,
+                    d.image_type,
+                    d.product_image,
+                    a.sale_tax,
+                    e.aliquot,
+                    a.buy_tax,
+                    g.aliquot AS buy_aliquot,
+                    b.unitary_cost
+                FROM products a
+                LEFT JOIN (
+                    SELECT product_code, SUM(stock) as total_stock
+                    FROM products_stock
+                    GROUP BY product_code
+                ) c ON a.code = c.product_code
+                LEFT JOIN products_units b ON a.code = b.product_code
+                LEFT JOIN products_image d ON d.main_code = a.code
+                LEFT JOIN taxes e ON e.code = a.sale_tax
+                LEFT JOIN taxes g ON g.code = a.buy_tax
+                LEFT JOIN coin f ON f.code = a.coin
+                LEFT JOIN units h ON h.code = b.unit
+                WHERE a.code IS NOT NULL
+                  AND a.code != ''
+                  AND a.product_type <> 'C'
+                ORDER BY a.code, b.maximum_price DESC;
+                """
+
+                self.pg_cursor.execute(query)
+                productos = self.pg_cursor.fetchall()
 
             claves_actuales = []
 
@@ -1716,9 +1964,11 @@ class SmartSyncComplete:
                 else:
                     # Sin cambios, solo actualizar timestamp pero MANTENER last_sync_data
                     # No actualizar last_sync_data para no perder el status guardado
+                    # IMPORTANTE: Limpiar pending_sync porque ya se procesó
                     update_query = """
                     UPDATE sync_hashes
-                    SET updated_at = NOW()
+                    SET updated_at = NOW(),
+                        pending_sync = FALSE
                     WHERE table_name = %s
                       AND record_key = %s
                       AND company_id = %s
@@ -2051,35 +2301,92 @@ class SmartSyncComplete:
     # ====================================================================
 
     def detectar_cambios_customers(self) -> Dict[str, List]:
-        """Detectar cambios en customers"""
+        """
+        Detectar cambios en customers
+
+        OPTIMIZADO: Si hay customers con pending_sync = true, solo procesa esos.
+        Si no hay ninguno (fallback), procesa todos los customers (compatibilidad).
+        """
         # Obtener company_id desde companies
         company_id = self._get_company_id_from_companies()
         if not company_id:
             self._log("   ❌ No se pudo obtener company_id", "error")
             return {'nuevos': [], 'modificados': [], 'eliminados': []}
 
-        self._log("Detectando cambios en customers...", "info")
-
         cambios = {'nuevos': [], 'modificados': [], 'eliminados': []}
 
         try:
-            query = """
-            SELECT
-                code,
-                description,
-                address,
-                client_id,
-                email,
-                phone,
-                contact
-            FROM clients
-            WHERE code IS NOT NULL AND code != ''
-              AND description IS NOT NULL AND description != ''
-            ORDER BY code
-            """
+            # 🔍 PASO 1: Verificar si hay customers con pending_sync = true
+            self.pg_cursor.execute("""
+                SELECT COUNT(*)
+                FROM sync_hashes
+                WHERE table_name = 'customers'
+                  AND company_id = %s
+                  AND pending_sync = TRUE
+                  AND deleted_at IS NULL
+            """, (company_id,))
+            count_pending = self.pg_cursor.fetchone()[0]
 
-            self.pg_cursor.execute(query)
-            clientes = self.pg_cursor.fetchall()
+            # 📋 PASO 2: Obtener customers según estrategia
+            if count_pending > 0:
+                # Estrategia optimizada: Solo customers con pending_sync
+                self._log(f"Detectando cambios en customers... ({count_pending} pendientes)", "info")
+
+                # Obtener códigos de customers pendientes
+                self.pg_cursor.execute("""
+                    SELECT record_key
+                    FROM sync_hashes
+                    WHERE table_name = 'customers'
+                      AND company_id = %s
+                      AND pending_sync = TRUE
+                      AND deleted_at IS NULL
+                """, (company_id,))
+                pending_codes = [row[0] for row in self.pg_cursor.fetchall()]
+
+                # Construir filtro IN para query principal
+                placeholders = ','.join(['%s'] * len(pending_codes))
+
+                query = f"""
+                SELECT
+                    code,
+                    description,
+                    address,
+                    client_id,
+                    email,
+                    phone,
+                    contact
+                FROM clients
+                WHERE code IN ({placeholders})
+                  AND code IS NOT NULL AND code != ''
+                  AND description IS NOT NULL AND description != ''
+                ORDER BY code
+                """
+
+                self.pg_cursor.execute(query, pending_codes)
+                clientes = self.pg_cursor.fetchall()
+
+                self._log(f"   🔍 Procesando {len(clientes)} customers con cambios pendientes", "debug")
+            else:
+                # Fallback: Procesar todos los customers (comportamiento original)
+                self._log("Detectando cambios en customers... (escaneo completo)", "info")
+
+                query = """
+                SELECT
+                    code,
+                    description,
+                    address,
+                    client_id,
+                    email,
+                    phone,
+                    contact
+                FROM clients
+                WHERE code IS NOT NULL AND code != ''
+                  AND description IS NOT NULL AND description != ''
+                ORDER BY code
+                """
+
+                self.pg_cursor.execute(query)
+                clientes = self.pg_cursor.fetchall()
 
             claves_actuales = []
 
