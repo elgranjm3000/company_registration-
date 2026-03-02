@@ -2001,15 +2001,24 @@ class SystemTrayService:
                     # thread_mb = threading.Thread(target=mostrar_messagebox, daemon=True)
                     # thread_mb.start()
                 else:
-                    # Modo automático - Solo log, sin alertas
+                    # Modo automático - Mostrar notificación toast también
                     log(f"✅ Sincronización automática completada en {duracion_str} - "
                         f"Productos: {sync_system.stats.get('products', {}).get('nuevos', 0)} nuevos, "
                         f"{sync_system.stats.get('products', {}).get('modificados', 0)} modificados", "INFO")
+
+                    # Mostrar notificación toast para sincronización automática también
+                    mostrar_banner(
+                        "✅ Sincronización Automática",
+                        f"Productos: {sync_system.stats.get('products', {}).get('nuevos', 0)} nuevos, "
+                        f"{sync_system.stats.get('products', {}).get('modificados', 0)} modificados"
+                        f"{f', {sync_system.stats.get('products', {}).get('eliminados', 0)} eliminados' if sync_system.stats.get('products', {}).get('eliminados', 0) > 0 else ''}",
+                        duracion=5
+                    )
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error"
 
-                # Mostrar notificación BANNER de error SOLO si es manual
+                # Mostrar notificación BANNER de error (manual y automático)
                 if es_manual:
                     mostrar_banner(
                         "⚠️ Error en Sincronización",
@@ -2018,13 +2027,19 @@ class SystemTrayService:
                     )
                 else:
                     log("⚠️ Sincronización automática falló - Revisa los logs para más detalles", "WARNING")
+                    # Mostrar notificación toast también para automático
+                    mostrar_banner(
+                        "⚠️ Sync Automático Falló",
+                        "Revisa los logs para más detalles",
+                        duracion=10
+                    )
 
         except Exception as e:
             log(f"Error en sincronización: {e}", "ERROR")
             self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.last_sync_status = f"❌ Error: {str(e)[:30]}"
 
-            # Mostrar notificación BANNER de error SOLO si es manual
+            # Mostrar notificación BANNER de error (manual y automático)
             if es_manual:
                 mostrar_banner(
                     "⚠️ Error en Sincronización",
@@ -2033,6 +2048,12 @@ class SystemTrayService:
                 )
             else:
                 log(f"⚠️ Sincronización automática con error: {e}", "ERROR")
+                # Mostrar notificación toast también para automático
+                mostrar_banner(
+                    "⚠️ Sync Automático Falló",
+                    str(e)[:100],
+                    duracion=10
+                )
         finally:
             self.is_syncing = False
 
