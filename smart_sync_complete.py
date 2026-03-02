@@ -542,6 +542,8 @@ class SmartSyncComplete:
         """
         Actualiza el company_id en sync_config desde MySQL
         Los triggers UPDATE leen este valor para usar el company_id correcto
+
+        Compatible con PostgreSQL 9.1+ (no usa ON CONFLICT)
         """
         try:
             # Obtener company_id desde MySQL
@@ -550,16 +552,28 @@ class SmartSyncComplete:
                 # Si no se puede obtener, usar un valor por defecto
                 company_id = 1
 
-            # Insertar o actualizar en sync_config
-            upsert_query = """
-            INSERT INTO sync_config (key, value, updated_at)
-            VALUES ('current_company_id', %s, NOW())
-            ON CONFLICT (key)
-            DO UPDATE SET
-                value = EXCLUDED.value,
-                updated_at = NOW();
-            """
-            self.pg_cursor.execute(upsert_query, (company_id,))
+            # Verificar si ya existe el registro
+            self.pg_cursor.execute("""
+                SELECT value FROM sync_config WHERE key = 'current_company_id'
+            """)
+            existe = self.pg_cursor.fetchone()
+
+            if existe:
+                # Ya existe: Actualizar
+                update_query = """
+                UPDATE sync_config
+                SET value = %s, updated_at = NOW()
+                WHERE key = 'current_company_id'
+                """
+                self.pg_cursor.execute(update_query, (company_id,))
+            else:
+                # No existe: Insertar
+                insert_query = """
+                INSERT INTO sync_config (key, value, updated_at)
+                VALUES ('current_company_id', %s, NOW())
+                """
+                self.pg_cursor.execute(insert_query, (company_id,))
+
             self.pg_conn.commit()
 
             self._log(f"   ✅ Company_id configurado en sync_config: {company_id}", "debug")
