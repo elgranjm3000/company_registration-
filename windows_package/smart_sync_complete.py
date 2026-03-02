@@ -5542,9 +5542,9 @@ class SmartSyncComplete:
                 if not self.sync_running:
                     break
 
-                # Buscar la category en MySQL por code
+                # Buscar la category en MySQL por name (no por code, MySQL usa name)
                 self.mysql_cursor.execute(
-                    "SELECT id FROM categories WHERE code = %s AND company_id = %s",
+                    "SELECT id FROM categories WHERE name = %s AND company_id = %s",
                     (category_code, company_id)
                 )
                 category_mysql = self.mysql_cursor.fetchone()
