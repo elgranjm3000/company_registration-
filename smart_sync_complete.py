@@ -2127,7 +2127,7 @@ class SmartSyncComplete:
             # Commit hashes
             self.pg_conn.commit()
 
-            self._log(f"Products: {len(cambios['nuevos'])} nuevos, "
+            self._log(f"Productos: {len(cambios['nuevos'])} nuevos, "
                       f"{len(cambios['modificados'])} modificados", "info")
 
         except Exception as e:
@@ -2537,7 +2537,7 @@ class SmartSyncComplete:
 
             self.pg_conn.commit()
 
-            self._log(f"Customers: {len(cambios['nuevos'])} nuevos, "
+            self._log(f"Clientes: {len(cambios['nuevos'])} nuevos, "
                       f"{len(cambios['modificados'])} modificados", "info")
 
         except Exception as e:
@@ -2615,7 +2615,7 @@ class SmartSyncComplete:
 
             self.pg_conn.commit()
 
-            self._log(f"Categories: {len(cambios['nuevos'])} nuevos, "
+            self._log(f"Departamentos: {len(cambios['nuevos'])} nuevos, "
                       f"{len(cambios['modificados'])} modificados", "info")
 
         except Exception as e:
@@ -4810,7 +4810,7 @@ class SmartSyncComplete:
             cambios: Dict con 'nuevos' y 'modificados'
         """
         if not cambios.get('nuevos') and not cambios.get('modificados'):
-            self._log("✅ Products: No hay cambios para sincronizar (MySQL → PG)", "info")
+            self._log("✅ Productos: No hay cambios para sincronizar (MySQL → PG)", "info")
             return
 
         total_nuevos = len(cambios.get('nuevos', []))
@@ -4944,7 +4944,7 @@ class SmartSyncComplete:
             cambios: Dict con 'nuevos' y 'modificados'
         """
         if not cambios.get('nuevos') and not cambios.get('modificados'):
-            self._log("✅ Customers: No hay cambios para sincronizar (MySQL → PG)", "info")
+            self._log("✅ Clientes: No hay cambios para sincronizar (MySQL → PG)", "info")
             return
 
         total_nuevos = len(cambios.get('nuevos', []))
@@ -5402,15 +5402,15 @@ class SmartSyncComplete:
             self._log("╔════════════════════════════════════════════════════════════════╗", "info")
             self._log("║                    RESUMEN DE SINCRONIZACIÓN                    ║", "info")
             self._log("╚════════════════════════════════════════════════════════════════╝", "info")
-            self._log(f"Products:   {self.stats['products']['nuevos']} nuevos, "
+            self._log(f"Productos:   {self.stats['products']['nuevos']} nuevos, "
                       f"{self.stats['products']['modificados']} modificados, "
                       f"{self.stats['products'].get('eliminados', 0)} eliminados", "success")
-            self._log(f"Customers:  {self.stats['customers']['nuevos']} nuevos, "
+            self._log(f"Clientes:  {self.stats['customers']['nuevos']} nuevos, "
                       f"{self.stats['customers']['modificados']} modificados, "
                       f"{self.stats['customers'].get('eliminados', 0)} eliminados", "success")
-            self._log(f"Categories: {self.stats['categories']['nuevos']} nuevos, "
+            self._log(f"Departamentos: {self.stats['categories']['nuevos']} nuevos, "
                       f"{self.stats['categories']['modificados']} modificados", "success")
-            self._log(f"Sellers:    {self.stats['sellers']['nuevos']} nuevos, "
+            self._log(f"Vendedores:    {self.stats['sellers']['nuevos']} nuevos, "
                       f"{self.stats['sellers']['modificados']} actualizados, "
                       f"{self.stats['sellers'].get('eliminados', 0)} eliminados", "success")
             self._log(f"Quotes:     {self.stats['quotes']['nuevos']} nuevos (MySQL→PG), "
@@ -5426,7 +5426,7 @@ class SmartSyncComplete:
                 # Products (productos)
                 products_total = self.stats['products']['nuevos'] + self.stats['products']['modificados']
                 if products_total > 0 or self.stats['products'].get('eliminados', 0) > 0:
-                    part = f"Products: {products_total} nuevos/modificados"
+                    part = f"Productos: {products_total} nuevos/modificados"
                     if self.stats['products'].get('eliminados', 0) > 0:
                         part += f", {self.stats['products'].get('eliminados', 0)} eliminados"
                     parts.append(part)
@@ -5434,7 +5434,7 @@ class SmartSyncComplete:
                 # Customers (clientes)
                 customers_total = self.stats['customers']['nuevos'] + self.stats['customers']['modificados']
                 if customers_total > 0 or self.stats['customers'].get('eliminados', 0) > 0:
-                    part = f"Customers: {customers_total} nuevos/modificados"
+                    part = f"Clientes: {customers_total} nuevos/modificados"
                     if self.stats['customers'].get('eliminados', 0) > 0:
                         part += f", {self.stats['customers'].get('eliminados', 0)} eliminados"
                     parts.append(part)
@@ -5442,7 +5442,7 @@ class SmartSyncComplete:
                 # Sellers (vendedores)
                 sellers_total = self.stats['sellers']['nuevos'] + self.stats['sellers']['modificados']
                 if sellers_total > 0 or self.stats['sellers'].get('eliminados', 0) > 0:
-                    part = f"Sellers: {sellers_total} nuevos/modificados"
+                    part = f"Vendedores: {sellers_total} nuevos/modificados"
                     if self.stats['sellers'].get('eliminados', 0) > 0:
                         part += f", {self.stats['sellers'].get('eliminados', 0)} eliminados"
                     parts.append(part)

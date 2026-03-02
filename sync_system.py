@@ -1032,19 +1032,19 @@ class ConfigWindow:
                      font=("Arial", 11, "bold")).pack(pady=(0, 10))
 
             # Labels para cada entidad con fuente más grande
-            lbl_products = ttk.Label(contenedor_contadores, text="📦 Products: --/--",
+            lbl_products = ttk.Label(contenedor_contadores, text="📦 Productos: --/--",
                                     font=("Arial", 10))
             lbl_products.pack(anchor="w", padx=30, pady=5)
 
-            lbl_customers = ttk.Label(contenedor_contadores, text="👥 Customers: --/--",
+            lbl_customers = ttk.Label(contenedor_contadores, text="👥 Clientes: --/--",
                                      font=("Arial", 10))
             lbl_customers.pack(anchor="w", padx=30, pady=5)
 
-            lbl_categories = ttk.Label(contenedor_contadores, text="📁 Categories: --/--",
+            lbl_categories = ttk.Label(contenedor_contadores, text="📁 Departamentos: --/--",
                                       font=("Arial", 10))
             lbl_categories.pack(anchor="w", padx=30, pady=5)
 
-            lbl_sellers = ttk.Label(contenedor_contadores, text="👤 Sellers: --/--",
+            lbl_sellers = ttk.Label(contenedor_contadores, text="👤 Vendedores: --/--",
                                      font=("Arial", 10))
             lbl_sellers.pack(anchor="w", padx=30, pady=5)
 
@@ -2061,7 +2061,7 @@ class SystemTrayService:
                     # Products (productos)
                     products_total = sync_system.stats.get('products', {}).get('nuevos', 0) + sync_system.stats.get('products', {}).get('modificados', 0)
                     if products_total > 0 or sync_system.stats.get('products', {}).get('eliminados', 0) > 0:
-                        part = f"Products: {products_total} nuevos/modificados"
+                        part = f"Productos: {products_total} nuevos/modificados"
                         if sync_system.stats.get('products', {}).get('eliminados', 0) > 0:
                             part += f", {sync_system.stats.get('products', {}).get('eliminados', 0)} eliminados"
                         parts.append(part)
@@ -2069,7 +2069,7 @@ class SystemTrayService:
                     # Customers (clientes)
                     customers_total = sync_system.stats.get('customers', {}).get('nuevos', 0) + sync_system.stats.get('customers', {}).get('modificados', 0)
                     if customers_total > 0 or sync_system.stats.get('customers', {}).get('eliminados', 0) > 0:
-                        part = f"Customers: {customers_total} nuevos/modificados"
+                        part = f"Clientes: {customers_total} nuevos/modificados"
                         if sync_system.stats.get('customers', {}).get('eliminados', 0) > 0:
                             part += f", {sync_system.stats.get('customers', {}).get('eliminados', 0)} eliminados"
                         parts.append(part)
@@ -2077,7 +2077,7 @@ class SystemTrayService:
                     # Sellers (vendedores)
                     sellers_total = sync_system.stats.get('sellers', {}).get('nuevos', 0) + sync_system.stats.get('sellers', {}).get('modificados', 0)
                     if sellers_total > 0 or sync_system.stats.get('sellers', {}).get('eliminados', 0) > 0:
-                        part = f"Sellers: {sellers_total} nuevos/modificados"
+                        part = f"Vendedores: {sellers_total} nuevos/modificados"
                         if sync_system.stats.get('sellers', {}).get('eliminados', 0) > 0:
                             part += f", {sync_system.stats.get('sellers', {}).get('eliminados', 0)} eliminados"
                         parts.append(part)

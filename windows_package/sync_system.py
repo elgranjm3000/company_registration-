@@ -983,19 +983,19 @@ class ConfigWindow:
                      font=("Arial", 11, "bold")).pack(pady=(0, 10))
 
             # Labels para cada entidad con fuente más grande
-            lbl_products = ttk.Label(contenedor_contadores, text="📦 Products: --/--",
+            lbl_products = ttk.Label(contenedor_contadores, text="📦 Productos: --/--",
                                     font=("Arial", 10))
             lbl_products.pack(anchor="w", padx=30, pady=5)
 
-            lbl_customers = ttk.Label(contenedor_contadores, text="👥 Customers: --/--",
+            lbl_customers = ttk.Label(contenedor_contadores, text="👥 Clientes: --/--",
                                      font=("Arial", 10))
             lbl_customers.pack(anchor="w", padx=30, pady=5)
 
-            lbl_categories = ttk.Label(contenedor_contadores, text="📁 Categories: --/--",
+            lbl_categories = ttk.Label(contenedor_contadores, text="📁 Departamentos: --/--",
                                       font=("Arial", 10))
             lbl_categories.pack(anchor="w", padx=30, pady=5)
 
-            lbl_sellers = ttk.Label(contenedor_contadores, text="👤 Sellers: --/--",
+            lbl_sellers = ttk.Label(contenedor_contadores, text="👤 Vendedores: --/--",
                                      font=("Arial", 10))
             lbl_sellers.pack(anchor="w", padx=30, pady=5)
 
@@ -1152,16 +1152,16 @@ class ConfigWindow:
                         f"   • Modificados: {products_stats.get('modificados', 0)}",
                         f"   • Eliminados: {products_stats.get('eliminados', 0)}",
                         "",
-                        f"👥 Customers:",
+                        f"👥 Clientes:",
                         f"   • Nuevos: {customers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {customers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {customers_stats.get('eliminados', 0)}",
                         "",
-                        f"📁 Categories:",
+                        f"📁 Departamentos:",
                         f"   • Nuevos: {categories_stats.get('nuevos', 0)}",
                         f"   • Modificados: {categories_stats.get('modificados', 0)}",
                         "",
-                        f"👤 Sellers:",
+                        f"👤 Vendedores:",
                         f"   • Nuevos: {sellers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {sellers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {sellers_stats.get('eliminados', 0)}",
@@ -1361,7 +1361,7 @@ class ManagerWindow:
         stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"))
         stats_frame.pack(fill="x", pady=5, padx=5)
 
-        self.lbl_stats = tk.Label(stats_frame, text="Products: 0 | Customers: 0 | Categories: 0 | Sellers: 0 | Quotes: 0",
+        self.lbl_stats = tk.Label(stats_frame, text="Productos: 0 | Clientes: 0 | Departamentos: 0 | Vendedores: 0 | Quotes: 0",
                                  font=("Arial", 10))
         self.lbl_stats.pack()
 
@@ -1461,10 +1461,10 @@ class ManagerWindow:
         if resultado:
             stats = self.sync_module.stats
             self.lbl_stats.config(
-                text=f"Products: {stats['products']['nuevos']} nuevos | "
-                     f"Customers: {stats['customers']['nuevos']} nuevos | "
-                     f"Categories: {stats['categories']['nuevos']} nuevos | "
-                     f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
+                text=f"Productos: {stats['products']['nuevos']} nuevos | "
+                     f"Clientes: {stats['customers']['nuevos']} nuevos | "
+                     f"Departamentos: {stats['categories']['nuevos']} nuevos | "
+                     f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
                      f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
             self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1473,10 +1473,10 @@ class ManagerWindow:
 
             # Mostrar notificación BANNER prominente con estadísticas
             mensaje_stats = (
-                f"Products: {stats['products']['nuevos']} nuevos\n"
-                f"Customers: {stats['customers']['nuevos']} nuevos\n"
-                f"Categories: {stats['categories']['nuevos']} nuevos\n"
-                f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
+                f"Productos: {stats['products']['nuevos']} nuevos\n"
+                f"Clientes: {stats['customers']['nuevos']} nuevos\n"
+                f"Departamentos: {stats['categories']['nuevos']} nuevos\n"
+                f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
                 f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
 
@@ -1515,10 +1515,10 @@ class ManagerWindow:
         if resultado:
             stats = self.sync_module.stats
             self.lbl_stats.config(
-                text=f"Products: {stats['products']['nuevos']} nuevos | "
-                     f"Customers: {stats['customers']['nuevos']} nuevos | "
-                     f"Categories: {stats['categories']['nuevos']} nuevos | "
-                     f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
+                text=f"Productos: {stats['products']['nuevos']} nuevos | "
+                     f"Clientes: {stats['customers']['nuevos']} nuevos | "
+                     f"Departamentos: {stats['categories']['nuevos']} nuevos | "
+                     f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
                      f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
             self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1526,10 +1526,10 @@ class ManagerWindow:
 
             # Mostrar notificación BANNER con estadísticas
             mensaje_stats = (
-                f"Products: {stats['products']['nuevos']} nuevos\n"
-                f"Customers: {stats['customers']['nuevos']} nuevos\n"
-                f"Categories: {stats['categories']['nuevos']} nuevos\n"
-                f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
+                f"Productos: {stats['products']['nuevos']} nuevos\n"
+                f"Clientes: {stats['customers']['nuevos']} nuevos\n"
+                f"Departamentos: {stats['categories']['nuevos']} nuevos\n"
+                f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
                 f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
 
@@ -1955,16 +1955,16 @@ class SystemTrayService:
                         f"   • Modificados: {products_stats.get('modificados', 0)}",
                         f"   • Eliminados: {products_stats.get('eliminados', 0)}",
                         "",
-                        f"👥 Customers:",
+                        f"👥 Clientes:",
                         f"   • Nuevos: {customers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {customers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {customers_stats.get('eliminados', 0)}",
                         "",
-                        f"📁 Categories:",
+                        f"📁 Departamentos:",
                         f"   • Nuevos: {categories_stats.get('nuevos', 0)}",
                         f"   • Modificados: {categories_stats.get('modificados', 0)}",
                         "",
-                        f"👤 Sellers:",
+                        f"👤 Vendedores:",
                         f"   • Nuevos: {sellers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {sellers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {sellers_stats.get('eliminados', 0)}",
@@ -2012,7 +2012,7 @@ class SystemTrayService:
                     # Products (productos)
                     products_total = sync_system.stats.get('products', {}).get('nuevos', 0) + sync_system.stats.get('products', {}).get('modificados', 0)
                     if products_total > 0 or sync_system.stats.get('products', {}).get('eliminados', 0) > 0:
-                        part = f"Products: {products_total} nuevos/modificados"
+                        part = f"Productos: {products_total} nuevos/modificados"
                         if sync_system.stats.get('products', {}).get('eliminados', 0) > 0:
                             part += f", {sync_system.stats.get('products', {}).get('eliminados', 0)} eliminados"
                         parts.append(part)
@@ -2020,7 +2020,7 @@ class SystemTrayService:
                     # Customers (clientes)
                     customers_total = sync_system.stats.get('customers', {}).get('nuevos', 0) + sync_system.stats.get('customers', {}).get('modificados', 0)
                     if customers_total > 0 or sync_system.stats.get('customers', {}).get('eliminados', 0) > 0:
-                        part = f"Customers: {customers_total} nuevos/modificados"
+                        part = f"Clientes: {customers_total} nuevos/modificados"
                         if sync_system.stats.get('customers', {}).get('eliminados', 0) > 0:
                             part += f", {sync_system.stats.get('customers', {}).get('eliminados', 0)} eliminados"
                         parts.append(part)
@@ -2028,7 +2028,7 @@ class SystemTrayService:
                     # Sellers (vendedores)
                     sellers_total = sync_system.stats.get('sellers', {}).get('nuevos', 0) + sync_system.stats.get('sellers', {}).get('modificados', 0)
                     if sellers_total > 0 or sync_system.stats.get('sellers', {}).get('eliminados', 0) > 0:
-                        part = f"Sellers: {sellers_total} nuevos/modificados"
+                        part = f"Vendedores: {sellers_total} nuevos/modificados"
                         if sync_system.stats.get('sellers', {}).get('eliminados', 0) > 0:
                             part += f", {sync_system.stats.get('sellers', {}).get('eliminados', 0)} eliminados"
                         parts.append(part)
