@@ -2006,14 +2006,46 @@ class SystemTrayService:
                         f"Productos: {sync_system.stats.get('products', {}).get('nuevos', 0)} nuevos, "
                         f"{sync_system.stats.get('products', {}).get('modificados', 0)} modificados", "INFO")
 
-                    # Mostrar notificación toast para sincronización automática también
-                    mostrar_banner(
-                        "✅ Sincronización Automática",
-                        f"Productos: {sync_system.stats.get('products', {}).get('nuevos', 0)} nuevos, "
-                        f"{sync_system.stats.get('products', {}).get('modificados', 0)} modificados"
-                        f"{f', {sync_system.stats.get('products', {}).get('eliminados', 0)} eliminados' if sync_system.stats.get('products', {}).get('eliminados', 0) > 0 else ''}",
-                        duracion=5
-                    )
+                    # Construir mensaje con todas las entidades (como en smart_sync_complete.py)
+                    parts = []
+
+                    # Products (productos)
+                    products_total = sync_system.stats.get('products', {}).get('nuevos', 0) + sync_system.stats.get('products', {}).get('modificados', 0)
+                    if products_total > 0 or sync_system.stats.get('products', {}).get('eliminados', 0) > 0:
+                        part = f"Products: {products_total} nuevos/modificados"
+                        if sync_system.stats.get('products', {}).get('eliminados', 0) > 0:
+                            part += f", {sync_system.stats.get('products', {}).get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Customers (clientes)
+                    customers_total = sync_system.stats.get('customers', {}).get('nuevos', 0) + sync_system.stats.get('customers', {}).get('modificados', 0)
+                    if customers_total > 0 or sync_system.stats.get('customers', {}).get('eliminados', 0) > 0:
+                        part = f"Customers: {customers_total} nuevos/modificados"
+                        if sync_system.stats.get('customers', {}).get('eliminados', 0) > 0:
+                            part += f", {sync_system.stats.get('customers', {}).get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Sellers (vendedores)
+                    sellers_total = sync_system.stats.get('sellers', {}).get('nuevos', 0) + sync_system.stats.get('sellers', {}).get('modificados', 0)
+                    if sellers_total > 0 or sync_system.stats.get('sellers', {}).get('eliminados', 0) > 0:
+                        part = f"Sellers: {sellers_total} nuevos/modificados"
+                        if sync_system.stats.get('sellers', {}).get('eliminados', 0) > 0:
+                            part += f", {sync_system.stats.get('sellers', {}).get('eliminados', 0)} eliminados"
+                        parts.append(part)
+
+                    # Categories (departamentos)
+                    categories_total = sync_system.stats.get('categories', {}).get('nuevos', 0) + sync_system.stats.get('categories', {}).get('modificados', 0)
+                    if categories_total > 0:
+                        parts.append(f"Departamentos: {categories_total} nuevos/modificados")
+
+                    # Mostrar notificación con todas las entidades
+                    if parts:
+                        mensaje = " | ".join(parts)
+                        mostrar_banner(
+                            "✅ Sincronización Automática",
+                            mensaje,
+                            duracion=5
+                        )
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error"
