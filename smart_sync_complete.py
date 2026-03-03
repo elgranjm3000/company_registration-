@@ -1941,6 +1941,7 @@ class SmartSyncComplete:
                   AND a.code != ''
                   AND a.product_type <> 'C'
                   AND b.unit != ''
+                  AND b.main_unit = true
                 ORDER BY a.code, b.maximum_price DESC;
                 """
 
@@ -2006,6 +2007,7 @@ class SmartSyncComplete:
                   AND a.code != ''
                   AND a.product_type <> 'C'
                   AND b.unit != ''
+                  AND b.main_unit = true
                 ORDER BY a.code, b.maximum_price DESC;
                 """
 
