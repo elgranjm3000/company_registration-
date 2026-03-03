@@ -1905,9 +1905,9 @@ class SmartSyncComplete:
                     a.coin,
                     f.description AS description_coin,
                     CASE
-                        WHEN b.maximum_price IS NULL
+                        WHEN b.higher_price IS NULL
                         THEN 0
-                        ELSE b.maximum_price
+                        ELSE b.higher_price
                     END AS price,
                     CASE
                         WHEN b.offer_price IS NULL
@@ -1973,9 +1973,9 @@ class SmartSyncComplete:
                     a.coin,
                     f.description AS description_coin,
                     CASE
-                        WHEN b.maximum_price IS NULL
+                        WHEN b.higher_price IS NULL
                         THEN 0
-                        ELSE b.maximum_price
+                        ELSE b.higher_price
                     END AS price,
                     CASE
                         WHEN b.offer_price IS NULL
@@ -3834,10 +3834,10 @@ class SmartSyncComplete:
             products_sin_categoria = 0
 
             # Verificar si hay productos en Bolívares (coin='01') para obtener tipo de cambio
-            # Índices del producto: 0=code, 1=description, 2=short_name, 3=department, 4=stock,
-            #                       5=product_type, 6=coin, 7=description_coin, 8=price, ...
+            # Índices del producto: 0=code, 1=unit_code, 2=description, 3=short_name, 4=department,
+            #                       5=product_code_pg, 6=unidad, 7=stock, 8=product_type, 9=coin, ...
             hay_productos_ves = any(
-                p[6] == '01'  # coin es el índice 6
+                p[9] == '01'  # coin es el índice 9
                 for p in cambios['nuevos'] + cambios['modificados']
             )
 
