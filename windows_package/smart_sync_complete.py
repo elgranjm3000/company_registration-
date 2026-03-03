@@ -1944,6 +1944,7 @@ class SmartSyncComplete:
                   AND a.code IS NOT NULL
                   AND a.code != ''
                   AND a.product_type <> 'C'
+                  AND b.unit != ''
                 ORDER BY a.code, b.maximum_price DESC;
                 """
 
@@ -2007,6 +2008,7 @@ class SmartSyncComplete:
                 WHERE a.code IS NOT NULL
                   AND a.code != ''
                   AND a.product_type <> 'C'
+                  AND b.unit != ''
                 ORDER BY a.code, b.maximum_price DESC;
                 """
 
