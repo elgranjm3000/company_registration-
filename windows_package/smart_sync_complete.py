@@ -1904,11 +1904,7 @@ class SmartSyncComplete:
                     a.product_type,
                     a.coin,
                     f.description AS description_coin,
-                    CASE
-                        WHEN b.higher_price IS NULL
-                        THEN 0
-                        ELSE b.higher_price
-                    END AS price,
+                    COALESCE(b.maximum_price, b.higher_price, 0) AS price,
                     CASE
                         WHEN b.offer_price IS NULL
                         THEN 0
@@ -1972,11 +1968,7 @@ class SmartSyncComplete:
                     a.product_type,
                     a.coin,
                     f.description AS description_coin,
-                    CASE
-                        WHEN b.higher_price IS NULL
-                        THEN 0
-                        ELSE b.higher_price
-                    END AS price,
+                    COALESCE(b.maximum_price, b.higher_price, 0) AS price,
                     CASE
                         WHEN b.offer_price IS NULL
                         THEN 0
