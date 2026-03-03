@@ -1922,7 +1922,8 @@ class SmartSyncComplete:
                     e.aliquot,
                     a.buy_tax,
                     g.aliquot AS buy_aliquot,
-                    b.unitary_cost
+                    b.unitary_cost,
+                    a.allow_decimal
                 FROM products a
                 LEFT JOIN (
                     SELECT product_code, SUM(stock) as total_stock
@@ -1987,7 +1988,8 @@ class SmartSyncComplete:
                     e.aliquot,
                     a.buy_tax,
                     g.aliquot AS buy_aliquot,
-                    b.unitary_cost
+                    b.unitary_cost,
+                    a.allow_decimal
                 FROM products a
                 LEFT JOIN (
                     SELECT product_code, SUM(stock) as total_stock
@@ -3854,7 +3856,7 @@ class SmartSyncComplete:
                         # Desempaquetar con todos los campos
                         (code, unit_code, description, short_name, department, product_code_pg,
                          unidad, stock, product_type, coin, description_coin, price, cost, higher_price,
-                         min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                         min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost, allow_decimal) = producto
 
                         # DEBUG: Mostrar coin para depuración
                         if code == 'TESTVES':
@@ -3899,6 +3901,10 @@ class SmartSyncComplete:
                             buy_tax = ''  # Valor vacío permitido
                         if buy_aliquot is None or buy_aliquot == 0:
                             buy_aliquot = 16  # 16% IVA por defecto
+
+                        # Manejo de allow_decimal (booleano)
+                        if allow_decimal is None:
+                            allow_decimal = False  # Por defecto no permite decimales
 
                         # 🔧 MANEJO DE short_name NULL - Usar description como fallback
                         # MySQL exige que 'name' no sea NULL
@@ -3950,7 +3956,8 @@ class SmartSyncComplete:
                             final_unitary_cost,
                             buy_tax,  # Ya tiene valor por defecto si era NULL
                             buy_aliquot,  # Ya tiene valor por defecto si era NULL
-                            unidad  # Unidad de medida
+                            unidad,  # Unidad de medida
+                            allow_decimal  # Permite decimales (boolean)
                         ))
 
                         productos_a_procesar.append((idx, code))
@@ -3969,9 +3976,9 @@ class SmartSyncComplete:
                         company_id, code, name, description, price, cost, stock, min_stock,
                         category_id, status, product_type, images, higher_price, sale_tax,
                         aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
-                        unidad, created_at, updated_at
+                        unidad, allow_decimal, created_at, updated_at
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
                     ON DUPLICATE KEY UPDATE
                         name = VALUES(name),
@@ -3993,6 +4000,7 @@ class SmartSyncComplete:
                         buy_tax = VALUES(buy_tax),
                         buy_aliquot = VALUES(buy_aliquot),
                         unidad = VALUES(unidad),
+                        allow_decimal = VALUES(allow_decimal),
                         updated_at = NOW()
                     """
 
@@ -4045,7 +4053,7 @@ class SmartSyncComplete:
                         # Desempaquetar con todos los campos
                         (code, unit_code, description, short_name, department, product_code_pg,
                          unidad, stock, product_type, coin, description_coin, price, cost, higher_price,
-                         min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost) = producto
+                         min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost, allow_decimal) = producto
 
                         # DEBUG: Mostrar coin para depuración
                         if code == 'TESTVES':
@@ -4090,6 +4098,10 @@ class SmartSyncComplete:
                             buy_tax = ''  # Valor vacío permitido
                         if buy_aliquot is None or buy_aliquot == 0:
                             buy_aliquot = 16  # 16% IVA por defecto
+
+                        # Manejo de allow_decimal (booleano)
+                        if allow_decimal is None:
+                            allow_decimal = False  # Por defecto no permite decimales
 
                         # 🔧 MANEJO DE short_name NULL - Usar description como fallback
                         # MySQL exige que 'name' no sea NULL
@@ -4137,7 +4149,9 @@ class SmartSyncComplete:
                             description_coin,  # Ya tiene valor por defecto si era NULL
                             final_unitary_cost,
                             buy_tax,  # Ya tiene valor por defecto si era NULL
-                            buy_aliquot  # Ya tiene valor por defecto si era NULL
+                            buy_aliquot,  # Ya tiene valor por defecto si era NULL
+                            unidad,  # Unidad de medida
+                            allow_decimal  # Permite decimales (boolean)
                         ))
 
                         productos_a_procesar.append((idx, code))
@@ -4157,7 +4171,7 @@ class SmartSyncComplete:
                         company_id, code, name, description, price, cost, stock, min_stock,
                         category_id, status, product_type, images, higher_price, sale_tax,
                         aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
-                        created_at, updated_at
+                        unidad, allow_decimal, created_at, updated_at
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
@@ -4180,6 +4194,8 @@ class SmartSyncComplete:
                         unitary_cost = VALUES(unitary_cost),
                         buy_tax = VALUES(buy_tax),
                         buy_aliquot = VALUES(buy_aliquot),
+                        unidad = VALUES(unidad),
+                        allow_decimal = VALUES(allow_decimal),
                         updated_at = NOW()
                     """
 
