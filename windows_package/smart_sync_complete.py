@@ -3897,11 +3897,11 @@ class SmartSyncComplete:
                         if not sale_tax or sale_tax.strip() == '':
                             sale_tax = ''  # Valor vacío permitido
                         if aliquot is None or aliquot == 0:
-                            aliquot = 16  # 16% IVA por defecto
+                            aliquot = 0  # 0% IVA por defecto
                         if not buy_tax or buy_tax.strip() == '':
                             buy_tax = ''  # Valor vacío permitido
                         if buy_aliquot is None or buy_aliquot == 0:
-                            buy_aliquot = 16  # 16% IVA por defecto
+                            buy_aliquot = 0  # 0% IVA por defecto
 
                         # Manejo de allow_decimal (booleano)
                         if allow_decimal is None:
@@ -4090,11 +4090,11 @@ class SmartSyncComplete:
                         if not sale_tax or sale_tax.strip() == '':
                             sale_tax = ''  # Valor vacío permitido
                         if aliquot is None or aliquot == 0:
-                            aliquot = 16  # 16% IVA por defecto
+                            aliquot = 0  # 0% IVA por defecto
                         if not buy_tax or buy_tax.strip() == '':
                             buy_tax = ''  # Valor vacío permitido
                         if buy_aliquot is None or buy_aliquot == 0:
-                            buy_aliquot = 16  # 16% IVA por defecto
+                            buy_aliquot = 0  # 0% IVA por defecto
 
                         # Manejo de allow_decimal (booleano)
                         if allow_decimal is None:
