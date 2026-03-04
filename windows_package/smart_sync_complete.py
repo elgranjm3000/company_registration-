@@ -4342,6 +4342,9 @@ class SmartSyncComplete:
                     if not email or email.strip() == '':
                         email = f"customer_{code}@temp.local"
 
+                    # Convertir status de PostgreSQL ('01'/'02') a MySQL ('active'/'inactive')
+                    status_mysql = 'active' if status == '01' else 'inactive' if status == '02' else 'inactive'
+
                     # VERIFICAR si existe ANTES de insertar
                     check_query = """
                     SELECT id
@@ -4360,13 +4363,14 @@ class SmartSyncComplete:
                             address = %s,
                             phone = %s,
                             contact = %s,
+                            status = %s,
                             updated_at = NOW()
                         WHERE company_id = %s AND document_number = %s
                         """
                         self.mysql_cursor.execute(update_query, (
                             description, email, address if address else None,
                             phone if phone else None, contact if contact else None,
-                            company_id, code
+                            status_mysql, company_id, code
                         ))
                         self._log(f"  🔄 Customer {code} ya existía, actualizado", "debug")
                         self.stats['customers']['modificados'] += 1
@@ -4381,7 +4385,7 @@ class SmartSyncComplete:
                         self.mysql_cursor.execute(insert_query, (
                             company_id, description, email, code,
                             address if address else None, phone if phone else None,
-                            contact if contact else None, 'active'
+                            contact if contact else None, status_mysql
                         ))
                         self.stats['customers']['nuevos'] += 1
 
@@ -4421,6 +4425,9 @@ class SmartSyncComplete:
                     if not email or email.strip() == '':
                         email = f"customer_{code}@temp.local"
 
+                    # Convertir status de PostgreSQL ('01'/'02') a MySQL ('active'/'inactive')
+                    status_mysql = 'active' if status == '01' else 'inactive' if status == '02' else 'inactive'
+
                     update_query = """
                     UPDATE customers SET
                         name = %s, email = %s, address = %s, phone = %s,
@@ -4431,7 +4438,7 @@ class SmartSyncComplete:
                     self.mysql_cursor.execute(update_query, (
                         description, email, address if address else None,
                         phone if phone else None, contact if contact else None,
-                        status if status else 'inactive', company_id, code
+                        status_mysql, company_id, code
                     ))
 
                     self.stats['customers']['modificados'] += 1
