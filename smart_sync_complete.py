@@ -3124,7 +3124,8 @@ class SmartSyncComplete:
             FROM quote_items qi
             JOIN products p ON p.id = qi.product_id
             WHERE qi.quote_id = %s
-            AND (p.sale_tax IS NULL OR p.sale_tax = '' OR p.sale_tax = 'EX')
+              AND (p.sale_tax IS NULL OR p.sale_tax = '' OR p.sale_tax = 'EX'
+                   OR p.aliquot IS NULL OR p.aliquot = '' OR p.aliquot = 0)
         """, (quote['id'],))
 
         exempt_items = self.mysql_cursor.fetchall()
