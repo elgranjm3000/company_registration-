@@ -3460,9 +3460,9 @@ class SmartSyncComplete:
 
             # Calcular costos según nueva fórmula:
             unitary_cost_final = uc  # unitary_cost de MySQL
-            total_net_cost = uc * qty  # total_net_cost = unitary_cost * cantidad
-            total_tax_cost = uc * (ba / 100) * qty  # total_tax_cost = unitary_cost * buy_aliquot/100 * cantidad
-            total_cost = total_net_cost + total_tax_cost  # total_cost = total_net_cost + total_tax_cost
+            total_net_cost = round(uc * qty, 2)  # total_net_cost = unitary_cost * cantidad (redondeado a 2 decimales)
+            total_tax_cost = round(uc * (ba / 100) * qty, 2)  # total_tax_cost = unitary_cost * buy_aliquot/100 * cantidad (redondeado a 2 decimales)
+            total_cost = round(total_net_cost + total_tax_cost, 2)  # total_cost = total_net_cost + total_tax_cost (redondeado a 2 decimales)
 
             total_net = sub - disc_amt  # Precio neto (para ventas)
 
@@ -3544,6 +3544,10 @@ class SmartSyncComplete:
 
         # Usar los valores calculados que vienen como parámetros (de MySQL)
         # unitary_cost, total_net_cost, total_tax_cost, total_cost ya vienen calculados
+        # Redondear a 2 decimales para asegurar precisión
+        total_net_cost = round(total_net_cost, 2)
+        total_tax_cost = round(total_tax_cost, 2)
+        total_cost = round(total_cost, 2)
 
         total_net = sub - disc
 
@@ -3560,9 +3564,9 @@ class SmartSyncComplete:
             correlativo, line,
             unitary_cost,       # unitary_cost de MySQL
             unit_price_f,
-            total_net_cost,    # de MySQL (unitary_cost * cantidad)
-            total_tax_cost,    # de MySQL (unitary_cost * buy_aliquot/100 * cantidad)
-            total_cost,        # de MySQL (total_net_cost + total_tax_cost)
+            total_net_cost,    # de MySQL (redondeado a 2 decimales)
+            total_tax_cost,    # de MySQL (redondeado a 2 decimales)
+            total_cost,        # de MySQL (redondeado a 2 decimales)
             sub,
             ta,
             tot,
@@ -3582,9 +3586,9 @@ class SmartSyncComplete:
         # Calcular valores en bolívares
         unitary_cost_bcv = unit_price_f * 0.8 * bcv_rate
         price_bcv = unit_price_f * bcv_rate
-        total_net_cost_bcv = quantity_f * unit_price_f * 0.8 * bcv_rate
-        total_tax_cost_bcv = tax_amount_bcv * 0.8
-        total_cost_bcv = total_net_cost_bcv + total_tax_cost_bcv
+        total_net_cost_bcv = round(quantity_f * unit_price_f * 0.8 * bcv_rate, 2)
+        total_tax_cost_bcv = round(tax_amount_bcv * 0.8, 2)
+        total_cost_bcv = round(total_net_cost_bcv + total_tax_cost_bcv, 2)
         total_net_bcv = subtotal_bcv - discount_amount_bcv
 
         self.pg_cursor.execute(sql_detail_coins, (
