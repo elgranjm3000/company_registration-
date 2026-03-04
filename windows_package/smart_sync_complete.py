@@ -2853,7 +2853,8 @@ class SmartSyncComplete:
                 bcv_rate,
                 status,
                 created_at,
-                updated_at
+                updated_at,
+                quote_date
             FROM quotes
             WHERE company_id = %s
             ORDER BY id
@@ -2867,7 +2868,7 @@ class SmartSyncComplete:
                 'id', 'quote_number', 'customer_id', 'company_id',
                 'user_seller_id', 'subtotal', 'tax', 'tax_amount',
                 'discount', 'discount_amount', 'total', 'bcv_rate',
-                'status', 'created_at', 'updated_at'
+                'status', 'created_at', 'updated_at', 'quote_date'
             ]
 
             quotes_dict = []
@@ -3149,12 +3150,12 @@ class SmartSyncComplete:
             total_tax, total, credit, cash, coin_code, canceled,
             pending, wait, total_net_cost, total_tax_cost, total_cost,
             freight_tax, freight_aliquot, document_no_internal,
-            control_no, operation_comments, type_price
+            control_no, operation_comments, type_price, shopping_order_date
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         RETURNING correlative
         """
@@ -3179,6 +3180,17 @@ class SmartSyncComplete:
 
         total_net = quote_subtotal - quote_discount_amount
         expiration = emission_date + timedelta(days=1)
+
+        # Preparar shopping_order_date desde quote_date (formato yyyy-mm-dd)
+        quote_date_mysql = quote.get('quote_date')
+        if quote_date_mysql:
+            if isinstance(quote_date_mysql, datetime):
+                shopping_order_date = quote_date_mysql.date()
+            else:
+                # Si viene como string, parsear y extraer fecha
+                shopping_order_date = datetime.strptime(str(quote_date_mysql)[:10], '%Y-%m-%d').date()
+        else:
+            shopping_order_date = None  # Usar NULL en PostgreSQL
 
         # Ejecutar query con costos en 0 (se calcularán después de insertar detalles)
         self.pg_cursor.execute(sql_operation, (
@@ -3224,7 +3236,8 @@ class SmartSyncComplete:
             document_no,               # document_no_internal
             '',                        # control_no
             '',                        # operation_comments
-            2                          # type_price (2 = precio normal)
+            2,                         # type_price (2 = precio normal)
+            shopping_order_date        # shopping_order_date (desde quote_date)
         ))
 
         # Recuperar el correlative generado por PostgreSQL
