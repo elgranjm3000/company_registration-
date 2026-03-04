@@ -3453,10 +3453,10 @@ class SmartSyncComplete:
             else:
                 tax_percent = 0
 
-            # Valores de MySQL
+            # Valores de MySQL (respetar valor de BD, NULL → 0)
             uc = safe_float(unitary_cost) if unitary_cost else 0
-            sa = safe_float(sale_aliquot) if sale_aliquot else 16
-            ba = safe_float(buy_aliquot) if buy_aliquot else 16
+            sa = safe_float(sale_aliquot) if sale_aliquot is not None else 0
+            ba = safe_float(buy_aliquot) if buy_aliquot is not None else 0
 
             # Calcular costos según nueva fórmula:
             unitary_cost_final = uc  # unitary_cost de MySQL
