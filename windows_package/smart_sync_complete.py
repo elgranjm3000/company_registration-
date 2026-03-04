@@ -1356,7 +1356,8 @@ class SmartSyncComplete:
                 str(customer[0]) if customer[0] else '',  # code
                 str(customer[1]) if customer[1] else '',  # description
                 str(customer[4]) if customer[4] else '',  # email
-                str(customer[5]) if customer[5] else ''   # phone
+                str(customer[5]) if customer[5] else '',  # phone
+                str(customer[7]) if len(customer) > 7 else ''   # status ← NUEVO
             )
             datos = "|".join(campos)
             return hashlib.md5(datos.encode('utf-8')).hexdigest()
@@ -2501,7 +2502,8 @@ class SmartSyncComplete:
                     client_id,
                     email,
                     phone,
-                    contact
+                    contact,
+                    status
                 FROM clients
                 WHERE code IS NOT NULL AND code != ''
                   AND description IS NOT NULL AND description != ''
@@ -4335,7 +4337,7 @@ class SmartSyncComplete:
                     break
 
                 try:
-                    code, description, address, client_id, email, phone, contact = cliente
+                    code, description, address, client_id, email, phone, contact, status = cliente
 
                     if not email or email.strip() == '':
                         email = f"customer_{code}@temp.local"
@@ -4414,7 +4416,7 @@ class SmartSyncComplete:
                     break
 
                 try:
-                    code, description, address, client_id, email, phone, contact = cliente
+                    code, description, address, client_id, email, phone, contact, status = cliente
 
                     if not email or email.strip() == '':
                         email = f"customer_{code}@temp.local"
@@ -4422,14 +4424,14 @@ class SmartSyncComplete:
                     update_query = """
                     UPDATE customers SET
                         name = %s, email = %s, address = %s, phone = %s,
-                        contact = %s, updated_at = NOW()
+                        contact = %s, status = %s, updated_at = NOW()
                     WHERE company_id = %s AND document_number = %s
                     """
 
                     self.mysql_cursor.execute(update_query, (
                         description, email, address if address else None,
                         phone if phone else None, contact if contact else None,
-                        company_id, code
+                        status if status else 'inactive', company_id, code
                     ))
 
                     self.stats['customers']['modificados'] += 1
