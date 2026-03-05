@@ -1412,7 +1412,6 @@ class ConfigWindow:
                                 config_nuevo.get('company_email', ''),
                                 progress_callback=actualizar_contador
                             )
-                            actualizar_paso = actualizar_paso  # Referencia local para usar dentro
 
                             # Sobrescribir método para actualizar pasos también
                             original_sync = sync.ejecutar_sync_completa
