@@ -134,7 +134,7 @@ class SmartSyncComplete:
         self.tipo_cambio_ves_usd = None  # Se obtendrá de pyDolarVenezuela
         self.tipo_cambio_obtenido_at = None  # Timestamp de cuando se obtuvo el tipo de cambio
 
-    def _reportar_progreso(self, entity: str, current: int, total: int):
+    def _reportar_progreso(self, entity: str, current: int, total: int, step: str = ''):
         """
         Reporta progreso de sincronización al callback
 
@@ -142,6 +142,7 @@ class SmartSyncComplete:
             entity: Nombre de la entidad ('products', 'customers', 'categories', 'sellers', 'quotes')
             current: Número actual de registros procesados
             total: Total de registros a procesar
+            step: Paso actual ('detect', 'collect', 'insert') - opcional
         """
         try:
             if total > 0:
@@ -181,12 +182,17 @@ class SmartSyncComplete:
                 # También llamar al callback si existe (para interfaz gráfica)
                 if self.progress_callback:
                     try:
-                        self.progress_callback({
+                        callback_data = {
                             'entity': entity,
                             'current': current,
                             'total': total,
                             'percentage': percentage
-                        })
+                        }
+                        # Agregar step si se proporciona
+                        if step:
+                            callback_data['step'] = step
+
+                        self.progress_callback(callback_data)
                     except Exception as e:
                         # Silencioso para no interrumpir la sincronización
                         pass
@@ -425,15 +431,15 @@ class SmartSyncComplete:
 
             # Agregar columna deleted_at si no existe
             self._agregar_columna_deleted_at()
+
             # Agregar columna pending_sync si no existe (para optimización de UPDATE)
             self._agregar_columna_pending_sync()
 
             # Crear tabla de configuración para almacenar company_id
             self._crear_tabla_sync_config()
+
             # NOTA: NO actualizamos company_id aquí porque aún no hay conexión a MySQL
             # Se actualizará en ejecutar_sync_completa() después de conectar
-
-
 
             # Crear triggers de eliminación para todas las entidades
             self._crear_trigger_eliminacion_products()
@@ -444,7 +450,6 @@ class SmartSyncComplete:
             # Crear triggers de UPDATE para optimizar detección de cambios
             self._crear_trigger_actualizacion_products()
             self._crear_trigger_actualizacion_customers()
-
 
             self.pg_conn.commit()
 
@@ -477,6 +482,46 @@ class SmartSyncComplete:
                 """)
                 self.pg_conn.commit()
                 # Silencioso - transparente para el usuario
+        except Exception as e:
+            # Si hay error, continuar (la columna podría ya existir)
+            self.pg_conn.rollback()
+
+    def _agregar_columna_pending_sync(self):
+        """
+        Agrega la columna pending_sync a sync_hashes si no existe
+        Esta columna se usa para optimizar la detección de cambios con triggers UPDATE
+        """
+        try:
+            # Verificar si la columna existe
+            self.pg_cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'sync_hashes'
+                AND column_name = 'pending_sync'
+            """)
+            existe = self.pg_cursor.fetchone()
+
+            if not existe:
+                # Agregar columna
+                self.pg_cursor.execute("""
+                    ALTER TABLE sync_hashes
+                    ADD COLUMN pending_sync BOOLEAN DEFAULT FALSE
+                """)
+                self.pg_conn.commit()
+
+                # Crear índice para optimizar queries de pending_sync
+                try:
+                    self.pg_cursor.execute("""
+                        CREATE INDEX idx_sync_hashes_pending_sync
+                        ON sync_hashes(pending_sync, table_name, company_id)
+                        WHERE pending_sync = TRUE
+                    """)
+                    self.pg_conn.commit()
+                except Exception as idx_error:
+                    # El índice podría ya existir
+                    self.pg_conn.rollback()
+
+                self._log("   ✅ Campo pending_sync agregado para optimizar detección de cambios", "info")
         except Exception as e:
             # Si hay error, continuar (la columna podría ya existir)
             self.pg_conn.rollback()
@@ -773,85 +818,30 @@ class SmartSyncComplete:
             # Si hay error, continuar (el trigger podría ya existir)
             self.pg_conn.rollback()
 
-
-
-
-    def _crear_trigger_actualizacion_customers(self):
+    def _crear_indice_sync_hashes(self):
         """
-        Crea el trigger que marca clientes como actualizados en sync_hashes
-        Esto optimiza la detección de cambios: solo se sincronizan los clientes con pending_sync = true
-
-        Compatible con PostgreSQL 9.1+ (no usa ON CONFLICT)
-
-        El trigger lee el company_id desde sync_config (se mantiene sincronizado con MySQL)
+        Crear índices de sync_hashes de forma compatible con PostgreSQL 9
+        PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS
         """
-        try:
-            # Crear función del trigger
-            # Compatible con PostgreSQL 9.1: Usa SELECT + IF/THEN en lugar de ON CONFLICT
-            create_function_query = """
-            CREATE OR REPLACE FUNCTION trigger_mark_client_updated_sync_hashes()
-            RETURNS TRIGGER AS $$
-            DECLARE
-                v_company_id INTEGER;
-                v_exists INTEGER;
-            BEGIN
-                -- Obtener el company_id desde sync_config
-                SELECT value INTO v_company_id
-                FROM sync_config
-                WHERE key = 'current_company_id';
+        indices = [
+            ("idx_sync_hashes_lookup", "CREATE INDEX idx_sync_hashes_lookup ON sync_hashes(table_name, record_key, company_id)"),
+            ("idx_sync_hashes_table", "CREATE INDEX idx_sync_hashes_table ON sync_hashes(table_name, company_id)")
+        ]
 
-                -- Si no existe, usar 1 como fallback
-                IF v_company_id IS NULL THEN
-                    v_company_id := 1;
-                END IF;
-
-                -- Verificar si ya existe el registro
-                SELECT 1 INTO v_exists
-                FROM sync_hashes
-                WHERE table_name = 'customers'
-                  AND record_key = NEW.code
-                  AND company_id = v_company_id
-                LIMIT 1;
-
-                IF v_exists = 1 THEN
-                    -- Ya existe: Actualizar
-                    UPDATE sync_hashes
-                    SET pending_sync = TRUE,
-                        updated_at = NOW()
-                    WHERE table_name = 'customers'
-                      AND record_key = NEW.code
-                      AND company_id = v_company_id;
-                ELSE
-                    -- No existe: Insertar
-                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-                    VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
-                END IF;
-
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-            """
-
-            self.pg_cursor.execute(create_function_query)
-
-            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
-            create_trigger_query = """
-            DROP TRIGGER IF EXISTS tr_clients_mark_updated_sync_hashes ON clients;
-
-            CREATE TRIGGER tr_clients_mark_updated_sync_hashes
-                AFTER UPDATE ON clients
-                FOR EACH ROW
-                EXECUTE PROCEDURE trigger_mark_client_updated_sync_hashes();
-            """
-
-            self.pg_cursor.execute(create_trigger_query)
-            self.pg_conn.commit()
-            self._log("   ✅ Trigger de actualización de clientes creado", "info")
-
-        except Exception as e:
-            # Si hay error, continuar (el trigger podría ya existir)
-            self.pg_conn.rollback()
-            self._log(f"   ⚠️ Error creando trigger UPDATE de clients: {str(e)}", "warning")
+        for nombre_idx, query in indices:
+            try:
+                self.pg_cursor.execute(query)
+                self.pg_conn.commit()  # Commit después de crear índice
+                # No mostrar mensaje de creación - es transparente para el usuario
+            except Exception as e:
+                # Silenciar todos los errores de índices (no son relevantes para el usuario)
+                error_msg = str(e).lower()
+                if "already exists" in error_msg:
+                    # El índice ya existe - es normal, no hacer nada
+                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
+                else:
+                    # Otro error de índice - silenciar también (no relevante para el usuario)
+                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
 
     def _crear_trigger_actualizacion_products(self):
         """
@@ -931,71 +921,82 @@ class SmartSyncComplete:
             self.pg_conn.rollback()
             self._log(f"   ⚠️ Error creando trigger UPDATE de products: {str(e)}", "warning")
 
-    def _agregar_columna_pending_sync(self):
+    def _crear_trigger_actualizacion_customers(self):
         """
-        Agrega la columna pending_sync a sync_hashes si no existe
-        Esta columna se usa para optimizar la detección de cambios con triggers UPDATE
+        Crea el trigger que marca clientes como actualizados en sync_hashes
+        Esto optimiza la detección de cambios: solo se sincronizan los clientes con pending_sync = true
+
+        Compatible con PostgreSQL 9.1+ (no usa ON CONFLICT)
+
+        El trigger lee el company_id desde sync_config (se mantiene sincronizado con MySQL)
         """
         try:
-            # Verificar si la columna existe
-            self.pg_cursor.execute("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name = 'sync_hashes'
-                AND column_name = 'pending_sync'
-            """)
-            existe = self.pg_cursor.fetchone()
+            # Crear función del trigger
+            # Compatible con PostgreSQL 9.1: Usa SELECT + IF/THEN en lugar de ON CONFLICT
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_client_updated_sync_hashes()
+            RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
+                v_exists INTEGER;
+            BEGIN
+                -- Obtener el company_id desde sync_config
+                SELECT value INTO v_company_id
+                FROM sync_config
+                WHERE key = 'current_company_id';
 
-            if not existe:
-                # Agregar columna
-                self.pg_cursor.execute("""
-                    ALTER TABLE sync_hashes
-                    ADD COLUMN pending_sync BOOLEAN DEFAULT FALSE
-                """)
-                self.pg_conn.commit()
+                -- Si no existe, usar 1 como fallback
+                IF v_company_id IS NULL THEN
+                    v_company_id := 1;
+                END IF;
 
-                # Crear índice para optimizar queries de pending_sync
-                try:
-                    self.pg_cursor.execute("""
-                        CREATE INDEX idx_sync_hashes_pending_sync
-                        ON sync_hashes(pending_sync, table_name, company_id)
-                        WHERE pending_sync = TRUE
-                    """)
-                    self.pg_conn.commit()
-                except Exception as idx_error:
-                    # El índice podría ya existir
-                    self.pg_conn.rollback()
+                -- Verificar si ya existe el registro
+                SELECT 1 INTO v_exists
+                FROM sync_hashes
+                WHERE table_name = 'customers'
+                  AND record_key = NEW.code
+                  AND company_id = v_company_id
+                LIMIT 1;
 
-                self._log("   ✅ Campo pending_sync agregado para optimizar detección de cambios", "info")
+                IF v_exists = 1 THEN
+                    -- Ya existe: Actualizar
+                    UPDATE sync_hashes
+                    SET pending_sync = TRUE,
+                        updated_at = NOW()
+                    WHERE table_name = 'customers'
+                      AND record_key = NEW.code
+                      AND company_id = v_company_id;
+                ELSE
+                    -- No existe: Insertar
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                    VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
+                END IF;
+
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            # Crear trigger (compatible con PostgreSQL 9.1+: EXECUTE PROCEDURE)
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_clients_mark_updated_sync_hashes ON clients;
+
+            CREATE TRIGGER tr_clients_mark_updated_sync_hashes
+                AFTER UPDATE ON clients
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_client_updated_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+            self._log("   ✅ Trigger de actualización de clientes creado", "info")
+
         except Exception as e:
-            # Si hay error, continuar (la columna podría ya existir)
+            # Si hay error, continuar (el trigger podría ya existir)
             self.pg_conn.rollback()
-
-
-    def _crear_indice_sync_hashes(self):
-        """
-        Crear índices de sync_hashes de forma compatible con PostgreSQL 9
-        PostgreSQL 9 no soporta CREATE INDEX IF NOT EXISTS
-        """
-        indices = [
-            ("idx_sync_hashes_lookup", "CREATE INDEX idx_sync_hashes_lookup ON sync_hashes(table_name, record_key, company_id)"),
-            ("idx_sync_hashes_table", "CREATE INDEX idx_sync_hashes_table ON sync_hashes(table_name, company_id)")
-        ]
-
-        for nombre_idx, query in indices:
-            try:
-                self.pg_cursor.execute(query)
-                self.pg_conn.commit()  # Commit después de crear índice
-                # No mostrar mensaje de creación - es transparente para el usuario
-            except Exception as e:
-                # Silenciar todos los errores de índices (no son relevantes para el usuario)
-                error_msg = str(e).lower()
-                if "already exists" in error_msg:
-                    # El índice ya existe - es normal, no hacer nada
-                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
-                else:
-                    # Otro error de índice - silenciar también (no relevante para el usuario)
-                    self.pg_conn.rollback()  # Rollback para limpiar la transacción abortada
+            self._log(f"   ⚠️ Error creando trigger UPDATE de clients: {str(e)}", "warning")
 
     def _conectar_bases_datos(self) -> bool:
         """
@@ -2022,12 +2023,19 @@ class SmartSyncComplete:
 
             claves_actuales = []
 
-            for producto in productos:
+            # Calcular total para progreso
+            total_productos = len(productos)
+            current_count = 0
+
+            for idx, producto in enumerate(productos, 1):
                 if not self.sync_running:
                     break
 
                 code = producto[0]
                 claves_actuales.append(code)
+
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS (PASO 1)
+                self._reportar_progreso('products', idx, total_productos, step='detect')
 
                 # Generar hash actual
                 hash_actual = self._generar_hash_product(producto)
@@ -2515,12 +2523,19 @@ class SmartSyncComplete:
 
             claves_actuales = []
 
-            for cliente in clientes:
+            # Calcular total para progreso
+            total_clientes = len(clientes)
+            current_count = 0
+
+            for idx, cliente in enumerate(clientes, 1):
                 if not self.sync_running:
                     break
 
                 code = cliente[0]
                 claves_actuales.append(code)
+
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS (PASO 1)
+                self._reportar_progreso('customers', idx, total_clientes, step='detect')
 
                 hash_actual = self._generar_hash_customer(cliente)
                 hash_guardado = self._obtener_hash_guardado('customers', code)
@@ -2593,12 +2608,19 @@ class SmartSyncComplete:
 
             claves_actuales = []
 
-            for category in categories:
+            # Calcular total para progreso
+            total_categories = len(categories)
+            current_count = 0
+
+            for idx, category in enumerate(categories, 1):
                 if not self.sync_running:
                     break
 
                 code = category[0]
                 claves_actuales.append(code)
+
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS (PASO 1)
+                self._reportar_progreso('categories', idx, total_categories, step='detect')
 
                 hash_actual = self._generar_hash_category(category)
                 hash_guardado = self._obtener_hash_guardado('categories', code)
@@ -3885,6 +3907,10 @@ class SmartSyncComplete:
                          unidad, stock, product_type, coin, description_coin, price, cost, higher_price,
                          min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost, allow_decimal) = producto
 
+                        # DEBUG: Mostrar coin para depuración
+                        if code == 'TESTVES':
+                            self._log(f"  🔍 DEBUG TESTVES: coin='{coin}', price={price}, cost={cost}, higher_price={higher_price}", "info")
+
                         # 🔧 MANEJO DE VALORES NULL - Usar valores por defecto
                         # Si department es NULL o vacío, intentar usar una categoría por defecto
                         if not department or department.strip() == '':
@@ -3985,6 +4011,10 @@ class SmartSyncComplete:
 
                         productos_a_procesar.append((idx, code))
 
+                        # ACTUALIZAR PROGRESO - NUEVOS (PASO 2 - RECOLECCIÓN)
+                        current_count = idx
+                        self._reportar_progreso('products', current_count, total_cambios, step='collect')
+
                     except Exception as e:
                         self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
                         self.stats['products']['errores'] += 1
@@ -4053,9 +4083,9 @@ class SmartSyncComplete:
                     self.stats['products']['nuevos'] += len(batch_data)
                     self._log(f"  ✅ BATCH INSERT completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso
+                    # Reportar progreso (PASO 3 - INSERT COMPLETADO)
                     for idx, code in productos_a_procesar:
-                        self._reportar_progreso('products', idx, total_cambios)
+                        self._reportar_progreso('products', idx, total_cambios, step='insert')
 
             # ====================================================================
             # MODIFICADOS - BATCH UPDATE
@@ -4077,6 +4107,10 @@ class SmartSyncComplete:
                         (code, unit_code, description, short_name, department, product_code_pg,
                          unidad, stock, product_type, coin, description_coin, price, cost, higher_price,
                          min_stock, status, image_type, product_image, sale_tax, aliquot, buy_tax, buy_aliquot, unitary_cost, allow_decimal) = producto
+
+                        # DEBUG: Mostrar coin para depuración
+                        if code == 'TESTVES':
+                            self._log(f"  🔍 DEBUG TESTVES: coin='{coin}', price={price}, cost={cost}, higher_price={higher_price}", "info")
 
                         # 🔧 MANEJO DE VALORES NULL - Usar valores por defecto
                         # Si department es NULL o vacío, intentar usar una categoría por defecto
@@ -4175,6 +4209,10 @@ class SmartSyncComplete:
 
                         productos_a_procesar.append((idx, code))
 
+                        # ACTUALIZAR PROGRESO - MODIFICADOS (PASO 2 - RECOLECCIÓN)
+                        current_count = total_nuevos + idx
+                        self._reportar_progreso('products', current_count, total_cambios, step='collect')
+
                     except Exception as e:
                         self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
                         self.stats['products']['errores'] += 1
@@ -4244,10 +4282,10 @@ class SmartSyncComplete:
                     self.stats['products']['modificados'] += len(batch_data)
                     self._log(f"  ✅ BATCH UPDATE completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso
+                    # Reportar progreso (PASO 3 - UPDATE COMPLETADO)
                     for idx, code in productos_a_procesar:
                         idx_adjusted = total_nuevos + idx
-                        self._reportar_progreso('products', idx_adjusted, total_cambios)
+                        self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
 
             # Reportar productos omitidos
             if products_sin_categoria > 0:

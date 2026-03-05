@@ -34,6 +34,13 @@ except ImportError:
     import warnings
     warnings.warn("cryptography no está instalado. Las credenciales estarán en base64 (menos seguro)")
 
+# Importar win10toast para notificaciones (opcional)
+try:
+    from win10toast import ToastNotifier
+    TOAST_AVAILABLE = True
+except ImportError:
+    TOAST_AVAILABLE = False
+
 # Detectar si estamos corriendo en PyInstaller
 if getattr(sys, 'frozen', False):
     # Si está empaquetado, usar el directorio temporal de PyInstaller
@@ -324,11 +331,14 @@ def obtener_config_mysql():
 
 def cargar_config():
     """Carga configuración desde archivo y desencripta campos sensibles"""
-    if not os.path.exists(CONFIG_FILE):
+    # Buscar archivo de configuración (prioriza archivo oculto)
+    config_path = buscar_config_externo()
+
+    if not config_path:
         return crear_config_default()
 
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
         # Desencriptar campos sensibles si hay módulo de encriptación
@@ -518,10 +528,49 @@ class SyncModule:
             if hasattr(sync_system, 'stats'):
                 self.stats = sync_system.stats.copy()
 
+                # 📢 Mostrar notificación toast con resumen
+                if TOAST_AVAILABLE:
+                    try:
+                        toast = ToastNotifier()
+
+                        # Calcular duración
+                        duracion = getattr(sync_system, 'duracion_sync', 0)
+
+                        # Construir mensaje con estadísticas
+                        cambios = []
+                        stats = self.stats
+                        if stats['products']['nuevos'] > 0 or stats['products']['modificados'] > 0:
+                            cambios.append(f"Prod: {stats['products']['nuevos']}+ {stats['products']['modificados']}~")
+
+                        if stats['customers']['nuevos'] > 0 or stats['customers']['modificados'] > 0:
+                            cambios.append(f"Cust: {stats['customers']['nuevos']}+ {stats['customers']['modificados']}~")
+
+                        if stats['categories']['nuevos'] > 0 or stats['categories']['modificados'] > 0:
+                            cambios.append(f"Cat: {stats['categories']['nuevos']}+ {stats['categories']['modificados']}~")
+
+                        if stats['quotes']['nuevos'] > 0:
+                            cambios.append(f"Quote: {stats['quotes']['nuevos']}+")
+
+                        # Si no hubo cambios
+                        if not cambios:
+                            mensaje = f"Sin cambios | Duration: {duracion:.1f}s"
+                        else:
+                            mensaje = " | ".join(cambios) + f" | Duration: {duracion:.1f}s"
+
+                        # Mostrar notificación (duración 8 segundos)
+                        toast.show_toast(
+                            "✅ Sincronización Completada",
+                            mensaje,
+                            duration=8,
+                            threaded=True
+                        )
+                    except Exception as e:
+                        # Si falla la notificación, no interrumpir el flujo
+                        log(f"Error mostrando notificación: {e}", "WARNING")
+
             log("=== SINCRONIZACIÓN COMPLETADA ===", "INFO")
 
-            # El toast notification ya se muestra en ejecutar_sync_completa()
-            # No mostramos messagebox para no ser intrusivos
+            # No mostramos messagebox para no ser intrusivos en segundo plano
             if resultado:
                 log("✅ Sincronización completada exitosamente", "SUCCESS")
             else:
@@ -974,6 +1023,55 @@ class ConfigWindow:
             detalles_label = ttk.Label(frame, text="", font=("Arial", 9), foreground="gray")
             detalles_label.pack(pady=5)
 
+            # INDICADOR DE PASOS
+            contenedor_pasos = ttk.Frame(frame)
+            contenedor_pasos.pack(pady=15, fill="x")
+
+            ttk.Label(contenedor_pasos, text="🔄 ESTADO DE SINCRONIZACIÓN",
+                     font=("Arial", 10, "bold")).pack(pady=(0, 10))
+
+            # Contenedor de los 3 pasos
+            pasos_frame = ttk.Frame(contenedor_pasos)
+            pasos_frame.pack(fill="x", padx=30)
+
+            # Diccionario para almacenar labels de pasos
+            pasos_labels = {}
+
+            # Crear los 3 pasos
+            pasos_info = [
+                (1, "Detectar cambios", "Guardar en sync_hashes"),
+                (2, "Recolectar datos", "Preparar batch"),
+                (3, "Guardar en BD", "Insertar/commit")
+            ]
+
+            for num, nombre, descripcion in pasos_info:
+                paso_frame = ttk.Frame(pasos_frame)
+                paso_frame.pack(fill="x", pady=2)
+
+                # Número del paso (círculo con color)
+                paso_num_label = ttk.Label(paso_frame, text=f" {num} ",
+                                          font=("Arial", 9, "bold"),
+                                          foreground="gray", background="#f0f0f0",
+                                          padding=(5, 2))
+                paso_num_label.pack(side="left", padx=(0, 5))
+
+                # Nombre del paso
+                ttk.Label(paso_frame, text=nombre,
+                         font=("Arial", 9)).pack(side="left")
+
+                # Descripción
+                ttk.Label(paso_frame, text=f"  ({descripcion})",
+                         font=("Arial", 8), foreground="gray").pack(side="left")
+
+                pasos_labels[num] = paso_num_label
+
+            # Label de estado actual (qué paso está activo)
+            estado_paso_label = ttk.Label(contenedor_pasos,
+                                         text="⏳ Iniciando...",
+                                         font=("Arial", 10),
+                                         foreground="blue")
+            estado_paso_label.pack(pady=10)
+
             # Contadores de progreso por entidad
             contenedor_contadores = ttk.Frame(frame)
             contenedor_contadores.pack(pady=20, fill="x", expand=True)
@@ -1034,27 +1132,96 @@ class ConfigWindow:
                     # Silenciosamente ignorar errores si la ventana fue cerrada
                     pass
 
+            def actualizar_paso(paso_num, estado="en_progreso", mensaje=""):
+                """
+                Actualiza el indicador visual de pasos
+
+                Args:
+                    paso_num: Número del paso (1, 2, 3)
+                    estado: 'pendiente', 'en_progreso', 'completado'
+                    mensaje: Mensaje opcional para el label de estado actual
+                """
+                try:
+                    if not progreso.winfo_exists():
+                        return
+
+                    # Colores según estado
+                    colores = {
+                        'pendiente': '#f0f0f0',      # Gris claro
+                        'en_progreso': '#007bff',   # Azul
+                        'completado': '#28a745'     # Verde
+                    }
+
+                    fg_colores = {
+                        'pendiente': 'gray',
+                        'en_progreso': 'white',
+                        'completado': 'white'
+                    }
+
+                    # Actualizar cada paso según su estado
+                    for num in range(1, 4):
+                        if num in pasos_labels and pasos_labels[num].winfo_exists():
+                            if num < paso_num:
+                                # Pasos anteriores: completado
+                                pasos_labels[num].config(
+                                    background=colores['completado'],
+                                    foreground=fg_colores['completado']
+                                )
+                            elif num == paso_num:
+                                # Paso actual: según estado
+                                pasos_labels[num].config(
+                                    background=colores[estado],
+                                    foreground=fg_colores[estado]
+                                )
+                            else:
+                                # Pasos futuros: pendiente
+                                pasos_labels[num].config(
+                                    background=colores['pendiente'],
+                                    foreground=fg_colores['pendiente']
+                                )
+
+                    # Actualizar mensaje de estado del paso actual
+                    if mensaje and estado_paso_label.winfo_exists():
+                        estado_paso_label.config(text=mensaje)
+
+                    progreso.update_idletasks()
+                except Exception:
+                    pass
+
             def actualizar_contador(progreso_data):
                 """
                 Actualiza el contador de una entidad específica
                 Esta función se llama desde el thread de sincronización
 
                 Args:
-                    progreso_data: Dict con keys 'entity', 'current', 'total', 'percentage'
+                    progreso_data: Dict con keys 'entity', 'current', 'total', 'percentage', 'step'
                 """
                 entity = progreso_data.get('entity', '')
                 current = progreso_data.get('current', 0)
                 total = progreso_data.get('total', 0)
+                step = progreso_data.get('step', '')  # 'detect', 'collect', 'insert'
 
                 nonlocal contadores
                 if entity in contadores:
                     contadores[entity]['current'] = current
                     contadores[entity]['total'] = total
 
+                    # ACTUALIZAR PASO según step
+                    if step:
+                        paso_num = {'detect': 1, 'collect': 2, 'insert': 3}.get(step, 1)
+                        estado = 'completado' if current == total and total > 0 else 'en_progreso'
+
+                        # Mensaje según paso
+                        mensajes = {
+                            'detect': f"🔍 Detectando cambios en {entity}...",
+                            'collect': f"📦 Recolectando datos de {entity}...",
+                            'insert': f"💾 Guardando {entity} en base de datos..."
+                        }
+
+                        actualizar_paso(paso_num, estado, mensajes.get(step, ''))
+
                     # ACTUALIZAR DIRECTAMENTE el label (sin after)
-                    # Aunque no es thread-safe en teoría, Tkinter puede manejar config() desde otros threads
                     try:
-                        # Verificar si la ventana todavía existe
                         if not progreso.winfo_exists():
                             return
 
@@ -1068,16 +1235,26 @@ class ConfigWindow:
 
                         if entity in entity_info:
                             info = entity_info[entity]
-                            # Verificar si el label todavía existe
                             if info['label'].winfo_exists():
-                                percentage = round((current / total * 100), 1) if total > 0 else 0
-                                info['label'].config(
-                                    text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
-                                )
-                                # Forzar actualización inmediata
+                                # Sellers SIN contador numérico
+                                if entity == 'sellers':
+                                    if current == 0 and total == 0:
+                                        # Iniciando
+                                        info['label'].config(text=f"{info['emoji']} {info['name']}: ⏳ Sincronizando...")
+                                    elif current == total and total > 0:
+                                        # Completado
+                                        info['label'].config(text=f"{info['emoji']} {info['name']}: ✅ Completado")
+                                    else:
+                                        # En progreso (sin números)
+                                        info['label'].config(text=f"{info['emoji']} {info['name']}: 🔄 Procesando...")
+                                else:
+                                    # Otros entities CON contador numérico
+                                    percentage = round((current / total * 100), 1) if total > 0 else 0
+                                    info['label'].config(
+                                        text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
+                                    )
                                 progreso.update_idletasks()
                     except Exception:
-                        # Silenciosamente ignorar errores si la ventana fue cerrada
                         pass
 
             def ejecutar_sincronizacion_thread():
@@ -1183,16 +1360,16 @@ class ConfigWindow:
                         f"   • Modificados: {products_stats.get('modificados', 0)}",
                         f"   • Eliminados: {products_stats.get('eliminados', 0)}",
                         "",
-                        f"👥 Clientes:",
+                        f"👥 Customers:",
                         f"   • Nuevos: {customers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {customers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {customers_stats.get('eliminados', 0)}",
                         "",
-                        f"📁 Departamentos:",
+                        f"📁 Categories:",
                         f"   • Nuevos: {categories_stats.get('nuevos', 0)}",
                         f"   • Modificados: {categories_stats.get('modificados', 0)}",
                         "",
-                        f"👤 Vendedores:",
+                        f"👤 Sellers:",
                         f"   • Nuevos: {sellers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {sellers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {sellers_stats.get('eliminados', 0)}",
@@ -1434,7 +1611,7 @@ class ManagerWindow:
         stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"))
         stats_frame.pack(fill="x", pady=5, padx=5)
 
-        self.lbl_stats = tk.Label(stats_frame, text="Productos: 0 | Clientes: 0 | Departamentos: 0 | Vendedores: 0 | Quotes: 0",
+        self.lbl_stats = tk.Label(stats_frame, text="Products: 0 | Customers: 0 | Categories: 0 | Sellers: 0 | Quotes: 0",
                                  font=("Arial", 10))
         self.lbl_stats.pack()
 
@@ -1534,10 +1711,10 @@ class ManagerWindow:
         if resultado:
             stats = self.sync_module.stats
             self.lbl_stats.config(
-                text=f"Productos: {stats['products']['nuevos']} nuevos | "
-                     f"Clientes: {stats['customers']['nuevos']} nuevos | "
-                     f"Departamentos: {stats['categories']['nuevos']} nuevos | "
-                     f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
+                text=f"Products: {stats['products']['nuevos']} nuevos | "
+                     f"Customers: {stats['customers']['nuevos']} nuevos | "
+                     f"Categories: {stats['categories']['nuevos']} nuevos | "
+                     f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
                      f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
             self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1546,10 +1723,10 @@ class ManagerWindow:
 
             # Mostrar notificación BANNER prominente con estadísticas
             mensaje_stats = (
-                f"Productos: {stats['products']['nuevos']} nuevos\n"
-                f"Clientes: {stats['customers']['nuevos']} nuevos\n"
-                f"Departamentos: {stats['categories']['nuevos']} nuevos\n"
-                f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
+                f"Products: {stats['products']['nuevos']} nuevos\n"
+                f"Customers: {stats['customers']['nuevos']} nuevos\n"
+                f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
                 f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
 
@@ -1588,10 +1765,10 @@ class ManagerWindow:
         if resultado:
             stats = self.sync_module.stats
             self.lbl_stats.config(
-                text=f"Productos: {stats['products']['nuevos']} nuevos | "
-                     f"Clientes: {stats['customers']['nuevos']} nuevos | "
-                     f"Departamentos: {stats['categories']['nuevos']} nuevos | "
-                     f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
+                text=f"Products: {stats['products']['nuevos']} nuevos | "
+                     f"Customers: {stats['customers']['nuevos']} nuevos | "
+                     f"Categories: {stats['categories']['nuevos']} nuevos | "
+                     f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos | "
                      f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
             self.lbl_ultima_sync.config(text=f"Última sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1599,10 +1776,10 @@ class ManagerWindow:
 
             # Mostrar notificación BANNER con estadísticas
             mensaje_stats = (
-                f"Productos: {stats['products']['nuevos']} nuevos\n"
-                f"Clientes: {stats['customers']['nuevos']} nuevos\n"
-                f"Departamentos: {stats['categories']['nuevos']} nuevos\n"
-                f"Vendedores: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
+                f"Products: {stats['products']['nuevos']} nuevos\n"
+                f"Customers: {stats['customers']['nuevos']} nuevos\n"
+                f"Categories: {stats['categories']['nuevos']} nuevos\n"
+                f"Sellers: {stats.get('sellers', {}).get('nuevos', 0)} nuevos\n"
                 f"Quotes: {stats['quotes']['nuevos']} nuevos"
             )
 
@@ -2028,16 +2205,16 @@ class SystemTrayService:
                         f"   • Modificados: {products_stats.get('modificados', 0)}",
                         f"   • Eliminados: {products_stats.get('eliminados', 0)}",
                         "",
-                        f"👥 Clientes:",
+                        f"👥 Customers:",
                         f"   • Nuevos: {customers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {customers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {customers_stats.get('eliminados', 0)}",
                         "",
-                        f"📁 Departamentos:",
+                        f"📁 Categories:",
                         f"   • Nuevos: {categories_stats.get('nuevos', 0)}",
                         f"   • Modificados: {categories_stats.get('modificados', 0)}",
                         "",
-                        f"👤 Vendedores:",
+                        f"👤 Sellers:",
                         f"   • Nuevos: {sellers_stats.get('nuevos', 0)}",
                         f"   • Modificados: {sellers_stats.get('modificados', 0)}",
                         f"   • Eliminados: {sellers_stats.get('eliminados', 0)}",
@@ -2763,7 +2940,6 @@ def main():
                     print("🔄 Reiniciando System Tray...\n")
                 else:
                     print("❌ Se alcanzó el máximo de reintentos. Saliendo.")
-                    import sys
                     sys.exit(1)
 
     elif args.mode == "sync":
