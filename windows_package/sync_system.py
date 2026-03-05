@@ -1131,6 +1131,22 @@ class ConfigWindow:
                 thread = threading.Thread(target=sync_worker, daemon=True)
                 thread.start()
 
+                # INICIAR LOOP DE ACTUALIZACIÓN DE GUI
+                # Esto mantiene la GUI viva y actualiza los contadores en tiempo real
+                def keep_gui_alive():
+                    """Mantiene la GUI actualizada mientras el thread de sincronización corre"""
+                    if thread.is_alive():
+                        # Actualizar GUI manualmente para procesar eventos pendientes
+                        try:
+                            progreso.update()
+                        except:
+                            pass
+                        # Llamar nuevamente en 50ms
+                        progreso.after(50, keep_gui_alive)
+
+                # Iniciar el loop de actualización
+                keep_gui_alive()
+
             def on_sync_complete(event):
                 """Callback cuando termina la sincronización"""
                 from datetime import datetime
