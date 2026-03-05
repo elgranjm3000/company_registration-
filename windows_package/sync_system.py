@@ -197,7 +197,19 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     """
     try:
         from win10toast import ToastNotifier
+
+        # WORKAROUND: Crear nueva instancia cada vez para evitar error classAtom
+        # El error ocurre cuando se reusa la misma instancia múltiples veces
         toast = ToastNotifier()
+
+        # Forzar la creación de classAtom si no existe
+        if not hasattr(toast, 'classAtom'):
+            try:
+                # Intentar inicializar classAtom manualmente
+                import win32gui
+                toast.classAtom = None
+            except:
+                pass
 
         # Intentar usar icono personalizado si está disponible
         icon_path = icono
@@ -219,19 +231,39 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
 
         # Mostrar notificación nativa de Windows
         # threaded=True es CRÍTICO para no bloquear el programa
-        result = toast.show_toast(
-            titulo,
-            mensaje,
-            duration=duracion,
-            icon_path=icon_path,
-            threaded=True,
-        )
+        try:
+            result = toast.show_toast(
+                titulo,
+                mensaje,
+                duration=duracion,
+                icon_path=icon_path,
+                threaded=True,
+            )
 
-        # Log para debugging
-        if result:
-            log(f"✅ Notificación Windows mostrada: {titulo}", "INFO")
-        else:
-            log(f"⚠️ Notificación Windows falló: {titulo}", "WARNING")
+            # Log para debugging
+            if result:
+                log(f"✅ Notificación Windows mostrada: {titulo}", "INFO")
+            else:
+                log(f"⚠️ Notificación Windows falló: {titulo}", "WARNING")
+        except AttributeError as e:
+            if 'classAtom' in str(e):
+                # Error específico de win10toast - intentar una vez más con nueva instancia
+                log(f"⚠️ Error classAtom detectado, reintentando...", "WARNING")
+                toast = ToastNotifier()
+                try:
+                    result = toast.show_toast(
+                        titulo,
+                        mensaje,
+                        duration=duracion,
+                        icon_path=icon_path,
+                        threaded=True,
+                    )
+                    if result:
+                        log(f"✅ Notificación Windows mostrada (retry): {titulo}", "INFO")
+                except:
+                    log(f"⚠️ Notificación Windows falló (retry): {titulo}", "WARNING")
+            else:
+                raise
 
     except ImportError:
         log("❌ ERROR: win10toast no está instalado", "ERROR")
