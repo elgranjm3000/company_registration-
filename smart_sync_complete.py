@@ -2017,12 +2017,19 @@ class SmartSyncComplete:
 
             claves_actuales = []
 
-            for producto in productos:
+            # Calcular total para progreso
+            total_productos = len(productos)
+            current_count = 0
+
+            for idx, producto in enumerate(productos, 1):
                 if not self.sync_running:
                     break
 
                 code = producto[0]
                 claves_actuales.append(code)
+
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS
+                self._reportar_progreso('products', idx, total_productos)
 
                 # Generar hash actual
                 hash_actual = self._generar_hash_product(producto)
@@ -2510,12 +2517,19 @@ class SmartSyncComplete:
 
             claves_actuales = []
 
-            for cliente in clientes:
+            # Calcular total para progreso
+            total_clientes = len(clientes)
+            current_count = 0
+
+            for idx, cliente in enumerate(clientes, 1):
                 if not self.sync_running:
                     break
 
                 code = cliente[0]
                 claves_actuales.append(code)
+
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS
+                self._reportar_progreso('customers', idx, total_clientes)
 
                 hash_actual = self._generar_hash_customer(cliente)
                 hash_guardado = self._obtener_hash_guardado('customers', code)
@@ -2588,12 +2602,19 @@ class SmartSyncComplete:
 
             claves_actuales = []
 
-            for category in categories:
+            # Calcular total para progreso
+            total_categories = len(categories)
+            current_count = 0
+
+            for idx, category in enumerate(categories, 1):
                 if not self.sync_running:
                     break
 
                 code = category[0]
                 claves_actuales.append(code)
+
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS
+                self._reportar_progreso('categories', idx, total_categories)
 
                 hash_actual = self._generar_hash_category(category)
                 hash_guardado = self._obtener_hash_guardado('categories', code)
