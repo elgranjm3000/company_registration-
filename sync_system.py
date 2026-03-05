@@ -1120,9 +1120,6 @@ class ConfigWindow:
                                    command=lambda: cerrar_ventana())
             btn_cerrar.pack(pady=15)
 
-            # Variable para controlar si la sincronización terminó
-            sync_completada = [False]
-
             # Contadores de progreso por entidad
             contenedor_contadores = ttk.Frame(frame)
             contenedor_contadores.pack(pady=20, fill="x", expand=True)
@@ -1480,9 +1477,6 @@ class ConfigWindow:
                 # Formatear horas
                 hora_inicio_str = hora_inicio.strftime("%H:%M:%S")
                 hora_fin_str = hora_fin.strftime("%H:%M:%S")
-
-                # Marcar sincronización como completada
-                sync_completada[0] = True
 
                 # Actualizar botón para permitir cerrar manualmente
                 try:

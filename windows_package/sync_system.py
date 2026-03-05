@@ -1503,9 +1503,6 @@ class ConfigWindow:
                 hora_inicio_str = hora_inicio.strftime("%H:%M:%S")
                 hora_fin_str = hora_fin.strftime("%H:%M:%S")
 
-                # Marcar sincronización como completada
-                sync_completada[0] = True
-
                 # Actualizar botón para permitir cerrar manualmente
                 try:
                     if progreso.winfo_exists():
