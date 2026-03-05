@@ -1066,24 +1066,22 @@ class ConfigWindow:
                 Actualiza el estado de la sincronización
                 Esta función se llama desde el thread de sincronización
                 """
-                def actualizar_gui():
-                    try:
-                        # Verificar si la ventana todavía existe
-                        if not progreso.winfo_exists():
-                            return
+                # ACTUALIZAR DIRECTAMENTE (sin after)
+                try:
+                    # Verificar si la ventana todavía existe
+                    if not progreso.winfo_exists():
+                        return
 
-                        # Verificar si los labels todavía existen
-                        if estado_label.winfo_exists():
-                            estado_label.config(text=mensaje)
-                        if detalles and detalles_label.winfo_exists():
-                            detalles_label.config(text=detalles)
-                        progreso.update_idletasks()  # Actualizar GUI
-                    except Exception:
-                        # Silenciosamente ignorar errores si la ventana fue cerrada
-                        pass
-
-                # Programar la actualización en el thread principal
-                progreso.after(0, actualizar_gui)
+                    # Verificar si los labels todavía existen
+                    if estado_label.winfo_exists():
+                        estado_label.config(text=mensaje)
+                    if detalles and detalles_label.winfo_exists():
+                        detalles_label.config(text=detalles)
+                    # Forzar actualización inmediata
+                    progreso.update_idletasks()
+                except Exception:
+                    # Silenciosamente ignorar errores si la ventana fue cerrada
+                    pass
 
             def actualizar_contador(progreso_data):
                 """
@@ -1102,37 +1100,34 @@ class ConfigWindow:
                     contadores[entity]['current'] = current
                     contadores[entity]['total'] = total
 
-                    # Usar after() para ejecutar la actualización en el thread principal de Tkinter
-                    # Esto es necesario porque Tkinter NO es thread-safe
-                    def actualizar_gui():
-                        try:
-                            # Verificar si la ventana todavía existe
-                            if not progreso.winfo_exists():
-                                return
+                    # ACTUALIZAR DIRECTAMENTE el label (sin after)
+                    # Aunque no es thread-safe en teoría, Tkinter puede manejar config() desde otros threads
+                    try:
+                        # Verificar si la ventana todavía existe
+                        if not progreso.winfo_exists():
+                            return
 
-                            # Mapeo de entidades a labels y emojis
-                            entity_info = {
-                                'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
-                                'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
-                                'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'},
-                                'sellers': {'label': lbl_sellers, 'emoji': '👤', 'name': 'Sellers'}
-                            }
+                        # Mapeo de entidades a labels y emojis
+                        entity_info = {
+                            'products': {'label': lbl_products, 'emoji': '📦', 'name': 'Products'},
+                            'customers': {'label': lbl_customers, 'emoji': '👥', 'name': 'Customers'},
+                            'categories': {'label': lbl_categories, 'emoji': '📁', 'name': 'Categories'},
+                            'sellers': {'label': lbl_sellers, 'emoji': '👤', 'name': 'Sellers'}
+                        }
 
-                            if entity in entity_info:
-                                info = entity_info[entity]
-                                # Verificar si el label todavía existe
-                                if info['label'].winfo_exists():
-                                    percentage = round((current / total * 100), 1) if total > 0 else 0
-                                    info['label'].config(
-                                        text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
-                                    )
-                                    progreso.update_idletasks()  # Actualizar GUI
-                        except Exception:
-                            # Silenciosamente ignorar errores si la ventana fue cerrada
-                            pass
-
-                    # Programar la actualización en el thread principal
-                    progreso.after(0, actualizar_gui)
+                        if entity in entity_info:
+                            info = entity_info[entity]
+                            # Verificar si el label todavía existe
+                            if info['label'].winfo_exists():
+                                percentage = round((current / total * 100), 1) if total > 0 else 0
+                                info['label'].config(
+                                    text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
+                                )
+                                # Forzar actualización inmediata
+                                progreso.update_idletasks()
+                    except Exception:
+                        # Silenciosamente ignorar errores si la ventana fue cerrada
+                        pass
 
             def ejecutar_sincronizacion_thread():
                 """Ejecuta la sincronización en un thread separado"""
