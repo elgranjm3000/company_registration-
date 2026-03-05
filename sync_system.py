@@ -1017,7 +1017,7 @@ class ConfigWindow:
             # Crear ventana de progreso
             progreso = tk.Toplevel(self.root)
             progreso.title("Sincronizando...")
-            progreso.geometry("700x550")  # Aumentado de 500x300 a 700x550
+            progreso.geometry("750x650")  # Aumentado para botón de cerrar
             progreso.resizable(False, False)
 
             # Centrar ventana
@@ -1056,15 +1056,12 @@ class ConfigWindow:
             detalles_label.pack(pady=5)
 
             # INDICADOR DE PASOS
-            contenedor_pasos = ttk.Frame(frame)
-            contenedor_pasos.pack(pady=15, fill="x")
-
-            ttk.Label(contenedor_pasos, text="🔄 ESTADO DE SINCRONIZACIÓN",
-                     font=("Arial", 10, "bold")).pack(pady=(0, 10))
+            contenedor_pasos = ttk.LabelFrame(frame, text="🔄 ESTADO DE SINCRONIZACIÓN", padding=10)
+            contenedor_pasos.pack(pady=10, fill="x", padx=5)
 
             # Contenedor de los 3 pasos
             pasos_frame = ttk.Frame(contenedor_pasos)
-            pasos_frame.pack(fill="x", padx=30)
+            pasos_frame.pack(fill="x", padx=10)
 
             # Diccionario para almacenar labels de pasos
             pasos_labels = {}
@@ -1117,6 +1114,14 @@ class ConfigWindow:
                                          font=("Arial", 10),
                                          foreground="blue")
             estado_paso_label.pack(pady=10)
+
+            # Botón CERRAR (inicialmente deshabilitado)
+            btn_cerrar = ttk.Button(frame, text="⏳ Sincronizando...", state="disabled",
+                                   command=lambda: cerrar_ventana())
+            btn_cerrar.pack(pady=15)
+
+            # Variable para controlar si la sincronización terminó
+            sync_completada = [False]
 
             # Contadores de progreso por entidad
             contenedor_contadores = ttk.Frame(frame)
@@ -1409,6 +1414,54 @@ class ConfigWindow:
                 # Iniciar el loop de actualización
                 keep_gui_alive()
 
+            def cerrar_ventana():
+                """Cierra la ventana de progreso y destruye la ventana de configuración"""
+                try:
+                    # Destruir ventana de progreso
+                    if progreso.winfo_exists():
+                        progreso.destroy()
+
+                    # Destruir ventana de configuración
+                    if self.root.winfo_exists():
+                        self.root.destroy()
+
+                    # Iniciar system tray automáticamente en el MISMO proceso
+                    try:
+                        log("Iniciando System Tray...", "INFO")
+                        tray = SystemTrayService(config_nuevo)
+                        tray.iniciar()
+                    except Exception as e:
+                        # Si falla el system tray, mostrar error y ejecutar Manager como fallback
+                        log(f"Error iniciando System Tray: {e}", "ERROR")
+
+                        # Mostrar error al usuario
+                        try:
+                            import tkinter as tk
+                            from tkinter import messagebox
+                            error_root = tk.Tk()
+                            error_root.withdraw()
+                            messagebox.showwarning(
+                                "⚠️ System Tray No Disponible",
+                                f"No se pudo iniciar el icono en la barra de tareas.\n\n"
+                                f"Error: {str(e)[:100]}\n\n"
+                                f"Se abrirá la ventana del Manager en su lugar.\n\n"
+                                f"Para usar el System Tray, asegúrese de tener instaladas:\n"
+                                f"  pip install pystray Pillow"
+                            )
+                            error_root.destroy()
+                        except:
+                            pass
+
+                        # Fallback: Ejecutar Manager
+                        try:
+                            root = tk.Tk()
+                            app = ManagerWindow(root)
+                            root.mainloop()
+                        except:
+                            pass
+                except Exception as e:
+                    log(f"Error cerrando ventana: {e}", "ERROR")
+
             def on_sync_complete(event):
                 """Callback cuando termina la sincronización"""
                 from datetime import datetime
@@ -1428,8 +1481,22 @@ class ConfigWindow:
                 hora_inicio_str = hora_inicio.strftime("%H:%M:%S")
                 hora_fin_str = hora_fin.strftime("%H:%M:%S")
 
-                # Cerrar ventana de progreso después de un momento
-                progreso.after(1000, progreso.destroy)
+                # Marcar sincronización como completada
+                sync_completada[0] = True
+
+                # Actualizar botón para permitir cerrar manualmente
+                try:
+                    if progreso.winfo_exists():
+                        # Detener barra de progreso
+                        progress_bar.stop()
+
+                        # Actualizar estado visual
+                        actualizar_estado("✅ Completado", "Sincronización finalizada")
+
+                        # Habilitar botón de cerrar
+                        btn_cerrar.config(state="normal", text="✅ Cerrar")
+                except Exception as e:
+                    log(f"Error actualizando botón cerrar: {e}", "ERROR")
 
                 # Construir mensaje de resumen con estadísticas
                 if resultado_sync['exito']:
@@ -1543,45 +1610,6 @@ class ConfigWindow:
                         "⚠️ Sincronización con Advertencias",
                         resultado_sync['mensaje']
                     ))
-
-                # Destruir ventana de configuración e iniciar system tray
-                self.root.destroy()
-
-                # Iniciar system tray automáticamente en el MISMO proceso
-                # (no usar subprocess para evitar que el proceso hijo falle silenciosamente)
-                try:
-                    log("Iniciando System Tray...", "INFO")
-                    tray = SystemTrayService(config_nuevo)
-                    tray.iniciar()
-                except Exception as e:
-                    # Si falla el system tray, mostrar error y ejecutar Manager como fallback
-                    log(f"Error iniciando System Tray: {e}", "ERROR")
-
-                    # Mostrar error al usuario
-                    try:
-                        import tkinter as tk
-                        from tkinter import messagebox
-                        error_root = tk.Tk()
-                        error_root.withdraw()
-                        messagebox.showwarning(
-                            "⚠️ System Tray No Disponible",
-                            f"No se pudo iniciar el icono en la barra de tareas.\n\n"
-                            f"Error: {str(e)[:100]}\n\n"
-                            f"Se abrirá la ventana del Manager en su lugar.\n\n"
-                            f"Para usar el System Tray, asegúrese de tener instaladas:\n"
-                            f"  pip install pystray Pillow"
-                        )
-                        error_root.destroy()
-                    except:
-                        pass
-
-                    # Fallback: Ejecutar Manager
-                    try:
-                        root = tk.Tk()
-                        app = ManagerWindow(root)
-                        root.mainloop()
-                    except:
-                        pass
 
             # Bind del evento de completado
             progreso.bind('<<SyncComplete>>', on_sync_complete)

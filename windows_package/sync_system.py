@@ -1471,8 +1471,23 @@ class ConfigWindow:
                 hora_inicio_str = hora_inicio.strftime("%H:%M:%S")
                 hora_fin_str = hora_fin.strftime("%H:%M:%S")
 
-                # Cerrar ventana de progreso después de un momento
-                progreso.after(1000, progreso.destroy)
+                # Marcar sincronización como completada
+                sync_completada[0] = True
+
+                # Actualizar botón para permitir cerrar manualmente
+                try:
+                    if progreso.winfo_exists():
+                        # Detener barra de progreso
+                        progress_bar.stop()
+
+                        # Actualizar estado visual
+                        actualizar_estado("✅ Completado", "Sincronización finalizada")
+
+                        # Habilitar botón de cerrar
+                        if 'btn_cerrar' in locals():
+                            btn_cerrar.config(state="normal", text="✅ Cerrar", bg="#28a745")
+                except Exception as e:
+                    log(f"Error actualizando botón cerrar: {e}", "ERROR")
 
                 # Construir mensaje de resumen con estadísticas
                 if resultado_sync['exito']:
