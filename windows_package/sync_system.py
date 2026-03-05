@@ -1391,48 +1391,80 @@ class ConfigWindow:
                     # Products (productos)
                     products_total = products_stats.get('nuevos', 0) + products_stats.get('modificados', 0)
                     if products_total > 0 or products_stats.get('eliminados', 0) > 0:
-                        part = f"Productos: {products_total} nuevos/modificados"
-                        if products_stats.get('eliminados', 0) > 0:
-                            part += f", {products_stats.get('eliminados', 0)} eliminados"
+                        nuevos = products_stats.get('nuevos', 0)
+                        modificados = products_stats.get('modificados', 0)
+                        eliminados = products_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"📦 {productos_total} productos ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"📦 {nuevos} productos nuevos"
+                        elif modificados > 0:
+                            part = f"📦 {modificados} productos actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Customers (clientes)
                     customers_total = customers_stats.get('nuevos', 0) + customers_stats.get('modificados', 0)
                     if customers_total > 0 or customers_stats.get('eliminados', 0) > 0:
-                        part = f"Clientes: {customers_total} nuevos/modificados"
-                        if customers_stats.get('eliminados', 0) > 0:
-                            part += f", {customers_stats.get('eliminados', 0)} eliminados"
+                        nuevos = customers_stats.get('nuevos', 0)
+                        modificados = customers_stats.get('modificados', 0)
+                        eliminados = customers_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"👥 {customers_total} clientes ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"👥 {nuevos} clientes nuevos"
+                        elif modificados > 0:
+                            part = f"👥 {modificados} clientes actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Sellers (vendedores)
                     sellers_total = sellers_stats.get('nuevos', 0) + sellers_stats.get('modificados', 0)
                     if sellers_total > 0 or sellers_stats.get('eliminados', 0) > 0:
-                        part = f"Vendedores: {sellers_total} nuevos/modificados"
-                        if sellers_stats.get('eliminados', 0) > 0:
-                            part += f", {sellers_stats.get('eliminados', 0)} eliminados"
+                        nuevos = sellers_stats.get('nuevos', 0)
+                        modificados = sellers_stats.get('modificados', 0)
+                        eliminados = sellers_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"👤 {sellers_total} vendedores ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"👤 {nuevos} vendedores nuevos"
+                        elif modificados > 0:
+                            part = f"👤 {modificados} vendedores actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Categories (departamentos)
                     categories_total = categories_stats.get('nuevos', 0) + categories_stats.get('modificados', 0)
                     if categories_total > 0 or categories_stats.get('eliminados', 0) > 0:
-                        part = f"Departamentos: {categories_total} nuevos/modificados"
-                        if categories_stats.get('eliminados', 0) > 0:
-                            part += f", {categories_stats.get('eliminados', 0)} eliminados"
+                        nuevos = categories_stats.get('nuevos', 0)
+                        modificados = categories_stats.get('modificados', 0)
+                        eliminados = categories_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"📁 {categories_total} departamentos ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"📁 {nuevos} departamentos nuevos"
+                        elif modificados > 0:
+                            part = f"📁 {modificados} departamentos actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Mostrar notificación con todas las entidades
                     if parts:
-                        mensaje = " | ".join(parts)
+                        mensaje = "\n".join(parts)  # Una línea por entidad
                         mostrar_banner(
-                            "✅ Sincronización Exitosa",
+                            "✅ Sincronización Completada",
                             mensaje,
-                            duracion=7
+                            duracion=10
                         )
                     else:
                         # Si no hay cambios, mostrar mensaje genérico
                         mostrar_banner(
-                            "✅ Sincronización Exitosa",
-                            "No hubo cambios en esta sincronización",
+                            "✅ Todo está actualizado",
+                            "No hay cambios para sincronizar. Todos los datos están actualizados.",
                             duracion=5
                         )
 
@@ -2236,48 +2268,80 @@ class SystemTrayService:
                     # Products (productos)
                     products_total = products_stats.get('nuevos', 0) + products_stats.get('modificados', 0)
                     if products_total > 0 or products_stats.get('eliminados', 0) > 0:
-                        part = f"Productos: {products_total} nuevos/modificados"
-                        if products_stats.get('eliminados', 0) > 0:
-                            part += f", {products_stats.get('eliminados', 0)} eliminados"
+                        nuevos = products_stats.get('nuevos', 0)
+                        modificados = products_stats.get('modificados', 0)
+                        eliminados = products_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"📦 {productos_total} productos ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"📦 {nuevos} productos nuevos"
+                        elif modificados > 0:
+                            part = f"📦 {modificados} productos actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Customers (clientes)
                     customers_total = customers_stats.get('nuevos', 0) + customers_stats.get('modificados', 0)
                     if customers_total > 0 or customers_stats.get('eliminados', 0) > 0:
-                        part = f"Clientes: {customers_total} nuevos/modificados"
-                        if customers_stats.get('eliminados', 0) > 0:
-                            part += f", {customers_stats.get('eliminados', 0)} eliminados"
+                        nuevos = customers_stats.get('nuevos', 0)
+                        modificados = customers_stats.get('modificados', 0)
+                        eliminados = customers_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"👥 {customers_total} clientes ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"👥 {nuevos} clientes nuevos"
+                        elif modificados > 0:
+                            part = f"👥 {modificados} clientes actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Sellers (vendedores)
                     sellers_total = sellers_stats.get('nuevos', 0) + sellers_stats.get('modificados', 0)
                     if sellers_total > 0 or sellers_stats.get('eliminados', 0) > 0:
-                        part = f"Vendedores: {sellers_total} nuevos/modificados"
-                        if sellers_stats.get('eliminados', 0) > 0:
-                            part += f", {sellers_stats.get('eliminados', 0)} eliminados"
+                        nuevos = sellers_stats.get('nuevos', 0)
+                        modificados = sellers_stats.get('modificados', 0)
+                        eliminados = sellers_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"👤 {sellers_total} vendedores ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"👤 {nuevos} vendedores nuevos"
+                        elif modificados > 0:
+                            part = f"👤 {modificados} vendedores actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Categories (departamentos)
                     categories_total = categories_stats.get('nuevos', 0) + categories_stats.get('modificados', 0)
                     if categories_total > 0 or categories_stats.get('eliminados', 0) > 0:
-                        part = f"Departamentos: {categories_total} nuevos/modificados"
-                        if categories_stats.get('eliminados', 0) > 0:
-                            part += f", {categories_stats.get('eliminados', 0)} eliminados"
+                        nuevos = categories_stats.get('nuevos', 0)
+                        modificados = categories_stats.get('modificados', 0)
+                        eliminados = categories_stats.get('eliminados', 0)
+                        if nuevos > 0 and modificados > 0:
+                            part = f"📁 {categories_total} departamentos ({nuevos} nuevos + {modificados} actualizados)"
+                        elif nuevos > 0:
+                            part = f"📁 {nuevos} departamentos nuevos"
+                        elif modificados > 0:
+                            part = f"📁 {modificados} departamentos actualizados"
+                        if eliminados > 0:
+                            part += f", {eliminados} eliminados"
                         parts.append(part)
 
                     # Mostrar notificación con todas las entidades
                     if parts:
-                        mensaje = " | ".join(parts)
+                        mensaje = "\n".join(parts)  # Una línea por entidad
                         mostrar_banner(
-                            "✅ Sincronización Exitosa",
+                            "✅ Sincronización Completada",
                             mensaje,
-                            duracion=7
+                            duracion=10
                         )
                     else:
                         # Si no hay cambios, mostrar mensaje genérico
                         mostrar_banner(
-                            "✅ Sincronización Exitosa",
-                            "No hubo cambios en esta sincronización",
+                            "✅ Todo está actualizado",
+                            "No hay cambios para sincronizar. Todos los datos están actualizados.",
                             duracion=5
                         )
 
