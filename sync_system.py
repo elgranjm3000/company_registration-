@@ -539,14 +539,14 @@ class SyncModule:
 
             # Crear instancia y ejecutar (self es el 'app')
             sync_system = sync_module.SmartSyncComplete(
-                app=self,
-                postgresql_config=postgresql_config,
-                mysql_config=mysql_config,
-                company_rif=self.config['company_rif'],
-                company_email=self.config['company_email'],
-                company_name=self.config.get('company_name', ''),  # ✅ Agregado
-                progress_callback=self.progress_callback,  # ✅ Callback de progreso
-                log_callback=self.log_message  # ✅ Callback de logs
+                self,  # app
+                postgresql_config,
+                mysql_config,
+                self.config['company_rif'],
+                self.config['company_email'],
+                self.config.get('company_name', ''),  # company_name
+                self.progress_callback,  # progress_callback
+                self.log_message  # log_callback
             )
 
             # Inicializar tabla sync_hashes si no existe
@@ -1667,11 +1667,11 @@ class ManagerWindow:
             app = AppWrapper()
 
             self.sync_module = SmartSyncComplete(
-                app=app,
-                postgresql_config=postgresql_config,
-                mysql_config=mysql_config,
-                company_rif=self.config.get('company_rif', ''),
-                company_email=self.config.get('company_email', ''),
+                app,
+                postgresql_config,
+                mysql_config,
+                self.config.get('company_rif', ''),
+                self.config.get('company_email', ''),
                 progress_callback=None
             )
         else:
@@ -2277,12 +2277,12 @@ class SystemTrayService:
             }
 
             sync_system = sync_module.SmartSyncComplete(
-                app=self,
-                postgresql_config=postgresql_config,
-                mysql_config=mysql_config,
-                company_rif=self.config['company_rif'],
-                company_email=self.config['company_email'],
-                company_name=self.config.get('company_name', '')  # ✅ Agregado
+                self,  # app
+                postgresql_config,
+                mysql_config,
+                self.config['company_rif'],
+                self.config['company_email'],
+                self.config.get('company_name', '')  # company_name
             )
 
             sync_system.inicializar_tabla_hashes()
