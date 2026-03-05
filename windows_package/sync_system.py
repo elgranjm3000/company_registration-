@@ -985,7 +985,7 @@ class ConfigWindow:
             # Crear ventana de progreso
             progreso = tk.Toplevel(self.root)
             progreso.title("Sincronizando...")
-            progreso.geometry("700x550")  # Aumentado de 500x300 a 700x550
+            progreso.geometry("750x650")  # Aumentado para mostrar todo el contenido
             progreso.resizable(False, False)
 
             # Centrar ventana
@@ -1000,39 +1000,59 @@ class ConfigWindow:
             progreso.transient(self.root)
             progreso.grab_set()
 
-            # Contenido
-            frame = ttk.Frame(progreso, padding=20)
+            # Crear Canvas con Scrollbar para contenido scrollable
+            canvas = tk.Canvas(progreso, highlightthickness=0)
+            scrollbar = ttk.Scrollbar(progreso, orient="vertical", command=canvas.yview)
+            scrollable_frame = ttk.Frame(canvas)
+
+            scrollable_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            # Habilitar scroll con mouse wheel
+            def _on_mousewheel(event):
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+            # Contenido principal con padding
+            frame = ttk.Frame(scrollable_frame, padding=20)
             frame.pack(fill="both", expand=True)
 
-            # Icono de carga
-            ttk.Label(frame, text="⏳", font=("Arial", 48)).pack(pady=10)
+            # Empaquetar Canvas y Scrollbar
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+            # Icono de carga (más pequeño)
+            ttk.Label(frame, text="⏳", font=("Arial", 36)).pack(pady=5)
 
             # Título
-            ttk.Label(frame, text="Sincronizando datos...", font=("Arial", 14, "bold")).pack(pady=10)
+            ttk.Label(frame, text="Sincronizando datos...", font=("Arial", 12, "bold")).pack(pady=5)
 
-            # Barra de progreso
-            progress_bar = ttk.Progressbar(frame, mode='indeterminate', length=400)
-            progress_bar.pack(pady=20)
+            # Barra de progreso (más corta)
+            progress_bar = ttk.Progressbar(frame, mode='indeterminate', length=300)
+            progress_bar.pack(pady=10)
             progress_bar.start(10)
 
             # Etiqueta de estado
-            estado_label = ttk.Label(frame, text="Iniciando...", font=("Arial", 10))
-            estado_label.pack(pady=10)
+            estado_label = ttk.Label(frame, text="Iniciando...", font=("Arial", 9))
+            estado_label.pack(pady=5)
 
             # Detalles
-            detalles_label = ttk.Label(frame, text="", font=("Arial", 9), foreground="gray")
-            detalles_label.pack(pady=5)
+            detalles_label = ttk.Label(frame, text="", font=("Arial", 8), foreground="gray")
+            detalles_label.pack(pady=3)
 
-            # INDICADOR DE PASOS
-            contenedor_pasos = ttk.Frame(frame)
-            contenedor_pasos.pack(pady=15, fill="x")
-
-            ttk.Label(contenedor_pasos, text="🔄 ESTADO DE SINCRONIZACIÓN",
-                     font=("Arial", 10, "bold")).pack(pady=(0, 10))
+            # INDICADOR DE PASOS (movido arriba, antes de los contadores)
+            contenedor_pasos = ttk.LabelFrame(frame, text="🔄 ESTADO DE SINCRONIZACIÓN", padding=10)
+            contenedor_pasos.pack(pady=10, fill="x", padx=5)
 
             # Contenedor de los 3 pasos
             pasos_frame = ttk.Frame(contenedor_pasos)
-            pasos_frame.pack(fill="x", padx=30)
+            pasos_frame.pack(fill="x", padx=10)
 
             # Diccionario para almacenar labels de pasos
             pasos_labels = {}
@@ -1081,29 +1101,25 @@ class ConfigWindow:
             estado_paso_label.pack(pady=10)
 
             # Contadores de progreso por entidad
-            contenedor_contadores = ttk.Frame(frame)
-            contenedor_contadores.pack(pady=20, fill="x", expand=True)
+            contenedor_contadores = ttk.LabelFrame(frame, text="📊 PROGRESO DE SINCRONIZACIÓN", padding=10)
+            contenedor_contadores.pack(pady=10, fill="x", padx=5)
 
-            # Título de contadores
-            ttk.Label(contenedor_contadores, text="📊 PROGRESO DE SINCRONIZACIÓN",
-                     font=("Arial", 11, "bold")).pack(pady=(0, 10))
-
-            # Labels para cada entidad con fuente más grande
+            # Labels para cada entidad
             lbl_products = ttk.Label(contenedor_contadores, text="📦 Productos: --/--",
-                                    font=("Arial", 10))
-            lbl_products.pack(anchor="w", padx=30, pady=5)
+                                    font=("Arial", 9))
+            lbl_products.pack(anchor="w", padx=10, pady=3)
 
             lbl_customers = ttk.Label(contenedor_contadores, text="👥 Clientes: --/--",
-                                     font=("Arial", 10))
-            lbl_customers.pack(anchor="w", padx=30, pady=5)
+                                     font=("Arial", 9))
+            lbl_customers.pack(anchor="w", padx=10, pady=3)
 
             lbl_categories = ttk.Label(contenedor_contadores, text="📁 Departamentos: --/--",
-                                      font=("Arial", 10))
-            lbl_categories.pack(anchor="w", padx=30, pady=5)
+                                      font=("Arial", 9))
+            lbl_categories.pack(anchor="w", padx=10, pady=3)
 
             lbl_sellers = ttk.Label(contenedor_contadores, text="👤 Vendedores: --/--",
-                                     font=("Arial", 10))
-            lbl_sellers.pack(anchor="w", padx=30, pady=5)
+                                     font=("Arial", 9))
+            lbl_sellers.pack(anchor="w", padx=10, pady=3)
 
             # Diccionario para almacenar estado de contadores
             contadores = {
