@@ -3984,6 +3984,10 @@ class SmartSyncComplete:
 
                         productos_a_procesar.append((idx, code))
 
+                        # ACTUALIZAR PROGRESO - NUEVOS
+                        current_count = idx
+                        self._reportar_progreso('products', current_count, total_cambios)
+
                     except Exception as e:
                         self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
                         self.stats['products']['errores'] += 1
@@ -4177,6 +4181,10 @@ class SmartSyncComplete:
                         ))
 
                         productos_a_procesar.append((idx, code))
+
+                        # ACTUALIZAR PROGRESO - MODIFICADOS
+                        current_count = total_nuevos + idx
+                        self._reportar_progreso('products', current_count, total_cambios)
 
                     except Exception as e:
                         self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
