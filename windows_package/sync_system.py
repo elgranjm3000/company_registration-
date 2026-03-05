@@ -1430,7 +1430,7 @@ class ConfigWindow:
                                 # ✅ CAPTURAR ESTADÍSTICAS antes de cerrar
                                 resultado_sync['stats'] = sync.stats.copy() if hasattr(sync, 'stats') else {}
 
-                                sync._cerrar_bases_datos()
+                                sync._cerrar_conexiones()
 
                                 actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
                                 resultado_sync['exito'] = True
