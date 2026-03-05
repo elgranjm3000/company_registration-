@@ -4021,7 +4021,11 @@ class SmartSyncComplete:
 
                 # Ejecutar BATCH INSERT
                 if batch_data:
-                    self._log(f"  🚀 Ejecutando BATCH INSERT de {len(batch_data)} productos...", "info")
+                    total_a_insertar = len(batch_data)
+                    self._log(f"  🚀 Ejecutando BATCH INSERT de {total_a_insertar} productos...", "info")
+
+                    # Dividir en lotes más pequeños para mostrar progreso
+                    batch_size = 50  # Insertar de 50 en 50
                     start_time = time.time()
 
                     insert_query = """
@@ -4058,7 +4062,15 @@ class SmartSyncComplete:
                     """
 
                     try:
-                        self.mysql_cursor.executemany(insert_query, batch_data)
+                        # Insertar en lotes de 50 para mostrar progreso
+                        for i in range(0, len(batch_data), batch_size):
+                            lote = batch_data[i:i + batch_size]
+                            self.mysql_cursor.executemany(insert_query, lote)
+
+                            # Reportar progreso durante el insert (PASO 3)
+                            idx_lote = productos_a_procesar[min(i, len(productos_a_procesar) - 1)][0]
+                            self._reportar_progreso('products', idx_lote, total_cambios, step='insert')
+
                         rows_affected = self.mysql_cursor.rowcount
                         self._log(f"  📊 executemany afectó {rows_affected} filas", "info")
 
@@ -4080,10 +4092,10 @@ class SmartSyncComplete:
                         raise
 
                     elapsed = time.time() - start_time
-                    self.stats['products']['nuevos'] += len(batch_data)
-                    self._log(f"  ✅ BATCH INSERT completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
+                    self.stats['products']['nuevos'] += total_a_insertar
+                    self._log(f"  ✅ BATCH INSERT completado: {total_a_insertar} productos en {elapsed:.2f}s ({elapsed/total_a_insertar*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso (PASO 3 - INSERT COMPLETADO)
+                    # Reportar progreso final (PASO 3 - INSERT COMPLETADO)
                     for idx, code in productos_a_procesar:
                         self._reportar_progreso('products', idx, total_cambios, step='insert')
 
@@ -4219,7 +4231,11 @@ class SmartSyncComplete:
 
                 # Ejecutar BATCH UPDATE
                 if batch_data:
-                    self._log(f"  🚀 Ejecutando BATCH UPDATE de {len(batch_data)} productos...", "info")
+                    total_a_actualizar = len(batch_data)
+                    self._log(f"  🚀 Ejecutando BATCH UPDATE de {total_a_actualizar} productos...", "info")
+
+                    # Dividir en lotes más pequeños para mostrar progreso
+                    batch_size = 50  # Actualizar de 50 en 50
                     start_time = time.time()
 
                     # Usamos INSERT ... ON DUPLICATE KEY UPDATE para actualizar
@@ -4257,7 +4273,16 @@ class SmartSyncComplete:
                     """
 
                     try:
-                        self.mysql_cursor.executemany(update_query, batch_data)
+                        # Actualizar en lotes de 50 para mostrar progreso
+                        for i in range(0, len(batch_data), batch_size):
+                            lote = batch_data[i:i + batch_size]
+                            self.mysql_cursor.executemany(update_query, lote)
+
+                            # Reportar progreso durante el update (PASO 3)
+                            idx_lote = productos_a_procesar[min(i, len(productos_a_procesar) - 1)][0]
+                            idx_adjusted = total_nuevos + idx_lote
+                            self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
+
                         rows_affected = self.mysql_cursor.rowcount
                         self._log(f"  📊 executemany afectó {rows_affected} filas", "info")
 
@@ -4279,10 +4304,10 @@ class SmartSyncComplete:
                         raise
 
                     elapsed = time.time() - start_time
-                    self.stats['products']['modificados'] += len(batch_data)
-                    self._log(f"  ✅ BATCH UPDATE completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
+                    self.stats['products']['modificados'] += total_a_actualizar
+                    self._log(f"  ✅ BATCH UPDATE completado: {total_a_actualizar} productos en {elapsed:.2f}s ({elapsed/total_a_actualizar*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso (PASO 3 - UPDATE COMPLETADO)
+                    # Reportar progreso final (PASO 3 - UPDATE COMPLETADO)
                     for idx, code in productos_a_procesar:
                         idx_adjusted = total_nuevos + idx
                         self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
