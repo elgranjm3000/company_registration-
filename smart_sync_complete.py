@@ -134,7 +134,7 @@ class SmartSyncComplete:
         self.tipo_cambio_ves_usd = None  # Se obtendrá de pyDolarVenezuela
         self.tipo_cambio_obtenido_at = None  # Timestamp de cuando se obtuvo el tipo de cambio
 
-    def _reportar_progreso(self, entity: str, current: int, total: int):
+    def _reportar_progreso(self, entity: str, current: int, total: int, step: str = ''):
         """
         Reporta progreso de sincronización al callback
 
@@ -142,6 +142,7 @@ class SmartSyncComplete:
             entity: Nombre de la entidad ('products', 'customers', 'categories', 'sellers', 'quotes')
             current: Número actual de registros procesados
             total: Total de registros a procesar
+            step: Paso actual ('detect', 'collect', 'insert') - opcional
         """
         try:
             if total > 0:
@@ -181,12 +182,17 @@ class SmartSyncComplete:
                 # También llamar al callback si existe (para interfaz gráfica)
                 if self.progress_callback:
                     try:
-                        self.progress_callback({
+                        callback_data = {
                             'entity': entity,
                             'current': current,
                             'total': total,
                             'percentage': percentage
-                        })
+                        }
+                        # Agregar step si se proporciona
+                        if step:
+                            callback_data['step'] = step
+
+                        self.progress_callback(callback_data)
                     except Exception as e:
                         # Silencioso para no interrumpir la sincronización
                         pass
@@ -2028,8 +2034,8 @@ class SmartSyncComplete:
                 code = producto[0]
                 claves_actuales.append(code)
 
-                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS
-                self._reportar_progreso('products', idx, total_productos)
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS (PASO 1)
+                self._reportar_progreso('products', idx, total_productos, step='detect')
 
                 # Generar hash actual
                 hash_actual = self._generar_hash_product(producto)
@@ -2528,8 +2534,8 @@ class SmartSyncComplete:
                 code = cliente[0]
                 claves_actuales.append(code)
 
-                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS
-                self._reportar_progreso('customers', idx, total_clientes)
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS (PASO 1)
+                self._reportar_progreso('customers', idx, total_clientes, step='detect')
 
                 hash_actual = self._generar_hash_customer(cliente)
                 hash_guardado = self._obtener_hash_guardado('customers', code)
@@ -2613,8 +2619,8 @@ class SmartSyncComplete:
                 code = category[0]
                 claves_actuales.append(code)
 
-                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS
-                self._reportar_progreso('categories', idx, total_categories)
+                # ACTUALIZAR PROGRESO - DETECCIÓN DE CAMBIOS (PASO 1)
+                self._reportar_progreso('categories', idx, total_categories, step='detect')
 
                 hash_actual = self._generar_hash_category(category)
                 hash_guardado = self._obtener_hash_guardado('categories', code)
@@ -4005,9 +4011,9 @@ class SmartSyncComplete:
 
                         productos_a_procesar.append((idx, code))
 
-                        # ACTUALIZAR PROGRESO - NUEVOS
+                        # ACTUALIZAR PROGRESO - NUEVOS (PASO 2 - RECOLECCIÓN)
                         current_count = idx
-                        self._reportar_progreso('products', current_count, total_cambios)
+                        self._reportar_progreso('products', current_count, total_cambios, step='collect')
 
                     except Exception as e:
                         self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
@@ -4077,9 +4083,9 @@ class SmartSyncComplete:
                     self.stats['products']['nuevos'] += len(batch_data)
                     self._log(f"  ✅ BATCH INSERT completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso
+                    # Reportar progreso (PASO 3 - INSERT COMPLETADO)
                     for idx, code in productos_a_procesar:
-                        self._reportar_progreso('products', idx, total_cambios)
+                        self._reportar_progreso('products', idx, total_cambios, step='insert')
 
             # ====================================================================
             # MODIFICADOS - BATCH UPDATE
@@ -4203,9 +4209,9 @@ class SmartSyncComplete:
 
                         productos_a_procesar.append((idx, code))
 
-                        # ACTUALIZAR PROGRESO - MODIFICADOS
+                        # ACTUALIZAR PROGRESO - MODIFICADOS (PASO 2 - RECOLECCIÓN)
                         current_count = total_nuevos + idx
-                        self._reportar_progreso('products', current_count, total_cambios)
+                        self._reportar_progreso('products', current_count, total_cambios, step='collect')
 
                     except Exception as e:
                         self._log(f"  ⚠️ Error preparando producto {producto[0] if producto else 'unknown'}: {str(e)[:100]}", "warning")
@@ -4276,10 +4282,10 @@ class SmartSyncComplete:
                     self.stats['products']['modificados'] += len(batch_data)
                     self._log(f"  ✅ BATCH UPDATE completado: {len(batch_data)} productos en {elapsed:.2f}s ({elapsed/len(batch_data)*1000:.1f} ms/promedio)", "success")
 
-                    # Reportar progreso
+                    # Reportar progreso (PASO 3 - UPDATE COMPLETADO)
                     for idx, code in productos_a_procesar:
                         idx_adjusted = total_nuevos + idx
-                        self._reportar_progreso('products', idx_adjusted, total_cambios)
+                        self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
 
             # Reportar productos omitidos
             if products_sin_categoria > 0:

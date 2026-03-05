@@ -1023,6 +1023,55 @@ class ConfigWindow:
             detalles_label = ttk.Label(frame, text="", font=("Arial", 9), foreground="gray")
             detalles_label.pack(pady=5)
 
+            # INDICADOR DE PASOS
+            contenedor_pasos = ttk.Frame(frame)
+            contenedor_pasos.pack(pady=15, fill="x")
+
+            ttk.Label(contenedor_pasos, text="🔄 ESTADO DE SINCRONIZACIÓN",
+                     font=("Arial", 10, "bold")).pack(pady=(0, 10))
+
+            # Contenedor de los 3 pasos
+            pasos_frame = ttk.Frame(contenedor_pasos)
+            pasos_frame.pack(fill="x", padx=30)
+
+            # Diccionario para almacenar labels de pasos
+            pasos_labels = {}
+
+            # Crear los 3 pasos
+            pasos_info = [
+                (1, "Detectar cambios", "Guardar en sync_hashes"),
+                (2, "Recolectar datos", "Preparar batch"),
+                (3, "Guardar en BD", "Insertar/commit")
+            ]
+
+            for num, nombre, descripcion in pasos_info:
+                paso_frame = ttk.Frame(pasos_frame)
+                paso_frame.pack(fill="x", pady=2)
+
+                # Número del paso (círculo con color)
+                paso_num_label = ttk.Label(paso_frame, text=f" {num} ",
+                                          font=("Arial", 9, "bold"),
+                                          foreground="gray", background="#f0f0f0",
+                                          padding=(5, 2))
+                paso_num_label.pack(side="left", padx=(0, 5))
+
+                # Nombre del paso
+                ttk.Label(paso_frame, text=nombre,
+                         font=("Arial", 9)).pack(side="left")
+
+                # Descripción
+                ttk.Label(paso_frame, text=f"  ({descripcion})",
+                         font=("Arial", 8), foreground="gray").pack(side="left")
+
+                pasos_labels[num] = paso_num_label
+
+            # Label de estado actual (qué paso está activo)
+            estado_paso_label = ttk.Label(contenedor_pasos,
+                                         text="⏳ Iniciando...",
+                                         font=("Arial", 10),
+                                         foreground="blue")
+            estado_paso_label.pack(pady=10)
+
             # Contadores de progreso por entidad
             contenedor_contadores = ttk.Frame(frame)
             contenedor_contadores.pack(pady=20, fill="x", expand=True)
@@ -1083,27 +1132,96 @@ class ConfigWindow:
                     # Silenciosamente ignorar errores si la ventana fue cerrada
                     pass
 
+            def actualizar_paso(paso_num, estado="en_progreso", mensaje=""):
+                """
+                Actualiza el indicador visual de pasos
+
+                Args:
+                    paso_num: Número del paso (1, 2, 3)
+                    estado: 'pendiente', 'en_progreso', 'completado'
+                    mensaje: Mensaje opcional para el label de estado actual
+                """
+                try:
+                    if not progreso.winfo_exists():
+                        return
+
+                    # Colores según estado
+                    colores = {
+                        'pendiente': '#f0f0f0',      # Gris claro
+                        'en_progreso': '#007bff',   # Azul
+                        'completado': '#28a745'     # Verde
+                    }
+
+                    fg_colores = {
+                        'pendiente': 'gray',
+                        'en_progreso': 'white',
+                        'completado': 'white'
+                    }
+
+                    # Actualizar cada paso según su estado
+                    for num in range(1, 4):
+                        if num in pasos_labels and pasos_labels[num].winfo_exists():
+                            if num < paso_num:
+                                # Pasos anteriores: completado
+                                pasos_labels[num].config(
+                                    background=colores['completado'],
+                                    foreground=fg_colores['completado']
+                                )
+                            elif num == paso_num:
+                                # Paso actual: según estado
+                                pasos_labels[num].config(
+                                    background=colores[estado],
+                                    foreground=fg_colores[estado]
+                                )
+                            else:
+                                # Pasos futuros: pendiente
+                                pasos_labels[num].config(
+                                    background=colores['pendiente'],
+                                    foreground=fg_colores['pendiente']
+                                )
+
+                    # Actualizar mensaje de estado del paso actual
+                    if mensaje and estado_paso_label.winfo_exists():
+                        estado_paso_label.config(text=mensaje)
+
+                    progreso.update_idletasks()
+                except Exception:
+                    pass
+
             def actualizar_contador(progreso_data):
                 """
                 Actualiza el contador de una entidad específica
                 Esta función se llama desde el thread de sincronización
 
                 Args:
-                    progreso_data: Dict con keys 'entity', 'current', 'total', 'percentage'
+                    progreso_data: Dict con keys 'entity', 'current', 'total', 'percentage', 'step'
                 """
                 entity = progreso_data.get('entity', '')
                 current = progreso_data.get('current', 0)
                 total = progreso_data.get('total', 0)
+                step = progreso_data.get('step', '')  # 'detect', 'collect', 'insert'
 
                 nonlocal contadores
                 if entity in contadores:
                     contadores[entity]['current'] = current
                     contadores[entity]['total'] = total
 
+                    # ACTUALIZAR PASO según step
+                    if step:
+                        paso_num = {'detect': 1, 'collect': 2, 'insert': 3}.get(step, 1)
+                        estado = 'completado' if current == total and total > 0 else 'en_progreso'
+
+                        # Mensaje según paso
+                        mensajes = {
+                            'detect': f"🔍 Detectando cambios en {entity}...",
+                            'collect': f"📦 Recolectando datos de {entity}...",
+                            'insert': f"💾 Guardando {entity} en base de datos..."
+                        }
+
+                        actualizar_paso(paso_num, estado, mensajes.get(step, ''))
+
                     # ACTUALIZAR DIRECTAMENTE el label (sin after)
-                    # Aunque no es thread-safe en teoría, Tkinter puede manejar config() desde otros threads
                     try:
-                        # Verificar si la ventana todavía existe
                         if not progreso.winfo_exists():
                             return
 
@@ -1117,16 +1235,26 @@ class ConfigWindow:
 
                         if entity in entity_info:
                             info = entity_info[entity]
-                            # Verificar si el label todavía existe
                             if info['label'].winfo_exists():
-                                percentage = round((current / total * 100), 1) if total > 0 else 0
-                                info['label'].config(
-                                    text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
-                                )
-                                # Forzar actualización inmediata
+                                # Sellers SIN contador numérico
+                                if entity == 'sellers':
+                                    if current == 0 and total == 0:
+                                        # Iniciando
+                                        info['label'].config(text=f"{info['emoji']} {info['name']}: ⏳ Sincronizando...")
+                                    elif current == total and total > 0:
+                                        # Completado
+                                        info['label'].config(text=f"{info['emoji']} {info['name']}: ✅ Completado")
+                                    else:
+                                        # En progreso (sin números)
+                                        info['label'].config(text=f"{info['emoji']} {info['name']}: 🔄 Procesando...")
+                                else:
+                                    # Otros entities CON contador numérico
+                                    percentage = round((current / total * 100), 1) if total > 0 else 0
+                                    info['label'].config(
+                                        text=f"{info['emoji']} {info['name']}: {current}/{total} ({percentage}%)"
+                                    )
                                 progreso.update_idletasks()
                     except Exception:
-                        # Silenciosamente ignorar errores si la ventana fue cerrada
                         pass
 
             def ejecutar_sincronizacion_thread():
