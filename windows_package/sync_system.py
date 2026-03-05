@@ -1036,6 +1036,7 @@ class ConfigWindow:
 
             # Diccionario para almacenar labels de pasos
             pasos_labels = {}
+            pasos_porcentaje = {}
 
             # Crear los 3 pasos
             pasos_info = [
@@ -1063,7 +1064,14 @@ class ConfigWindow:
                 ttk.Label(paso_frame, text=f"  ({descripcion})",
                          font=("Arial", 8), foreground="gray").pack(side="left")
 
+                # Porcentaje del paso (inicialmente 0%)
+                porcentaje_label = ttk.Label(paso_frame, text="0%",
+                                           font=("Arial", 9, "bold"),
+                                           foreground="gray")
+                porcentaje_label.pack(side="right", padx=(10, 0))
+
                 pasos_labels[num] = paso_num_label
+                pasos_porcentaje[num] = porcentaje_label
 
             # Label de estado actual (qué paso está activo)
             estado_paso_label = ttk.Label(contenedor_pasos,
@@ -1132,7 +1140,7 @@ class ConfigWindow:
                     # Silenciosamente ignorar errores si la ventana fue cerrada
                     pass
 
-            def actualizar_paso(paso_num, estado="en_progreso", mensaje=""):
+            def actualizar_paso(paso_num, estado="en_progreso", mensaje="", porcentaje=None):
                 """
                 Actualiza el indicador visual de pasos
 
@@ -1140,6 +1148,7 @@ class ConfigWindow:
                     paso_num: Número del paso (1, 2, 3)
                     estado: 'pendiente', 'en_progreso', 'completado'
                     mensaje: Mensaje opcional para el label de estado actual
+                    porcentaje: Porcentaje del paso actual (0-100)
                 """
                 try:
                     if not progreso.winfo_exists():
@@ -1158,27 +1167,57 @@ class ConfigWindow:
                         'completado': 'white'
                     }
 
+                    fg_porcentaje = {
+                        'pendiente': 'gray',
+                        'en_progreso': '#007bff',
+                        'completado': '#28a745'
+                    }
+
                     # Actualizar cada paso según su estado
                     for num in range(1, 4):
                         if num in pasos_labels and pasos_labels[num].winfo_exists():
                             if num < paso_num:
-                                # Pasos anteriores: completado
+                                # Pasos anteriores: completado (100%)
                                 pasos_labels[num].config(
                                     background=colores['completado'],
                                     foreground=fg_colores['completado']
                                 )
+                                if num in pasos_porcentaje and pasos_porcentaje[num].winfo_exists():
+                                    pasos_porcentaje[num].config(
+                                        text="100%",
+                                        foreground=fg_porcentaje['completado']
+                                    )
                             elif num == paso_num:
                                 # Paso actual: según estado
                                 pasos_labels[num].config(
                                     background=colores[estado],
                                     foreground=fg_colores[estado]
                                 )
+                                # Actualizar porcentaje del paso actual
+                                if num in pasos_porcentaje and pasos_porcentaje[num].winfo_exists():
+                                    if porcentaje is not None:
+                                        # Usar el porcentaje proporcionado
+                                        pct_text = f"{porcentaje:.1f}%"
+                                        pct_color = fg_porcentaje[estado]
+                                    else:
+                                        # Sin porcentaje específico, mostrar 0%
+                                        pct_text = "0%"
+                                        pct_color = fg_porcentaje[estado]
+                                    pasos_porcentaje[num].config(
+                                        text=pct_text,
+                                        foreground=pct_color
+                                    )
                             else:
-                                # Pasos futuros: pendiente
+                                # Pasos futuros: pendiente (0%)
                                 pasos_labels[num].config(
                                     background=colores['pendiente'],
                                     foreground=fg_colores['pendiente']
                                 )
+                                if num in pasos_porcentaje and pasos_porcentaje[num].winfo_exists():
+                                    pasos_porcentaje[num].config(
+                                        text="0%",
+                                        foreground=fg_porcentaje['pendiente']
+                                    )
 
                     # Actualizar mensaje de estado del paso actual
                     if mensaje and estado_paso_label.winfo_exists():
@@ -1211,6 +1250,11 @@ class ConfigWindow:
                         paso_num = {'detect': 1, 'collect': 2, 'insert': 3}.get(step, 1)
                         estado = 'completado' if current == total and total > 0 else 'en_progreso'
 
+                        # Calcular porcentaje del paso actual
+                        porcentaje = round((current / total * 100), 1) if total > 0 else 0
+                        if estado == 'completado':
+                            porcentaje = 100.0
+
                         # Mensaje según paso
                         mensajes = {
                             'detect': f"🔍 Detectando cambios en {entity}...",
@@ -1218,7 +1262,7 @@ class ConfigWindow:
                             'insert': f"💾 Guardando {entity} en base de datos..."
                         }
 
-                        actualizar_paso(paso_num, estado, mensajes.get(step, ''))
+                        actualizar_paso(paso_num, estado, mensajes.get(step, ''), porcentaje)
 
                     # ACTUALIZAR DIRECTAMENTE el label (sin after)
                     try:
