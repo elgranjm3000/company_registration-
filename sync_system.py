@@ -1359,11 +1359,13 @@ class ConfigWindow:
 
                 def sync_worker():
                     try:
+                        log("🚀 Iniciando sincronización en modo config", "INFO")
                         # Ejecutar primera sincronización
                         actualizar_estado("🔌 Verificando conexiones...", "Conectando a bases de datos")
 
                         # Usar SmartSyncComplete si está disponible, sino SyncModule antiguo
                         if SmartSyncComplete:
+                            log("✅ SmartSyncComplete disponible, usándolo", "INFO")
                             # Preparar configuraciones para SmartSyncComplete
                             postgresql_config = {
                                 'host': config_nuevo['postgres_host'],
@@ -1398,41 +1400,56 @@ class ConfigWindow:
                             )
 
                             if sync._conectar_bases_datos():
+                                log("✅ Conexión a bases de datos establecida (SmartSyncComplete)", "INFO")
                                 actualizar_estado("🔄 Sincronizando...", "Products, Customers, Categories, Sellers")
                                 sync.ejecutar_sync_completa()
+                                log("✅ ejecutar_sync_completa() terminó (SmartSyncComplete)", "INFO")
 
                                 # ✅ CAPTURAR ESTADÍSTICAS antes de cerrar
                                 resultado_sync['stats'] = sync.stats.copy() if hasattr(sync, 'stats') else {}
+                                log(f"📊 Estadísticas capturadas: {resultado_sync['stats']}", "INFO")
 
                                 sync._cerrar_bases_datos()
+                                log("✅ Bases de datos cerradas (SmartSyncComplete)", "INFO")
 
                                 actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
                                 resultado_sync['exito'] = True
                                 resultado_sync['mensaje'] = "Configuración guardada correctamente\n\n✅ Primera sincronización completada\n\nEl sistema continuará sincronizando en segundo plano."
+                                log("✅ resultado_sync['exito'] = True (SmartSyncComplete)", "INFO")
                             else:
+                                log("❌ No se pudo conectar a bases de datos (SmartSyncComplete)", "ERROR")
                                 actualizar_estado("❌ Error", "No se pudo conectar")
                                 resultado_sync['exito'] = False
                                 resultado_sync['mensaje'] = "Configuración guardada\n\n⚠️ No se pudo conectar a las bases de datos\n\nVerifique la configuración y las credenciales."
+                                log("❌ resultado_sync['exito'] = False (SmartSyncComplete - conexión falló)", "ERROR")
                         else:
                             # Fallback al SyncModule antiguo
+                            log("⚠️ SmartSyncComplete no disponible, usando SyncModule antiguo", "WARNING")
                             sync = SyncModule(config_nuevo, progress_callback=actualizar_contador)
 
                             if sync.verificar_conexiones():
+                                log("✅ Conexión a bases de datos establecida (SyncModule)", "INFO")
                                 actualizar_estado("🔄 Sincronizando...", "Products, Customers, Categories, Quotes")
                                 sync.sincronizar()
+                                log("✅ sincronizar() terminó (SyncModule)", "INFO")
 
                                 # ✅ CAPTURAR ESTADÍSTICAS antes de cerrar
                                 resultado_sync['stats'] = sync.stats.copy() if hasattr(sync, 'stats') else {}
+                                log(f"📊 Estadísticas capturadas: {resultado_sync['stats']}", "INFO")
 
                                 sync.cerrar()
+                                log("✅ Conexión cerrada (SyncModule)", "INFO")
 
                                 actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
                                 resultado_sync['exito'] = True
                                 resultado_sync['mensaje'] = "Configuración guardada correctamente\n\n✅ Primera sincronización completada\n\nEl sistema continuará sincronizando en segundo plano."
+                                log("✅ resultado_sync['exito'] = True (SyncModule)", "INFO")
                             else:
+                                log("❌ No se pudo conectar a bases de datos (SyncModule)", "ERROR")
                                 actualizar_estado("❌ Error", "No se pudo conectar")
                                 resultado_sync['exito'] = False
                                 resultado_sync['mensaje'] = "Configuración guardada\n\n⚠️ No se pudo conectar a las bases de datos\n\nVerifique la configuración y las credenciales."
+                                log("❌ resultado_sync['exito'] = False (SyncModule - conexión falló)", "ERROR")
                     except Exception as e:
                         import traceback
                         error_detalle = traceback.format_exc()
@@ -1443,7 +1460,9 @@ class ConfigWindow:
                         resultado_sync['exito'] = False
                         resultado_sync['error'] = e
                         resultado_sync['mensaje'] = f"Configuración guardada\n\n⚠️ Error en sincronización: {str(e)}\n\nRevisa el log para más detalles."
+                        log(f"❌ resultado_sync['exito'] = False (excepción: {str(e)})", "ERROR")
                     finally:
+                        log(f"🏁 Sincronización finalizada. resultado_sync['exito'] = {resultado_sync.get('exito', 'UNDEFINED')}", "INFO")
                         progress_bar.stop()
                         # Notificar que terminó
                         progreso.after(0, lambda: progreso.event_generate('<<SyncComplete>>'))
