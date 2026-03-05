@@ -1409,8 +1409,8 @@ class ConfigWindow:
                                 resultado_sync['stats'] = sync.stats.copy() if hasattr(sync, 'stats') else {}
                                 log(f"📊 Estadísticas capturadas: {resultado_sync['stats']}", "INFO")
 
-                                sync._cerrar_bases_datos()
-                                log("✅ Bases de datos cerradas (SmartSyncComplete)", "INFO")
+                                sync._cerrar_conexiones()
+                                log("✅ Conexiones cerradas (SmartSyncComplete)", "INFO")
 
                                 actualizar_estado("✅ Completado", "Sincronización finalizada con éxito")
                                 resultado_sync['exito'] = True
