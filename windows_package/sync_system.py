@@ -1455,10 +1455,15 @@ class ConfigWindow:
                                 resultado_sync['exito'] = False
                                 resultado_sync['mensaje'] = "Configuración guardada\n\n⚠️ No se pudo conectar a las bases de datos\n\nVerifique la configuración y las credenciales."
                     except Exception as e:
+                        import traceback
+                        error_detalle = traceback.format_exc()
+                        log(f"❌ Error en sincronización (modo config): {str(e)}", "ERROR")
+                        log(f"Traceback completo:\n{error_detalle}", "ERROR")
+
                         actualizar_estado("❌ Error", str(e))
                         resultado_sync['exito'] = False
                         resultado_sync['error'] = e
-                        resultado_sync['mensaje'] = f"Configuración guardada\n\n⚠️ Error en sincronización: {str(e)}"
+                        resultado_sync['mensaje'] = f"Configuración guardada\n\n⚠️ Error en sincronización: {str(e)}\n\nRevisa el log para más detalles."
                     finally:
                         progress_bar.stop()
                         # Notificar que terminó
