@@ -4356,7 +4356,7 @@ class SmartSyncComplete:
                     self._log(f"  🚀 Ejecutando BATCH INSERT de {total_a_insertar} productos...", "info")
 
                     # Dividir en lotes más pequeños para mostrar progreso
-                    batch_size = 1000  # Insertar de 1000 en 1000 (balance óptimo para MySQL)
+                    batch_size = 10000  # Insertar de 10000 en 10000 (optimizado para MySQL remoto)
                     start_time = time.time()
 
                     insert_query = """
@@ -4626,7 +4626,7 @@ class SmartSyncComplete:
                     self._log(f"  🚀 Ejecutando BATCH UPDATE de {total_a_actualizar} productos...", "info")
 
                     # Dividir en lotes más pequeños para mostrar progreso
-                    batch_size = 1000  # Actualizar de 1000 en 1000 (balance óptimo para MySQL)
+                    batch_size = 10000  # Actualizar de 10000 en 10000 (optimizado para MySQL remoto)
                     start_time = time.time()
 
                     # Usamos INSERT ... ON DUPLICATE KEY UPDATE para actualizar
@@ -4811,7 +4811,7 @@ class SmartSyncComplete:
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
-        batch_size = 1000  # Insertar/actualizar de 1000 en 1000 (balance óptimo para MySQL)
+        batch_size = 10000  # Insertar/actualizar de 10000 en 10000 (optimizado para MySQL remoto)
 
         try:
             # 🚀 OBTENER TODOS LOS DOCUMENT_NUMBERS EXISTENTES EN UNA SOLA QUERY
