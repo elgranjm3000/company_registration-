@@ -4104,7 +4104,7 @@ class SmartSyncComplete:
                     self._log(f"  🚀 Ejecutando BATCH INSERT de {total_a_insertar} productos...", "info")
 
                     # Dividir en lotes más pequeños para mostrar progreso
-                    batch_size = 50  # Insertar de 50 en 50
+                    batch_size = 1000  # Insertar de 1000 en 1000 (optimizado para MySQL remoto)
                     start_time = time.time()
 
                     insert_query = """
@@ -4350,7 +4350,7 @@ class SmartSyncComplete:
                     self._log(f"  🚀 Ejecutando BATCH UPDATE de {total_a_actualizar} productos...", "info")
 
                     # Dividir en lotes más pequeños para mostrar progreso
-                    batch_size = 50  # Actualizar de 50 en 50
+                    batch_size = 1000  # Actualizar de 1000 en 1000 (optimizado para MySQL remoto)
                     start_time = time.time()
 
                     # Usamos INSERT ... ON DUPLICATE KEY UPDATE para actualizar
