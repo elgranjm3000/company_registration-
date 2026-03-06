@@ -1509,6 +1509,75 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"Error eliminando hash: {str(e)}", "error")
 
+    def _guardar_hashes_batch(self, table_name: str, hashes_data: list):
+        """
+        Guardar o actualizar múltiples hashes en sync_hashes usando BATCH operations
+        Mucho más rápido que llamar a _guardar_hash() individualmente
+
+        Args:
+            table_name: Nombre de tabla ('products', 'customers', etc.)
+            hashes_data: Lista de tuplas (record_key, record_hash, data_dict, operacion)
+                          operacion: 'insert' | 'update' | 'upsert'
+        """
+        if not hashes_data:
+            return
+
+        try:
+            company_id = self._get_company_id_from_companies()
+            if not company_id:
+                return
+
+            # Separar por operación
+            inserts = []
+            updates = []
+
+            for record_key, record_hash, data, operacion in hashes_data:
+                # Convertir data a JSON
+                data_json = json.dumps(data, default=str) if data else None
+
+                if operacion == 'insert':
+                    inserts.append((table_name, record_key, record_hash, data_json, company_id))
+                elif operacion == 'update':
+                    updates.append((record_hash, data_json, table_name, record_key, company_id))
+                elif operacion == 'upsert':
+                    # Para upsert, intentamos actualizar primero
+                    updates.append((record_hash, data_json, table_name, record_key, company_id))
+                    # Y también preparamos insert por si acaso
+                    inserts.append((table_name, record_key, record_hash, data_json, company_id))
+
+            # Ejecutar BATCH UPDATES
+            if updates:
+                update_query = """
+                UPDATE sync_hashes
+                SET record_hash = %s,
+                    last_sync_data = %s,
+                    updated_at = NOW(),
+                    pending_sync = FALSE
+                WHERE table_name = %s
+                  AND record_key = %s
+                  AND company_id = %s
+                """
+                self.pg_cursor.executemany(update_query, updates)
+
+            # Ejecutar BATCH INSERTS (solo los que no fueron actualizados)
+            if inserts:
+                # Para evitar duplicados en upsert, filtramos los que ya se actualizaron
+                # Usando INSERT ... ON CONFLICT para PostgreSQL 9.5+
+                # Para PostgreSQL 9, usamos el enfoque de UPDATE primero, luego INSERT los que fallaron
+                insert_query = """
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, last_sync_data, company_id, updated_at, pending_sync)
+                VALUES (%s, %s, %s, %s, %s, NOW(), FALSE)
+                """
+                try:
+                    self.pg_cursor.executemany(insert_query, inserts)
+                except Exception as insert_err:
+                    # Si hay error de duplicados, está bien (ya fueron actualizados)
+                    if 'duplicate' not in str(insert_err).lower():
+                        raise insert_err
+
+        except Exception as e:
+            self._log(f"Error guardando hashes batch: {str(e)}", "error")
+
     def _create_image_json(self, image_type, product_image):
         """
         Crear JSON para el campo images
@@ -2081,6 +2150,9 @@ class SmartSyncComplete:
             claves_actuales = []
             claves_sin_cambios = []  # Para batch update de pending_sync
 
+            # 🚀 OPTIMIZACIÓN: Acumular hashes para guardar en batch al final
+            hashes_para_guardar = []  # (record_key, record_hash, data, operacion)
+
             # Calcular total para progreso
             total_productos = len(productos)
             current_count = 0
@@ -2118,7 +2190,8 @@ class SmartSyncComplete:
                     # Nuevo producto (nunca sincronizado)
                     cambios['nuevos'].append(producto)
                     self._log(f"  ✨ NUEVO: {code}", "debug")
-                    self._guardar_hash('products', code, hash_actual)
+                    # 🚀 ACUMULAR para batch insert (sin data)
+                    hashes_para_guardar.append((code, hash_actual, None, 'insert'))
                 elif estaba_inactivo:
                     # Producto REACTIVADO
                     self._log(f"  ✅ REACTIVADO: {code} (inactivo desde {inactive_since})", "info")
@@ -2131,7 +2204,8 @@ class SmartSyncComplete:
                         'reactivated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
-                    self._guardar_hash('products', code, hash_actual, info_reactivacion)
+                    # 🚀 ACUMULAR para batch update
+                    hashes_para_guardar.append((code, hash_actual, info_reactivacion, 'update'))
                     cambios['modificados'].append(producto)  # Sincronizar a MySQL
                 elif hash_guardado != hash_actual:
                     # Producto modificado (sin cambio de status)
@@ -2144,10 +2218,17 @@ class SmartSyncComplete:
                         'coin': producto[9],  # coin (01=VES, 02=USD)
                         'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
-                    self._guardar_hash('products', code, hash_actual, data_sync)
+                    # 🚀 ACUMULAR para batch update
+                    hashes_para_guardar.append((code, hash_actual, data_sync, 'update'))
                 else:
                     # Sin cambios, acumular para batch update (una sola query al final)
                     claves_sin_cambios.append(code)
+
+            # 🚀 OPTIMIZACIÓN: Batch insert/update de hashes en sync_hashes
+            # En lugar de 52,686 calls individuales, hacemos 1 solo batch operation
+            if hashes_para_guardar:
+                self._log(f"  💾 Guardando {len(hashes_para_guardar)} hashes en sync_hashes (batch)...", "debug")
+                self._guardar_hashes_batch('products', hashes_para_guardar)
 
             # 🚀 OPTIMIZACIÓN: Batch update de pending_sync para productos sin cambios
             # En lugar de 50,000 updates individuales, hacemos 1 solo batch update
@@ -2182,6 +2263,9 @@ class SmartSyncComplete:
                 self.pg_cursor.execute(query_eliminados, [company_id] + claves_actuales)
                 eliminados = self.pg_cursor.fetchall()
 
+                # 🚀 OPTIMIZACIÓN: Acumular hashes inactivos para batch
+                hashes_inactivos = []
+
                 for (code, last_sync_data) in eliminados:
                     # Verificar si ya estaba marcado como inactivo
                     data_parseado = {}
@@ -2202,13 +2286,18 @@ class SmartSyncComplete:
 
                     # Usar hash especial para productos inactivos
                     hash_inactivo = hashlib.md5(f"INACTIVE_{code}".encode()).hexdigest()
-                    self._guardar_hash('products', code, hash_inactivo, info_inactividad)
+                    # 🚀 ACUMULAR para batch update
+                    hashes_inactivos.append((code, hash_inactivo, info_inactividad, 'update'))
 
                     cambios['eliminados'].append({'code': code})
                     if ya_estaba_inactivo:
                         self._log(f"  🔄 Permanece INACTIVO: {code}", "debug")
                     else:
                         self._log(f"  📴 Marcar como INACTIVO: {code}", "info")
+
+                # 🚀 Guardar hashes inactivos en batch
+                if hashes_inactivos:
+                    self._guardar_hashes_batch('products', hashes_inactivos)
 
             # Commit hashes
             self.pg_conn.commit()
@@ -2600,6 +2689,9 @@ class SmartSyncComplete:
 
             claves_actuales = []
 
+            # 🚀 OPTIMIZACIÓN: Acumular hashes para guardar en batch al final
+            hashes_para_guardar = []  # (record_key, record_hash, data, operacion)
+
             # Calcular total para progreso
             total_clientes = len(clientes)
             current_count = 0
@@ -2622,11 +2714,18 @@ class SmartSyncComplete:
                 if hash_guardado is None:
                     cambios['nuevos'].append(cliente)
                     self._log(f"  ✨ NUEVO: {code}", "debug")
+                    # 🚀 ACUMULAR para batch insert
+                    hashes_para_guardar.append((code, hash_actual, None, 'insert'))
                 elif hash_guardado != hash_actual:
                     cambios['modificados'].append(cliente)
                     self._log(f"  🔄 MODIFICADO: {code}", "debug")
+                    # 🚀 ACUMULAR para batch update
+                    hashes_para_guardar.append((code, hash_actual, None, 'update'))
 
-                self._guardar_hash('customers', code, hash_actual)
+            # 🚀 OPTIMIZACIÓN: Batch insert/update de hashes en sync_hashes
+            if hashes_para_guardar:
+                self._log(f"  💾 Guardando {len(hashes_para_guardar)} hashes en sync_hashes (batch)...", "debug")
+                self._guardar_hashes_batch('customers', hashes_para_guardar)
 
             # Detectar eliminados
             if claves_actuales:
