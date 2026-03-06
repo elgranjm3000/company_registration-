@@ -16,6 +16,8 @@ import logging
 import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 import sys
 import os
 
@@ -4007,6 +4009,99 @@ class SmartSyncComplete:
     # SINCRONIZACIÓN DE CAMBIOS A MYSQL
     # ====================================================================
 
+    def _insert_batch_thread(self, batch_info: Tuple):
+        """
+        Inserta un batch de productos en un thread separado
+        batch_info: (lote, insert_query, batch_num, mysql_config, company_id)
+        """
+        lote, insert_query, batch_num, mysql_config, company_id = batch_info
+        thread_id = threading.current_thread().name
+
+        try:
+            # Crear conexión separada para este thread
+            conn = pymysql.connect(**mysql_config)
+            cursor = conn.cursor()
+
+            # Ejecutar batch insert
+            cursor.executemany(insert_query, lote)
+            conn.commit()
+
+            cursor.close()
+            conn.close()
+
+            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
+        except Exception as e:
+            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+
+    def _update_batch_thread(self, batch_info: Tuple):
+        """
+        Actualiza un batch de productos en un thread separado
+        batch_info: (lote, update_query, batch_num, mysql_config, company_id)
+        """
+        lote, update_query, batch_num, mysql_config, company_id = batch_info
+
+        try:
+            # Crear conexión separada para este thread
+            conn = pymysql.connect(**mysql_config)
+            cursor = conn.cursor()
+
+            # Ejecutar batch update
+            cursor.executemany(update_query, lote)
+            conn.commit()
+
+            cursor.close()
+            conn.close()
+
+            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
+        except Exception as e:
+            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+
+    def _insert_customer_batch_thread(self, batch_info: Tuple):
+        """
+        Inserta un batch de customers en un thread separado
+        batch_info: (lote, insert_query, batch_num, mysql_config)
+        """
+        lote, insert_query, batch_num, mysql_config = batch_info
+
+        try:
+            # Crear conexión separada para este thread
+            conn = pymysql.connect(**mysql_config)
+            cursor = conn.cursor()
+
+            # Ejecutar batch insert
+            cursor.executemany(insert_query, lote)
+            conn.commit()
+
+            cursor.close()
+            conn.close()
+
+            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
+        except Exception as e:
+            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+
+    def _update_customer_batch_thread(self, batch_info: Tuple):
+        """
+        Actualiza un batch de customers en un thread separado
+        batch_info: (lote, update_query, batch_num, mysql_config)
+        """
+        lote, update_query, batch_num, mysql_config = batch_info
+
+        try:
+            # Crear conexión separada para este thread
+            conn = pymysql.connect(**mysql_config)
+            cursor = conn.cursor()
+
+            # Ejecutar batch update
+            cursor.executemany(update_query, lote)
+            conn.commit()
+
+            cursor.close()
+            conn.close()
+
+            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
+        except Exception as e:
+            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+
     def sincronizar_products_mysql(self, cambios: Dict[str, List]):
         """Sincronizar cambios de products a MySQL usando BATCH INSERTS para mejor rendimiento"""
         if not any(cambios.values()):
@@ -4240,20 +4335,44 @@ class SmartSyncComplete:
                     """
 
                     try:
-                        # 🚀 Insertar en lotes de 5000 con COMMIT DESPUÉS DE CADA LOTE
+                        # 🚀 THREADS: Insertar en paralelo con ThreadPoolExecutor
+                        num_workers = 4  # 4 threads procesando en paralelo
+                        self._log(f"  🚀 Procesando con {num_workers} threads en paralelo...", "info")
+
+                        # Preparar batches para threads
+                        batches_para_procesar = []
                         for i in range(0, len(batch_data), batch_size):
                             lote = batch_data[i:i + batch_size]
-                            self.mysql_cursor.executemany(insert_query, lote)
+                            batch_num = i // batch_size + 1
+                            batches_para_procesar.append((lote, insert_query, batch_num, self.mysql_config, company_id))
 
-                            # 🚀 COMMIT DESPUÉS DE CADA LOTE para evitar lock timeout
-                            self.mysql_conn.commit()
-                            self._log(f"  ✅ Commit batch {i//batch_size + 1}: {len(lote):,} productos insertados", "debug")
+                        # Ejecutar en paralelo con ThreadPoolExecutor
+                        total_insertados = 0
+                        with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="InsertWorker") as executor:
+                            # Submit all batches
+                            future_to_batch = {executor.submit(self._insert_batch_thread, batch_info): batch_info[1]
+                                                 for batch_info in batches_para_procesar}
 
-                            # Reportar progreso durante el insert (PASO 3)
-                            idx_lote = productos_a_procesar[min(i + len(lote) - 1, len(productos_a_procesar) - 1)][0]
-                            self._reportar_progreso('products', idx_lote, total_cambios, step='insert')
+                            # Process results as they complete
+                            for future in as_completed(future_to_batch):
+                                batch_num = future_to_batch[future]
+                                try:
+                                    result = future.result()
+                                    if result['success']:
+                                        total_insertados += result['count']
+                                        self._log(f"  ✅ Batch {batch_num}: {result['count']:,} productos insertados", "debug")
 
-                        self._log(f"  ✅ Todos los commits ejecutados correctamente", "info")
+                                        # Reportar progreso
+                                        idx_lote = productos_a_procesar[min((batch_num * batch_size) - 1, len(productos_a_procesar) - 1)][0]
+                                        self._reportar_progreso('products', idx_lote, total_cambios, step='insert')
+                                    else:
+                                        self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                                        self.stats['products']['errores'] += result['count']
+
+                                except Exception as e:
+                                    self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+
+                        self._log(f"  ✅ Todos los batches completados: {total_insertados:,} productos insertados", "info")
 
                     except Exception as insert_error:
                         # 🔍 GUARDAR ERROR EN ARCHIVO (SILENCIOSO - no mostrar al usuario)
@@ -4487,21 +4606,45 @@ class SmartSyncComplete:
                     """
 
                     try:
-                        # 🚀 Actualizar en lotes de 5000 con COMMIT DESPUÉS DE CADA LOTE
+                        # 🚀 THREADS: Actualizar en paralelo con ThreadPoolExecutor
+                        num_workers = 4  # 4 threads procesando en paralelo
+                        self._log(f"  🚀 Procesando con {num_workers} threads en paralelo...", "info")
+
+                        # Preparar batches para threads
+                        batches_para_procesar = []
                         for i in range(0, len(batch_data), batch_size):
                             lote = batch_data[i:i + batch_size]
-                            self.mysql_cursor.executemany(update_query, lote)
+                            batch_num = i // batch_size + 1
+                            batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config, company_id))
 
-                            # 🚀 COMMIT DESPUÉS DE CADA LOTE para evitar lock timeout
-                            self.mysql_conn.commit()
-                            self._log(f"  ✅ Commit batch {i//batch_size + 1}: {len(lote):,} productos actualizados", "debug")
+                        # Ejecutar en paralelo con ThreadPoolExecutor
+                        total_actualizados = 0
+                        with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="UpdateWorker") as executor:
+                            # Submit all batches
+                            future_to_batch = {executor.submit(self._update_batch_thread, batch_info): batch_info[1]
+                                                 for batch_info in batches_para_procesar}
 
-                            # Reportar progreso durante el update (PASO 3)
-                            idx_lote = productos_a_procesar[min(i + len(lote) - 1, len(productos_a_procesar) - 1)][0]
-                            idx_adjusted = total_nuevos + idx_lote
-                            self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
+                            # Process results as they complete
+                            for future in as_completed(future_to_batch):
+                                batch_num = future_to_batch[future]
+                                try:
+                                    result = future.result()
+                                    if result['success']:
+                                        total_actualizados += result['count']
+                                        self._log(f"  ✅ Batch {batch_num}: {result['count']:,} productos actualizados", "debug")
 
-                        self._log(f"  ✅ Todos los commits ejecutados correctamente", "info")
+                                        # Reportar progreso
+                                        idx_lote = productos_a_procesar[min((batch_num * batch_size) - 1, len(productos_a_procesar) - 1)][0]
+                                        idx_adjusted = total_nuevos + idx_lote
+                                        self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
+                                    else:
+                                        self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                                        self.stats['products']['errores'] += result['count']
+
+                                except Exception as e:
+                                    self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+
+                        self._log(f"  ✅ Todos los batches completados: {total_actualizados:,} productos actualizados", "info")
 
                     except Exception as update_error:
                         # 🔍 GUARDAR ERROR EN ARCHIVO (SILENCIOSO - no mostrar al usuario)
@@ -4658,9 +4801,9 @@ class SmartSyncComplete:
                         contact if contact else None, status_mysql
                     ))
 
-            # 🚀 EJECUTAR BATCH INSERTS
+            # 🚀 EJECUTAR BATCH INSERTS CON THREADS
             if inserts_data:
-                self._log(f"  📥 Insertando {len(inserts_data)} customers NUEVOS...", "info")
+                self._log(f"  📥 Insertando {len(inserts_data)} customers NUEVOS con threads...", "info")
                 insert_query = """
                 INSERT INTO customers (
                     company_id, name, email, document_number, address, phone, contact,
@@ -4668,24 +4811,40 @@ class SmartSyncComplete:
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                 """
 
+                # Preparar batches para threads
+                num_workers = 4
+                batches_para_procesar = []
                 for i in range(0, len(inserts_data), batch_size):
-                    if not self.sync_running:
-                        break
-
                     lote = inserts_data[i:i + batch_size]
-                    self.mysql_cursor.executemany(insert_query, lote)
-                    self.mysql_conn.commit()
+                    batch_num = i // batch_size + 1
+                    batches_para_procesar.append((lote, insert_query, batch_num, self.mysql_config))
 
-                    progreso = min(i + batch_size, len(inserts_data))
-                    self._log(f"  ✅ Insert batch: {progreso:,}/{len(inserts_data):,} customers insertados", "debug")
-                    self._reportar_progreso('customers', progreso, total_cambios)
+                # Ejecutar en paralelo con ThreadPoolExecutor
+                total_insertados = 0
+                with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="CustInsertWorker") as executor:
+                    future_to_batch = {executor.submit(self._insert_customer_batch_thread, batch_info): batch_info[1]
+                                         for batch_info in batches_para_procesar}
 
-                self.stats['customers']['nuevos'] = len(inserts_data)
-                self._log(f"  ✅ Commit final: {len(inserts_data):,} customers nuevos insertados", "success")
+                    for future in as_completed(future_to_batch):
+                        batch_num = future_to_batch[future]
+                        try:
+                            result = future.result()
+                            if result['success']:
+                                total_insertados += result['count']
+                                progreso = min(batch_num * batch_size, len(inserts_data))
+                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers insertados", "debug")
+                                self._reportar_progreso('customers', progreso, total_cambios)
+                            else:
+                                self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                        except Exception as e:
+                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
 
-            # 🚀 EJECUTAR BATCH UPDATES (para nuevos que ya existían)
+                self.stats['customers']['nuevos'] = total_insertados
+                self._log(f"  ✅ Commit final: {total_insertados:,} customers nuevos insertados", "success")
+
+            # 🚀 EJECUTAR BATCH UPDATES CON THREADS (para nuevos que ya existían)
             if updates_data:
-                self._log(f"  🔄 Actualizando {len(updates_data)} customers que ya existían...", "info")
+                self._log(f"  🔄 Actualizando {len(updates_data)} customers que ya existían con threads...", "info")
                 update_query = """
                 UPDATE customers SET
                     name = %s,
@@ -4698,19 +4857,36 @@ class SmartSyncComplete:
                 WHERE company_id = %s AND document_number = %s
                 """
 
+                # Preparar batches para threads
+                num_workers = 4
+                batches_para_procesar = []
                 for i in range(0, len(updates_data), batch_size):
-                    if not self.sync_running:
-                        break
-
                     lote = updates_data[i:i + batch_size]
-                    self.mysql_cursor.executemany(update_query, lote)
-                    self.mysql_conn.commit()
+                    batch_num = i // batch_size + 1
+                    batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config))
 
-                    progreso = min(i + batch_size, len(updates_data))
-                    self._log(f"  ✅ Update batch: {progreso:,}/{len(updates_data):,} customers actualizados", "debug")
+                # Ejecutar en paralelo con ThreadPoolExecutor
+                total_actualizados = 0
+                with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="CustUpdateWorker") as executor:
+                    future_to_batch = {executor.submit(self._update_customer_batch_thread, batch_info): batch_info[1]
+                                       for batch_info in batches_para_procesar}
 
-                self.stats['customers']['modificados'] += len(updates_data)
-                self._log(f"  ✅ Commit final: {len(updates_data):,} customers actualizados", "success")
+                    for future in as_completed(future_to_batch):
+                        batch_num = future_to_batch[future]
+                        try:
+                            result = future.result()
+                            if result['success']:
+                                total_actualizados += result['count']
+                                progreso = min(batch_num * batch_size, len(updates_data))
+                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers actualizados", "debug")
+                                self._reportar_progreso('customers', total_nuevos + progreso, total_cambios)
+                            else:
+                                self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                        except Exception as e:
+                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+
+                self.stats['customers']['modificados'] += total_actualizados
+                self._log(f"  ✅ Commit final: {total_actualizados:,} customers actualizados", "success")
 
             # ====================================================================
             # PROCESAR MODIFICADOS
@@ -4737,8 +4913,9 @@ class SmartSyncComplete:
                     status_mysql, company_id, code
                 ))
 
-            # 🚀 EJECUTAR BATCH UPDATES
+            # 🚀 EJECUTAR BATCH UPDATES CON THREADS (modificados)
             if modificados_data:
+                self._log(f"  🔄 Actualizando {len(modificados_data)} customers MODIFICADOS con threads...", "info")
                 update_query = """
                 UPDATE customers SET
                     name = %s, email = %s, address = %s, phone = %s,
@@ -4746,21 +4923,37 @@ class SmartSyncComplete:
                 WHERE company_id = %s AND document_number = %s
                 """
 
+                # Preparar batches para threads
+                num_workers = 4
+                batches_para_procesar = []
                 for i in range(0, len(modificados_data), batch_size):
-                    if not self.sync_running:
-                        break
-
                     lote = modificados_data[i:i + batch_size]
-                    self.mysql_cursor.executemany(update_query, lote)
-                    self.mysql_conn.commit()
+                    batch_num = i // batch_size + 1
+                    batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config))
 
-                    progreso = min(i + batch_size, len(modificados_data))
-                    idx_adjusted = total_nuevos + progreso
-                    self._log(f"  ✅ Update batch: {progreso:,}/{len(modificados_data):,} customers modificados", "debug")
-                    self._reportar_progreso('customers', idx_adjusted, total_cambios)
+                # Ejecutar en paralelo con ThreadPoolExecutor
+                total_actualizados = 0
+                with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="CustModUpdateWorker") as executor:
+                    future_to_batch = {executor.submit(self._update_customer_batch_thread, batch_info): batch_info[1]
+                                       for batch_info in batches_para_procesar}
 
-                self.stats['customers']['modificados'] += len(modificados_data)
-                self._log(f"  ✅ Commit final: {len(modificados_data):,} customers modificados actualizados", "success")
+                    for future in as_completed(future_to_batch):
+                        batch_num = future_to_batch[future]
+                        try:
+                            result = future.result()
+                            if result['success']:
+                                total_actualizados += result['count']
+                                progreso = min(batch_num * batch_size, len(modificados_data))
+                                idx_adjusted = total_nuevos + progreso
+                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers modificados", "debug")
+                                self._reportar_progreso('customers', idx_adjusted, total_cambios)
+                            else:
+                                self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                        except Exception as e:
+                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+
+                self.stats['customers']['modificados'] += total_actualizados
+                self._log(f"  ✅ Commit final: {total_actualizados:,} customers modificados actualizados", "success")
 
             self._log(f"✅ Customers sincronizados: {self.stats['customers']['nuevos']} nuevos, "
                       f"{self.stats['customers']['modificados']} modificados, {self.stats['customers']['errores']} errores", "success")
