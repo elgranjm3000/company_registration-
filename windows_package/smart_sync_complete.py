@@ -4203,7 +4203,7 @@ class SmartSyncComplete:
                     self._log(f"  🚀 Ejecutando BATCH INSERT de {total_a_insertar} productos...", "info")
 
                     # Dividir en lotes más pequeños para mostrar progreso
-                    batch_size = 5000  # Insertar de 5000 en 5000 (ultra optimizado para MySQL remoto)
+                    batch_size = 1000  # Insertar de 1000 en 1000 (balance óptimo para MySQL remoto)
                     start_time = time.time()
 
                     insert_query = """
@@ -4240,20 +4240,20 @@ class SmartSyncComplete:
                     """
 
                     try:
-                        # Insertar en lotes de 50 para mostrar progreso
+                        # 🚀 Insertar en lotes de 5000 con COMMIT DESPUÉS DE CADA LOTE
                         for i in range(0, len(batch_data), batch_size):
                             lote = batch_data[i:i + batch_size]
                             self.mysql_cursor.executemany(insert_query, lote)
 
+                            # 🚀 COMMIT DESPUÉS DE CADA LOTE para evitar lock timeout
+                            self.mysql_conn.commit()
+                            self._log(f"  ✅ Commit batch {i//batch_size + 1}: {len(lote):,} productos insertados", "debug")
+
                             # Reportar progreso durante el insert (PASO 3)
-                            idx_lote = productos_a_procesar[min(i, len(productos_a_procesar) - 1)][0]
+                            idx_lote = productos_a_procesar[min(i + len(lote) - 1, len(productos_a_procesar) - 1)][0]
                             self._reportar_progreso('products', idx_lote, total_cambios, step='insert')
 
-                        rows_affected = self.mysql_cursor.rowcount
-                        self._log(f"  📊 executemany afectó {rows_affected} filas", "info")
-
-                        self.mysql_conn.commit()
-                        self._log(f"  ✅ Commit ejecutado correctamente", "info")
+                        self._log(f"  ✅ Todos los commits ejecutados correctamente", "info")
 
                     except Exception as insert_error:
                         # 🔍 GUARDAR ERROR EN ARCHIVO (SILENCIOSO - no mostrar al usuario)
@@ -4449,7 +4449,7 @@ class SmartSyncComplete:
                     self._log(f"  🚀 Ejecutando BATCH UPDATE de {total_a_actualizar} productos...", "info")
 
                     # Dividir en lotes más pequeños para mostrar progreso
-                    batch_size = 5000  # Actualizar de 5000 en 5000 (ultra optimizado para MySQL remoto)
+                    batch_size = 1000  # Actualizar de 1000 en 1000 (balance óptimo para MySQL remoto)
                     start_time = time.time()
 
                     # Usamos INSERT ... ON DUPLICATE KEY UPDATE para actualizar
@@ -4487,21 +4487,21 @@ class SmartSyncComplete:
                     """
 
                     try:
-                        # Actualizar en lotes de 50 para mostrar progreso
+                        # 🚀 Actualizar en lotes de 5000 con COMMIT DESPUÉS DE CADA LOTE
                         for i in range(0, len(batch_data), batch_size):
                             lote = batch_data[i:i + batch_size]
                             self.mysql_cursor.executemany(update_query, lote)
 
+                            # 🚀 COMMIT DESPUÉS DE CADA LOTE para evitar lock timeout
+                            self.mysql_conn.commit()
+                            self._log(f"  ✅ Commit batch {i//batch_size + 1}: {len(lote):,} productos actualizados", "debug")
+
                             # Reportar progreso durante el update (PASO 3)
-                            idx_lote = productos_a_procesar[min(i, len(productos_a_procesar) - 1)][0]
+                            idx_lote = productos_a_procesar[min(i + len(lote) - 1, len(productos_a_procesar) - 1)][0]
                             idx_adjusted = total_nuevos + idx_lote
                             self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
 
-                        rows_affected = self.mysql_cursor.rowcount
-                        self._log(f"  📊 executemany afectó {rows_affected} filas", "info")
-
-                        self.mysql_conn.commit()
-                        self._log(f"  ✅ Commit ejecutado correctamente", "info")
+                        self._log(f"  ✅ Todos los commits ejecutados correctamente", "info")
 
                     except Exception as update_error:
                         # 🔍 GUARDAR ERROR EN ARCHIVO (SILENCIOSO - no mostrar al usuario)
@@ -4609,7 +4609,7 @@ class SmartSyncComplete:
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
-        batch_size = 5000  # Insertar/actualizar de 5000 en 5000 (ultra optimizado para MySQL remoto)
+        batch_size = 1000  # Insertar/actualizar de 1000 en 1000 (balance óptimo para MySQL remoto)
 
         try:
             # 🚀 OBTENER TODOS LOS DOCUMENT_NUMBERS EXISTENTES EN UNA SOLA QUERY
