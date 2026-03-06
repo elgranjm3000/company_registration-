@@ -4382,7 +4382,7 @@ class SmartSyncComplete:
                         total_insertados = 0
                         with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="InsertWorker") as executor:
                             # Submit all batches
-                            future_to_batch = {executor.submit(self._insert_batch_thread, batch_info): batch_info[1]
+                            future_to_batch = {executor.submit(self._insert_batch_thread, batch_info): batch_info[2]
                                                  for batch_info in batches_para_procesar}
 
                             # Process results as they complete
@@ -4653,7 +4653,7 @@ class SmartSyncComplete:
                         total_actualizados = 0
                         with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="UpdateWorker") as executor:
                             # Submit all batches
-                            future_to_batch = {executor.submit(self._update_batch_thread, batch_info): batch_info[1]
+                            future_to_batch = {executor.submit(self._update_batch_thread, batch_info): batch_info[2]
                                                  for batch_info in batches_para_procesar}
 
                             # Process results as they complete
@@ -4854,7 +4854,7 @@ class SmartSyncComplete:
                 # Ejecutar en paralelo con ThreadPoolExecutor
                 total_insertados = 0
                 with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="CustInsertWorker") as executor:
-                    future_to_batch = {executor.submit(self._insert_customer_batch_thread, batch_info): batch_info[1]
+                    future_to_batch = {executor.submit(self._insert_customer_batch_thread, batch_info): batch_info[2]
                                          for batch_info in batches_para_procesar}
 
                     for future in as_completed(future_to_batch):
@@ -4900,7 +4900,7 @@ class SmartSyncComplete:
                 # Ejecutar en paralelo con ThreadPoolExecutor
                 total_actualizados = 0
                 with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="CustUpdateWorker") as executor:
-                    future_to_batch = {executor.submit(self._update_customer_batch_thread, batch_info): batch_info[1]
+                    future_to_batch = {executor.submit(self._update_customer_batch_thread, batch_info): batch_info[2]
                                        for batch_info in batches_para_procesar}
 
                     for future in as_completed(future_to_batch):
@@ -4966,7 +4966,7 @@ class SmartSyncComplete:
                 # Ejecutar en paralelo con ThreadPoolExecutor
                 total_actualizados = 0
                 with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="CustModUpdateWorker") as executor:
-                    future_to_batch = {executor.submit(self._update_customer_batch_thread, batch_info): batch_info[1]
+                    future_to_batch = {executor.submit(self._update_customer_batch_thread, batch_info): batch_info[2]
                                        for batch_info in batches_para_procesar}
 
                     for future in as_completed(future_to_batch):
