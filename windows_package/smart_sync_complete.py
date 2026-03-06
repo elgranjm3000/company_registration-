@@ -4595,7 +4595,7 @@ class SmartSyncComplete:
             self._log(f"Error sincronizando status de products: {str(e)}", "error")
 
     def sincronizar_customers_mysql(self, cambios: Dict[str, List]):
-        """Sincronizar cambios de customers a MySQL"""
+        """Sincronizar cambios de customers a MySQL usando BATCH operations"""
         if not any(cambios.values()):
             return
 
@@ -4607,158 +4607,160 @@ class SmartSyncComplete:
 
         self._log("Sincronizando cambios de customers a MySQL...", "info")
 
-        # Registrar en system_logs (CREATE para nuevos, UPDATE para modificados)
-        # COMENTADO: Tarda mucho guardando en system_logs
-        nuevos_customers = [c[0] for c in cambios['nuevos']]
-        modificados_customers = [c[0] for c in cambios['modificados']]
-
-        # if nuevos_customers:
-        #     self._log_to_system_logs_batch('customers', nuevos_customers, 'CREATE')
-        # if modificados_customers:
-        #     self._log_to_system_logs_batch('customers', modificados_customers, 'UPDATE')
-
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
-        current_count = 0
+        batch_size = 5000  # Insertar/actualizar de 5000 en 5000 (ultra optimizado para MySQL remoto)
 
         try:
-            # Nuevos
+            # 🚀 OBTENER TODOS LOS DOCUMENT_NUMBERS EXISTENTES EN UNA SOLA QUERY
+            all_existing_query = """
+            SELECT document_number
+            FROM customers
+            WHERE company_id = %s
+            """
+            self.mysql_cursor.execute(all_existing_query, (company_id,))
+            existing_document_numbers = {row[0] for row in self.mysql_cursor.fetchall()}
+            self._log(f"  📋 Obtenidos {len(existing_document_numbers):,} document_numbers existentes en MySQL", "debug")
+
+            # ====================================================================
+            # PROCESAR NUEVOS
+            # ====================================================================
             total_nuevos = len(cambios['nuevos'])
             if total_nuevos > 0:
-                self._log(f"  👥 Insertando {total_nuevos} customers NUEVOS...", "info")
+                self._log(f"  👥 Procesando {total_nuevos} customers NUEVOS con BATCH...", "info")
 
-            for idx, cliente in enumerate(cambios['nuevos'], 1):
-                if not self.sync_running:
-                    break
+            # 🚀 PREPARAR BATCH DATA: Separar inserts y updates
+            inserts_data = []
+            updates_data = []
 
-                try:
-                    code, description, address, client_id, email, phone, contact, status = cliente
+            for cliente in cambios['nuevos']:
+                code, description, address, client_id, email, phone, contact, status = cliente
 
-                    if not email or email.strip() == '':
-                        email = f"customer_{code}@temp.local"
+                if not email or email.strip() == '':
+                    email = f"customer_{code}@temp.local"
 
-                    # Convertir status de PostgreSQL ('01'/'02') a MySQL ('active'/'inactive')
-                    status_mysql = 'active' if status == '01' else 'inactive' if status == '02' else 'inactive'
+                # Convertir status de PostgreSQL ('01'/'02') a MySQL ('active'/'inactive')
+                status_mysql = 'active' if status == '01' else 'inactive' if status == '02' else 'inactive'
 
-                    # VERIFICAR si existe ANTES de insertar
-                    check_query = """
-                    SELECT id
-                    FROM customers
-                    WHERE company_id = %s AND document_number = %s
-                    """
-                    self.mysql_cursor.execute(check_query, (company_id, code))
-                    existe = self.mysql_cursor.fetchone()
-
-                    if existe:
-                        # Ya existe - ACTUALIZAR
-                        update_query = """
-                        UPDATE customers SET
-                            name = %s,
-                            email = %s,
-                            address = %s,
-                            phone = %s,
-                            contact = %s,
-                            status = %s,
-                            updated_at = NOW()
-                        WHERE company_id = %s AND document_number = %s
-                        """
-                        self.mysql_cursor.execute(update_query, (
-                            description, email, address if address else None,
-                            phone if phone else None, contact if contact else None,
-                            status_mysql, company_id, code
-                        ))
-                        self._log(f"  🔄 Customer {code} ya existía, actualizado", "debug")
-                        self.stats['customers']['modificados'] += 1
-                    else:
-                        # No existe - INSERTAR
-                        insert_query = """
-                        INSERT INTO customers (
-                            company_id, name, email, document_number, address, phone, contact,
-                            status, created_at, updated_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                        """
-                        self.mysql_cursor.execute(insert_query, (
-                            company_id, description, email, code,
-                            address if address else None, phone if phone else None,
-                            contact if contact else None, status_mysql
-                        ))
-                        self.stats['customers']['nuevos'] += 1
-
-                    # Commit cada 50 customers para no acumular transacción enorme
-                    if idx % 50 == 0:
-                        self.mysql_conn.commit()
-                        self._log(f"  ✅ Commit parcial: {idx}/{total_nuevos} customers procesados", "debug")
-
-                    # Reportar progreso después de insertar exitosamente
-                    self._reportar_progreso('customers', idx, total_cambios)
-
-                except Exception as e:
-                    # Error con un customer específico - continuar con los demás
-                    self._log(f"  ⚠️ Error procesando customer {code}: {str(e)[:100]}", "warning")
-                    self.stats['customers']['errores'] += 1
-
-                    # Reportar progreso aunque haya error
-                    self._reportar_progreso('customers', idx, total_cambios)
-
-            # Commit final de los nuevos
-            if total_nuevos > 0:
-                self.mysql_conn.commit()
-                self._log(f"  ✅ Commit final: {self.stats['customers']['nuevos']}/{total_nuevos} customers nuevos insertados", "success")
-
-            # Modificados
-            total_modificados = len(cambios['modificados'])
-            if total_modificados > 0:
-                self._log(f"  👥 Actualizando {total_modificados} customers MODIFICADOS...", "info")
-
-            for idx, cliente in enumerate(cambios['modificados'], 1):
-                if not self.sync_running:
-                    break
-
-                try:
-                    code, description, address, client_id, email, phone, contact, status = cliente
-
-                    if not email or email.strip() == '':
-                        email = f"customer_{code}@temp.local"
-
-                    # Convertir status de PostgreSQL ('01'/'02') a MySQL ('active'/'inactive')
-                    status_mysql = 'active' if status == '01' else 'inactive' if status == '02' else 'inactive'
-
-                    update_query = """
-                    UPDATE customers SET
-                        name = %s, email = %s, address = %s, phone = %s,
-                        contact = %s, status = %s, updated_at = NOW()
-                    WHERE company_id = %s AND document_number = %s
-                    """
-
-                    self.mysql_cursor.execute(update_query, (
+                # Determinar si es insert o update
+                if code in existing_document_numbers:
+                    # Ya existe - UPDATE
+                    updates_data.append((
                         description, email, address if address else None,
                         phone if phone else None, contact if contact else None,
                         status_mysql, company_id, code
                     ))
+                else:
+                    # No existe - INSERT
+                    inserts_data.append((
+                        company_id, description, email, code,
+                        address if address else None, phone if phone else None,
+                        contact if contact else None, status_mysql
+                    ))
 
-                    self.stats['customers']['modificados'] += 1
-                    # Commit cada 50 customers
-                    if idx % 50 == 0:
-                        self.mysql_conn.commit()
-                        self._log(f"  ✅ Commit parcial: {idx}/{total_modificados} customers actualizados", "debug")
+            # 🚀 EJECUTAR BATCH INSERTS
+            if inserts_data:
+                self._log(f"  📥 Insertando {len(inserts_data)} customers NUEVOS...", "info")
+                insert_query = """
+                INSERT INTO customers (
+                    company_id, name, email, document_number, address, phone, contact,
+                    status, created_at, updated_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                """
 
-                    # Reportar progreso después de actualizar exitosamente (ajustar idx para continuar desde los nuevos)
-                    idx_adjusted = total_nuevos + idx
-                    self._reportar_progreso('customers', idx_adjusted, total_cambios)
+                for i in range(0, len(inserts_data), batch_size):
+                    if not self.sync_running:
+                        break
 
-                except Exception as e:
-                    # Error con un customer específico - continuar con los demás
-                    self._log(f"  ⚠️ Error actualizando customer {code}: {str(e)[:100]}", "warning")
-                    self.stats['customers']['errores'] += 1
+                    lote = inserts_data[i:i + batch_size]
+                    self.mysql_cursor.executemany(insert_query, lote)
+                    self.mysql_conn.commit()
 
-                    # Reportar progreso aunque haya error
-                    idx_adjusted = total_nuevos + idx
-                    self._reportar_progreso('customers', idx_adjusted, total_cambios)
+                    progreso = min(i + batch_size, len(inserts_data))
+                    self._log(f"  ✅ Insert batch: {progreso:,}/{len(inserts_data):,} customers insertados", "debug")
+                    self._reportar_progreso('customers', progreso, total_cambios)
 
-            # Commit final de los modificados
+                self.stats['customers']['nuevos'] = len(inserts_data)
+                self._log(f"  ✅ Commit final: {len(inserts_data):,} customers nuevos insertados", "success")
+
+            # 🚀 EJECUTAR BATCH UPDATES (para nuevos que ya existían)
+            if updates_data:
+                self._log(f"  🔄 Actualizando {len(updates_data)} customers que ya existían...", "info")
+                update_query = """
+                UPDATE customers SET
+                    name = %s,
+                    email = %s,
+                    address = %s,
+                    phone = %s,
+                    contact = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE company_id = %s AND document_number = %s
+                """
+
+                for i in range(0, len(updates_data), batch_size):
+                    if not self.sync_running:
+                        break
+
+                    lote = updates_data[i:i + batch_size]
+                    self.mysql_cursor.executemany(update_query, lote)
+                    self.mysql_conn.commit()
+
+                    progreso = min(i + batch_size, len(updates_data))
+                    self._log(f"  ✅ Update batch: {progreso:,}/{len(updates_data):,} customers actualizados", "debug")
+
+                self.stats['customers']['modificados'] += len(updates_data)
+                self._log(f"  ✅ Commit final: {len(updates_data):,} customers actualizados", "success")
+
+            # ====================================================================
+            # PROCESAR MODIFICADOS
+            # ====================================================================
+            total_modificados = len(cambios['modificados'])
             if total_modificados > 0:
-                self.mysql_conn.commit()
-                self._log(f"  ✅ Commit final: {self.stats['customers']['modificados']}/{total_modificados} customers modificados actualizados", "success")
+                self._log(f"  👥 Procesando {total_modificados} customers MODIFICADOS con BATCH...", "info")
+
+            # 🚀 PREPARAR BATCH DATA
+            modificados_data = []
+
+            for cliente in cambios['modificados']:
+                code, description, address, client_id, email, phone, contact, status = cliente
+
+                if not email or email.strip() == '':
+                    email = f"customer_{code}@temp.local"
+
+                # Convertir status de PostgreSQL ('01'/'02') a MySQL ('active'/'inactive')
+                status_mysql = 'active' if status == '01' else 'inactive' if status == '02' else 'inactive'
+
+                modificados_data.append((
+                    description, email, address if address else None,
+                    phone if phone else None, contact if contact else None,
+                    status_mysql, company_id, code
+                ))
+
+            # 🚀 EJECUTAR BATCH UPDATES
+            if modificados_data:
+                update_query = """
+                UPDATE customers SET
+                    name = %s, email = %s, address = %s, phone = %s,
+                    contact = %s, status = %s, updated_at = NOW()
+                WHERE company_id = %s AND document_number = %s
+                """
+
+                for i in range(0, len(modificados_data), batch_size):
+                    if not self.sync_running:
+                        break
+
+                    lote = modificados_data[i:i + batch_size]
+                    self.mysql_cursor.executemany(update_query, lote)
+                    self.mysql_conn.commit()
+
+                    progreso = min(i + batch_size, len(modificados_data))
+                    idx_adjusted = total_nuevos + progreso
+                    self._log(f"  ✅ Update batch: {progreso:,}/{len(modificados_data):,} customers modificados", "debug")
+                    self._reportar_progreso('customers', idx_adjusted, total_cambios)
+
+                self.stats['customers']['modificados'] += len(modificados_data)
+                self._log(f"  ✅ Commit final: {len(modificados_data):,} customers modificados actualizados", "success")
 
             self._log(f"✅ Customers sincronizados: {self.stats['customers']['nuevos']} nuevos, "
                       f"{self.stats['customers']['modificados']} modificados, {self.stats['customers']['errores']} errores", "success")
