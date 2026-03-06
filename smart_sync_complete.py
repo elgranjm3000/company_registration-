@@ -1404,25 +1404,36 @@ class SmartSyncComplete:
     # OBTENER HASH GUARDADO
     # ====================================================================
 
-    def _obtener_hash_guardado(self, table_name: str, record_key: str) -> Optional[Tuple]:
+    def _obtener_hash_guardado(self, table_name: str, record_key: str, include_last_sync_data: bool = False) -> Optional[Tuple]:
         """
         Obtener hash guardado de sync_hashes
 
         Args:
             table_name: Nombre de tabla
             record_key: Clave del registro
+            include_last_sync_data: Si True, también devuelve last_sync_data
 
         Returns:
-            Tupla (record_hash, updated_at) o None si no existe
+            Tupla (record_hash, updated_at) o (record_hash, last_sync_data, updated_at) si include_last_sync_data=True
+            None si no existe
         """
         try:
-            query = """
-            SELECT record_hash, updated_at
-            FROM sync_hashes
-            WHERE table_name = %s
-              AND record_key = %s
-              AND company_id = %s
-            """
+            if include_last_sync_data:
+                query = """
+                SELECT record_hash, last_sync_data, updated_at
+                FROM sync_hashes
+                WHERE table_name = %s
+                  AND record_key = %s
+                  AND company_id = %s
+                """
+            else:
+                query = """
+                SELECT record_hash, updated_at
+                FROM sync_hashes
+                WHERE table_name = %s
+                  AND record_key = %s
+                  AND company_id = %s
+                """
 
             company_id = self._get_company_id_from_companies()
             if not company_id:
@@ -1616,6 +1627,34 @@ class SmartSyncComplete:
         except Exception as e:
             self._log(f"  ⚠️ Error convirtiendo {monto_ves} VES a USD: {str(e)}", "warning")
             return monto_ves
+
+    def _convertir_usd_a_ves(self, monto_usd: float, tipo_cambio: float = None) -> float:
+        """
+        Convertir monto de USD a VES
+
+        Args:
+            monto_usd: Monto en Dólares
+            tipo_cambio: Tipo de cambio (opcional, usa el caché si no se proporciona)
+
+        Returns:
+            float con el monto en VES o el monto original si no se puede convertir
+        """
+        if monto_usd is None or monto_usd <= 0:
+            return monto_usd
+
+        try:
+            # Obtener tipo de cambio si no se proporciona
+            if tipo_cambio is None:
+                tipo_cambio = self._obtener_tipo_cambio_ves_usd()
+
+            if tipo_cambio and tipo_cambio > 0:
+                monto_ves = monto_usd * tipo_cambio
+                return round(monto_ves, 2)  # 2 decimales para VES
+            else:
+                return monto_usd
+        except Exception as e:
+            self._log(f"  ⚠️ Error convirtiendo {monto_usd} USD a VES: {str(e)}", "warning")
+            return monto_usd
 
     # ====================================================================
     # SYSTEM LOGS - REGISTRO DE ACTIVIDAD
@@ -2077,6 +2116,7 @@ class SmartSyncComplete:
                     # Guardar historial de reactivación en last_sync_data
                     info_reactivacion = {
                         'status': 'active',
+                        'coin': producto[9],  # Guardar coin para detección de cambios
                         'inactive_since': inactive_since,
                         'reactivated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -2088,9 +2128,10 @@ class SmartSyncComplete:
                     cambios['modificados'].append(producto)
                     self._log(f"  🔄 MODIFICADO: {code}", "debug")
 
-                    # Guardar hash con status actual en last_sync_data
+                    # Guardar hash con status y coin actual en last_sync_data
                     data_sync = {
                         'status': producto[12],  # status (active/inactive)
+                        'coin': producto[9],  # coin (01=VES, 02=USD)
                         'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
                     self._guardar_hash('products', code, hash_actual, data_sync)
@@ -4181,13 +4222,49 @@ class SmartSyncComplete:
                         # Crear JSON de imagen
                         image_json = self._create_image_json(image_type, product_image)
 
-                        # 💰 CONVERTIR DE VES A USD si coin='01'
+                        # 💰 DETECTAR CAMBIO DE COIN Y CONVERTIR
+                        # Obtener el coin anterior desde sync_hashes para productos modificados
+                        coin_anterior = None
+                        hash_guardado_full = self._obtener_hash_guardado('products', code, include_last_sync_data=True)
+                        if hash_guardado_full and len(hash_guardado_full) >= 2:
+                            last_sync_data = hash_guardado_full[1]
+                            if last_sync_data:
+                                try:
+                                    data_parseado = json.loads(last_sync_data) if isinstance(last_sync_data, str) else last_sync_data
+                                    coin_anterior = data_parseado.get('coin')
+                                except:
+                                    coin_anterior = None
+
                         final_price = safe_float(price)
                         final_cost = safe_float(cost)
                         final_higher_price = safe_float(higher_price)
                         final_unitary_cost = safe_float(unitary_cost) if unitary_cost else 0
 
-                        if coin == '01' and tipo_cambio:
+                        # Obtener tipo de cambio si es necesario
+                        if (coin == '01' or coin == '02') and (coin_anterior == '01' or coin_anterior == '02'):
+                            if tipo_cambio is None:
+                                tipo_cambio = self._obtener_tipo_cambio_ves_usd()
+
+                        # Caso 1: Cambio de VES ('01') a USD ('02')
+                        if coin_anterior == '01' and coin == '02' and tipo_cambio:
+                            self._log(f"  💱 Coin cambiado VES→USD: {code} - convirtiendo precios...", "info")
+                            final_price = self._convertir_ves_a_usd(final_price, tipo_cambio)
+                            final_cost = self._convertir_ves_a_usd(final_cost, tipo_cambio)
+                            final_higher_price = self._convertir_ves_a_usd(final_higher_price, tipo_cambio)
+                            final_unitary_cost = self._convertir_ves_a_usd(final_unitary_cost, tipo_cambio)
+                            self._log(f"     → {price:.2f} VES → {final_price:.4f} USD (tasa: {tipo_cambio:.2f})", "info")
+
+                        # Caso 2: Cambio de USD ('02') a VES ('01')
+                        elif coin_anterior == '02' and coin == '01' and tipo_cambio:
+                            self._log(f"  💱 Coin cambiado USD→VES: {code} - convirtiendo precios...", "info")
+                            final_price = self._convertir_usd_a_ves(final_price, tipo_cambio)
+                            final_cost = self._convertir_usd_a_ves(final_cost, tipo_cambio)
+                            final_higher_price = self._convertir_usd_a_ves(final_higher_price, tipo_cambio)
+                            final_unitary_cost = self._convertir_usd_a_ves(final_unitary_cost, tipo_cambio)
+                            self._log(f"     → {price:.4f} USD → {final_price:.2f} VES (tasa: {tipo_cambio:.2f})", "info")
+
+                        # Caso 3: Sin cambio de coin, pero moneda es VES ('01')
+                        elif coin == '01' and tipo_cambio:
                             final_price = self._convertir_ves_a_usd(final_price, tipo_cambio)
                             final_cost = self._convertir_ves_a_usd(final_cost, tipo_cambio)
                             final_higher_price = self._convertir_ves_a_usd(final_higher_price, tipo_cambio)
