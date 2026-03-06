@@ -4340,7 +4340,7 @@ class SmartSyncComplete:
                         aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
                         unidad, allow_decimal, created_at, updated_at
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
                     ON DUPLICATE KEY UPDATE
                         name = VALUES(name),
@@ -4611,7 +4611,7 @@ class SmartSyncComplete:
                         aliquot, coin, description_coin, unitary_cost, buy_tax, buy_aliquot,
                         unidad, allow_decimal, created_at, updated_at
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                     )
                     ON DUPLICATE KEY UPDATE
                         name = VALUES(name),
