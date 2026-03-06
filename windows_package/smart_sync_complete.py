@@ -4731,7 +4731,8 @@ class SmartSyncComplete:
             if products_sin_categoria > 0:
                 self._log(f"  ⚠️ {products_sin_categoria} productos omitidos por categoría inexistente", "warning")
 
-            self.mysql_conn.commit()
+            # NOTA: No hacemos commit aquí porque cada thread ya hizo su propio commit
+            # Intentar hacer commit en la conexión principal puede fallar si MySQL cerró la conexión por timeout
             self._log(f"✅ Products sincronizados: {self.stats['products']['nuevos']} nuevos, "
                       f"{self.stats['products']['modificados']} modificados", "success")
 
