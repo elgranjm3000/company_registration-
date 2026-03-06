@@ -2388,6 +2388,18 @@ class SmartSyncComplete:
             codigos_encontrados = [p['code'] for p in products_dict]
             self._log(f"   🔍 Códigos: {codigos_encontrados[:10]}{'...' if len(codigos_encontrados) > 10 else ''}", "debug")
 
+            # 🚀 OPTIMIZACIÓN: Cargar TODOS los hashes de products_mysql en memoria en UNA sola query
+            self._log("  🔍 Cargando hashes de sync_hashes en memoria...", "debug")
+            query_todos_hashes = """
+            SELECT record_key, record_hash
+            FROM sync_hashes
+            WHERE table_name = 'products_mysql'
+              AND company_id = %s
+            """
+            self.pg_cursor.execute(query_todos_hashes, (company_id,))
+            hashes_en_memoria = {row[0]: row[1] for row in self.pg_cursor.fetchall()}
+            self._log(f"  ✅ {len(hashes_en_memoria)} hashes cargados en memoria", "debug")
+
             for product in products_dict:
                 if not self.sync_running:
                     break
@@ -2398,8 +2410,9 @@ class SmartSyncComplete:
                 # Generar hash actual
                 hash_actual = self._generar_hash_product_mysql(product)
 
-                # Buscar hash guardado en sync_hashes (PostgreSQL)
-                hash_guardado = self._obtener_hash_guardado('products_mysql', str(product_id))
+                # Buscar hash guardado en sync_hashes (PostgreSQL) - ahora desde memoria
+                hash_guardado_hash = hashes_en_memoria.get(str(product_id))
+                hash_guardado = (hash_guardado_hash,) if hash_guardado_hash is not None else None
 
                 self._log(f"   🔍 Product #{product_id} ({product_code}): hash_guardado={hash_guardado[0][:8] if hash_guardado else 'None'}", "debug")
 
