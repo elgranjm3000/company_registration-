@@ -2060,7 +2060,26 @@ class SmartSyncComplete:
                 self.pg_cursor.execute(query)
                 productos = self.pg_cursor.fetchall()
 
+            # 🚀 OPTIMIZACIÓN: Cargar TODOS los hashes en memoria en UNA sola query
+            # Esto evita el problema N+1 de hacer una query por cada producto
+            self._log("  🔍 Cargando hashes de sync_hashes en memoria...", "debug")
+            query_todos_hashes = """
+            SELECT record_key, record_hash, last_sync_data
+            FROM sync_hashes
+            WHERE table_name = 'products'
+              AND company_id = %s
+            """
+            self.pg_cursor.execute(query_todos_hashes, (company_id,))
+            hashes_en_memoria = {}
+            for row in self.pg_cursor.fetchall():
+                hashes_en_memoria[row[0]] = {
+                    'hash': row[1],
+                    'last_sync_data': row[2]
+                }
+            self._log(f"  ✅ {len(hashes_en_memoria)} hashes cargados en memoria", "debug")
+
             claves_actuales = []
+            claves_sin_cambios = []  # Para batch update de pending_sync
 
             # Calcular total para progreso
             total_productos = len(productos)
@@ -2079,19 +2098,10 @@ class SmartSyncComplete:
                 # Generar hash actual
                 hash_actual = self._generar_hash_product(producto)
 
-                # Buscar hash guardado CON last_sync_data (para detectar reactivaciones)
-                query_hash = """
-                SELECT record_hash, last_sync_data
-                FROM sync_hashes
-                WHERE table_name = 'products'
-                  AND record_key = %s
-                  AND company_id = %s
-                """
-                self.pg_cursor.execute(query_hash, (code, company_id))
-                hash_guardado_full = self.pg_cursor.fetchone()
-
-                hash_guardado = hash_guardado_full[0] if hash_guardado_full else None
-                last_sync_data = hash_guardado_full[1] if hash_guardado_full else None
+                # 🚀 OPTIMIZACIÓN: Buscar hash en memoria en lugar de query individual
+                hash_info = hashes_en_memoria.get(code)
+                hash_guardado = hash_info['hash'] if hash_info else None
+                last_sync_data = hash_info['last_sync_data'] if hash_info else None
 
                 # Verificar si estaba inactivo (reactivación)
                 data_parseado = {}
@@ -2136,18 +2146,27 @@ class SmartSyncComplete:
                     }
                     self._guardar_hash('products', code, hash_actual, data_sync)
                 else:
-                    # Sin cambios, solo actualizar timestamp pero MANTENER last_sync_data
-                    # No actualizar last_sync_data para no perder el status guardado
-                    # IMPORTANTE: Limpiar pending_sync porque ya se procesó
-                    update_query = """
+                    # Sin cambios, acumular para batch update (una sola query al final)
+                    claves_sin_cambios.append(code)
+
+            # 🚀 OPTIMIZACIÓN: Batch update de pending_sync para productos sin cambios
+            # En lugar de 50,000 updates individuales, hacemos 1 solo batch update
+            if claves_sin_cambios:
+                self._log(f"  🔄 Actualizando pending_sync para {len(claves_sin_cambios)} productos sin cambios...", "debug")
+                # Procesar en lotes de 1000 para evitar query muy largo
+                batch_size = 1000
+                for i in range(0, len(claves_sin_cambios), batch_size):
+                    lote = claves_sin_cambios[i:i + batch_size]
+                    placeholders = ','.join(['%s'] * len(lote))
+                    update_batch_query = f"""
                     UPDATE sync_hashes
                     SET updated_at = NOW(),
                         pending_sync = FALSE
-                    WHERE table_name = %s
-                      AND record_key = %s
+                    WHERE table_name = 'products'
+                      AND record_key IN ({placeholders})
                       AND company_id = %s
                     """
-                    self.pg_cursor.execute(update_query, ('products', code, company_id))
+                    self.pg_cursor.execute(update_batch_query, lote + [company_id])
 
             # Detectar productos inactivos (eliminados del query pero con hash guardado)
             if claves_actuales:
@@ -2562,6 +2581,23 @@ class SmartSyncComplete:
                 self.pg_cursor.execute(query)
                 clientes = self.pg_cursor.fetchall()
 
+            # 🚀 OPTIMIZACIÓN: Cargar TODOS los hashes en memoria en UNA sola query
+            self._log("  🔍 Cargando hashes de sync_hashes en memoria...", "debug")
+            query_todos_hashes = """
+            SELECT record_key, record_hash, last_sync_data
+            FROM sync_hashes
+            WHERE table_name = 'customers'
+              AND company_id = %s
+            """
+            self.pg_cursor.execute(query_todos_hashes, (company_id,))
+            hashes_en_memoria = {}
+            for row in self.pg_cursor.fetchall():
+                hashes_en_memoria[row[0]] = {
+                    'hash': row[1],
+                    'last_sync_data': row[2]
+                }
+            self._log(f"  ✅ {len(hashes_en_memoria)} hashes cargados en memoria", "debug")
+
             claves_actuales = []
 
             # Calcular total para progreso
@@ -2579,12 +2615,14 @@ class SmartSyncComplete:
                 self._reportar_progreso('customers', idx, total_clientes, step='detect')
 
                 hash_actual = self._generar_hash_customer(cliente)
-                hash_guardado = self._obtener_hash_guardado('customers', code)
+                # 🚀 OPTIMIZACIÓN: Buscar hash en memoria en lugar de query individual
+                hash_info = hashes_en_memoria.get(code)
+                hash_guardado = hash_info['hash'] if hash_info else None
 
                 if hash_guardado is None:
                     cambios['nuevos'].append(cliente)
                     self._log(f"  ✨ NUEVO: {code}", "debug")
-                elif hash_guardado[0] != hash_actual:
+                elif hash_guardado != hash_actual:
                     cambios['modificados'].append(cliente)
                     self._log(f"  🔄 MODIFICADO: {code}", "debug")
 
