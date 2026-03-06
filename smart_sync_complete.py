@@ -4019,7 +4019,15 @@ class SmartSyncComplete:
 
         try:
             # Crear conexión separada para este thread
-            conn = pymysql.connect(**mysql_config)
+            # Asegurar que el puerto sea int
+            conn = pymysql.connect(
+                host=mysql_config['host'],
+                port=int(mysql_config.get('port', 3306)),
+                user=mysql_config['user'],
+                password=mysql_config['password'],
+                database=mysql_config['database'],
+                charset=mysql_config.get('charset', 'utf8mb4')
+            )
             cursor = conn.cursor()
 
             # Ejecutar batch insert
@@ -4042,7 +4050,15 @@ class SmartSyncComplete:
 
         try:
             # Crear conexión separada para este thread
-            conn = pymysql.connect(**mysql_config)
+            # Asegurar que el puerto sea int
+            conn = pymysql.connect(
+                host=mysql_config['host'],
+                port=int(mysql_config.get('port', 3306)),
+                user=mysql_config['user'],
+                password=mysql_config['password'],
+                database=mysql_config['database'],
+                charset=mysql_config.get('charset', 'utf8mb4')
+            )
             cursor = conn.cursor()
 
             # Ejecutar batch update
@@ -4065,7 +4081,15 @@ class SmartSyncComplete:
 
         try:
             # Crear conexión separada para este thread
-            conn = pymysql.connect(**mysql_config)
+            # Asegurar que el puerto sea int
+            conn = pymysql.connect(
+                host=mysql_config['host'],
+                port=int(mysql_config.get('port', 3306)),
+                user=mysql_config['user'],
+                password=mysql_config['password'],
+                database=mysql_config['database'],
+                charset=mysql_config.get('charset', 'utf8mb4')
+            )
             cursor = conn.cursor()
 
             # Ejecutar batch insert
@@ -4088,7 +4112,15 @@ class SmartSyncComplete:
 
         try:
             # Crear conexión separada para este thread
-            conn = pymysql.connect(**mysql_config)
+            # Asegurar que el puerto sea int
+            conn = pymysql.connect(
+                host=mysql_config['host'],
+                port=int(mysql_config.get('port', 3306)),
+                user=mysql_config['user'],
+                password=mysql_config['password'],
+                database=mysql_config['database'],
+                charset=mysql_config.get('charset', 'utf8mb4')
+            )
             cursor = conn.cursor()
 
             # Ejecutar batch update
