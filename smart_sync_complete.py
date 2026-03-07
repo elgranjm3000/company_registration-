@@ -1207,17 +1207,86 @@ class SmartSyncComplete:
 
             return False
 
+    def _ensure_mysql_connection(self) -> bool:
+        """
+        Verifica que la conexión MySQL esté activa y la reconecta si es necesario.
+        Esto resuelve el problema de "MySQL server has gone away" cuando la conexión
+        queda inactiva por más tiempo que el wait_timeout del servidor (default 600s = 10 min).
+
+        Returns:
+            True si la conexión está activa o se pudo reconectar, False si falló
+        """
+        try:
+            # Si no hay conexión, intentar conectar
+            if not self.mysql_conn or not self.mysql_cursor:
+                self._log("🔄 Conexión MySQL inexistente, reconectando...", "debug")
+                return self._reconnect_mysql()
+
+            # Verificar si la conexión está viva con ping
+            try:
+                self.mysql_conn.ping(reconnect=False)
+                return True  # Conexión está viva
+            except Exception as ping_error:
+                # La conexión está muerta, intentar reconectar
+                self._log(f"🔄 Conexión MySQL perdida (ping falló), reconectando...", "debug")
+                return self._reconnect_mysql()
+
+        except Exception as e:
+            self._log(f"❌ Error verificando conexión MySQL: {str(e)[:100]}", "error")
+            return False
+
+    def _reconnect_mysql(self) -> bool:
+        """
+        Reconecta a MySQL creando una nueva conexión.
+
+        Returns:
+            True si se pudo reconectar, False si falló
+        """
+        try:
+            # Cerrar conexión anterior si existe
+            try:
+                if self.mysql_cursor:
+                    self.mysql_cursor.close()
+                if self.mysql_conn:
+                    self.mysql_conn.close()
+            except Exception:
+                pass  # Ignorar errores al cerrar
+
+            # Crear nueva conexión con timeouts extendidos
+            self.mysql_conn = pymysql.connect(
+                host=self.mysql_config['host'],
+                port=int(self.mysql_config.get('port', 3306)),
+                user=self.mysql_config['user'],
+                password=self.mysql_config['password'],
+                database=self.mysql_config['database'],
+                charset='utf8mb4',
+                connect_timeout=30,  # 30 segundos timeout de conexión
+                read_timeout=60,     # 60 segundos timeout de lectura
+                write_timeout=60     # 60 segundos timeout de escritura
+            )
+            self.mysql_cursor = self.mysql_conn.cursor()
+
+            self._log("✅ Conexión MySQL reestablecida", "success")
+            return True
+
+        except Exception as e:
+            self._log(f"❌ Error reconectando MySQL: {str(e)[:100]}", "error")
+            return False
+
     def _get_company_id_from_companies(self) -> Optional[int]:
         """
         Obtener company_id directamente desde tabla companies de MySQL
         Se usa en todas las funciones EXCEPTO al crear la empresa nueva
+        Incluye reconexión automática si la conexión se perdió.
 
         Returns:
             company_id o None si no existe
         """
         try:
-            if not self.mysql_cursor:
-                self._log("❌ No hay conexión a MySQL para obtener company_id", "error")
+            # 🔧 VERIFICAR Y RECONECTAR SI ES NECESARIO
+            # Esto resuelve "MySQL server has gone away" después de largos períodos de inactividad
+            if not self._ensure_mysql_connection():
+                self._log("❌ No se pudo establecer conexión MySQL para obtener company_id", "error")
                 return None
 
             query = """
@@ -1237,6 +1306,20 @@ class SmartSyncComplete:
                 return None
 
         except Exception as e:
+            # Si es un error de conexión, intentar reconectar una vez más
+            error_msg = str(e).lower()
+            if any(err in error_msg for err in ['gone away', 'lost connection', 'timeout', 'connection reset']):
+                self._log(f"⚠️ Error de conexión obteniendo company_id, reintentando...", "warning")
+                if self._ensure_mysql_connection():
+                    try:
+                        self.mysql_cursor.execute(query, (self.company_rif, self.company_email.lower()))
+                        result = self.mysql_cursor.fetchone()
+                        if result:
+                            self._log("✅ company_id obtenido después de reconectar", "success")
+                            return result[0]
+                    except Exception as retry_error:
+                        self._log(f"❌ Error obteniendo company_id después de reconectar: {str(retry_error)[:100]}", "error")
+
             self._log(f"❌ Error obteniendo company_id desde companies: {e}", "error")
             return None
 
@@ -4037,128 +4120,242 @@ class SmartSyncComplete:
 
     def _insert_batch_thread(self, batch_info: Tuple):
         """
-        Inserta un batch de productos en un thread separado
-        batch_info: (lote, insert_query, batch_num, mysql_config, company_id)
+        Inserta un batch de productos en un thread separado con reintentos automáticos
+        batch_info: (lote, insert_query, batch_num, mysql_config, company_id, max_retries)
         """
-        lote, insert_query, batch_num, mysql_config, company_id = batch_info
+        lote, insert_query, batch_num, mysql_config, company_id, max_retries = batch_info
         thread_id = threading.current_thread().name
 
-        try:
-            # Crear conexión separada para este thread
-            # Asegurar que el puerto sea int
-            conn = pymysql.connect(
-                host=mysql_config['host'],
-                port=int(mysql_config.get('port', 3306)),
-                user=mysql_config['user'],
-                password=mysql_config['password'],
-                database=mysql_config['database'],
-                charset=mysql_config.get('charset', 'utf8mb4')
-            )
-            cursor = conn.cursor()
+        # Intentar con reintentos automáticos
+        for attempt in range(max_retries + 1):
+            try:
+                # Crear conexión separada para este thread
+                # Asegurar que el puerto sea int
+                conn = pymysql.connect(
+                    host=mysql_config['host'],
+                    port=int(mysql_config.get('port', 3306)),
+                    user=mysql_config['user'],
+                    password=mysql_config['password'],
+                    database=mysql_config['database'],
+                    charset=mysql_config.get('charset', 'utf8mb4'),
+                    connect_timeout=30,  # 30 segundos timeout de conexión
+                    read_timeout=60,     # 60 segundos timeout de lectura
+                    write_timeout=60     # 60 segundos timeout de escritura
+                )
+                cursor = conn.cursor()
 
-            # Ejecutar batch insert
-            cursor.executemany(insert_query, lote)
-            conn.commit()
+                # Ejecutar batch insert
+                cursor.executemany(insert_query, lote)
+                conn.commit()
 
-            cursor.close()
-            conn.close()
+                cursor.close()
+                conn.close()
 
-            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
-        except Exception as e:
-            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+                return {'success': True, 'batch_num': batch_num, 'count': len(lote), 'attempt': attempt + 1}
+
+            except Exception as e:
+                error_msg = str(e).lower()
+
+                # Si es el último intento, retornar error
+                if attempt == max_retries:
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': max_retries + 1
+                    }
+
+                # Si es error de conexión, esperar y reintentar
+                if any(err in error_msg for err in ['timeout', 'gone away', 'lost connection', 'connection reset']):
+                    # Esperar antes de reintentar (backoff exponencial)
+                    wait_time = 2 ** attempt  # 1s, 2s, 4s...
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # Otro tipo de error, no reintentar
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': attempt + 1
+                    }
 
     def _update_batch_thread(self, batch_info: Tuple):
         """
-        Actualiza un batch de productos en un thread separado
-        batch_info: (lote, update_query, batch_num, mysql_config, company_id)
+        Actualiza un batch de productos en un thread separado con reintentos automáticos
+        batch_info: (lote, update_query, batch_num, mysql_config, company_id, max_retries)
         """
-        lote, update_query, batch_num, mysql_config, company_id = batch_info
+        lote, update_query, batch_num, mysql_config, company_id, max_retries = batch_info
 
-        try:
-            # Crear conexión separada para este thread
-            # Asegurar que el puerto sea int
-            conn = pymysql.connect(
-                host=mysql_config['host'],
-                port=int(mysql_config.get('port', 3306)),
-                user=mysql_config['user'],
-                password=mysql_config['password'],
-                database=mysql_config['database'],
-                charset=mysql_config.get('charset', 'utf8mb4')
-            )
-            cursor = conn.cursor()
+        # Intentar con reintentos automáticos
+        for attempt in range(max_retries + 1):
+            try:
+                # Crear conexión separada para este thread
+                # Asegurar que el puerto sea int
+                conn = pymysql.connect(
+                    host=mysql_config['host'],
+                    port=int(mysql_config.get('port', 3306)),
+                    user=mysql_config['user'],
+                    password=mysql_config['password'],
+                    database=mysql_config['database'],
+                    charset=mysql_config.get('charset', 'utf8mb4'),
+                    connect_timeout=30,
+                    read_timeout=60,
+                    write_timeout=60
+                )
+                cursor = conn.cursor()
 
-            # Ejecutar batch update
-            cursor.executemany(update_query, lote)
-            conn.commit()
+                # Ejecutar batch update
+                cursor.executemany(update_query, lote)
+                conn.commit()
 
-            cursor.close()
-            conn.close()
+                cursor.close()
+                conn.close()
 
-            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
-        except Exception as e:
-            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+                return {'success': True, 'batch_num': batch_num, 'count': len(lote), 'attempt': attempt + 1}
+
+            except Exception as e:
+                error_msg = str(e).lower()
+
+                # Si es el último intento, retornar error
+                if attempt == max_retries:
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': max_retries + 1
+                    }
+
+                # Si es error de conexión, esperar y reintentar
+                if any(err in error_msg for err in ['timeout', 'gone away', 'lost connection', 'connection reset']):
+                    wait_time = 2 ** attempt
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': attempt + 1
+                    }
 
     def _insert_customer_batch_thread(self, batch_info: Tuple):
         """
-        Inserta un batch de customers en un thread separado
-        batch_info: (lote, insert_query, batch_num, mysql_config)
+        Inserta un batch de customers en un thread separado con reintentos automáticos
+        batch_info: (lote, insert_query, batch_num, mysql_config, max_retries)
         """
-        lote, insert_query, batch_num, mysql_config = batch_info
+        lote, insert_query, batch_num, mysql_config, max_retries = batch_info
 
-        try:
-            # Crear conexión separada para este thread
-            # Asegurar que el puerto sea int
-            conn = pymysql.connect(
-                host=mysql_config['host'],
-                port=int(mysql_config.get('port', 3306)),
-                user=mysql_config['user'],
-                password=mysql_config['password'],
-                database=mysql_config['database'],
-                charset=mysql_config.get('charset', 'utf8mb4')
-            )
-            cursor = conn.cursor()
+        # Intentar con reintentos automáticos
+        for attempt in range(max_retries + 1):
+            try:
+                # Crear conexión separada para este thread
+                # Asegurar que el puerto sea int
+                conn = pymysql.connect(
+                    host=mysql_config['host'],
+                    port=int(mysql_config.get('port', 3306)),
+                    user=mysql_config['user'],
+                    password=mysql_config['password'],
+                    database=mysql_config['database'],
+                    charset=mysql_config.get('charset', 'utf8mb4'),
+                    connect_timeout=30,
+                    read_timeout=60,
+                    write_timeout=60
+                )
+                cursor = conn.cursor()
 
-            # Ejecutar batch insert
-            cursor.executemany(insert_query, lote)
-            conn.commit()
+                # Ejecutar batch insert
+                cursor.executemany(insert_query, lote)
+                conn.commit()
 
-            cursor.close()
-            conn.close()
+                cursor.close()
+                conn.close()
 
-            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
-        except Exception as e:
-            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+                return {'success': True, 'batch_num': batch_num, 'count': len(lote), 'attempt': attempt + 1}
+
+            except Exception as e:
+                error_msg = str(e).lower()
+
+                # Si es el último intento, retornar error
+                if attempt == max_retries:
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': max_retries + 1
+                    }
+
+                # Si es error de conexión, esperar y reintentar
+                if any(err in error_msg for err in ['timeout', 'gone away', 'lost connection', 'connection reset']):
+                    wait_time = 2 ** attempt
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': attempt + 1
+                    }
 
     def _update_customer_batch_thread(self, batch_info: Tuple):
         """
-        Actualiza un batch de customers en un thread separado
-        batch_info: (lote, update_query, batch_num, mysql_config)
+        Actualiza un batch de customers en un thread separado con reintentos automáticos
+        batch_info: (lote, update_query, batch_num, mysql_config, max_retries)
         """
-        lote, update_query, batch_num, mysql_config = batch_info
+        lote, update_query, batch_num, mysql_config, max_retries = batch_info
 
-        try:
-            # Crear conexión separada para este thread
-            # Asegurar que el puerto sea int
-            conn = pymysql.connect(
-                host=mysql_config['host'],
-                port=int(mysql_config.get('port', 3306)),
-                user=mysql_config['user'],
-                password=mysql_config['password'],
-                database=mysql_config['database'],
-                charset=mysql_config.get('charset', 'utf8mb4')
-            )
-            cursor = conn.cursor()
+        # Intentar con reintentos automáticos
+        for attempt in range(max_retries + 1):
+            try:
+                # Crear conexión separada para este thread
+                # Asegurar que el puerto sea int
+                conn = pymysql.connect(
+                    host=mysql_config['host'],
+                    port=int(mysql_config.get('port', 3306)),
+                    user=mysql_config['user'],
+                    password=mysql_config['password'],
+                    database=mysql_config['database'],
+                    charset=mysql_config.get('charset', 'utf8mb4'),
+                    connect_timeout=30,
+                    read_timeout=60,
+                    write_timeout=60
+                )
+                cursor = conn.cursor()
 
-            # Ejecutar batch update
-            cursor.executemany(update_query, lote)
-            conn.commit()
+                # Ejecutar batch update
+                cursor.executemany(update_query, lote)
+                conn.commit()
 
-            cursor.close()
-            conn.close()
+                cursor.close()
+                conn.close()
 
-            return {'success': True, 'batch_num': batch_num, 'count': len(lote)}
-        except Exception as e:
-            return {'success': False, 'batch_num': batch_num, 'error': str(e)}
+                return {'success': True, 'batch_num': batch_num, 'count': len(lote), 'attempt': attempt + 1}
+
+            except Exception as e:
+                error_msg = str(e).lower()
+
+                # Si es el último intento, retornar error
+                if attempt == max_retries:
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': max_retries + 1
+                    }
+
+                # Si es error de conexión, esperar y reintentar
+                if any(err in error_msg for err in ['timeout', 'gone away', 'lost connection', 'connection reset']):
+                    wait_time = 2 ** attempt
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return {
+                        'success': False,
+                        'batch_num': batch_num,
+                        'error': str(e),
+                        'attempts': attempt + 1
+                    }
 
     def sincronizar_products_mysql(self, cambios: Dict[str, List]):
         """Sincronizar cambios de products a MySQL usando BATCH INSERTS para mejor rendimiento"""
@@ -4356,7 +4553,7 @@ class SmartSyncComplete:
                     self._log(f"  🚀 Ejecutando BATCH INSERT de {total_a_insertar} productos...", "info")
 
                     # Dividir en lotes más pequeños para mostrar progreso
-                    batch_size = 10000  # Insertar de 10000 en 10000 (optimizado para MySQL remoto)
+                    batch_size = 1000  # Insertar de 1000 en 1000 (optimizado para MySQL remoto con reconexión)
                     start_time = time.time()
 
                     insert_query = """
@@ -4395,14 +4592,15 @@ class SmartSyncComplete:
                     try:
                         # 🚀 THREADS: Insertar en paralelo con ThreadPoolExecutor
                         num_workers = 4  # 4 threads procesando en paralelo
-                        self._log(f"  🚀 Procesando con {num_workers} threads en paralelo...", "info")
+                        max_retries = 3  # Máximo 3 reintentos por batch
+                        self._log(f"  🚀 Procesando con {num_workers} threads en paralelo (con {max_retries} reintentos)...", "info")
 
                         # Preparar batches para threads
                         batches_para_procesar = []
                         for i in range(0, len(batch_data), batch_size):
                             lote = batch_data[i:i + batch_size]
                             batch_num = i // batch_size + 1
-                            batches_para_procesar.append((lote, insert_query, batch_num, self.mysql_config, company_id))
+                            batches_para_procesar.append((lote, insert_query, batch_num, self.mysql_config, company_id, max_retries))
 
                         # Ejecutar en paralelo con ThreadPoolExecutor
                         total_insertados = 0
@@ -4418,17 +4616,19 @@ class SmartSyncComplete:
                                     result = future.result()
                                     if result['success']:
                                         total_insertados += result['count']
-                                        self._log(f"  ✅ Batch {batch_num}: {result['count']:,} productos insertados", "debug")
+                                        attempt_info = f" (intentos: {result.get('attempt', 1)})" if result.get('attempt', 1) > 1 else ""
+                                        self._log(f"  ✅ Batch {batch_num}: {result['count']:,} productos insertados{attempt_info}", "debug")
 
                                         # Reportar progreso
                                         idx_lote = productos_a_procesar[min((batch_num * batch_size) - 1, len(productos_a_procesar) - 1)][0]
                                         self._reportar_progreso('products', idx_lote, total_cambios, step='insert')
                                     else:
-                                        self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                                        attempt_info = f" después de {result.get('attempts', 1)} intentos" if result.get('attempts', 1) > 1 else ""
+                                        self._log(f"  ❌ Error en batch {batch_num}{attempt_info}: {result['error'][:100]}", "error")
                                         self.stats['products']['errores'] += result['count']
 
                                 except Exception as e:
-                                    self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+                                    self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)[:100]}", "error")
 
                         self._log(f"  ✅ Todos los batches completados: {total_insertados:,} productos insertados", "info")
 
@@ -4666,14 +4866,15 @@ class SmartSyncComplete:
                     try:
                         # 🚀 THREADS: Actualizar en paralelo con ThreadPoolExecutor
                         num_workers = 4  # 4 threads procesando en paralelo
-                        self._log(f"  🚀 Procesando con {num_workers} threads en paralelo...", "info")
+                        max_retries = 3  # Máximo 3 reintentos por batch
+                        self._log(f"  🚀 Procesando con {num_workers} threads en paralelo (con {max_retries} reintentos)...", "info")
 
                         # Preparar batches para threads
                         batches_para_procesar = []
                         for i in range(0, len(batch_data), batch_size):
                             lote = batch_data[i:i + batch_size]
                             batch_num = i // batch_size + 1
-                            batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config, company_id))
+                            batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config, company_id, max_retries))
 
                         # Ejecutar en paralelo con ThreadPoolExecutor
                         total_actualizados = 0
@@ -4689,18 +4890,20 @@ class SmartSyncComplete:
                                     result = future.result()
                                     if result['success']:
                                         total_actualizados += result['count']
-                                        self._log(f"  ✅ Batch {batch_num}: {result['count']:,} productos actualizados", "debug")
+                                        attempt_info = f" (intentos: {result.get('attempt', 1)})" if result.get('attempt', 1) > 1 else ""
+                                        self._log(f"  ✅ Batch {batch_num}: {result['count']:,} productos actualizados{attempt_info}", "debug")
 
                                         # Reportar progreso
                                         idx_lote = productos_a_procesar[min((batch_num * batch_size) - 1, len(productos_a_procesar) - 1)][0]
                                         idx_adjusted = total_nuevos + idx_lote
                                         self._reportar_progreso('products', idx_adjusted, total_cambios, step='insert')
                                     else:
-                                        self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                                        attempt_info = f" después de {result.get('attempts', 1)} intentos" if result.get('attempts', 1) > 1 else ""
+                                        self._log(f"  ❌ Error en batch {batch_num}{attempt_info}: {result['error'][:100]}", "error")
                                         self.stats['products']['errores'] += result['count']
 
                                 except Exception as e:
-                                    self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+                                    self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)[:100]}", "error")
 
                         self._log(f"  ✅ Todos los batches completados: {total_actualizados:,} productos actualizados", "info")
 
@@ -4811,7 +5014,7 @@ class SmartSyncComplete:
 
         # Calcular total para progreso
         total_cambios = len(cambios['nuevos']) + len(cambios['modificados'])
-        batch_size = 10000  # Insertar/actualizar de 10000 en 10000 (optimizado para MySQL remoto)
+        batch_size = 1000  # Insertar/actualizar de 1000 en 1000 (optimizado para MySQL remoto con reconexión)
 
         try:
             # 🚀 OBTENER TODOS LOS DOCUMENT_NUMBERS EXISTENTES EN UNA SOLA QUERY
@@ -4872,11 +5075,12 @@ class SmartSyncComplete:
 
                 # Preparar batches para threads
                 num_workers = 4
+                max_retries = 3  # Máximo 3 reintentos por batch
                 batches_para_procesar = []
                 for i in range(0, len(inserts_data), batch_size):
                     lote = inserts_data[i:i + batch_size]
                     batch_num = i // batch_size + 1
-                    batches_para_procesar.append((lote, insert_query, batch_num, self.mysql_config))
+                    batches_para_procesar.append((lote, insert_query, batch_num, self.mysql_config, max_retries))
 
                 # Ejecutar en paralelo con ThreadPoolExecutor
                 total_insertados = 0
@@ -4891,12 +5095,14 @@ class SmartSyncComplete:
                             if result['success']:
                                 total_insertados += result['count']
                                 progreso = min(batch_num * batch_size, len(inserts_data))
-                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers insertados", "debug")
+                                attempt_info = f" (intentos: {result.get('attempt', 1)})" if result.get('attempt', 1) > 1 else ""
+                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers insertados{attempt_info}", "debug")
                                 self._reportar_progreso('customers', progreso, total_cambios)
                             else:
-                                self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                                attempt_info = f" después de {result.get('attempts', 1)} intentos" if result.get('attempts', 1) > 1 else ""
+                                self._log(f"  ❌ Error en batch {batch_num}{attempt_info}: {result['error'][:100]}", "error")
                         except Exception as e:
-                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)[:100]}", "error")
 
                 self.stats['customers']['nuevos'] = total_insertados
                 self._log(f"  ✅ Commit final: {total_insertados:,} customers nuevos insertados", "success")
@@ -4918,11 +5124,12 @@ class SmartSyncComplete:
 
                 # Preparar batches para threads
                 num_workers = 4
+                max_retries = 3  # Máximo 3 reintentos por batch
                 batches_para_procesar = []
                 for i in range(0, len(updates_data), batch_size):
                     lote = updates_data[i:i + batch_size]
                     batch_num = i // batch_size + 1
-                    batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config))
+                    batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config, max_retries))
 
                 # Ejecutar en paralelo con ThreadPoolExecutor
                 total_actualizados = 0
@@ -4937,12 +5144,14 @@ class SmartSyncComplete:
                             if result['success']:
                                 total_actualizados += result['count']
                                 progreso = min(batch_num * batch_size, len(updates_data))
-                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers actualizados", "debug")
+                                attempt_info = f" (intentos: {result.get('attempt', 1)})" if result.get('attempt', 1) > 1 else ""
+                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers actualizados{attempt_info}", "debug")
                                 self._reportar_progreso('customers', total_nuevos + progreso, total_cambios)
                             else:
-                                self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                                attempt_info = f" después de {result.get('attempts', 1)} intentos" if result.get('attempts', 1) > 1 else ""
+                                self._log(f"  ❌ Error en batch {batch_num}{attempt_info}: {result['error'][:100]}", "error")
                         except Exception as e:
-                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)[:100]}", "error")
 
                 self.stats['customers']['modificados'] += total_actualizados
                 self._log(f"  ✅ Commit final: {total_actualizados:,} customers actualizados", "success")
@@ -4984,11 +5193,12 @@ class SmartSyncComplete:
 
                 # Preparar batches para threads
                 num_workers = 4
+                max_retries = 3  # Máximo 3 reintentos por batch
                 batches_para_procesar = []
                 for i in range(0, len(modificados_data), batch_size):
                     lote = modificados_data[i:i + batch_size]
                     batch_num = i // batch_size + 1
-                    batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config))
+                    batches_para_procesar.append((lote, update_query, batch_num, self.mysql_config, max_retries))
 
                 # Ejecutar en paralelo con ThreadPoolExecutor
                 total_actualizados = 0
@@ -5004,12 +5214,14 @@ class SmartSyncComplete:
                                 total_actualizados += result['count']
                                 progreso = min(batch_num * batch_size, len(modificados_data))
                                 idx_adjusted = total_nuevos + progreso
-                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers modificados", "debug")
+                                attempt_info = f" (intentos: {result.get('attempt', 1)})" if result.get('attempt', 1) > 1 else ""
+                                self._log(f"  ✅ Batch {batch_num}: {result['count']:,} customers modificados{attempt_info}", "debug")
                                 self._reportar_progreso('customers', idx_adjusted, total_cambios)
                             else:
-                                self._log(f"  ❌ Error en batch {batch_num}: {result['error']}", "error")
+                                attempt_info = f" después de {result.get('attempts', 1)} intentos" if result.get('attempts', 1) > 1 else ""
+                                self._log(f"  ❌ Error en batch {batch_num}{attempt_info}: {result['error'][:100]}", "error")
                         except Exception as e:
-                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)}", "error")
+                            self._log(f"  ❌ Excepción en batch {batch_num}: {str(e)[:100]}", "error")
 
                 self.stats['customers']['modificados'] += total_actualizados
                 self._log(f"  ✅ Commit final: {total_actualizados:,} customers modificados actualizados", "success")
@@ -5389,11 +5601,16 @@ class SmartSyncComplete:
 
     def sincronizar_products_postgresql(self, cambios: Dict[str, List]):
         """
-        Sincronizar products de MySQL a PostgreSQL
+        Sincronizar products de MySQL a PostgreSQL (OPTIMIZADO CON BATCH)
 
         NOTA: PostgreSQL es la fuente de verdad para products.
         Solo se INSERTAN products que no existen (ej: creados desde quotes),
         pero NUNCA se ACTUALIZAN products existentes desde MySQL.
+
+        OPTIMIZACIONES:
+        - Carga todos los códigos existentes en memoria (1 query)
+        - Usa BATCH INSERT con executemany (1000 registros)
+        - Compatible con PostgreSQL 9.1+ (filtra en Python antes de insertar)
 
         Args:
             cambios: Dict con 'nuevos' y 'modificados'
@@ -5414,107 +5631,163 @@ class SmartSyncComplete:
 
         self._log("", "info")
         self._log("📦 SINCRONIZANDO PRODUCTS NUEVOS (MySQL → PostgreSQL)...", "info")
-        self._log(f"   📋 Nuevos: {total_nuevos} (modificados ignorados)", "info")
+        self._log(f"   📋 Marcados como nuevos: {total_nuevos}", "info")
 
         try:
-            # Obtener valores válidos para columnas con restricciones
+            # ═══════════════════════════════════════════════════════════
+            # 1. Cargar todos los códigos existentes en PostgreSQL (1 query)
+            # ═══════════════════════════════════════════════════════════
+            self.pg_cursor.execute("SELECT code FROM products")
+            codigos_existentes = {row[0] for row in self.pg_cursor.fetchall()}
+            self._log(f"   🔍 Cargados {len(codigos_existentes):,} códigos existentes en memoria", "debug")
+
+            # ═══════════════════════════════════════════════════════════
+            # 2. Obtener status válido
+            # ═══════════════════════════════════════════════════════════
             self.pg_cursor.execute("SELECT code FROM status WHERE code != '00' LIMIT 1")
             status_row = self.pg_cursor.fetchone()
             status_valido = status_row[0] if status_row else '01'
 
-            # Procesar SOLO products nuevos (ignorar modificados)
+            # ═══════════════════════════════════════════════════════════
+            # 3. Filtrar productos que realmente NO existen en PG
+            # ═══════════════════════════════════════════════════════════
             products_a_procesar = cambios.get('nuevos', [])
-            total_a_procesar = len(products_a_procesar)
-            current_count = 0
+
+            productos_reales_nuevos = []
+            productos_ya_existentes = []
 
             for product in products_a_procesar:
-                if not self.sync_running:
-                    break
+                product_code = product['code']
 
+                if product_code in codigos_existentes:
+                    # Ya existe, solo guardar hash
+                    productos_ya_existentes.append(product)
+                else:
+                    # Realmente nuevo
+                    productos_reales_nuevos.append(product)
+
+            self._log(f"   ℹ️ De {total_nuevos} marcados como nuevos:", "info")
+            self._log(f"      - Realmente nuevos: {len(productos_reales_nuevos):,}", "info")
+            self._log(f"      - Ya existentes: {len(productos_ya_existentes):,}", "info")
+
+            # ═══════════════════════════════════════════════════════════
+            # 4. Guardar hashes para productos que ya existen
+            # ═══════════════════════════════════════════════════════════
+            if productos_ya_existentes:
+                self._log(f"   💾 Guardando hashes para {len(productos_ya_existentes):,} productos ya existentes...", "debug")
+                for product in productos_ya_existentes:
+                    try:
+                        product_id = str(product['id'])
+                        hash_nuevo = self._generar_hash_product_mysql(product)
+                        self._guardar_hash('products_mysql', product_id, hash_nuevo, product)
+                    except Exception as e:
+                        self._log(f"   ⚠️ Error guardando hash para product {product.get('code')}: {str(e)[:50]}", "warning")
+
+            # ═══════════════════════════════════════════════════════════
+            # 5. Si no hay productos realmente nuevos, terminar
+            # ═══════════════════════════════════════════════════════════
+            if not productos_reales_nuevos:
+                self._log("   ℹ️ No hay productos realmente nuevos para insertar", "info")
+                return
+
+            # ═══════════════════════════════════════════════════════════
+            # 6. Preparar datos para BATCH INSERT
+            # ═══════════════════════════════════════════════════════════
+            batch_data = []
+            for product in productos_reales_nuevos:
                 product_id = product['id']
                 product_code = product['code']
-                current_count += 1
+                description = product.get('description') or ''
+                cost = product.get('cost')
+                price = product.get('price')
+                product_type = product.get('product_type') or 'finished'
+
+                # Convertir a float
+                try:
+                    cost_val = float(cost) if cost is not None else 0.0
+                except (ValueError, TypeError):
+                    cost_val = 0.0
 
                 try:
-                    # Verificar si ya existe
-                    self.pg_cursor.execute(
-                        "SELECT code FROM products WHERE code = %s",
-                        (product_code,)
-                    )
-                    existe = self.pg_cursor.fetchone()
+                    price_val = float(price) if price is not None else 0.0
+                except (ValueError, TypeError):
+                    price_val = 0.0
 
-                    if existe:
-                        # Ya existe - IGNORAR (PostgreSQL es la fuente de verdad)
-                        self._log(f"  ℹ️ Product {product_code} ya existe en PostgreSQL (omitiendo)", "debug")
+                # Calcular sale_price en centimos
+                sale_price_cents = int(price_val * 100) if price_val > 0 else 0
 
-                        # Guardar hash para no volver a procesarlo
-                        hash_nuevo = self._generar_hash_product_mysql(product)
-                        self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
-                        continue
+                batch_data.append((
+                    product_code,
+                    description[:255] if description else '',
+                    cost_val,
+                    price_val,
+                    status_valido,
+                    product_type,
+                    sale_price_cents
+                ))
 
-                    # No existe - INSERTAR
-                    self._log(f"  ✨ Insertando product {product_code}...", "debug")
+            # ═══════════════════════════════════════════════════════════
+            # 7. BATCH INSERT (1000 registros a la vez)
+            #    Compatible con PostgreSQL 9.1+: Ya filtramos en Python,
+            #    así que no necesitamos ON CONFLICT
+            # ═══════════════════════════════════════════════════════════
+            insert_query = """
+            INSERT INTO products (
+                code, description, minimal_sale, maximal_sale,
+                status, product_type, sale_price
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
 
-                    # Manejar valores NULL correctamente
-                    description = product.get('description') or ''
-                    cost = product.get('cost')
-                    price = product.get('price')
-                    product_type = product.get('product_type') or 'finished'
+            batch_size = 1000
+            total_insertados = 0
 
-                    # Convertir a float, usar 0 si es None
-                    try:
-                        cost_val = float(cost) if cost is not None else 0.0
-                    except (ValueError, TypeError):
-                        cost_val = 0.0
+            for i in range(0, len(batch_data), batch_size):
+                lote = batch_data[i:i + batch_size]
 
-                    try:
-                        price_val = float(price) if price is not None else 0.0
-                    except (ValueError, TypeError):
-                        price_val = 0.0
-
-                    # Calcular sale_price (en centimos)
-                    sale_price_cents = int(price_val * 100) if price_val > 0 else 0
-
-                    # Compatible con PostgreSQL 9.1 - Ya verificamos arriba que no existe
-                    sql_insert = """
-                    INSERT INTO products (
-                        code, description, minimal_sale, maximal_sale,
-                        status, product_type, sale_price
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """
-                    self.pg_cursor.execute(sql_insert, (
-                        product_code,
-                        description[:255] if description else '',
-                        cost_val,
-                        price_val,
-                        status_valido,
-                        product_type,
-                        sale_price_cents
-                    ))
-
+                try:
+                    self.pg_cursor.executemany(insert_query, lote)
                     self.pg_conn.commit()
 
-                    # Actualizar estadísticas y reportar progreso
-                    self.stats['products']['nuevos'] += 1
-                    self._reportar_progreso('products', current_count, total_a_procesar)
+                    insertados_en_lote = len(lote)
+                    total_insertados += insertados_en_lote
 
-                    # Guardar hash DESPUÉS de insertar
-                    hash_nuevo = self._generar_hash_product_mysql(product)
-                    self._guardar_hash('products_mysql', str(product_id), hash_nuevo, product)
+                    self._log(f"  ✅ Batch {i//batch_size + 1}: {insertados_en_lote:,} productos insertados", "debug")
 
-                except Exception as e:
-                    error_msg = str(e).lower()
+                except Exception as batch_error:
+                    error_msg = str(batch_error).lower()
+                    # Si es error de duplicado, continuar (no debería ocurrir por el filtrado previo)
                     if 'duplicate' in error_msg or 'unique' in error_msg:
-                        self._log(f"  ℹ️ Product {product_code} ya existe (omitiendo)", "debug")
+                        self._log(f"  ⚠️ Batch {i//batch_size + 1}: Algunos productos ya existen (omitidos)", "debug")
                         self.pg_conn.rollback()
+                        # Intentar insertar uno por uno para encontrar los que sí son nuevos
+                        for data in lote:
+                            try:
+                                self.pg_cursor.execute(insert_query, (data,))
+                                self.pg_conn.commit()
+                                total_insertados += 1
+                            except Exception:
+                                self.pg_conn.rollback()
                     else:
-                        import traceback
-                        self._log(f"Error procesando product {product_code}: {str(e)}", "error")
-                        self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+                        self._log(f"  ❌ Error en batch {i//batch_size + 1}: {str(batch_error)[:100]}", "error")
                         self.pg_conn.rollback()
-                        self.stats['products']['errores'] += 1
+                        self.stats['products']['errores'] += len(lote)
 
-            self._log(f"✅ Products completados: {self.stats['products']['nuevos']} nuevos insertados, "
+            # ═══════════════════════════════════════════════════════════
+            # 8. Guardar hashes para todos los productos procesados
+            # ═══════════════════════════════════════════════════════════
+            self._log(f"   💾 Guardando hashes para {len(products_a_procesar):,} productos...", "debug")
+            for product in products_a_procesar:
+                try:
+                    product_id = str(product['id'])
+                    hash_nuevo = self._generar_hash_product_mysql(product)
+                    self._guardar_hash('products_mysql', product_id, hash_nuevo, product)
+                except Exception as e:
+                    self._log(f"   ⚠️ Error guardando hash para product {product.get('code')}: {str(e)[:50]}", "warning")
+
+            # Actualizar estadísticas
+            self.stats['products']['nuevos'] += total_insertados
+
+            self._log(f"✅ Products completados: {total_insertados:,} nuevos insertados, "
                       f"{self.stats['products']['errores']} errores", "success")
 
         except Exception as e:
@@ -5523,11 +5796,16 @@ class SmartSyncComplete:
 
     def sincronizar_customers_postgresql(self, cambios: Dict[str, List]):
         """
-        Sincronizar customers de MySQL a PostgreSQL
+        Sincronizar customers de MySQL a PostgreSQL (OPTIMIZADO CON BATCH)
 
         NOTA: PostgreSQL es la fuente de verdad para customers.
         Solo se INSERTAN customers que no existen,
         pero NUNCA se ACTUALIZAN customers existentes desde MySQL.
+
+        OPTIMIZACIONES:
+        - Carga todos los códigos existentes en memoria (1 query)
+        - Usa BATCH INSERT con executemany (1000 registros)
+        - Compatible con PostgreSQL 9.1+ (filtra en Python antes de insertar)
 
         Args:
             cambios: Dict con 'nuevos' y 'modificados'
@@ -5548,111 +5826,162 @@ class SmartSyncComplete:
 
         self._log("", "info")
         self._log("👥 SINCRONIZANDO CUSTOMERS NUEVOS (MySQL → PostgreSQL)...", "info")
-        self._log(f"   📋 Nuevos: {total_nuevos} (modificados ignorados)", "info")
+        self._log(f"   📋 Marcados como nuevos: {total_nuevos}", "info")
 
         try:
-            # Procesar SOLO customers nuevos (ignorar modificados)
+            # ═══════════════════════════════════════════════════════════
+            # 1. Cargar todos los códigos existentes en PostgreSQL (1 query)
+            # ═══════════════════════════════════════════════════════════
+            self.pg_cursor.execute("SELECT code FROM clients")
+            codigos_existentes = {row[0] for row in self.pg_cursor.fetchall()}
+            self._log(f"   🔍 Cargados {len(codigos_existentes):,} códigos de clientes en memoria", "debug")
+
+            # ═══════════════════════════════════════════════════════════
+            # 2. Filtrar clientes que realmente NO existen en PG
+            # ═══════════════════════════════════════════════════════════
             customers_a_procesar = cambios.get('nuevos', [])
-            total_a_procesar = len(customers_a_procesar)
-            current_count = 0
+
+            customers_reales_nuevos = []
+            customers_ya_existentes = []
 
             for customer in customers_a_procesar:
-                if not self.sync_running:
-                    break
-
-                customer_id = customer['id']
                 customer_code = customer['document_number']
-                current_count += 1
+
+                if customer_code in codigos_existentes:
+                    # Ya existe, solo guardar hash
+                    customers_ya_existentes.append(customer)
+                else:
+                    # Realmente nuevo
+                    customers_reales_nuevos.append(customer)
+
+            self._log(f"   ℹ️ De {total_nuevos} marcados como nuevos:", "info")
+            self._log(f"      - Realmente nuevos: {len(customers_reales_nuevos):,}", "info")
+            self._log(f"      - Ya existentes: {len(customers_ya_existentes):,}", "info")
+
+            # ═══════════════════════════════════════════════════════════
+            # 3. Guardar hashes para clientes que ya existen
+            # ═══════════════════════════════════════════════════════════
+            if customers_ya_existentes:
+                self._log(f"   💾 Guardando hashes para {len(customers_ya_existentes):,} clientes ya existentes...", "debug")
+                for customer in customers_ya_existentes:
+                    try:
+                        customer_id = str(customer['id'])
+                        hash_nuevo = self._generar_hash_customer_mysql(customer)
+                        self._guardar_hash('customers_mysql', customer_id, hash_nuevo, customer)
+                    except Exception as e:
+                        self._log(f"   ⚠️ Error guardando hash para customer {customer.get('document_number')}: {str(e)[:50]}", "warning")
+
+            # ═══════════════════════════════════════════════════════════
+            # 4. Si no hay clientes realmente nuevos, terminar
+            # ═══════════════════════════════════════════════════════════
+            if not customers_reales_nuevos:
+                self._log("   ℹ️ No hay clientes realmente nuevos para insertar", "info")
+                return
+
+            # ═══════════════════════════════════════════════════════════
+            # 5. Preparar datos para BATCH INSERT
+            # ═══════════════════════════════════════════════════════════
+            batch_data = []
+            for customer in customers_reales_nuevos:
+                customer_code = customer['document_number']
+                name = customer.get('name', '')[:255]
+                address = customer.get('address')
+                email = customer.get('email')
+
+                # Generar email temporal si no existe
+                if not email or email.strip() == '':
+                    email = f"customer_{customer_code}@temp.local"
+
+                batch_data.append((
+                    customer_code,       # code
+                    name,                # description
+                    address,             # address
+                    email,               # email
+                    customer.get('phone'),      # phone
+                    customer.get('contact'),    # contact
+                    customer_code,       # client_id = code
+                    '00',                # country
+                    '00',                # province
+                    '00',                # city
+                    '00',                # town
+                    '00',                # area_sales
+                    '00',                # seller
+                    '00',                # client_group
+                    0,                   # credit_days
+                    0,                   # credit_limit
+                    0,                   # discount
+                    '01',                # client_type
+                    0,                   # sale_price
+                    '01',                # status
+                    0,                   # name_fiscal
+                    True                 # generic_client
+                ))
+
+            # ═══════════════════════════════════════════════════════════
+            # 6. BATCH INSERT (1000 registros a la vez)
+            #    Compatible con PostgreSQL 9.1+: Ya filtramos en Python,
+            #    así que no necesitamos ON CONFLICT
+            # ═══════════════════════════════════════════════════════════
+            insert_query = """
+            INSERT INTO clients (
+                code, description, address, email, phone, contact,
+                client_id, country, province, city, town, area_sales,
+                seller, client_group, credit_days, credit_limit,
+                discount, client_type, sale_price, status,
+                name_fiscal, generic_client
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+
+            batch_size = 1000
+            total_insertados = 0
+
+            for i in range(0, len(batch_data), batch_size):
+                lote = batch_data[i:i + batch_size]
 
                 try:
-                    # Verificar si ya existe
-                    self.pg_cursor.execute(
-                        "SELECT code FROM clients WHERE code = %s",
-                        (customer_code,)
-                    )
-                    existe = self.pg_cursor.fetchone()
-
-                    if existe:
-                        # Ya existe - IGNORAR (PostgreSQL es la fuente de verdad)
-                        self._log(f"  ℹ️ Customer {customer_code} ya existe en PostgreSQL (omitiendo)", "debug")
-
-                        # Guardar hash para no volver a procesarlo
-                        hash_nuevo = self._generar_hash_customer_mysql(customer)
-                        self._guardar_hash('customers_mysql', str(customer_id), hash_nuevo, customer)
-                        continue
-
-                    # No existe - INSERTAR
-                    self._log(f"  ✨ Insertando customer {customer_code}...", "debug")
-
-                    # Manejar valores NULL correctamente
-                    name = customer.get('name', '')
-                    address = customer.get('address')
-                    email = customer.get('email')
-                    phone = customer.get('phone')
-                    contact = customer.get('contact')
-
-                    # Generar email temporal si no existe
-                    if not email or email.strip() == '':
-                        email = f"customer_{customer_code}@temp.local"
-
-                    # Insertar en tabla clients de PostgreSQL con valores por defecto
-                    sql_insert = """
-                    INSERT INTO clients (
-                        code, description, address, email, phone, contact,
-                        client_id, country, province, city, town, area_sales,
-                        seller, client_group, credit_days, credit_limit,
-                        discount, client_type, sale_price, status,
-                        name_fiscal, generic_client
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
-                    self.pg_cursor.execute(sql_insert, (
-                        customer_code,                           # code
-                        name[:255] if name else '',              # description
-                        address,                                 # address
-                        email,                                   # email
-                        phone,                                   # phone
-                        contact,                                 # contact
-                        customer_code,                           # client_id = code
-                        '00',                                    # country
-                        '00',                                    # province
-                        '00',                                    # city
-                        '00',                                    # town
-                        '00',                                    # area_sales
-                        '00',                                    # seller
-                        '00',                                    # client_group
-                        0,                                       # credit_days
-                        0,                                       # credit_limit
-                        0,                                       # discount
-                        '01',                                    # client_type
-                        0,                                       # sale_price
-                        '01',                                    # status
-                        0,                                       # name_fiscal
-                        True                                     # generic_client
-                    ))
-
+                    self.pg_cursor.executemany(insert_query, lote)
                     self.pg_conn.commit()
 
-                    # Actualizar estadísticas y reportar progreso
-                    self.stats['customers']['nuevos'] += 1
-                    self._reportar_progreso('customers', current_count, total_a_procesar)
+                    insertados_en_lote = len(lote)
+                    total_insertados += insertados_en_lote
 
-                    # Guardar hash DESPUÉS de insertar
-                    hash_nuevo = self._generar_hash_customer_mysql(customer)
-                    self._guardar_hash('customers_mysql', str(customer_id), hash_nuevo, customer)
+                    self._log(f"  ✅ Batch {i//batch_size + 1}: {insertados_en_lote:,} clientes insertados", "debug")
 
-                except Exception as e:
-                    error_msg = str(e).lower()
+                except Exception as batch_error:
+                    error_msg = str(batch_error).lower()
+                    # Si es error de duplicado, continuar (no debería ocurrir por el filtrado previo)
                     if 'duplicate' in error_msg or 'unique' in error_msg:
-                        self._log(f"  ℹ️ Customer {customer_code} ya existe (omitiendo)", "debug")
+                        self._log(f"  ⚠️ Batch {i//batch_size + 1}: Algunos clientes ya existen (omitidos)", "debug")
                         self.pg_conn.rollback()
+                        # Intentar insertar uno por uno para encontrar los que sí son nuevos
+                        for data in lote:
+                            try:
+                                self.pg_cursor.execute(insert_query, (data,))
+                                self.pg_conn.commit()
+                                total_insertados += 1
+                            except Exception:
+                                self.pg_conn.rollback()
                     else:
-                        import traceback
-                        self._log(f"Error procesando customer {customer_code}: {str(e)}", "error")
-                        self._log(f"TRACEBACK:\n{traceback.format_exc()}", "error")
+                        self._log(f"  ❌ Error en batch {i//batch_size + 1}: {str(batch_error)[:100]}", "error")
                         self.pg_conn.rollback()
-                        self.stats['customers']['errores'] += 1
+                        self.stats['customers']['errores'] += len(lote)
 
-            self._log(f"✅ Customers completados: {self.stats['customers']['nuevos']} nuevos insertados, "
+            # ═══════════════════════════════════════════════════════════
+            # 7. Guardar hashes para todos los clientes procesados
+            # ═══════════════════════════════════════════════════════════
+            self._log(f"   💾 Guardando hashes para {len(customers_a_procesar):,} clientes...", "debug")
+            for customer in customers_a_procesar:
+                try:
+                    customer_id = str(customer['id'])
+                    hash_nuevo = self._generar_hash_customer_mysql(customer)
+                    self._guardar_hash('customers_mysql', customer_id, hash_nuevo, customer)
+                except Exception as e:
+                    self._log(f"   ⚠️ Error guardando hash para customer {customer.get('document_number')}: {str(e)[:50]}", "warning")
+
+            # Actualizar estadísticas
+            self.stats['customers']['nuevos'] += total_insertados
+
+            self._log(f"✅ Customers completados: {total_insertados:,} nuevos insertados, "
                       f"{self.stats['customers']['errores']} errores", "success")
 
         except Exception as e:
