@@ -493,14 +493,13 @@ class APISyncManager:
             True si exitoso, False si hubo error
         """
         try:
-            # Verificar si sync_hashes ya existe
+            # Verificar si sync_hashes ya existe (PostgreSQL 9 compatible)
             self.pg_cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'sync_hashes'
-                );
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_name = 'sync_hashes'
             """)
-            sync_hashes_existe = self.pg_cursor.fetchone()[0]
+            sync_hashes_count = self.pg_cursor.fetchone()[0]
+            sync_hashes_existe = sync_hashes_count > 0
 
             # Crear tabla sync_hashes solo si no existe
             if not sync_hashes_existe:
@@ -579,14 +578,13 @@ class APISyncManager:
         Solo crea si no existe.
         """
         try:
-            # Verificar si ya existe
+            # Verificar si ya existe (PostgreSQL 9 compatible)
             self.pg_cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'sync_config'
-                );
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_name = 'sync_config'
             """)
-            existe = self.pg_cursor.fetchone()[0]
+            count = self.pg_cursor.fetchone()[0]
+            existe = count > 0
 
             if not existe:
                 print("[DEBUG] Creando tabla sync_config...")
