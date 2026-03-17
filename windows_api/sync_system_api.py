@@ -51,6 +51,7 @@ import base64
 import hashlib
 import re
 import threading
+import queue
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
