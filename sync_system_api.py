@@ -483,6 +483,7 @@ class APISyncManager:
 
         Crea:
         - Tabla sync_hashes si no existe
+        - Tabla sync_config si no existe
         - Índices para sync_hashes
         - Triggers para marcar productos eliminados
         - Triggers para marcar productos actualizados
@@ -509,6 +510,9 @@ class APISyncManager:
             """
             self.pg_cursor.execute(create_table_query)
             self.pg_conn.commit()
+
+            # Crear tabla sync_config
+            self._crear_tabla_sync_config()
 
             # Crear índices
             self._crear_indices_sync_hashes()
@@ -546,6 +550,24 @@ class APISyncManager:
                 if "already exists" not in error_msg:
                     self._log(f"⚠️ Error creando índice {nombre_idx}: {e}", "warning")
                 self.pg_conn.rollback()
+
+    def _crear_tabla_sync_config(self):
+        """
+        Crea la tabla sync_config para almacenar configuración de sincronización.
+        Se usa para guardar el company_id que usan los triggers UPDATE.
+        """
+        try:
+            create_table_query = """
+            CREATE TABLE IF NOT EXISTS sync_config (
+                key VARCHAR(100) PRIMARY KEY,
+                value INTEGER NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+            """
+            self.pg_cursor.execute(create_table_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
 
     def _crear_trigger_eliminacion_products(self):
         """Crea trigger que marca productos como eliminados en sync_hashes."""
