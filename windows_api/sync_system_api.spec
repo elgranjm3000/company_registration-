@@ -2,18 +2,23 @@
 # Spec file para compilar sync_system_api.py con PyInstaller
 # Incluye todas las dependencias para System Tray y API REST
 
+# Construir lista de datas (sin None)
+datas_list = [
+    # Agregar módulos del sistema
+    ('api_client', 'api_client'),
+    ('sync', 'sync'),
+    ('config_encryption.py', '.'),
+]
+
+# Agregar icono solo si existe
+if os.path.exists('icon.ico'):
+    datas_list.append(('icon.ico', '.'))
+
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        # Agregar módulos del sistema
-        ('api_client', 'api_client'),
-        ('sync', 'sync'),
-        ('config_encryption.py', '.'),
-        # Icono personalizado si existe
-        ('icon.ico', '.') if os.path.exists('icon.ico') else None,
-    ],
+    datas=datas_list,
     hiddenimports=[
         # Módulos principales de la aplicación
         'api_client',
