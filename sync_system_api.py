@@ -1783,15 +1783,34 @@ class ConfigWindow:
                 progress_bar.pack(fill='x', padx=50, pady=20)
                 progress_bar.start(10)
 
+                # Cola para comunicación thread → main thread
+                sync_queue = queue.Queue()
+
+                def procesar_mensajes_queue():
+                    """Procesa mensajes de la cola desde el main thread"""
+                    try:
+                        while not sync_queue.empty():
+                            msg = sync_queue.get_nowait()
+                            sync_label.config(text=msg)
+                    except:
+                        pass
+                    # Programar próxima actualización
+                    sync_window.after(100, procesar_mensajes_queue)
+
+                # Iniciar procesamiento de mensajes
+                procesar_mensajes_queue()
+
                 def ejecutar_sync_worker():
                     """Worker de sincronización en thread"""
                     print("[DEBUG] Iniciando ejecutar_sync_worker()")
                     try:
-                        # Crear logger
+                        # Crear logger que usa cola (thread-safe)
                         def sync_logger(msg, level="info"):
                             print(f"[SYNC] {msg}")
-                            if sync_window.winfo_exists():
-                                sync_label.config(text=msg)
+                            try:
+                                sync_queue.put(msg)
+                            except:
+                                pass  # Si la cola está cerrada, ignorar
 
                         # Crear gestores
                         print("[DEBUG] Creando APIAuthManager...")
@@ -1802,7 +1821,7 @@ class ConfigWindow:
 
                         # Login
                         print("[DEBUG] Haciendo login a API...")
-                        sync_logger("🔐 Autenticando con API...")
+                        sync_queue.put("🔐 Autenticando con API...")
                         auth_manager.login(config['api_email'], api_password)
                         auth_manager.validate_company(config['company_rif'], config['company_email'])
                         print("[DEBUG] Login exitoso")
@@ -1822,10 +1841,10 @@ class ConfigWindow:
 
                         # Conectar y sincronizar
                         print("[DEBUG] Conectando a PostgreSQL...")
-                        sync_logger("🔗 Conectando a PostgreSQL...")
+                        sync_queue.put("🔗 Conectando a PostgreSQL...")
                         if sync_manager.connect_postgresql() and sync_manager.initialize_api_clients():
                             print("[DEBUG] Conectado, iniciando sync_all()...")
-                            sync_logger("🔄 Sincronizando datos (puede tardar varios minutos)...")
+                            sync_queue.put("🔄 Sincronizando datos (puede tardar varios minutos)...")
                             result = sync_manager.sync_all()
                             print("[DEBUG] sync_all() completado")
 
@@ -1860,9 +1879,8 @@ class ConfigWindow:
                         }
 
                     print("[DEBUG] Notificando completion...")
-                    # Notificar completion
-                    if sync_window.winfo_exists():
-                        sync_window.event_generate('<<SyncComplete>>')
+                    # Notificar completion (event_generate es thread-safe)
+                    sync_window.event_generate('<<SyncComplete>>')
 
                 def on_sync_complete(event):
                     """Manejador de completion de sincronización"""
