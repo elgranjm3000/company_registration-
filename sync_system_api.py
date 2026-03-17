@@ -555,16 +555,28 @@ class APISyncManager:
             return False
 
     def _crear_indices_sync_hashes(self):
-        """Crea índices para sync_hashes."""
+        """Crea índices para sync_hashes (PostgreSQL 9 compatible)."""
         indices = [
-            ("idx_sync_hashes_lookup", "CREATE INDEX IF NOT EXISTS idx_sync_hashes_lookup ON sync_hashes(table_name, record_key, company_id)"),
-            ("idx_sync_hashes_table", "CREATE INDEX IF NOT EXISTS idx_sync_hashes_table ON sync_hashes(table_name, company_id)")
+            ("idx_sync_hashes_lookup", "CREATE INDEX idx_sync_hashes_lookup ON sync_hashes(table_name, record_key, company_id)"),
+            ("idx_sync_hashes_table", "CREATE INDEX idx_sync_hashes_table ON sync_hashes(table_name, company_id)")
         ]
 
         for nombre_idx, query in indices:
             try:
-                self.pg_cursor.execute(query)
-                self.pg_conn.commit()
+                # Verificar si el índice ya existe (PostgreSQL 9 compatible)
+                self.pg_cursor.execute("""
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE indexname = %s
+                """, (nombre_idx,))
+                count = self.pg_cursor.fetchone()[0]
+
+                if count == 0:
+                    # El índice no existe, crearlo
+                    self.pg_cursor.execute(query)
+                    self.pg_conn.commit()
+                    print(f"[DEBUG] Índice {nombre_idx} creado")
+                else:
+                    print(f"[DEBUG] Índice {nombre_idx} ya existe, omitiendo")
             except Exception as e:
                 error_msg = str(e).lower()
                 if "already exists" not in error_msg:
