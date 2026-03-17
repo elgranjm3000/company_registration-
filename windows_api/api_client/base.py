@@ -275,72 +275,74 @@ class BaseAPIClient:
         raise APIError("Max retries exceeded")
 
     def _log_request(self, method: str, endpoint: str, params: Optional[Dict], json_data: Optional[Dict]):
-        """Log información de la request saliente."""
+        """Log información de la request saliente (solo endpoint, sin datos sensibles)."""
         try:
-            msg = f"📤 API REQUEST: {method} {endpoint}"
+            # Solo mostrar endpoint y método, NO mostrar datos enviados
+            msg = f"📤 {method} {endpoint}"
 
-            # Agregar params si hay
-            if params:
-                params_str = str(params)[:200]  # Limitar longitud
-                msg += f"\n   Params: {params_str}"
-
-            # Agregar body si hay (solo para POST/PUT)
+            # Si hay datos, solo mostrar cantidad
             if json_data and method in ['POST', 'PUT', 'PATCH']:
-                # Ocultar password si está presente
-                safe_data = json_data.copy()
-                if 'password' in safe_data:
-                    safe_data['password'] = '***HIDDEN***'
-                data_str = str(safe_data)[:300]  # Limitar longitud
-                msg += f"\n   Body: {data_str}"
+                if isinstance(json_data, dict):
+                    if 'products' in json_data:
+                        msg += f" ({len(json_data['products'])} products)"
+                    elif 'customers' in json_data:
+                        msg += f" ({len(json_data['customers'])} customers)"
+                    elif 'sellers' in json_data:
+                        msg += f" ({len(json_data['sellers'])} sellers)"
+                    elif 'categories' in json_data:
+                        msg += f" ({len(json_data['categories'])} categories)"
+                    else:
+                        msg += " (1 item)"
+                else:
+                    msg += " (data)"
 
-            self.logger.info(msg)
+            self.logger.debug(msg)  # Usar debug para no saturar logs de info
         except Exception:
             pass  # No fallar el request por error de logging
 
     def _log_response(self, response, endpoint: str):
-        """Log información de la respuesta entrante."""
+        """Log información de la respuesta entrante (solo resultado, sin datos)."""
         try:
-            # Status code y tiempo
-            msg = f"📥 API RESPONSE: {response.status_code} {endpoint}"
+            # Status code
+            status_icon = "✅" if 200 <= response.status_code < 300 else "❌"
+            msg = f"{status_icon} {response.status_code} {endpoint}"
 
-            # Intentar parsear JSON
+            # Intentar parsear JSON para extraer solo estadísticas
             try:
                 if response.headers.get('content-type', '').startswith('application/json'):
                     json_resp = response.json()
 
-                    # Extraer info útil según la estructura
                     if isinstance(json_resp, dict):
-                        # Respuestas típicas de la API
-                        if 'success' in json_resp:
-                            msg += f" | success={json_resp['success']}"
+                        # Solo mostrar estadísticas, NO mostrar datos
+                        stats = []
 
-                        if 'message' in json_resp:
-                            msg += f" | message={json_resp['message'][:100]}"
+                        if 'success' in json_resp:
+                            stats.append(f"success={json_resp['success']}")
 
                         if 'created' in json_resp:
-                            msg += f" | created={json_resp['created']}"
+                            stats.append(f"created={json_resp['created']}")
 
                         if 'updated' in json_resp:
-                            msg += f" | updated={json_resp['updated']}"
+                            stats.append(f"updated={json_resp['updated']}")
 
-                        if 'errors' in json_resp:
-                            msg += f" | errors={json_resp['errors']}"
+                        if 'errors' in json_resp and json_resp['errors'] > 0:
+                            stats.append(f"errors={json_resp['errors']}")
 
                         if 'data' in json_resp and isinstance(json_resp['data'], list):
-                            msg += f" | items={len(json_resp['data'])}"
+                            stats.append(f"items={len(json_resp['data'])}")
 
-                        # Si hay error, mostrar detalles
-                        if 'error' in json_resp:
-                            msg += f"\n   ❌ Error: {str(json_resp['error'])[:200]}"
+                        if stats:
+                            msg += f" | {', '.join(stats)}"
+
+                        # Si hay error, mostrar mensaje breve
+                        if 'error' in json_resp and response.status_code >= 400:
+                            msg += f" | Error: {str(json_resp['error'])[:100]}"
 
                     elif isinstance(json_resp, list):
                         msg += f" | items={len(json_resp)}"
 
             except Exception:
-                # Si no es JSON o hay error parseando
-                text_preview = response.text[:100] if response.text else ''
-                if text_preview:
-                    msg += f" | {text_preview}"
+                pass  # Si no es JSON, no mostrar detalles
 
             # Log según status code
             if response.status_code >= 200 and response.status_code < 300:
@@ -348,7 +350,7 @@ class BaseAPIClient:
             elif response.status_code >= 400:
                 self.logger.warning(msg)
             else:
-                self.logger.info(msg)
+                self.logger.debug(msg)
 
         except Exception:
             pass  # No fallar el request por error de logging

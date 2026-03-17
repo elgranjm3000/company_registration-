@@ -8,7 +8,7 @@
   "postgres_password": "muentes123.",
   "company_rif": "J195071884",
   "company_email": "muentes2@hotmail.com",
-  "sync_interval_minutes": "30",
+  "sync_interval_minutes": "1",
   "configured": true,
   "first_run": false
 }
