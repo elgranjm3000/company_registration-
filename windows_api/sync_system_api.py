@@ -49,6 +49,9 @@ try:
 except ImportError as e:
     print(f"Error: No se pueden importar los módulos: {e}")
     print("Asegúrese de que api_client/ y sync/ estén en el directorio actual")
+    # Mantener ventana abierta si es .exe compilado
+    if getattr(sys, 'frozen', False):
+        input("\nPresiona Enter para salir...")
     sys.exit(1)
 
 # Importar psycopg2
@@ -57,6 +60,9 @@ try:
 except ImportError:
     print("Error: psycopg2 no está instalado")
     print("Ejecute: pip install psycopg2-binary")
+    # Mantener ventana abierta si es .exe compilado
+    if getattr(sys, 'frozen', False):
+        input("\nPresiona Enter para salir...")
     sys.exit(1)
 
 # ==============================================================================

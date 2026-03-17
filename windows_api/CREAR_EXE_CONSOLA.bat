@@ -22,28 +22,7 @@ if %errorlevel% neq 0 (
 echo Creando ejecutable con consola...
 echo.
 
-pyinstaller --name=SyncAPISystem ^
-    --onedir ^
-    --console ^
-    --clean ^
-    --noconfirm ^
-    --log-level=INFO ^
-    --add-data="config_encryption.py;." ^
-    --add-data="api_client;base" ^
-    --add-data="sync;base" ^
-    --hidden-import=psycopg2 ^
-    --hidden-import=requests ^
-    --hidden-import=pystray ^
-    --hidden-import=PIL ^
-    --hidden-import=tkinter ^
-    --hidden-import=cryptography ^
-    --hidden-import=config_encryption ^
-    --hidden-import=api_client ^
-    --hidden-import=sync ^
-    --collect-all=psycopg2 ^
-    --collect-all=pystray ^
-    --collect-all=Pillow ^
-    sync_system_api.py
+pyinstaller --clean sync_system_api.spec
 
 if %errorlevel% neq 0 (
     echo.

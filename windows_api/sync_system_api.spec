@@ -11,8 +11,12 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        # Agregar aquí cualquier archivo de datos necesario
-        ('icon.ico', '.'),  # Icono personalizado si existe
+        # Agregar módulos del sistema
+        ('api_client', 'api_client'),
+        ('sync', 'sync'),
+        ('config_encryption.py', '.'),
+        # Icono personalizado si existe
+        ('icon.ico', '.') if os.path.exists('icon.ico') else None,
     ],
     hiddenimports=[
         # Módulos principales de la aplicación
