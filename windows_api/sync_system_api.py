@@ -16,8 +16,34 @@ Características:
 - Validación de empresa y obtención de company_id
 """
 
-import os
+# ========================================
+# DIAGNÓSTICO DE INICIO (antes de cualquier import)
+# ========================================
 import sys
+import os
+import traceback
+
+CRASH_LOG = "startup_crash.log"
+
+def log_startup_error(error_type, error_msg, traceback_str):
+    """Registrar error de inicio en archivo"""
+    try:
+        with open(CRASH_LOG, "w", encoding="utf-8") as f:
+            f.write(f"STARTUP ERROR - {error_type}\n")
+            f.write("="*70 + "\n")
+            f.write(f"Error: {error_msg}\n")
+            f.write(f"\nTraceback:\n{traceback_str}\n")
+            f.write(f"\nPython Version: {sys.version}\n")
+            f.write(f"Executable: {sys.executable}\n")
+            f.write(f"Frozen: {getattr(sys, 'frozen', False)}\n")
+            f.write(f"Working Directory: {os.getcwd()}\n")
+            f.write(f"\nsys.path:\n")
+            for p in sys.path:
+                f.write(f"  - {p}\n")
+    except:
+        pass  # Si falla el logging, no hay nada que hacer
+
+import os
 import time
 import json
 import argparse
@@ -47,8 +73,10 @@ try:
         QuotesSync
     )
 except ImportError as e:
-    print(f"Error: No se pueden importar los módulos: {e}")
+    error_msg = f"Error: No se pueden importar los módulos: {e}"
+    print(error_msg)
     print("Asegúrese de que api_client/ y sync/ estén en el directorio actual")
+    log_startup_error("IMPORT_ERROR", error_msg, traceback.format_exc())
     # Mantener ventana abierta si es .exe compilado
     if getattr(sys, 'frozen', False):
         input("\nPresiona Enter para salir...")
@@ -57,9 +85,11 @@ except ImportError as e:
 # Importar psycopg2
 try:
     import psycopg2
-except ImportError:
-    print("Error: psycopg2 no está instalado")
+except ImportError as e:
+    error_msg = f"Error: psycopg2 no está instalado - {e}"
+    print(error_msg)
     print("Ejecute: pip install psycopg2-binary")
+    log_startup_error("PSYCOPG2_ERROR", error_msg, traceback.format_exc())
     # Mantener ventana abierta si es .exe compilado
     if getattr(sys, 'frozen', False):
         input("\nPresiona Enter para salir...")
@@ -2641,4 +2671,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        error_msg = f"Error durante la ejecución: {e}"
+        print(error_msg)
+        print("\nDetalles del error:")
+        traceback.print_exc()
+        log_startup_error("RUNTIME_ERROR", error_msg, traceback.format_exc())
+        # Mantener ventana abierta si es .exe compilado
+        if getattr(sys, 'frozen', False):
+            input("\nPresiona Enter para salir...")
+        sys.exit(1)
