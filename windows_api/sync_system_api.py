@@ -486,47 +486,67 @@ class APISyncManager:
         - Tabla sync_hashes si no existe
         - Tabla sync_config si no existe
         - Índices para sync_hashes
-        - Triggers para marcar productos eliminados
-        - Triggers para marcar productos actualizados
+        - Triggers para marcar productos eliminados (solo si tabla se creó)
+        - Triggers para marcar productos actualizados (solo si tabla se creó)
 
         Returns:
             True si exitoso, False si hubo error
         """
         try:
-            # Crear tabla sync_hashes
-            create_table_query = """
-            CREATE TABLE IF NOT EXISTS sync_hashes (
-                id SERIAL PRIMARY KEY,
-                table_name VARCHAR(50) NOT NULL,
-                record_key VARCHAR(100) NOT NULL,
-                record_hash VARCHAR(32) NOT NULL,
-                last_sync_data TEXT,
-                synced_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW(),
-                company_id INTEGER,
-                deleted_at TIMESTAMP,
-                pending_sync BOOLEAN DEFAULT FALSE,
-                UNIQUE(table_name, record_key, company_id)
-            );
-            """
-            self.pg_cursor.execute(create_table_query)
-            self.pg_conn.commit()
+            # Verificar si sync_hashes ya existe
+            self.pg_cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'sync_hashes'
+                );
+            """)
+            sync_hashes_existe = self.pg_cursor.fetchone()[0]
+
+            # Crear tabla sync_hashes solo si no existe
+            if not sync_hashes_existe:
+                print("[DEBUG] Creando tabla sync_hashes...")
+                create_table_query = """
+                CREATE TABLE sync_hashes (
+                    id SERIAL PRIMARY KEY,
+                    table_name VARCHAR(50) NOT NULL,
+                    record_key VARCHAR(100) NOT NULL,
+                    record_hash VARCHAR(32) NOT NULL,
+                    last_sync_data TEXT,
+                    synced_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    company_id INTEGER,
+                    deleted_at TIMESTAMP,
+                    pending_sync BOOLEAN DEFAULT FALSE,
+                    UNIQUE(table_name, record_key, company_id)
+                );
+                """
+                self.pg_cursor.execute(create_table_query)
+                self.pg_conn.commit()
+                print("[DEBUG] Tabla sync_hashes creada")
+            else:
+                print("[DEBUG] Tabla sync_hashes ya existe, omitiendo creación")
 
             # Crear tabla sync_config
             self._crear_tabla_sync_config()
 
-            # Crear índices
+            # Crear índices (son seguros con IF NOT EXISTS)
             self._crear_indices_sync_hashes()
 
-            # Crear triggers de eliminación
-            self._crear_trigger_eliminacion_products()
-            self._crear_trigger_eliminacion_categories()
-            self._crear_trigger_eliminacion_customers()
-            self._crear_trigger_eliminacion_sellers()
+            # Solo crear triggers si la tabla sync_hashes se acaba de crear
+            if not sync_hashes_existe:
+                print("[DEBUG] Creando triggers...")
+                # Crear triggers de eliminación
+                self._crear_trigger_eliminacion_products()
+                self._crear_trigger_eliminacion_categories()
+                self._crear_trigger_eliminacion_customers()
+                self._crear_trigger_eliminacion_sellers()
 
-            # Crear triggers de actualización
-            self._crear_trigger_actualizacion_products()
-            self._crear_trigger_actualizacion_customers()
+                # Crear triggers de actualización
+                self._crear_trigger_actualizacion_products()
+                self._crear_trigger_actualizacion_customers()
+                print("[DEBUG] Triggers creados")
+            else:
+                print("[DEBUG] Triggers ya existen, omitiendo creación")
 
             self._log("✅ Tablas y triggers de sincronización inicializados", "debug")
             return True
@@ -556,18 +576,34 @@ class APISyncManager:
         """
         Crea la tabla sync_config para almacenar configuración de sincronización.
         Se usa para guardar el company_id que usan los triggers UPDATE.
+        Solo crea si no existe.
         """
         try:
-            create_table_query = """
-            CREATE TABLE IF NOT EXISTS sync_config (
-                key VARCHAR(100) PRIMARY KEY,
-                value INTEGER NOT NULL,
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-            """
-            self.pg_cursor.execute(create_table_query)
-            self.pg_conn.commit()
+            # Verificar si ya existe
+            self.pg_cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'sync_config'
+                );
+            """)
+            existe = self.pg_cursor.fetchone()[0]
+
+            if not existe:
+                print("[DEBUG] Creando tabla sync_config...")
+                create_table_query = """
+                CREATE TABLE sync_config (
+                    key VARCHAR(100) PRIMARY KEY,
+                    value INTEGER NOT NULL,
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+                """
+                self.pg_cursor.execute(create_table_query)
+                self.pg_conn.commit()
+                print("[DEBUG] Tabla sync_config creada")
+            else:
+                print("[DEBUG] Tabla sync_config ya existe, omitiendo creación")
         except Exception as e:
+            print(f"[DEBUG] Error creando sync_config: {e}")
             self.pg_conn.rollback()
 
     def _crear_trigger_eliminacion_products(self):
