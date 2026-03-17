@@ -1034,9 +1034,9 @@ class ConfigWindow:
         user = self.pg_user_var.get().strip()
         password = self.pg_password_var.get().strip()
 
-        # Validar campos requeridos
-        if not all([host, port, database, user, password]):
-            messagebox.showwarning("Advertencia", "Por favor complete todos los campos de PostgreSQL")
+        # Validar campos requeridos (password puede estar en blanco)
+        if not all([host, port, database, user]):
+            messagebox.showwarning("Advertencia", "Por favor complete Host, Puerto, Database y Usuario de PostgreSQL")
             return
 
         self.log("🧪 Probando conexión a PostgreSQL...")
@@ -1101,7 +1101,7 @@ class ConfigWindow:
             'Email API': self.api_email_var.get(),
             'Password API': self.api_password_var.get(),
             'Database PostgreSQL': self.pg_database_var.get(),
-            'Password PostgreSQL': self.pg_password_var.get(),
+            # Password PostgreSQL puede estar en blanco (confianza en el host)
             'RIF de la empresa': self.company_rif_var.get(),
             'Email de la empresa': self.company_email_var.get()
         }
