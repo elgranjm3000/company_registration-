@@ -1573,11 +1573,12 @@ class ConfigWindow:
                     progreso.destroy()
 
                 if resultado['exito']:
-                    # Cerrar ventana de config
-                    self.root.destroy()
-
-                    # Ejecutar primera sincronización e iniciar System Tray
+                    # PRIMERO: Ejecutar primera sincronización (crea nueva ventana)
                     ejecutar_primera_sync_y_tray(resultado['api_password'])
+
+                    # LUEGO: Cerrar ventana de config
+                    if self.root.winfo_exists():
+                        self.root.destroy()
                 else:
                     # Si hubo error, mantener la ventana de config abierta
                     pass
