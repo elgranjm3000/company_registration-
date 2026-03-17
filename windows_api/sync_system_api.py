@@ -591,7 +591,7 @@ class APISyncManager:
                 create_table_query = """
                 CREATE TABLE sync_config (
                     key VARCHAR(100) PRIMARY KEY,
-                    value INTEGER NOT NULL,
+                    value VARCHAR(100) NOT NULL,
                     updated_at TIMESTAMP DEFAULT NOW()
                 );
                 """
@@ -905,6 +905,12 @@ class APISyncManager:
 
         # ACTUALIZAR sync_config con el company_id (para que los triggers lo usen)
         try:
+            # Primero hacer rollback para limpiar cualquier transacción abortada
+            try:
+                self.pg_conn.rollback()
+            except:
+                pass
+
             cursor = self.pg_conn.cursor()
 
             # Verificar si ya existe
@@ -934,7 +940,10 @@ class APISyncManager:
                 self.pg_conn.commit()
         except Exception as e:
             self._log(f"⚠️ Error actualizando sync_config: {e}", "warning")
-            self.pg_conn.rollback()
+            try:
+                self.pg_conn.rollback()
+            except:
+                pass
 
         # 1. Categories
         self._log("\n📁 SINCRONIZANDO CATEGORIES...")
