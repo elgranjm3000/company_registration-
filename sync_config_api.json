@@ -1,0 +1,14 @@
+{
+  "api_url": "https://chrystal.com.ve/mobile/public/api",
+  "api_email": "admin@test.com",
+  "postgres_host": "localhost",
+  "postgres_port": "5432",
+  "postgres_database": "nueva",
+  "postgres_user": "postgres",
+  "postgres_password": "muentes123.",
+  "company_rif": "J195071884",
+  "company_email": "muentes2@hotmail.com",
+  "sync_interval_minutes": "30",
+  "configured": true,
+  "first_run": false
+}

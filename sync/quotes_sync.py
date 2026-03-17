@@ -1,0 +1,262 @@
+"""
+Sincronización de Quotes (API REST → PostgreSQL)
+"""
+
+from typing import Dict, List, Any
+from datetime import datetime
+import hashlib
+import json
+
+
+class QuotesSync:
+    """Sincronización de quotes desde la API REST hacia PostgreSQL"""
+
+    def __init__(self, pg_conn, pg_cursor, company_id: int, quotes_client, logger=None):
+        """
+        Args:
+            pg_conn: Conexión a PostgreSQL
+            pg_cursor: Cursor de PostgreSQL
+            company_id: ID de la empresa
+            quotes_client: Cliente API de Quotes
+            logger: Función de log opcional
+        """
+        self.pg_conn = pg_conn
+        self.pg_cursor = pg_cursor
+        self.company_id = company_id
+        self.quotes_client = quotes_client
+        self.logger = logger or self._default_logger
+        self.stats = {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0}
+
+    def _default_logger(self, msg: str, level: str = "info"):
+        """Logger por defecto"""
+        print(f"[{level.upper()}] {msg}")
+
+    def _log(self, msg: str, level: str = "info"):
+        """Log message"""
+        self.logger(msg, level)
+
+    def _generar_hash_quote(self, quote: dict) -> str:
+        """Generar hash MD5 de un quote para detectar cambios"""
+        # Datos relevantes para el hash
+        datos_relevantes = {
+            'id': quote.get('id'),
+            'quote_number': quote.get('quote_number'),
+            'subtotal': quote.get('subtotal'),
+            'tax_amount': quote.get('tax_amount'),
+            'discount_amount': quote.get('discount_amount'),
+            'total': quote.get('total'),
+            'status': quote.get('status'),
+            'items': quote.get('items', [])
+        }
+        return hashlib.md5(json.dumps(datos_relevantes, sort_keys=True).encode()).hexdigest()
+
+    def detect_changes(self) -> Dict[str, List]:
+        """Detectar cotizaciones en estado draft pendientes de sincronización desde la API"""
+        self._log("💰 Detectando cotizaciones en estado draft pendientes de sincronización...", "info")
+
+        cambios = {'nuevos': [], 'existentes': []}
+
+        try:
+            # Obtener quotes en estado draft de la API
+            quotes_api = self.quotes_client.get_pending_quotes(self.company_id)
+
+            if not quotes_api:
+                self._log("   No hay cotizaciones en estado draft", "info")
+                return cambios
+
+            self._log(f"   Cotizaciones encontradas: {len(quotes_api)}", "info")
+
+            for quote in quotes_api:
+                quote_id = quote.get('id')
+                quote_number = quote.get('quote_number')
+
+                # Verificar si ya existe en sync_hashes
+                self.pg_cursor.execute("""
+                    SELECT record_hash FROM sync_hashes
+                    WHERE table_name = 'quotes'
+                      AND record_key = %s
+                      AND company_id = %s
+                """, (str(quote_id), self.company_id))
+
+                resultado = self.pg_cursor.fetchone()
+
+                if resultado is None:
+                    # Nuevo quote
+                    cambios['nuevos'].append(quote)
+                    self._log(f"  ✨ NUEVA: Cotización #{quote_id} ({quote_number})", "info")
+                else:
+                    cambios['existentes'].append(quote)
+                    self._log(f"  ⏭️  EXISTE: Cotización #{quote_id} ({quote_number})", "debug")
+
+            self._log(f"✅ Cotizaciones detectadas: {len(cambios['nuevos'])} nuevas", "info")
+
+        except Exception as e:
+            self._log(f"Error detectando cotizaciones: {e}", "error")
+            self.stats['errors'] += 1
+
+        return cambios
+
+    def sync_to_postgresql(self, changes: Dict[str, List]) -> bool:
+        """Sincronizar quotes a PostgreSQL"""
+        nuevos_quotes = changes.get('nuevos', [])
+
+        if not nuevos_quotes:
+            self._log("No hay cotizaciones nuevas para sincronizar", "info")
+            return True
+
+        self._log(f"Sincronizando {len(nuevos_quotes)} cotizaciones a PostgreSQL...", "info")
+
+        for quote in nuevos_quotes:
+            try:
+                self._insertar_quote_completo(quote)
+                self.stats['created'] += 1
+
+                # Actualizar status en la API REST
+                quote_id = quote.get('id')
+                quote_number = quote.get('quote_number')
+
+                # Marcar como 'approved' en la API
+                if self.quotes_client.update_quote_status(quote_id, self.company_id, 'approved'):
+                    self._log(f"  ✅ Estado actualizado en API: Cotización #{quote_id} ({quote_number}) → approved", "info")
+                else:
+                    self._log(f"  ⚠️ No se pudo actualizar estado en API: Cotización #{quote_id}", "warning")
+
+                # Guardar en sync_hashes
+                self._guardar_hash(quote)
+
+                self._log(f"  ✅ Cotización #{quote_id} sincronizada completamente", "info")
+
+            except Exception as e:
+                self._log(f"  ❌ Error sincronizando cotización #{quote.get('id')}: {e}", "error")
+                self.stats['errors'] += 1
+
+        return self.stats['errors'] == 0
+
+    def _insertar_quote_completo(self, quote: dict) -> int:
+        """Insertar quote completo en PostgreSQL (sales_operation)"""
+        from decimal import Decimal
+
+        # Datos básicos del quote
+        quote_id = quote.get('id')
+        quote_number = quote.get('quote_number')
+        customer = quote.get('customer', {})
+        seller = quote.get('seller', {})
+        items = quote.get('items', [])
+
+        # Fechas
+        emission_date = self._parse_date(quote.get('quote_date'))
+        register_date = self._parse_date(quote.get('created_at'))
+
+        # Cliente
+        client_code = customer.get('code', customer.get('rif', ''))
+        client_name = customer.get('name', '')
+        client_address = customer.get('address', '')
+        client_phone = customer.get('phone', '')
+
+        # Vendedor
+        seller_name = seller.get('name', '')
+
+        # Totales
+        total_amount = float(quote.get('subtotal', 0))
+        tax_amount = float(quote.get('tax_amount', 0))
+        discount_amount = float(quote.get('discount_amount', 0))
+        total = float(quote.get('total', 0))
+
+        # Insertar sales_operation (encabezado)
+        sql_operation = """
+            INSERT INTO sales_operation (
+                operation_type, document_no, emission_date, register_date,
+                client_code, client_name, client_address, client_phone,
+                seller, total_amount, total_tax, discount, total,
+                pending, canceled, coin_code
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            RETURNING correlative
+        """
+
+        self.pg_cursor.execute(sql_operation, (
+            'BUDGET',  # operation_type
+            str(quote_number),  # document_no
+            emission_date,  # emission_date
+            register_date,  # register_date
+            client_code,  # client_code
+            client_name,  # client_name
+            client_address,  # client_address
+            client_phone,  # client_phone
+            seller_name,  # seller
+            total_amount,  # total_amount
+            tax_amount,  # total_tax
+            discount_amount,  # discount
+            total,  # total
+            False,  # pending
+            False,  # canceled
+            'USD'  # coin_code (default)
+        ))
+
+        correlative = self.pg_cursor.fetchone()[0]
+        self._log(f"     Insertada venta #{correlative}", "debug")
+
+        # Insertar items (sales_operation_details)
+        for item in items:
+            self._insertar_item(correlative, item, quote_number)
+
+        self.pg_conn.commit()
+        return correlative
+
+    def _insertar_item(self, correlative: int, item: dict, quote_number: str):
+        """Insertar item del quote en sales_operation_details"""
+        product = item.get('product', {})
+        product_code = product.get('code') if product else None
+
+        sql_detalle = """
+            INSERT INTO sales_operation_details (
+                correlative, product_code, description,
+                quantity, unit_price, discount, tax, total
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s
+            )
+        """
+
+        self.pg_cursor.execute(sql_detalle, (
+            correlative,
+            product_code,
+            item.get('name', ''),
+            float(item.get('quantity', 0)),
+            float(item.get('unit_price', 0)),
+            float(item.get('discount_amount', 0)),
+            float(item.get('tax_amount', 0)),
+            float(item.get('total', 0))
+        ))
+
+        self._log(f"     Insertado ítem: {item.get('name')}", "debug")
+
+    def _guardar_hash(self, quote: dict):
+        """Guardar hash en sync_hashes"""
+        quote_id = quote.get('id')
+        hash_value = self._generar_hash_quote(quote)
+
+        self.pg_cursor.execute("""
+            INSERT INTO sync_hashes (table_name, record_key, record_hash, company_id, pending_sync, deleted_at)
+            VALUES ('quotes', %s, %s, %s, FALSE, NULL)
+        """, (str(quote_id), hash_value, self.company_id))
+
+        self.pg_conn.commit()
+
+    def _parse_date(self, date_str: str) -> datetime:
+        """Parsear fecha desde formato API"""
+        if not date_str:
+            return datetime.now()
+
+        try:
+            # Formato API: "2026-03-14T10:30:00.000000Z"
+            if 'T' in date_str:
+                return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            else:
+                return datetime.fromisoformat(date_str)
+        except:
+            return datetime.now()
+
+    def get_stats(self) -> Dict[str, int]:
+        """Obtener estadísticas de sincronización"""
+        return self.stats

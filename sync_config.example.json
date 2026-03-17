@@ -1,0 +1,23 @@
+{
+  "postgres_host": "localhost",
+  "postgres_port": "5432",
+  "postgres_database": "chrystal_db",
+  "postgres_user": "postgres",
+  "postgres_password": "your_password_here",
+
+  "company_rif": "J-123456789",
+  "company_email": "empresa@email.com",
+  "company_id": 27,
+
+  "sync_interval_minutes": "30",
+
+  "configured": true,
+
+  "api_config": {
+    "base_url": "https://api.chrystal.com/api",
+    "api_key": "your-bearer-token-here",
+    "timeout": 30,
+    "max_retries": 3,
+    "batch_size": 5000
+  }
+}

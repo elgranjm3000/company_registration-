@@ -1,0 +1,2638 @@
+#!/usr/bin/env python3
+"""
+SISTEMA DE SINCRONIZACIÓN API REST - NUEVA ARQUITECTURA
+=========================================================
+Este sistema sincroniza PostgreSQL → API REST (sin MySQL)
+
+Modos:
+- config: Primera configuración
+- manager: Interfaz de administración
+- reconfig: Reconfigurar desde cero
+
+Características:
+- Token en memoria (no se guarda en disco)
+- Login automático con email/password
+- Refresh de token cuando expira
+- Validación de empresa y obtención de company_id
+"""
+
+import os
+import sys
+import time
+import json
+import argparse
+import base64
+import hashlib
+import re
+from pathlib import Path
+from datetime import datetime
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
+
+# Importar clientes API y sincronizadores
+try:
+    from api_client import (
+        CompanyClient,
+        CategoriesClient,
+        ProductsClient,
+        CustomersClient,
+        SellersClient,
+        QuotesClient
+    )
+    from sync import (
+        CategoriesSync,
+        ProductsSync,
+        CustomersSync,
+        SellersSync,
+        QuotesSync
+    )
+except ImportError as e:
+    print(f"Error: No se pueden importar los módulos: {e}")
+    print("Asegúrese de que api_client/ y sync/ estén en el directorio actual")
+    sys.exit(1)
+
+# Importar psycopg2
+try:
+    import psycopg2
+except ImportError:
+    print("Error: psycopg2 no está instalado")
+    print("Ejecute: pip install psycopg2-binary")
+    sys.exit(1)
+
+# ==============================================================================
+# CONFIGURACIÓN
+# ==============================================================================
+
+CONFIG_FILE = "sync_config_api.json"
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
+
+def get_log_file(company_email=None):
+    """Obtener archivo de log según la empresa"""
+    if company_email:
+        email_safe = re.sub(r'[^\w\-]', '_', company_email.replace('@', '_'))[:50]
+        return os.path.join(LOGS_DIR, f"sync_api_{email_safe}.log")
+    return os.path.join(LOGS_DIR, "sync_api.log")
+
+
+def setup_logging(company_email=None):
+    """
+    Configurar logging para guardar en archivo y mostrar en consola.
+
+    Args:
+        company_email: Email de la empresa para nombrar el archivo de log
+
+    Returns:
+        logger function compatible con el sistema
+    """
+    log_file = get_log_file(company_email)
+
+    # Crear logger
+    import logging
+    logger = logging.getLogger('sync_api')
+    logger.setLevel(logging.DEBUG)
+
+    # IMPORTANTE: Evitar propagación al logger raíz para prevenir duplicados
+    logger.propagate = False
+
+    # Eliminar handlers existentes para evitar duplicados
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        handler.close()
+
+    # File handler
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    file_handler.setFormatter(file_format)
+    logger.addHandler(file_handler)
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_format = logging.Formatter('%(levelname)s: %(message)s')
+    console_handler.setFormatter(console_format)
+    logger.addHandler(console_handler)
+
+    # Función de log compatible (para usar con el logger existente)
+    def log_func(message: str, level: str = "info"):
+        """Función de log compatible"""
+        level_map = {
+            'debug': logging.DEBUG,
+            'info': logging.INFO,
+            'warning': logging.WARNING,
+            'error': logging.ERROR,
+            'critical': logging.CRITICAL
+        }
+        log_level = level_map.get(level.lower(), logging.INFO)
+        logger.log(log_level, message)
+
+    # Guardar referencia a log_func para poder agregar handlers GUI después
+    log_func._logger = logger
+    log_func._gui_handler = None
+
+    return log_func
+
+
+def add_gui_handler(logger_func, gui_log_func):
+    """
+    Agregar handler para enviar logs del logger de Python a la GUI.
+
+    Args:
+        logger_func: Función de log retornada por setup_logging
+        gui_log_func: Función de log de la GUI (message, level)
+    """
+    import logging
+
+    # Si ya existe un handler GUI, no agregar otro
+    if logger_func._gui_handler is not None:
+        return
+
+    class GUIHandler(logging.Handler):
+        """Handler personalizado para enviar logs a la GUI"""
+
+        def __init__(self, log_func):
+            super().__init__()
+            self.log_func = log_func
+
+        def emit(self, record):
+            try:
+                # Convertir nivel de logging a nivel del sistema
+                level_map = {
+                    logging.DEBUG: 'info',
+                    logging.INFO: 'info',
+                    logging.WARNING: 'warning',
+                    logging.ERROR: 'error',
+                    logging.CRITICAL: 'error'
+                }
+                level = level_map.get(record.levelno, 'info')
+
+                # Formatear mensaje
+                msg = self.format(record)
+
+                # Enviar a la GUI
+                self.log_func(msg, level)
+            except Exception:
+                pass  # No fallar por error de logging
+
+    # Crear y configurar handler
+    gui_handler = GUIHandler(gui_log_func)
+    gui_handler.setLevel(logging.INFO)
+    gui_format = logging.Formatter('%(message)s')  # Solo el mensaje, sin timestamp extra
+    gui_handler.setFormatter(gui_format)
+
+    # Agregar al logger
+    logger_func._logger.addHandler(gui_handler)
+    logger_func._gui_handler = gui_handler
+
+
+class APIAuthManager:
+    """
+    Gestor de autenticación API REST.
+
+    Maneja el token en memoria (nunca se guarda en disco).
+    Implementa refresh automático cuando el token expira.
+    """
+
+    def __init__(self, base_url: str, logger=None):
+        """
+        Args:
+            base_url: URL base de la API
+            logger: Logger opcional
+        """
+        self.base_url = base_url
+        self.logger = logger
+
+        # Datos en memoria (NO se guardan en disco)
+        self.api_token = None
+        self.token_expires_at = None
+        self.company_id = None
+        self.company_data = None
+
+        # Credenciales (solo para refresh)
+        self.api_email = None
+        self.api_password = None
+        self.device_name = "sync-system"
+
+    def login(self, email: str, password: str) -> dict:
+        """
+        Hacer login y obtener token.
+
+        Args:
+            email: Email del usuario
+            password: Password del usuario
+
+        Returns:
+            Dict con success, company_id, user_data, etc.
+        """
+        try:
+            import requests
+
+            self._log(f"🔐 Haciendo login a la API...")
+
+            response = requests.post(
+                f"{self.base_url}/auth/login",
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                json={
+                    'email': email,
+                    'password': password,
+                    'device_name': self.device_name,
+                    'force_logout': True
+                },
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    user_data = data.get('data', {})
+
+                    # Guardar token en memoria
+                    self.api_token = user_data.get('token')
+                    self.token_expires_at = user_data.get('token_expires_at')
+                    self.api_email = email
+                    self.api_password = password
+
+                    self._log(f"✅ Login exitoso")
+                    self._log(f"   Token: {self.api_token[:20]}...")
+                    self._log(f"   Expira: {self.token_expires_at}")
+
+                    return {
+                        'success': True,
+                        'user': user_data.get('user'),
+                        'subscription': user_data.get('subscription')
+                    }
+
+            self._log(f"❌ Login falló: {response.status_code}", "error")
+            return {'success': False, 'error': f'HTTP {response.status_code}'}
+
+        except Exception as e:
+            self._log(f"❌ Error en login: {e}", "error")
+            return {'success': False, 'error': str(e)}
+
+    def validate_company(self, rif: str, email: str) -> dict:
+        """
+        Validar empresa y obtener company_id.
+
+        Args:
+            rif: RIF de la empresa
+            email: Email de la empresa
+
+        Returns:
+            Dict con success, company_id, company_data
+        """
+        try:
+            import requests
+
+            self._log(f"🏢 Validando empresa: {rif}")
+
+            if not self.api_token:
+                return {'success': False, 'error': 'No hay token. Haga login primero.'}
+
+            response = requests.post(
+                f"{self.base_url}/sync-batch/company/validate",
+                headers={
+                    'Authorization': f'Bearer {self.api_token}',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                json={
+                    'rif': rif,
+                    'email': email
+                },
+                timeout=30
+            )
+
+            if response.status_code in [200, 201]:
+                data = response.json()
+                if data.get('success'):
+                    self.company_id = data.get('company_id')
+                    self.company_data = data.get('company')
+
+                    self._log(f"✅ Empresa validada")
+                    self._log(f"   Company ID: {self.company_id}")
+                    self._log(f"   Nombre: {self.company_data.get('name')}")
+
+                    return {
+                        'success': True,
+                        'company_id': self.company_id,
+                        'company': self.company_data
+                    }
+
+            error_msg = response.json().get('message', 'Error desconocido') if response.text else 'Error desconocido'
+            self._log(f"❌ Validación falló: {error_msg}", "error")
+            return {'success': False, 'error': error_msg}
+
+        except Exception as e:
+            self._log(f"❌ Error validando empresa: {e}", "error")
+            return {'success': False, 'error': str(e)}
+
+    def get_auth_headers(self) -> dict:
+        """Retornar headers con token de autenticación."""
+        if not self.api_token:
+            raise Exception("No hay token. Haga login primero.")
+
+        return {
+            'Authorization': f'Bearer {self.api_token}',
+            'Content-Type': 'application/json'
+        }
+
+    def is_token_expired(self) -> bool:
+        """Verificar si el token expiró."""
+        if not self.token_expires_at:
+            return True
+
+        try:
+            from datetime import datetime
+            expires_at = datetime.fromisoformat(self.token_expires_at.replace('Z', '+00:00'))
+            now = datetime.now(expires_at.tzinfo)
+
+            # Considerar expirado si falta menos de 5 minutos
+            return (expires_at - now).total_seconds() < 300
+        except:
+            return True
+
+    def refresh_token_if_needed(self) -> bool:
+        """
+        Refrescar token si está por expirar.
+
+        Returns:
+            True si el refresh fue exitoso o no fue necesario
+        """
+        if not self.is_token_expired():
+            return True
+
+        self._log("🔄 Token por expirar, refrescando...")
+
+        if not self.api_email or not self.api_password:
+            self._log("❌ No hay credenciales para refresh", "error")
+            return False
+
+        result = self.login(self.api_email, self.api_password)
+        return result.get('success', False)
+
+    def _log(self, message: str, level: str = "info"):
+        """Log message."""
+        if self.logger:
+            self.logger(message, level)
+        else:
+            print(message)
+
+
+class APISyncManager:
+    """
+    Gestor de sincronización API REST.
+
+    Coordina la sincronización de todas las entidades.
+    """
+
+    def __init__(self, postgres_config: dict, auth_manager: APIAuthManager, logger=None):
+        """
+        Args:
+            postgres_config: Configuración de PostgreSQL
+            auth_manager: Gestor de autenticación API
+            logger: Logger opcional
+        """
+        self.postgres_config = postgres_config
+        self.auth_manager = auth_manager
+        self.logger = logger
+
+        # Conexión PostgreSQL
+        self.pg_conn = None
+        self.pg_cursor = None
+
+        # Clientes API (se crean después del login)
+        self.categories_client = None
+        self.products_client = None
+        self.customers_client = None
+        self.sellers_client = None
+        self.quotes_client = None
+
+        # Estadísticas
+        self.stats = {
+            'categories': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
+            'quotes': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
+            'products': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
+            'customers': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
+            'sellers': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0}
+        }
+
+        self.sync_running = True
+
+    def connect_postgresql(self) -> bool:
+        """Conectar a PostgreSQL."""
+        try:
+            self.pg_conn = psycopg2.connect(**self.postgres_config)
+            self.pg_cursor = self.pg_conn.cursor()
+            self._log("✅ Conectado a PostgreSQL")
+            return True
+        except Exception as e:
+            self._log(f"❌ Error conectando a PostgreSQL: {e}", "error")
+            return False
+
+    def initialize_api_clients(self) -> bool:
+        """Inicializar clientes API después del login."""
+        try:
+            import logging
+            base_url = self.auth_manager.base_url
+            api_token = self.auth_manager.api_token
+
+            if not api_token:
+                self._log("❌ No hay token API", "error")
+                return False
+
+            # Obtener logger compartido para todos los clientes
+            api_logger = logging.getLogger('sync_api')
+
+            # Crear clientes
+            self.categories_client = CategoriesClient(
+                base_url=base_url,
+                api_key=api_token,
+                logger=api_logger
+            )
+
+            self.products_client = ProductsClient(
+                base_url=base_url,
+                api_key=api_token,
+                logger=api_logger
+            )
+
+            self.customers_client = CustomersClient(
+                base_url=base_url,
+                api_key=api_token,
+                logger=api_logger
+            )
+
+            self.sellers_client = SellersClient(
+                base_url=base_url,
+                api_key=api_token,
+                logger=api_logger
+            )
+
+            self.quotes_client = QuotesClient(
+                base_url=base_url,
+                api_key=api_token,
+                logger=api_logger
+            )
+
+            self._log("✅ Clientes API inicializados")
+            return True
+
+        except Exception as e:
+            self._log(f"❌ Error inicializando clientes API: {e}", "error")
+            return False
+
+    def sync_all(self) -> dict:
+        """
+        Ejecutar sincronización completa de todas las entidades.
+
+        Orden: Categories → Products → Customers → Sellers → Quotes
+
+        Returns:
+            Dict con estadísticas agregadas
+        """
+        self._log("\n" + "="*70)
+        self._log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA")
+        self._log("="*70)
+
+        if not self.auth_manager.refresh_token_if_needed():
+            self._log("❌ No se pudo refrescar el token", "error")
+            return {'success': False, 'error': 'Token expired'}
+
+        company_id = self.auth_manager.company_id
+
+        # ACTUALIZAR sync_config con el company_id (para que los triggers lo usen)
+        try:
+            cursor = self.pg_conn.cursor()
+
+            # Verificar si ya existe
+            cursor.execute("""
+                SELECT value FROM sync_config WHERE key = 'current_company_id'
+            """)
+            existe = cursor.fetchone()
+
+            if existe:
+                valor_actual = existe[0]
+                if valor_actual != str(company_id):
+                    self._log(f"📝 Actualizando sync_config: {valor_actual} → {company_id}")
+                    cursor.execute("""
+                        UPDATE sync_config
+                        SET value = %s, updated_at = NOW()
+                        WHERE key = 'current_company_id'
+                    """, (str(company_id),))
+                    self.pg_conn.commit()
+                else:
+                    self._log(f"✅ sync_config ya tiene company_id correcto: {company_id}")
+            else:
+                self._log(f"📝 Insertando company_id en sync_config: {company_id}")
+                cursor.execute("""
+                    INSERT INTO sync_config (key, value, updated_at)
+                    VALUES ('current_company_id', %s, NOW())
+                """, (str(company_id),))
+                self.pg_conn.commit()
+        except Exception as e:
+            self._log(f"⚠️ Error actualizando sync_config: {e}", "warning")
+            self.pg_conn.rollback()
+
+        # 1. Categories
+        self._log("\n📁 SINCRONIZANDO CATEGORIES...")
+        categories_sync = CategoriesSync(
+            self.pg_conn,
+            self.categories_client,
+            company_id,
+            self.logger
+        )
+        categories_sync.execute()
+        self.stats['categories'] = categories_sync.stats.copy()
+
+        # 2. Products
+        self._log("\n📦 SINCRONIZANDO PRODUCTS...")
+        products_sync = ProductsSync(
+            self.pg_conn,
+            self.products_client,
+            company_id,
+            self.logger
+        )
+        products_sync.execute()
+        self.stats['products'] = products_sync.stats.copy()
+
+        # 3. Customers
+        self._log("\n👥 SINCRONIZANDO CUSTOMERS...")
+        customers_sync = CustomersSync(
+            self.pg_conn,
+            self.customers_client,
+            company_id,
+            self.logger
+        )
+        customers_sync.execute()
+        self.stats['customers'] = customers_sync.stats.copy()
+
+        # 4. Sellers
+        self._log("\n👔 SINCRONIZANDO SELLERS...")
+        sellers_sync = SellersSync(
+            self.pg_conn,
+            self.sellers_client,
+            company_id,
+            self.logger
+        )
+        sellers_sync.execute()
+        self.stats['sellers'] = sellers_sync.stats.copy()
+
+        # 5. Quotes (API → PostgreSQL)
+        self._log("\n💰 SINCRONIZANDO QUOTES...")
+        quotes_sync = QuotesSync(
+            self.pg_conn,
+            self.pg_conn.cursor(),
+            company_id,
+            self.quotes_client,
+            self.logger
+        )
+
+        # Detectar cambios
+        cambios_quotes = quotes_sync.detect_changes()
+
+        # Sincronizar a PostgreSQL
+        if cambios_quotes.get('nuevos'):
+            quotes_sync.sync_to_postgresql(cambios_quotes)
+
+        self.stats['quotes'] = quotes_sync.get_stats()
+
+        # Resumen
+        self._log("\n" + "="*70)
+        self._log("📊 RESUMEN DE SINCRONIZACIÓN")
+        self._log("="*70)
+
+        total_created = sum(s.get('created', 0) for s in self.stats.values())
+        total_updated = sum(s.get('updated', 0) for s in self.stats.values())
+        total_deleted = sum(s.get('deleted', 0) for s in self.stats.values())
+        total_errors = sum(s.get('errors', 0) for s in self.stats.values())
+
+        self._log(f"Created: {total_created}")
+        self._log(f"Updated: {total_updated}")
+        self._log(f"Deleted: {total_deleted}")
+        self._log(f"Errors: {total_errors}")
+
+        return {
+            'success': total_errors == 0,
+            'stats': self.stats
+        }
+
+    def sync_categories(self) -> dict:
+        """Sincronizar solo categories."""
+        self._log("\n📁 SINCRONIZANDO CATEGORIES...")
+
+        if not self.auth_manager.refresh_token_if_needed():
+            self._log("❌ No se pudo refrescar el token", "error")
+            return {'success': False, 'stats': {}}
+
+        company_id = self.auth_manager.company_id
+
+        categories_sync = CategoriesSync(
+            self.pg_conn,
+            self.categories_client,
+            company_id,
+            self.logger
+        )
+        categories_sync.execute()
+
+        return {
+            'success': categories_sync.stats['errors'] == 0,
+            'stats': categories_sync.stats.copy()
+        }
+
+    def sync_products(self) -> dict:
+        """Sincronizar solo products."""
+        self._log("\n📦 SINCRONIZANDO PRODUCTS...")
+
+        if not self.auth_manager.refresh_token_if_needed():
+            self._log("❌ No se pudo refrescar el token", "error")
+            return {'success': False, 'stats': {}}
+
+        company_id = self.auth_manager.company_id
+
+        products_sync = ProductsSync(
+            self.pg_conn,
+            self.products_client,
+            company_id,
+            self.logger
+        )
+        products_sync.execute()
+
+        return {
+            'success': products_sync.stats['errors'] == 0,
+            'stats': products_sync.stats.copy()
+        }
+
+    def sync_customers(self) -> dict:
+        """Sincronizar solo customers."""
+        self._log("\n👥 SINCRONIZANDO CUSTOMERS...")
+
+        if not self.auth_manager.refresh_token_if_needed():
+            self._log("❌ No se pudo refrescar el token", "error")
+            return {'success': False, 'stats': {}}
+
+        company_id = self.auth_manager.company_id
+
+        customers_sync = CustomersSync(
+            self.pg_conn,
+            self.customers_client,
+            company_id,
+            self.logger
+        )
+        customers_sync.execute()
+
+        return {
+            'success': customers_sync.stats['errors'] == 0,
+            'stats': customers_sync.stats.copy()
+        }
+
+    def sync_sellers(self) -> dict:
+        """Sincronizar solo sellers."""
+        self._log("\n👔 SINCRONIZANDO SELLERS...")
+
+        if not self.auth_manager.refresh_token_if_needed():
+            self._log("❌ No se pudo refrescar el token", "error")
+            return {'success': False, 'stats': {}}
+
+        company_id = self.auth_manager.company_id
+
+        sellers_sync = SellersSync(
+            self.pg_conn,
+            self.sellers_client,
+            company_id,
+            self.logger
+        )
+        sellers_sync.execute()
+
+        return {
+            'success': sellers_sync.stats['errors'] == 0,
+            'stats': sellers_sync.stats.copy()
+        }
+
+    def sync_quotes(self) -> dict:
+        """Sincronizar solo quotes."""
+        self._log("\n💰 SINCRONIZANDO QUOTES...")
+
+        if not self.auth_manager.refresh_token_if_needed():
+            self._log("❌ No se pudo refrescar el token", "error")
+            return {'success': False, 'stats': {}}
+
+        company_id = self.auth_manager.company_id
+
+        quotes_sync = QuotesSync(
+            self.pg_conn,
+            self.pg_conn.cursor(),
+            company_id,
+            self.quotes_client,
+            self.logger
+        )
+
+        cambios_quotes = quotes_sync.detect_changes()
+
+        if cambios_quotes.get('nuevos'):
+            quotes_sync.sync_to_postgresql(cambios_quotes)
+
+        return {
+            'success': quotes_sync.get_stats()['errors'] == 0,
+            'stats': quotes_sync.get_stats()
+        }
+
+    def close(self):
+        """Cerrar conexiones."""
+        if self.pg_conn:
+            self.pg_conn.close()
+            self._log("✅ Conexión PostgreSQL cerrada")
+
+    def _log(self, message: str, level: str = "info"):
+        """Log message."""
+        if self.logger:
+            self.logger(message, level)
+        else:
+            print(message)
+
+
+# ==============================================================================
+# GUI - CONFIG WINDOW
+# ==============================================================================
+
+class ConfigWindow:
+    """Ventana de configuración inicial."""
+
+    def __init__(self, root):
+        self.root = root
+        self.root.geometry("600x700")
+
+        # Cargar configuración existente si hay
+        existing_config = self.load_existing_config()
+
+        # Título según si es nueva o edición
+        if existing_config:
+            self.root.title("⚙️ Editar Configuración - Sincronizador API")
+            # Mostrar mensaje informativo sobre configuración existente
+            messagebox.showinfo(
+                "⚠️ Configuración Existente",
+                "Ya existe una configuración guardada en el sistema.\n\n"
+                "Si desea configurar desde cero, debe:\n\n"
+                "1. Cerrar esta ventana\n"
+                "2. Ejecutar el comando: python3 sync_system_api.py --mode reconfig\n\n"
+                "O desde el Manager, hacer clic en el botón 'Reconfigurar'.\n\n"
+                "Si solo desea actualizar algunos valores, puede editarlos directamente aquí."
+            )
+        else:
+            self.root.title("⚙️ Nueva Configuración - Sincronizador API")
+
+        # Variables
+        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://aspect-robots-labeled-competitions.trycloudflare.com/sales-apiWEB/public/api"))
+        self.api_email_var = tk.StringVar(value=existing_config.get('api_email', ''))
+        self.api_password_var = tk.StringVar()  # Password nunca se carga
+
+        self.pg_host_var = tk.StringVar(value=existing_config.get('postgres_host', "localhost"))
+        self.pg_port_var = tk.StringVar(value=existing_config.get('postgres_port', "5432"))
+        self.pg_database_var = tk.StringVar(value=existing_config.get('postgres_database', ''))
+        self.pg_user_var = tk.StringVar(value=existing_config.get('postgres_user', "postgres"))
+        self.pg_password_var = tk.StringVar()  # Password se carga si existe
+
+        self.company_rif_var = tk.StringVar(value=existing_config.get('company_rif', ''))
+        self.company_email_var = tk.StringVar(value=existing_config.get('company_email', ''))
+        self.sync_interval_var = tk.StringVar(value=existing_config.get('sync_interval_minutes', '30'))
+
+        self.log_text = None
+
+        self.create_widgets()
+
+    def load_existing_config(self) -> dict:
+        """Cargar configuración existente si hay."""
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+
+    def create_widgets(self):
+        """Crear widgets de la interfaz."""
+
+        # Título
+        title = tk.Label(self.root, text="⚙️ Configuración del Sincronizador API",
+                        font=("Arial", 16, "bold"))
+        title.pack(pady=10)
+
+        # Notebook para pestañas
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Pestaña API
+        api_frame = ttk.Frame(notebook)
+        notebook.add(api_frame, text="🔐 API REST")
+
+        ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(api_frame, textvariable=self.api_url_var, width=60).pack(padx=10, pady=5)
+
+        ttk.Label(api_frame, text="Email:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(api_frame, textvariable=self.api_email_var, width=60).pack(padx=10, pady=5)
+
+        ttk.Label(api_frame, text="Password:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(api_frame, textvariable=self.api_password_var, show="*", width=60).pack(padx=10, pady=5)
+
+        # Botón probar API
+        ttk.Button(api_frame, text="🧪 Probar Conexión API",
+                  command=self.test_api_connection).pack(padx=10, pady=10)
+
+        # Pestaña PostgreSQL
+        pg_frame = ttk.Frame(notebook)
+        notebook.add(pg_frame, text="🐘 PostgreSQL")
+
+        ttk.Label(pg_frame, text="Host:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(pg_frame, textvariable=self.pg_host_var, width=60).pack(padx=10, pady=5)
+
+        ttk.Label(pg_frame, text="Port:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(pg_frame, textvariable=self.pg_port_var, width=60).pack(padx=10, pady=5)
+
+        ttk.Label(pg_frame, text="Database:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(pg_frame, textvariable=self.pg_database_var, width=60).pack(padx=10, pady=5)
+
+        ttk.Label(pg_frame, text="User:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(pg_frame, textvariable=self.pg_user_var, width=60).pack(padx=10, pady=5)
+
+        ttk.Label(pg_frame, text="Password:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(pg_frame, textvariable=self.pg_password_var, show="*", width=60).pack(padx=10, pady=5)
+
+        # Botón probar PostgreSQL
+        ttk.Button(pg_frame, text="🧪 Probar Conexión PostgreSQL",
+                  command=self.test_postgres_connection).pack(padx=10, pady=10)
+
+        # Pestaña Empresa
+        company_frame = ttk.Frame(notebook)
+        notebook.add(company_frame, text="🏢 Empresa")
+
+        ttk.Label(company_frame, text="RIF de la empresa (ej: J123456789):").pack(anchor="w", padx=10, pady=(10,0))
+        rif_entry = ttk.Entry(company_frame, textvariable=self.company_rif_var, width=60)
+        rif_entry.pack(padx=10, pady=5)
+        # Convertir a mayúsculas al escribir
+        rif_entry.bind('<KeyRelease>', lambda e: self.company_rif_var.set(self.company_rif_var.get().upper()))
+        rif_entry.bind('<FocusOut>', lambda e: self.company_rif_var.set(self.company_rif_var.get().upper()))
+
+        ttk.Label(company_frame, text="Email de la empresa:").pack(anchor="w", padx=10, pady=(10,0))
+        ttk.Entry(company_frame, textvariable=self.company_email_var, width=60).pack(padx=10, pady=5)
+
+        # Pestaña Configuración
+        config_frame = ttk.Frame(notebook)
+        notebook.add(config_frame, text="⚙️ Configuración")
+
+        ttk.Label(config_frame, text="Intervalo de sincronización automática:").pack(anchor="w", padx=10, pady=(20,0))
+
+        interval_frame = ttk.Frame(config_frame)
+        interval_frame.pack(padx=10, pady=5)
+
+        ttk.Entry(interval_frame, textvariable=self.sync_interval_var, width=10).pack(side="left", padx=5)
+        ttk.Label(interval_frame, text="minutos").pack(side="left")
+
+        ttk.Label(config_frame, text="ℹ️ El sistema se sincronizará automáticamente cada X minutos.",
+                 foreground="gray", justify="left").pack(anchor="w", padx=10, pady=10)
+
+        # Botones
+        button_frame = tk.Frame(self.root)
+        button_frame.pack(pady=10)
+
+        ttk.Button(button_frame, text="💾 Guardar y Salir",
+                  command=self.save_config).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="❌ Cancelar",
+                  command=self.root.quit).pack(side="left", padx=5)
+
+    def log(self, message: str, level: str = "info"):
+        """Escribir log."""
+        if self.log_text:
+            self.log_text.insert("end", f"{message}\n")
+            self.log_text.see("end")
+
+    def test_api_connection(self):
+        """Probar conexión a la API REST."""
+        api_url = self.api_url_var.get().strip()
+        email = self.api_email_var.get().strip()
+        password = self.api_password_var.get().strip()
+
+        # Validar campos requeridos
+        if not api_url or not email or not password:
+            messagebox.showwarning("Advertencia", "Por favor complete URL, Email y Password de la API")
+            return
+
+        # Deshabilitar botón durante la prueba
+        self.log("🧪 Probando conexión a la API...")
+
+        try:
+            import requests
+
+            # Hacer login
+            response = requests.post(
+                f"{api_url}/auth/login",
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                json={
+                    'email': email,
+                    'password': password,
+                    'device_name': 'config-test',
+                    'force_logout': True
+                },
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    user_data = data.get('data', {})
+                    user = user_data.get('user', {})
+
+                    messagebox.showinfo(
+                        "✅ Conexión Exitosa",
+                        f"Conexión a la API establecida correctamente.\n\n"
+                        f"Usuario: {user.get('email', 'N/A')}\n"
+                        f"Nombre: {user.get('name', 'N/A')}\n"
+                        f"Token: {user_data.get('token', '')[:20]}..."
+                    )
+                    self.log("✅ API: Conexión exitosa")
+                else:
+                    messagebox.showerror("❌ Error", f"Login falló: {data.get('message', 'Error desconocido')}")
+                    self.log("❌ API: Login falló")
+            elif response.status_code >= 500:
+                # Error del servidor (500, 502, 503, etc)
+                error_msg = f"Error del servidor ({response.status_code})\n\n"
+                try:
+                    error_detail = response.json()
+                    error_msg += f"Mensaje: {error_detail.get('message', 'No disponible')}\n"
+                    if 'error' in error_detail:
+                        error_msg += f"Error: {error_detail.get('error', 'No disponible')}"
+                except:
+                    error_msg += f"Respuesta: {response.text[:200]}"
+
+                messagebox.showerror("❌ Error del Servidor", error_msg)
+                self.log(f"❌ API: Error del servidor {response.status_code}")
+                self.log(f"   Detalle: {response.text[:200]}")
+            else:
+                messagebox.showerror("❌ Error", f"Error HTTP {response.status_code}: {response.text[:100]}")
+                self.log(f"❌ API: Error HTTP {response.status_code}")
+
+        except requests.exceptions.Timeout:
+            messagebox.showerror("❌ Error", "Tiempo de espera agotado. La API no responde.")
+            self.log("❌ API: Timeout")
+        except requests.exceptions.ConnectionError:
+            messagebox.showerror("❌ Error", "No se puede conectar a la API. Verifique la URL.")
+            self.log("❌ API: Error de conexión")
+        except Exception as e:
+            messagebox.showerror("❌ Error", f"Error inesperado: {str(e)}")
+            self.log(f"❌ API: {str(e)}")
+
+    def test_postgres_connection(self):
+        """Probar conexión a PostgreSQL."""
+        host = self.pg_host_var.get().strip()
+        port = self.pg_port_var.get().strip()
+        database = self.pg_database_var.get().strip()
+        user = self.pg_user_var.get().strip()
+        password = self.pg_password_var.get().strip()
+
+        # Validar campos requeridos
+        if not all([host, port, database, user, password]):
+            messagebox.showwarning("Advertencia", "Por favor complete todos los campos de PostgreSQL")
+            return
+
+        self.log("🧪 Probando conexión a PostgreSQL...")
+
+        try:
+            import psycopg2
+
+            # Intentar conectar
+            conn = psycopg2.connect(
+                host=host,
+                port=int(port),
+                database=database,
+                user=user,
+                password=password,
+                connect_timeout=10
+            )
+
+            cursor = conn.cursor()
+
+            # Verificar versión
+            cursor.execute("SELECT version()")
+            version = cursor.fetchone()[0]
+
+            # Contar productos
+            cursor.execute("SELECT COUNT(*) FROM products")
+            products_count = cursor.fetchone()[0]
+
+            cursor.close()
+            conn.close()
+
+            messagebox.showinfo(
+                "✅ Conexión Exitosa",
+                f"Conexión a PostgreSQL establecida.\n\n"
+                f"Host: {host}\n"
+                f"Database: {database}\n"
+                f"Productos: {products_count:,}\n\n"
+                f"Versión: {version[:50]}..."
+            )
+            self.log("✅ PostgreSQL: Conexión exitosa")
+
+        except psycopg2.OperationalError as e:
+            error_msg = str(e)
+            if "authentication failed" in error_msg.lower():
+                messagebox.showerror("❌ Error", "Autenticación falló. Verifique usuario y contraseña.")
+            elif "connection refused" in error_msg.lower():
+                messagebox.showerror("❌ Error", "Conexión rechazada. Verifique host y puerto.")
+            elif "database" in error_msg.lower() and "does not exist" in error_msg.lower():
+                messagebox.showerror("❌ Error", f"La base de datos '{database}' no existe.")
+            else:
+                messagebox.showerror("❌ Error", f"Error de conexión:\n{error_msg[:100]}")
+            self.log(f"❌ PostgreSQL: {error_msg[:50]}")
+
+        except Exception as e:
+            messagebox.showerror("❌ Error", f"Error inesperado: {str(e)}")
+            self.log(f"❌ PostgreSQL: {str(e)}")
+
+    def save_config(self):
+        """Guardar configuración y verificar conexión con ventana de progreso."""
+        # Validar campos requeridos
+        required = {
+            'URL de la API': self.api_url_var.get(),
+            'Email API': self.api_email_var.get(),
+            'Password API': self.api_password_var.get(),
+            'Database PostgreSQL': self.pg_database_var.get(),
+            'Password PostgreSQL': self.pg_password_var.get(),
+            'RIF de la empresa': self.company_rif_var.get(),
+            'Email de la empresa': self.company_email_var.get()
+        }
+
+        missing = [k for k, v in required.items() if not v]
+        if missing:
+            messagebox.showerror("Error", f"Faltan campos requeridos:\n" + "\n".join(f"  • {k}" for k in missing))
+            return
+
+        # Validar intervalo de sincronización
+        interval = self.sync_interval_var.get().strip()
+        if not interval or not interval.isdigit():
+            messagebox.showerror("Error", "El intervalo de sincronización debe ser un número válido")
+            return
+
+        interval_minutes = int(interval)
+        if interval_minutes < 1:
+            messagebox.showerror("Error", "El intervalo de sincronización debe ser al menos 1 minuto")
+            return
+
+        try:
+            # Convertir RIF a mayúsculas
+            company_rif = self.company_rif_var.get().strip().upper()
+
+            # Crear configuración
+            config = {
+                'api_url': self.api_url_var.get(),
+                'api_email': self.api_email_var.get(),
+                # Password NO se guarda (se pedirá al iniciar)
+                'postgres_host': self.pg_host_var.get(),
+                'postgres_port': self.pg_port_var.get(),
+                'postgres_database': self.pg_database_var.get(),
+                'postgres_user': self.pg_user_var.get(),
+                # Password PostgreSQL SÍ se guarda (es local)
+                'postgres_password': self.pg_password_var.get(),
+                'company_rif': company_rif,
+                'company_email': self.company_email_var.get(),
+                'sync_interval_minutes': str(interval_minutes),
+                'configured': True,
+                'first_run': False
+            }
+
+            # Guardar configuración
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(config, f, indent=2)
+
+            # Mostrar ventana de progreso
+            self._mostrar_ventana_progreso(config)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error guardando configuración:\n{e}")
+
+    def _mostrar_ventana_progreso(self, config):
+        """Mostrar ventana de progreso al guardar configuración."""
+        # Crear ventana de progreso
+        progreso = tk.Toplevel(self.root)
+        progreso.title("Configurando...")
+        progreso.geometry("600x700")
+        progreso.resizable(False, False)
+
+        # Hacerla modal
+        progreso.transient(self.root)
+        progreso.grab_set()
+
+        # Centrar ventana
+        progreso.update_idletasks()
+        x = (progreso.winfo_screenwidth() // 2) - (600 // 2)
+        y = (progreso.winfo_screenheight() // 2) - (700 // 2)
+        progreso.geometry(f"+{x}+{y}")
+
+        # Frame principal
+        frame = tk.Frame(progreso, padx=20, pady=20)
+        frame.pack(fill="both", expand=True)
+
+        # Icono
+        ttk.Label(frame, text="⏳", font=("Arial", 48)).pack(pady=10)
+
+        # Título
+        ttk.Label(frame, text="Verificando configuración...", font=("Arial", 14, "bold")).pack(pady=10)
+
+        # Barra de progreso
+        progress_bar = ttk.Progressbar(frame, mode='indeterminate', length=400)
+        progress_bar.pack(pady=20)
+        progress_bar.start(10)
+
+        # Etiqueta de estado
+        estado_label = ttk.Label(frame, text="Iniciando...", font=("Arial", 10))
+        estado_label.pack(pady=10)
+
+        # Etiqueta de detalle
+        detalle_label = ttk.Label(frame, text="", font=("Arial", 9), foreground="gray")
+        detalle_label.pack(pady=5)
+
+        # INDICADOR DE PASOS
+        contenedor_pasos = ttk.LabelFrame(frame, text="🔄 ESTADO DE VERIFICACIÓN", padding=10)
+        contenedor_pasos.pack(pady=10, fill="x", padx=5)
+
+        pasos_frame = ttk.Frame(contenedor_pasos)
+        pasos_frame.pack(fill="x", padx=10)
+
+        pasos_labels = {}
+        pasos_porcentaje = {}
+
+        # Crear los 3 pasos
+        pasos_info = [
+            (1, "Conectar a PostgreSQL", "Verificar base de datos"),
+            (2, "Autenticar API", "Validar credenciales"),
+            (3, "Validar empresa", "Verificar empresa en API")
+        ]
+
+        for num, nombre, descripcion in pasos_info:
+            paso_frame = ttk.Frame(pasos_frame)
+            paso_frame.pack(fill="x", pady=5)
+
+            left_container = ttk.Frame(paso_frame)
+            left_container.pack(side="left", fill="x", expand=True)
+
+            paso_num_label = ttk.Label(left_container, text=f" {num} ",
+                                      font=("Arial", 10, "bold"),
+                                      foreground="white", background="#808080",
+                                      padding=(6, 3))
+            paso_num_label.pack(side="left", padx=(0, 8))
+
+            ttk.Label(left_container, text=nombre,
+                     font=("Arial", 10, "bold")).pack(side="left")
+
+            ttk.Label(left_container, text=f"  - {descripcion}",
+                     font=("Arial", 8), foreground="gray").pack(side="left")
+
+            porcentaje_label = tk.Label(paso_frame, text="0%",
+                                       font=("Arial", 14, "bold"),
+                                       fg="#0066cc", bg="#f0f0f0",
+                                       padx=8, pady=2,
+                                       relief="solid", borderwidth=1)
+            porcentaje_label.pack(side="right", padx=(10, 0))
+
+            pasos_labels[num] = paso_num_label
+            pasos_porcentaje[num] = porcentaje_label
+
+        estado_paso_label = ttk.Label(contenedor_pasos,
+                                     text="⏳ Iniciando...",
+                                     font=("Arial", 10),
+                                     foreground="blue")
+        estado_paso_label.pack(pady=10)
+
+        # Botón CERRAR (inicialmente deshabilitado)
+        btn_cerrar = ttk.Button(frame, text="⏳ Verificando...", state="disabled")
+        btn_cerrar.pack(pady=15)
+
+        # Variable para controlar el resultado
+        resultado = {'exito': False, 'mensaje': ''}
+
+        def actualizar_paso(paso_num, estado="en_progreso", mensaje="", porcentaje=None):
+            """Actualizar estado de un paso"""
+            if not progreso.winfo_exists():
+                return
+
+            try:
+                # Colores según estado
+                colores = {
+                    'pendiente': '#808080',  # Gris
+                    'en_progreso': '#0066cc',  # Azul
+                    'completado': '#00cc00',  # Verde
+                    'error': '#cc0000'  # Rojo
+                }
+
+                # Actualizar todos los números de paso
+                for num in pasos_labels:
+                    if num in pasos_labels and pasos_labels[num].winfo_exists():
+                        bg_color = colores['pendiente']
+                        if num < paso_num:
+                            bg_color = colores['completado']
+                        elif num == paso_num:
+                            bg_color = colores[estado]
+
+                        pasos_labels[num].config(background=bg_color)
+
+                # Actualizar porcentaje del paso actual
+                if paso_num in pasos_porcentaje and pasos_porcentaje[paso_num].winfo_exists():
+                    if porcentaje is not None:
+                        pct_text = f"{porcentaje:.0f}%"
+                    else:
+                        pct_text = "0%"
+                    pasos_porcentaje[paso_num].config(text=pct_text)
+
+                # Actualizar label de estado
+                if paso_num in pasos_porcentaje and pasos_porcentaje[paso_num].winfo_exists():
+                    fg_color = colores.get(estado, 'black')
+                    pasos_porcentaje[paso_num].config(fg=fg_color)
+
+                # Actualizar mensaje de paso
+                if mensaje and estado_paso_label.winfo_exists():
+                    estado_paso_label.config(text=f"⏳ {mensaje}")
+
+            except Exception:
+                pass
+
+        def actualizar_estado(mensaje, detalle=""):
+            """Actualizar etiquetas de estado"""
+            try:
+                if estado_label.winfo_exists():
+                    estado_label.config(text=mensaje)
+                if detalle and detalle_label.winfo_exists():
+                    detalle_label.config(text=detalle)
+                progreso.update_idletasks()
+            except:
+                pass
+
+        def ejecutar_verificacion_thread():
+            """Ejecutar verificación en thread separado"""
+            import threading
+            import psycopg2
+
+            def verification_worker():
+                try:
+                    # PASO 1: Conectar a PostgreSQL
+                    actualizar_paso(1, "en_progreso", "Conectando a PostgreSQL...", 0)
+                    actualizar_estado("🔌 Conectando a PostgreSQL...", f"Host: {config['postgres_host']}")
+
+                    pg_conn = None
+                    try:
+                        pg_conn = psycopg2.connect(
+                            host=config['postgres_host'],
+                            port=config['postgres_port'],
+                            database=config['postgres_database'],
+                            user=config['postgres_user'],
+                            password=config['postgres_password'],
+                            connect_timeout=10
+                        )
+                        actualizar_paso(1, "completado", "Conexión exitosa", 100)
+                        actualizar_estado("✅ PostgreSQL conectado", "Base de datos verificada")
+                    except Exception as e:
+                        actualizar_paso(1, "error", "Error de conexión", 0)
+                        raise Exception(f"Error conectando a PostgreSQL: {e}")
+
+                    # PASO 2: Autenticar API
+                    actualizar_paso(2, "en_progreso", "Autenticando...", 0)
+                    actualizar_estado("🔐 Autenticando API...", f"Email: {config['api_email']}")
+
+                    auth_manager = None
+                    try:
+                        auth_manager = APIAuthManager(config['api_url'])
+                        login_result = auth_manager.login(
+                            config['api_email'],
+                            self.api_password_var.get()  # Usar password del formulario
+                        )
+
+                        if login_result.get('success'):
+                            actualizar_paso(2, "completado", "Autenticación exitosa", 100)
+                            actualizar_estado("✅ API autenticada", "Token obtenido correctamente")
+                        else:
+                            actualizar_paso(2, "error", "Autenticación fallida", 0)
+                            raise Exception(f"Login falló: {login_result.get('error')}")
+                    except Exception as e:
+                        actualizar_paso(2, "error", "Error de autenticación", 0)
+                        raise Exception(f"Error autenticando API: {e}")
+
+                    # PASO 3: Validar empresa
+                    actualizar_paso(3, "en_progreso", "Validando empresa...", 0)
+                    actualizar_estado("🏢 Validando empresa...", f"RIF: {config['company_rif']}")
+
+                    try:
+                        validate_result = auth_manager.validate_company(
+                            config['company_rif'],
+                            config['company_email']
+                        )
+
+                        if validate_result.get('success'):
+                            actualizar_paso(3, "completado", "Empresa validada", 100)
+                            actualizar_estado("✅ Empresa validada", "Configuración correcta")
+                        else:
+                            actualizar_paso(3, "error", "Validación fallida", 0)
+                            raise Exception(f"Validación falló: {validate_result.get('error')}")
+                    except Exception as e:
+                        actualizar_paso(3, "error", "Error de validación", 0)
+                        raise Exception(f"Error validando empresa: {e}")
+
+                    # Todo exitoso
+                    resultado['exito'] = True
+                    resultado['mensaje'] = "✅ Configuración guardada correctamente\n\n✅ Conexión a PostgreSQL verificada\n✅ Autenticación API validada\n✅ Empresa validada\n\nEl sistema está listo para sincronizar."
+
+                except Exception as e:
+                    resultado['exito'] = False
+                    resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error durante verificación:\n\n{str(e)}\n\nLa configuración se guardó pero hay\nproblemas de conexión. Verifica los datos."
+
+                finally:
+                    # Cerrar conexiones
+                    if pg_conn:
+                        try:
+                            pg_conn.close()
+                        except:
+                            pass
+
+                    progress_bar.stop()
+                    progreso.after(0, lambda: progreso.event_generate('<<VerificationComplete>>'))
+
+            # Crear e iniciar thread
+            thread = threading.Thread(target=verification_worker, daemon=True)
+            thread.start()
+
+            # Mantener GUI viva
+            def keep_gui_alive():
+                if thread.is_alive():
+                    try:
+                        progreso.update()
+                    except:
+                        pass
+                    progreso.after(50, keep_gui_alive)
+
+            keep_gui_alive()
+
+        def cerrar_ventana():
+            """Cerrar ventana y regresar"""
+            try:
+                if progreso.winfo_exists():
+                    progreso.destroy()
+
+                if resultado['exito']:
+                    self.root.destroy()
+                else:
+                    # Si hubo error, mantener la ventana de config abierta
+                    pass
+            except:
+                pass
+
+        # Manejar evento de finalización
+        def on_verification_complete(event):
+            if not progreso.winfo_exists():
+                return
+
+            progress_bar.stop()
+
+            if resultado['exito']:
+                btn_cerrar.config(text="✅ Continuar", command=cerrar_ventana, state="normal")
+                estado_label.config(text="✅ Verificación completada", foreground="green")
+                estado_paso_label.config(text="✅ Configuración verificada con éxito", foreground="green")
+            else:
+                btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
+                estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
+                estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
+
+            messagebox.showinfo("Resultado", resultado['mensaje'])
+
+        progreso.bind('<<VerificationComplete>>', on_verification_complete)
+
+        # Iniciar verificación
+        ejecutar_verificacion_thread()
+
+
+# ==============================================================================
+# GUI - MANAGER WINDOW
+# ==============================================================================
+
+class ManagerWindow:
+    """Ventana principal de administración."""
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Sincronizador API REST - Manager")
+        self.root.geometry("800x600")
+
+        # Cargar configuración
+        self.config = self.load_config()
+        if not self.config:
+            messagebox.showerror("Error", "No hay configuración. Ejecute --mode config")
+            self.root.destroy()
+            return
+
+        # Configurar logging con archivo
+        self.log_func = setup_logging(self.config.get('company_email'))
+
+        # Conectar logger de Python con la GUI
+        add_gui_handler(self.log_func, self.log)
+
+        # Auth Manager (en memoria)
+        self.auth_manager = None
+
+        # Sync Manager
+        self.sync_manager = None
+
+        # Crear widgets
+        self.create_widgets()
+
+        # Pedir password al inicio
+        self.root.after(100, self.ask_password)
+
+    def load_config(self):
+        """Cargar configuración desde archivo."""
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error cargando configuración:\n{e}")
+        return None
+
+    def ask_password(self):
+        """Pedir password de la API."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("🔐 Login API")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Centrar
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        tk.Label(dialog, text="Ingrese password de la API:", font=("Arial", 11)).pack(pady=20)
+
+        password_var = tk.StringVar()
+        entry = ttk.Entry(dialog, textvariable=password_var, show="*", width=30)
+        entry.pack(pady=10)
+        entry.focus()
+
+        def on_login():
+            password = password_var.get()
+            if not password:
+                messagebox.showwarning("Advertencia", "Ingrese el password", parent=dialog)
+                return
+
+            self.do_login(password, dialog)
+
+        def on_cancel():
+            try:
+                dialog.destroy()
+            except:
+                pass
+            try:
+                self.root.destroy()
+            except:
+                pass
+
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=20)
+        ttk.Button(button_frame, text="Login", command=on_login).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancelar", command=on_cancel).pack(side="left", padx=5)
+
+        entry.bind("<Return>", lambda e: on_login())
+
+    def do_login(self, password: str, dialog: tk.Tk):
+        """Ejecutar login."""
+        try:
+            self.log("🔐 Conectando a la API...")
+
+            # Crear auth manager
+            base_url = self.config.get('api_url')
+            self.auth_manager = APIAuthManager(base_url, self.log)
+
+            # Login
+            result = self.auth_manager.login(
+                self.config.get('api_email'),
+                password
+            )
+
+            if not result.get('success'):
+                messagebox.showerror("Error", f"Login falló:\n{result.get('error')}")
+                try:
+                    dialog.destroy()
+                except:
+                    pass
+                try:
+                    self.root.destroy()
+                except:
+                    pass
+                return
+
+            # Validar empresa
+            self.log("🏢 Validando empresa...")
+            result = self.auth_manager.validate_company(
+                self.config.get('company_rif'),
+                self.config.get('company_email')
+            )
+
+            if not result.get('success'):
+                messagebox.showerror("Error", f"Validación falló:\n{result.get('error')}")
+                try:
+                    dialog.destroy()
+                except:
+                    pass
+                try:
+                    self.root.destroy()
+                except:
+                    pass
+                return
+
+            # Crear sync manager
+            pg_config = {
+                'host': self.config.get('postgres_host'),
+                'port': self.config.get('postgres_port'),
+                'database': self.config.get('postgres_database'),
+                'user': self.config.get('postgres_user'),
+                'password': self.config.get('postgres_password')
+            }
+
+            self.sync_manager = APISyncManager(pg_config, self.auth_manager, self.log)
+
+            # Conectar PostgreSQL
+            if not self.sync_manager.connect_postgresql():
+                messagebox.showerror("Error", "No se pudo conectar a PostgreSQL")
+                try:
+                    dialog.destroy()
+                except:
+                    pass
+                try:
+                    self.root.destroy()
+                except:
+                    pass
+                return
+
+            # Guardar company_id en sync_config (para que los triggers lo usen)
+            try:
+                company_id = self.auth_manager.company_id
+                cursor = self.sync_manager.pg_conn.cursor()
+
+                self.log(f"📝 Guardando company_id {company_id} en sync_config...")
+
+                # Verificar si ya existe
+                cursor.execute("""
+                    SELECT value FROM sync_config WHERE key = 'current_company_id'
+                """)
+                existe = cursor.fetchone()
+
+                if existe:
+                    valor_actual = existe[0]
+                    self.log(f"   sync_config tiene: {valor_actual}")
+                    self.log(f"   Actualizando a: {company_id}")
+
+                    # Ya existe: Actualizar
+                    cursor.execute("""
+                        UPDATE sync_config
+                        SET value = %s, updated_at = NOW()
+                        WHERE key = 'current_company_id'
+                    """, (str(company_id),))
+
+                    self.log(f"   Filas afectadas: {cursor.rowcount}")
+                else:
+                    self.log(f"   No existe, insertando nuevo registro...")
+
+                    # No existe: Insertar
+                    cursor.execute("""
+                        INSERT INTO sync_config (key, value, updated_at)
+                        VALUES ('current_company_id', %s, NOW())
+                    """, (str(company_id),))
+
+                    self.log(f"   Insertado: {company_id}")
+
+                self.sync_manager.pg_conn.commit()
+                self.log(f"✅ Company_id {company_id} guardado en sync_config")
+            except Exception as e:
+                self.log(f"⚠️ Error guardando company_id en sync_config: {e}", "warning")
+                self.sync_manager.pg_conn.rollback()
+
+            # Inicializar clientes API
+            if not self.sync_manager.initialize_api_clients():
+                messagebox.showerror("Error", "No se pudieron inicializar los clientes API")
+                try:
+                    dialog.destroy()
+                except:
+                    pass
+                try:
+                    self.root.destroy()
+                except:
+                    pass
+                return
+
+            # Cerrar diálogo y mostrar ventana principal
+            try:
+                dialog.destroy()
+            except:
+                pass
+            self.log("✅ Sistema listo para sincronizar")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error durante login:\n{e}")
+            import traceback
+            self.log(traceback.format_exc(), "error")
+            try:
+                dialog.destroy()
+            except:
+                pass
+            try:
+                self.root.destroy()
+            except:
+                pass
+
+    def create_widgets(self):
+        """Crear widgets de la interfaz."""
+
+        # Header
+        header = tk.Frame(self.root, bg="#2c3e50", height=60)
+        header.pack(fill="x")
+
+        title = tk.Label(header, text="🔄 Sincronizador API REST - Manager",
+                        font=("Arial", 18, "bold"), bg="#2c3e50", fg="white")
+        title.pack(pady=15)
+
+        # Contenido principal
+        main_frame = tk.Frame(self.root)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Info de empresa
+        info_frame = tk.Frame(main_frame)
+        info_frame.pack(fill="x", pady=5)
+
+        tk.Label(info_frame, text=f"🏢 Empresa: {self.config.get('company_rif')}",
+                font=("Arial", 10)).pack(side="left")
+        tk.Label(info_frame, text=f"📧 Email: {self.config.get('company_email')}",
+                font=("Arial", 10)).pack(side="left", padx=20)
+
+        # Panel de estado
+        status_frame = tk.LabelFrame(main_frame, text="📊 Estado del Sistema", font=("Arial", 12, "bold"))
+        status_frame.pack(fill="x", pady=5, padx=5)
+
+        self.lbl_estado = tk.Label(status_frame, text="🟢 ACTIVO", font=("Arial", 14), fg="green")
+        self.lbl_estado.pack()
+
+        self.lbl_ultima_sync = tk.Label(status_frame, text="Última sync: --", font=("Arial", 10))
+        self.lbl_ultima_sync.pack(pady=5)
+
+        # Panel de estadísticas
+        stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"))
+        stats_frame.pack(fill="x", pady=5, padx=5)
+
+        self.lbl_stats = tk.Label(stats_frame, text="Categories: 0 | Products: 0 | Customers: 0 | Sellers: 0 | Quotes: 0",
+                                 font=("Arial", 10))
+        self.lbl_stats.pack()
+
+        self.lbl_progress = tk.Label(stats_frame, text="Listo para sincronizar", font=("Arial", 9), fg="blue")
+        self.lbl_progress.pack(pady=(5,0))
+
+        # Botones de sincronización individual
+        sync_btn_frame = tk.Frame(main_frame)
+        sync_btn_frame.pack(fill="x", pady=5)
+
+        ttk.Button(sync_btn_frame, text="📁 Categories",
+                  command=lambda: self.sync_entity('categories'), width=15).pack(side="left", padx=3)
+
+        ttk.Button(sync_btn_frame, text="📦 Products",
+                  command=lambda: self.sync_entity('products'), width=15).pack(side="left", padx=3)
+
+        ttk.Button(sync_btn_frame, text="👥 Customers",
+                  command=lambda: self.sync_entity('customers'), width=15).pack(side="left", padx=3)
+
+        ttk.Button(sync_btn_frame, text="👔 Sellers",
+                  command=lambda: self.sync_entity('sellers'), width=15).pack(side="left", padx=3)
+
+        ttk.Button(sync_btn_frame, text="💰 Quotes",
+                  command=lambda: self.sync_entity('quotes'), width=15).pack(side="left", padx=3)
+
+        # Botones principales
+        btn_frame = tk.Frame(main_frame)
+        btn_frame.pack(fill="x", pady=10)
+
+        self.btn_sync = ttk.Button(btn_frame, text="🔄 Sincronizar Todo", command=self.sync_all, width=20)
+        self.btn_sync.pack(side="left", padx=5)
+
+        ttk.Button(btn_frame, text="⚙️ Configuración", command=self.configurar, width=20).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="🔄 Reconfigurar", command=self.reconfig, width=20).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="📋 Ver Logs", command=self.ver_logs, width=20).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="❌ Salir", command=self.cerrar_ventana, width=20).pack(side="right", padx=5)
+
+        # Logs
+        log_frame = tk.LabelFrame(main_frame, text="📝 Logs en Tiempo Real", font=("Arial", 12, "bold"))
+        log_frame.pack(fill="both", expand=True, pady=5, padx=5)
+
+        self.log_text = scrolledtext.ScrolledText(log_frame, height=10, state="disabled")
+        self.log_text.pack(fill="both", expand=True)
+
+        # Configurar colores para los logs
+        self.log_text.tag_config("error", foreground="red")
+        self.log_text.tag_config("warning", foreground="orange")
+        self.log_text.tag_config("success", foreground="green")
+
+        # Cargar últimos logs
+        self.cargar_logs()
+
+    def cargar_logs(self):
+        """Cargar últimos logs del archivo."""
+        try:
+            log_file = get_log_file(self.config.get('company_email'))
+            if os.path.exists(log_file):
+                with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                    # Leer últimas 50 líneas
+                    lines = f.readlines()[-50:]
+                    for line in lines:
+                        self.log_text.config(state="normal")
+                        self.log_text.insert("end", line.strip() + "\n")
+                        self.log_text.config(state="disabled")
+                self.log_text.see("end")
+        except Exception as e:
+            pass  # Silencioso, si no hay archivo de log aún
+
+    def cerrar_ventana(self):
+        """Cierra la ventana de forma segura"""
+        try:
+            if self.sync_manager:
+                self.sync_manager.close()
+            self.root.destroy()
+        except Exception as e:
+            print(f"Error cerrando ventana: {e}")
+            try:
+                self.root.destroy()
+            except:
+                pass
+
+    def configurar(self):
+        """Abrir configuración."""
+        messagebox.showinfo("Configuración",
+            "Para reconfigurar el sistema, cierre esta ventana y ejecute:\n"
+            "python3 sync_system_api.py --mode reconfig")
+
+    def ver_logs(self):
+        """Abrir archivo de logs en editor de texto."""
+        try:
+            import subprocess
+            log_file = get_log_file(self.config.get('company_email'))
+
+            if not os.path.exists(log_file):
+                messagebox.showinfo("Logs", f"No existe archivo de logs aún:\n{log_file}")
+                return
+
+            # Mostrar información
+            self.log(f"📂 Abriendo archivo de logs: {log_file}")
+
+            # Lista de editores a intentar (en orden de preferencia)
+            if sys.platform == 'win32':
+                # Windows
+                os.startfile(log_file)
+                self.log(f"   ✅ Archivo abierto")
+            elif sys.platform == 'darwin':
+                # macOS
+                subprocess.Popen(['open', log_file],
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+                self.log(f"   ✅ Archivo abierto con open")
+            else:
+                # Linux - intentar varios editores
+                editores = [
+                    # Editores gráficos livianos (sin dependencias de D-Bus pesadas)
+                    ['mousepad', log_file],      # Muy liviano, sin D-Bus
+                    ['leafpad', log_file],       # Muy liviano
+                    ['geany', log_file],         # Liviano
+                    ['kate', log_file],          # KDE
+                    ['gedit', log_file],         # GNOME (puede dar warnings)
+                    ['code', '--new-window', log_file],  # VS Code
+                    ['subl', log_file],          # Sublime Text
+                    # Último recurso: xdg-open
+                    ['xdg-open', log_file]
+                ]
+
+                abierto = False
+                for editor_cmd in editores:
+                    try:
+                        self.log(f"   Intentando con: {editor_cmd[0]}")
+                        # Usar Popen para no bloquear
+                        process = subprocess.Popen(
+                            editor_cmd,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            start_new_session=True  # Desacoplar completamente el proceso
+                        )
+                        # Si no lanzó excepción, asumimos que se abrió
+                        self.log(f"   ✅ Archivo abierto con: {editor_cmd[0]}")
+                        abierto = True
+                        break
+                    except FileNotFoundError:
+                        # Editor no encontrado, intentar el siguiente
+                        continue
+                    except Exception as e:
+                        # Otro error, intentar el siguiente
+                        self.log(f"   ⚠️ Error con {editor_cmd[0]}: {e}", "warning")
+                        continue
+
+                if not abierto:
+                    # Si ningún editor funcionó, mostrar la ruta para abrir manualmente
+                    self.log(f"   ⚠️ No se pudo abrir automáticamente", "warning")
+                    messagebox.showinfo(
+                        "Logs - Abrir Manualmente",
+                        f"No se pudo abrir el editor automáticamente.\n\n"
+                        f"Ruta del archivo:\n{log_file}\n\n"
+                        f"Puede abrirlo manualmente con:\n"
+                        f"cat '{log_file}'\n\n"
+                        f"o su editor favorito:\n"
+                        f"'{log_file}'"
+                    )
+
+        except Exception as e:
+            self.log(f"❌ Error abriendo logs: {e}", "error")
+            import traceback
+            self.log(traceback.format_exc(), "error")
+            messagebox.showerror("Error", f"No se pudo abrir el archivo de logs:\n{e}")
+
+    def log(self, message: str, level: str = "info"):
+        """Escribir log a la GUI solamente. El logger de Python maneja el archivo."""
+        # IMPORTANTE: No llamar a log_func aquí porque causaría duplicados
+        # log_func → logger → GUIHandler → GUI (ciclo)
+        # En su lugar, escribir directamente a la GUI
+
+        # Los logs que vienen de los clientes API ya pasan por el logger → GUIHandler
+        # Solo necesitamos escribir a la GUI para logs directos de ManagerWindow
+        if self.log_text:
+            self.log_text.config(state="normal")
+
+            # Colores según nivel
+            tags = {
+                'error': 'error',
+                'warning': 'warning',
+                'success': 'success'
+            }
+
+            tag = tags.get(level, 'normal')
+            self.log_text.insert("end", f"{message}\n", tag)
+            self.log_text.see("end")
+            self.log_text.config(state="disabled")
+
+    def sync_all(self):
+        """Sincronizar todas las entidades."""
+        if not self.sync_manager:
+            messagebox.showwarning("Advertencia", "El sistema no está inicializado")
+            return
+
+        def run_sync():
+            try:
+                result = self.sync_manager.sync_all()
+
+                if result.get('success'):
+                    messagebox.showinfo("✅ Éxito", "Sincronización completada exitosamente")
+                else:
+                    messagebox.showwarning("⚠️ Advertencia", "La sincronización tuvo errores. Revise el log.")
+
+            except Exception as e:
+                messagebox.showerror("❌ Error", f"Error durante sincronización:\n{e}")
+                import traceback
+                self.log(traceback.format_exc(), "error")
+
+        # Ejecutar en thread para no bloquear GUI
+        import threading
+        thread = threading.Thread(target=run_sync)
+        thread.daemon = True
+        thread.start()
+
+    def sync_entity(self, entity: str):
+        """Sincronizar una entidad específica."""
+        if not self.sync_manager:
+            messagebox.showwarning("Advertencia", "El sistema no está inicializado")
+            return
+
+        def run_sync():
+            try:
+                self.log(f"\n🔄 SINCRONIZANDO {entity.upper()}...", "info")
+
+                if entity == 'categories':
+                    result = self.sync_manager.sync_categories()
+                elif entity == 'products':
+                    result = self.sync_manager.sync_products()
+                elif entity == 'customers':
+                    result = self.sync_manager.sync_customers()
+                elif entity == 'sellers':
+                    result = self.sync_manager.sync_sellers()
+                elif entity == 'quotes':
+                    result = self.sync_manager.sync_quotes()
+                else:
+                    self.log(f"❌ Entidad desconocida: {entity}", "error")
+                    return
+
+                stats = result.get('stats', {})
+                created = stats.get('created', 0)
+                updated = stats.get('updated', 0)
+                deleted = stats.get('deleted', 0)
+                errors = stats.get('errors', 0)
+
+                if errors == 0:
+                    self.log(f"✅ {entity.capitalize()} sincronizados: {created} creados, {updated} actualizados, {deleted} eliminados", "success")
+                    messagebox.showinfo("✅ Éxito", f"{entity.capitalize()} sincronizados:\n{created} creados\n{updated} actualizados\n{deleted} eliminados")
+                else:
+                    self.log(f"⚠️ {entity.capitalize()} sincronizados con errores: {created} creados, {updated} actualizados, {errors} errores", "warning")
+                    messagebox.showwarning("⚠️ Advertencia", f"{entity.capitalize()} sincronizados con {errors} errores.\nRevise el log.")
+
+            except Exception as e:
+                self.log(f"❌ Error sincronizando {entity}: {e}", "error")
+                messagebox.showerror("❌ Error", f"Error durante sincronización de {entity}:\n{e}")
+                import traceback
+                self.log(traceback.format_exc(), "error")
+
+        # Ejecutar en thread para no bloquear GUI
+        import threading
+        thread = threading.Thread(target=run_sync)
+        thread.daemon = True
+        thread.start()
+
+    def reconfig(self):
+        """Reconfigurar desde cero."""
+        if messagebox.askyesno("Reconfigurar", "¿Está seguro de reconfigurar desde cero?\nSe borrará la configuración actual."):
+            try:
+                if os.path.exists(CONFIG_FILE):
+                    os.remove(CONFIG_FILE)
+
+                messagebox.showinfo("Reconfiguración", "Configuración eliminada.\nEl sistema se cerrará. Ejecute --mode config para reconfigurar.")
+                self.root.destroy()
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error reconfigurando:\n{e}")
+
+
+# ==============================================================================
+# SYSTEM TRAY SERVICE
+# ==============================================================================
+
+class SystemTrayService:
+    """
+    Servicio en segundo plano con icono en la bandeja del sistema.
+    Ejecuta sincronizaciones automáticamente sin ventana visible.
+    """
+
+    def __init__(self, config, api_password):
+        self.config = config
+        self.api_password = api_password
+        self.sync_running = True
+        self.is_syncing = False
+        self.last_sync_time = None
+        self.last_sync_status = "Esperando..."
+        self.root = None
+        self.icon = None
+
+        # Configurar auto-inicio al encender el equipo
+        self.configurar_auto_inicio()
+
+    def crear_icono(self):
+        """Crea icono simple para la bandeja del sistema"""
+        try:
+            from PIL import Image, ImageDraw
+            # Crear imagen simple 64x64
+            image = Image.new('RGB', (64, 64), color='white')
+            draw = ImageDraw.Draw(image)
+
+            # Dibujar círculo azul (sincronización)
+            draw.ellipse([10, 10, 54, 54], fill='#3498db', outline='#2980b9', width=3)
+
+            # Dibujar flechas de sincronización
+            draw.polygon([(20, 32), (32, 20), (32, 28), (44, 28), (44, 20), (56, 32), (44, 44), (44, 36), (32, 36), (32, 44)], fill='white')
+
+            return image
+        except ImportError:
+            print("ERROR: PIL no está instalado. Ejecute: pip install Pillow")
+            return None
+        except Exception as e:
+            print(f"Error creando icono: {e}")
+            return None
+
+    def configurar_auto_inicio(self):
+        """
+        Configura el sistema para que inicie automáticamente al encender el equipo
+        Verifica que el archivo exista antes de crear el registro
+        """
+        try:
+            import winreg
+
+            # Ruta del ejecutable o script actual
+            if getattr(sys, 'frozen', False):
+                # Si está empaquetado como exe
+                app_path = sys.executable
+            else:
+                # Si es script Python
+                script_path = os.path.abspath(__file__)
+                app_path = f'"{sys.executable}" "{script_path}" --mode tray'
+
+            # Verificar que el archivo exista
+            if not os.path.exists(sys.executable):
+                print(f"⚠️ El archivo no existe: {sys.executable}")
+                print("   Limpiando registro de auto-inicio...")
+                self.limpiar_auto_inicio()
+                return
+
+            # Registry key para auto-inicio
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key_name = "SyncAPISystemTray"
+
+            # Abrir registry key
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+
+            # Establecer el valor
+            winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, app_path)
+            winreg.CloseKey(key)
+
+            print("✅ Auto-inicio configurado correctamente")
+            print(f"   Ruta: {app_path}")
+        except ImportError:
+            print("⚠️ winreg no disponible (solo Windows)")
+        except Exception as e:
+            print(f"⚠️ No se pudo configurar auto-inicio: {e}")
+
+    def limpiar_auto_inicio(self):
+        """
+        Limpia el registro de auto-inicio
+        Se llama automáticamente si el archivo no existe
+        """
+        try:
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key_name = "SyncAPISystemTray"
+
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            try:
+                winreg.DeleteValue(key, key_name)
+                print("✅ Registro de auto-inicio limpiado")
+            except FileNotFoundError:
+                # No existe, no hay problema
+                pass
+            winreg.CloseKey(key)
+        except Exception as e:
+            print(f"⚠️ No se pudo limpiar registro: {e}")
+
+    def ejecutar_sincronizacion(self, es_manual=False):
+        """Ejecuta una sincronización"""
+        from datetime import datetime
+
+        if self.is_syncing:
+            print("⚠️ Ya hay una sincronización en progreso")
+            return
+
+        self.is_syncing = True
+        inicio = datetime.now()
+
+        try:
+            print(f"{'='*70}")
+            if es_manual:
+                print(f"🔄 Sincronización MANUAL - {inicio.strftime('%Y-%m-%d %H:%M:%S')}")
+            else:
+                print(f"🔄 Sincronización AUTOMÁTICA - {inicio.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"{'='*70}\n")
+
+            # Crear logger
+            def tray_logger(msg, level="info"):
+                prefix = {'info': '✅', 'warning': '⚠️', 'error': '❌', 'debug': '🔍'}.get(level, 'ℹ️')
+                print(f"{prefix} {msg}")
+
+            # Crear gestores
+            auth_manager = APIAuthManager(
+                base_url=self.config['api_url'],
+                logger=tray_logger
+            )
+
+            # Login
+            auth_manager.login(self.config['api_email'], self.api_password)
+            auth_manager.validate_company(self.config['company_rif'], self.config['company_email'])
+
+            sync_manager = APISyncManager(
+                postgres_config={
+                    'host': self.config['postgres_host'],
+                    'port': self.config['postgres_port'],
+                    'database': self.config['postgres_database'],
+                    'user': self.config['postgres_user'],
+                    'password': self.config['postgres_password']
+                },
+                auth_manager=auth_manager,
+                logger=tray_logger
+            )
+
+            # Conectar y sincronizar
+            if sync_manager.connect_postgresql() and sync_manager.initialize_api_clients():
+                result = sync_manager.sync_all()
+
+                fin = datetime.now()
+                duracion = (fin - inicio).total_seconds()
+
+                total = result.get('total', {})
+                self.last_sync_time = fin.strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = f"✅ {total.get('created', 0)} nuevos, {total.get('updated', 0)} modificados"
+
+                print(f"\n📊 Completado en {duracion:.1f}s")
+                print(f"   ✨ Nuevos:      {total.get('created', 0)}")
+                print(f"   🔄 Modificados: {total.get('updated', 0)}")
+                print(f"   ❌ Eliminados:  {total.get('deleted', 0)}")
+                print()
+
+                sync_manager.close()
+            else:
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "❌ Error de conexión"
+
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.last_sync_status = f"❌ Error: {str(e)[:30]}"
+
+        finally:
+            self.is_syncing = False
+
+    def bucle_sincronizacion(self):
+        """Bucle de sincronización automática"""
+        import time
+
+        interval = int(self.config.get('sync_interval_minutes', 30))
+        print(f"⏱️  Intervalo de sincronización: {interval} minutos")
+
+        # Primera sincronización inmediata
+        if self.sync_running:
+            print("🔄 Ejecutando primera sincronización al inicio...")
+            self.ejecutar_sincronizacion()
+
+        # Bucle
+        while self.sync_running:
+            try:
+                time.sleep(interval * 60)
+                if self.sync_running:
+                    self.ejecutar_sincronizacion()
+            except KeyboardInterrupt:
+                break
+
+    def abrir_manager(self):
+        """Abre la ventana del manager"""
+        import threading
+        threading.Thread(target=self._abrir_manager_thread, daemon=True).start()
+
+    def _abrir_manager_thread(self):
+        """Abre manager en un thread separado"""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            app = ManagerWindow(root)
+            root.mainloop()
+        except Exception as e:
+            print(f"Error abriendo manager: {e}")
+
+    def ver_logs(self):
+        """Abre ventana de logs"""
+        import threading
+        threading.Thread(target=self._ver_logs_thread, daemon=True).start()
+
+    def _ver_logs_thread(self):
+        """Muestra logs en ventana separada"""
+        try:
+            import tkinter as tk
+            from tkinter import scrolledtext, ttk
+
+            log_window = tk.Toplevel()
+            log_window.title(f"Logs - Sync API ({self.config.get('company_rif', 'N/A')})")
+            log_window.geometry("800x600")
+
+            # Área de texto
+            txt = scrolledtext.ScrolledText(log_window, state="normal", font=("Consolas", 9))
+            txt.pack(fill="both", expand=True)
+
+            # Cargar logs
+            log_file = get_log_file(self.config.get('company_email'))
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                    txt.insert("1.0", content)
+                    txt.see("end")
+                except Exception as e:
+                    txt.insert("1.0", f"Error cargando logs: {e}")
+            else:
+                txt.insert("1.0", "No hay archivo de logs aún")
+
+            txt.config(state="disabled")
+
+            # Botón cerrar
+            tk.Button(log_window, text="❌ Cerrar", command=log_window.destroy).pack(pady=5)
+
+        except Exception as e:
+            print(f"Error abriendo logs: {e}")
+
+    def sincronizar_ahora(self):
+        """Ejecuta sincronización manual desde el menú"""
+        import threading
+        threading.Thread(target=self.ejecutar_sincronizacion, kwargs={'es_manual': True}, daemon=True).start()
+
+    def abrir_config(self):
+        """Abre ventana de configuración"""
+        import threading
+        threading.Thread(target=self._abrir_config_thread, daemon=True).start()
+
+    def _abrir_config_thread(self):
+        """Abre config en thread separado"""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            app = ConfigWindow(root)
+            root.mainloop()
+        except Exception as e:
+            print(f"Error abriendo config: {e}")
+
+    def salir(self):
+        """Sale del sistema tray"""
+        print("\n👋 Deteniendo servicio...")
+        self.sync_running = False
+        if self.icon:
+            self.icon.stop()
+
+    def iniciar(self):
+        """Inicia el servicio system tray"""
+        try:
+            print("="*70)
+            print("INICIANDO SYSTEM TRAY SERVICE")
+            print("="*70)
+            print(f"RIF: {self.config['company_rif']}")
+            print(f"Email: {self.config['company_email']}")
+            print(f"Intervalo: {self.config.get('sync_interval_minutes', 30)} minutos")
+            print()
+
+            import pystray
+
+            # Crear icono
+            print("Creando icono de la bandeja del sistema...")
+            icon_image = self.crear_icono()
+            if not icon_image:
+                raise Exception("No se pudo crear el icono. Instale: pip install Pillow")
+
+            print("✅ Icono creado correctamente")
+
+            # Crear menú
+            menu = pystray.Menu(
+                pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
+                pystray.MenuItem('📊 Ver Logs', self.ver_logs),
+                pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
+                pystray.MenuItem('⚙️ Configuración', self.abrir_config),
+                pystray.MenuItem('❌ Salir', self.salir)
+            )
+
+            # Crear icono
+            tooltip_text = f"""Sync API System
+RIF: {self.config['company_rif']}
+
+Clic derecho para opciones"""
+            self.icon = pystray.Icon("Sync API", icon_image, tooltip_text, menu)
+
+            # Iniciar sincronización automática en thread
+            print("Iniciando thread de sincronización automática...")
+            import threading
+            sync_thread = threading.Thread(target=self.bucle_sincronizacion)
+            sync_thread.daemon = True
+            sync_thread.start()
+
+            # Ejecutar icono (bloqueante)
+            print("✅ Servicio iniciado en la bandeja del sistema")
+            print("💡 El icono está en la barra de tareas (junto al reloj)")
+            print("💡 Clic derecho para ver opciones")
+            print()
+
+            self.icon.run()
+
+        except ImportError as e:
+            error_msg = f"Falta dependencia: {str(e)}"
+            print(f"ERROR: {error_msg}")
+            print("Ejecute: pip install pystray Pillow")
+            raise Exception(error_msg)
+        except KeyboardInterrupt:
+            print("⚠️ Interrupción por teclado (Ctrl+C)")
+        except Exception as e:
+            print(f"❌ ERROR en System Tray: {e}")
+            raise
+
+
+# ==============================================================================
+# CONSOLE MODE FUNCTIONS
+# ==============================================================================
+
+def run_sync_console():
+    """Ejecutar sincronización en modo consola (sin GUI)."""
+    # Verificar que hay config
+    if not os.path.exists(CONFIG_FILE):
+        print("❌ No hay configuración. Ejecute --mode config primero")
+        sys.exit(1)
+
+    # Cargar configuración
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"❌ Error cargando configuración: {e}")
+        sys.exit(1)
+
+    # Pedir password de la API
+    import getpass
+    api_password = getpass.getpass("Password de la API: ")
+
+    # Crear logger para consola
+    def console_logger(msg, level="info"):
+        prefix = {
+            'info': '✅',
+            'warning': '⚠️',
+            'error': '❌',
+            'debug': '🔍'
+        }.get(level, 'ℹ️')
+        print(f"{prefix} {msg}")
+
+    try:
+        # Crear gestor de autenticación
+        auth_manager = APIAuthManager(
+            base_url=config['api_url'],
+            logger=console_logger
+        )
+
+        # Login
+        print("\n🔐 Autenticando...")
+        result = auth_manager.login(config['api_email'], api_password)
+        if not result.get('success'):
+            print(f"❌ Login falló: {result.get('error')}")
+            sys.exit(1)
+
+        # Validar empresa
+        print("🏢 Validando empresa...")
+        result = auth_manager.validate_company(config['company_rif'], config['company_email'])
+        if not result.get('success'):
+            print(f"❌ Validación falló: {result.get('error')}")
+            sys.exit(1)
+
+        print(f"✅ Company ID: {auth_manager.company_id}")
+
+        # Crear gestor de sincronización
+        sync_manager = APISyncManager(
+            postgres_config={
+                'host': config['postgres_host'],
+                'port': config['postgres_port'],
+                'database': config['postgres_database'],
+                'user': config['postgres_user'],
+                'password': config['postgres_password']
+            },
+            auth_manager=auth_manager,
+            logger=console_logger
+        )
+
+        # Conectar a PostgreSQL
+        print("\n🐘 Conectando a PostgreSQL...")
+        if not sync_manager.connect_postgresql():
+            print("❌ No se pudo conectar a PostgreSQL")
+            sys.exit(1)
+
+        # Inicializar clientes API
+        print("📡 Inicializando clientes API...")
+        if not sync_manager.initialize_api_clients():
+            print("❌ No se pudieron inicializar los clientes API")
+            sys.exit(1)
+
+        # Sincronizar
+        print("\n" + "="*70)
+        print("🔄 INICIANDO SINCRONIZACIÓN")
+        print("="*70 + "\n")
+
+        result = sync_manager.sync_all()
+
+        print("\n" + "="*70)
+        print("📊 RESUMEN DE SINCRONIZACIÓN")
+        print("="*70)
+
+        for entity, stats in result.get('entities', {}).items():
+            print(f"\n📁 {entity.upper()}:")
+            print(f"   ✨ Nuevos:      {stats.get('created', 0)}")
+            print(f"   🔄 Modificados: {stats.get('updated', 0)}")
+            print(f"   ❌ Eliminados:  {stats.get('deleted', 0)}")
+            print(f"   ⏭️  Sin cambios: {stats.get('unchanged', 0)}")
+
+        total = result.get('total', {})
+        print(f"\n📈 TOTALES:")
+        print(f"   ✨ Nuevos:      {total.get('created', 0)}")
+        print(f"   🔄 Modificados: {total.get('updated', 0)}")
+        print(f"   ❌ Eliminados:  {total.get('deleted', 0)}")
+
+        if result.get('success'):
+            print("\n✅ Sincronización completada exitosamente")
+        else:
+            print(f"\n❌ Sincronización con errores: {result.get('error', 'Error desconocido')}")
+
+        # Cerrar conexiones
+        sync_manager.close()
+
+    except KeyboardInterrupt:
+        print("\n\n⚠️ Sincronización interrumpida por el usuario")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ Error durante sincronización: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+def run_service_loop():
+    """Ejecutar sincronización en loop infinito (modo servicio)."""
+    import time
+
+    # Verificar que hay config
+    if not os.path.exists(CONFIG_FILE):
+        print("❌ No hay configuración. Ejecute --mode config primero")
+        sys.exit(1)
+
+    # Cargar configuración
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"❌ Error cargando configuración: {e}")
+        sys.exit(1)
+
+    interval_minutes = int(config.get('sync_interval_minutes', 30))
+    print(f"⏱️  Intervalo de sincronización: {interval_minutes} minutos")
+    print("💡 Presione Ctrl+C para detener\n")
+
+    # Pedir password UNA vez
+    import getpass
+    api_password = getpass.getpass("Password de la API: ")
+
+    sync_count = 0
+
+    try:
+        while True:
+            sync_count += 1
+            print(f"\n{'='*70}")
+            print(f"🔄 SINCRONIZACIÓN #{sync_count} - {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"{'='*70}\n")
+
+            # Ejecutar sincronización (usando funciones internas)
+            if not os.path.exists(CONFIG_FILE):
+                print("❌ Configuración eliminada. Saliendo...")
+                break
+
+            # Crear logger para consola
+            def console_logger(msg, level="info"):
+                prefix = {
+                    'info': '✅',
+                    'warning': '⚠️',
+                    'error': '❌',
+                    'debug': '🔍'
+                }.get(level, 'ℹ️')
+                print(f"{prefix} {msg}")
+
+            try:
+                # Recargar configuración (por si cambió)
+                with open(CONFIG_FILE, 'r') as f:
+                    config = json.load(f)
+
+                # Crear gestores
+                auth_manager = APIAuthManager(
+                    base_url=config['api_url'],
+                    logger=console_logger
+                )
+
+                auth_manager.login(config['api_email'], api_password)
+                auth_manager.validate_company(config['company_rif'], config['company_email'])
+
+                sync_manager = APISyncManager(
+                    postgres_config={
+                        'host': config['postgres_host'],
+                        'port': config['postgres_port'],
+                        'database': config['postgres_database'],
+                        'user': config['postgres_user'],
+                        'password': config['postgres_password']
+                    },
+                    auth_manager=auth_manager,
+                    logger=console_logger
+                )
+
+                if sync_manager.connect_postgresql() and sync_manager.initialize_api_clients():
+                    result = sync_manager.sync_all()
+
+                    total = result.get('total', {})
+                    print(f"\n📊 Esta sincronización: ✨{total.get('created', 0)} 🔄{total.get('updated', 0)} ❌{total.get('deleted', 0)}")
+
+                    sync_manager.close()
+                else:
+                    print("❌ Error en conexiones")
+
+            except Exception as e:
+                print(f"❌ Error en sincronización #{sync_count}: {e}")
+
+            # Esperar para la próxima sincronización
+            print(f"\n⏳ Próxima sincronización en {interval_minutes} minutos...")
+            print(f"{'='*70}\n")
+            time.sleep(interval_minutes * 60)
+
+    except KeyboardInterrupt:
+        print(f"\n\n⚠️ Servicio detenido por el usuario")
+        print(f"📊 Total de sincronizaciones ejecutadas: {sync_count}")
+        sys.exit(0)
+
+
+# ==============================================================================
+# MAIN
+# ==============================================================================
+
+def main():
+    """Función principal."""
+    parser = argparse.ArgumentParser(description="Sincronizador API REST")
+    parser.add_argument("--mode", choices=["config", "manager", "reconfig", "sync", "service", "tray"],
+                       default="manager", help="Modo de ejecución")
+    parser.add_argument("--once", action="store_true",
+                       help="En modo service, ejecutar una sola vez y salir")
+
+    args = parser.parse_args()
+
+    # Si --reconfig o mode=reconfig, borrar config
+    if args.mode == "reconfig":
+        print("🔄 Reconfiguración - Borrando configuración...")
+        if os.path.exists(CONFIG_FILE):
+            os.remove(CONFIG_FILE)
+            print("✅ Configuración eliminada")
+        args.mode = "config"
+
+    # Crear directorio de logs
+    if not os.path.exists(LOGS_DIR):
+        os.makedirs(LOGS_DIR)
+
+    # Ejecutar según modo
+    if args.mode == "config":
+        root = tk.Tk()
+        app = ConfigWindow(root)
+        root.mainloop()
+
+    elif args.mode == "manager":
+        # Verificar que hay config
+        if not os.path.exists(CONFIG_FILE):
+            print("❌ No hay configuración. Ejecute --mode config primero")
+            sys.exit(1)
+
+        root = tk.Tk()
+        app = ManagerWindow(root)
+        root.mainloop()
+
+    elif args.mode == "sync":
+        # Modo sincronización única (sin GUI)
+        print("=== SINCRONIZACIÓN ÚNICA ===")
+        run_sync_console()
+
+    elif args.mode == "service":
+        # Modo servicio (loop o una sola ejecución)
+        if args.once:
+            print("=== MODO SERVICIO (UNA SOLA EJECUCIÓN) ===")
+            run_sync_console()
+        else:
+            print("=== MODO SERVICIO (LOOP INFINITO) ===")
+            run_service_loop()
+
+    elif args.mode == "tray":
+        # Modo System Tray (icono en bandeja)
+        print("=== MODO SYSTEM TRAY ===")
+
+        # Verificar que hay config
+        if not os.path.exists(CONFIG_FILE):
+            print("❌ No hay configuración. Ejecute --mode config primero")
+            sys.exit(1)
+
+        # Cargar configuración
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        except Exception as e:
+            print(f"❌ Error cargando configuración: {e}")
+            sys.exit(1)
+
+        # Pedir password
+        import getpass
+        api_password = getpass.getpass("Password de la API: ")
+
+        # Iniciar System Tray
+        try:
+            tray = SystemTrayService(config, api_password)
+            tray.iniciar()
+        except Exception as e:
+            print(f"❌ Error iniciando System Tray: {e}")
+            print("\nAsegúrese de tener instaladas las dependencias:")
+            print("  pip install pystray Pillow")
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
