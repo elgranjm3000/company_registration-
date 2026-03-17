@@ -468,10 +468,312 @@ class APISyncManager:
             self.pg_conn = psycopg2.connect(**self.postgres_config)
             self.pg_cursor = self.pg_conn.cursor()
             self._log("✅ Conectado a PostgreSQL")
+
+            # Inicializar tablas y triggers necesarios
+            self.inicializar_tablas_sync()
+
             return True
         except Exception as e:
             self._log(f"❌ Error conectando a PostgreSQL: {e}", "error")
             return False
+
+    def inicializar_tablas_sync(self) -> bool:
+        """
+        Inicializa tablas y triggers para sincronización.
+
+        Crea:
+        - Tabla sync_hashes si no existe
+        - Índices para sync_hashes
+        - Triggers para marcar productos eliminados
+        - Triggers para marcar productos actualizados
+
+        Returns:
+            True si exitoso, False si hubo error
+        """
+        try:
+            # Crear tabla sync_hashes
+            create_table_query = """
+            CREATE TABLE IF NOT EXISTS sync_hashes (
+                id SERIAL PRIMARY KEY,
+                table_name VARCHAR(50) NOT NULL,
+                record_key VARCHAR(100) NOT NULL,
+                record_hash VARCHAR(32) NOT NULL,
+                last_sync_data TEXT,
+                synced_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                company_id INTEGER,
+                deleted_at TIMESTAMP,
+                pending_sync BOOLEAN DEFAULT FALSE,
+                UNIQUE(table_name, record_key, company_id)
+            );
+            """
+            self.pg_cursor.execute(create_table_query)
+            self.pg_conn.commit()
+
+            # Crear índices
+            self._crear_indices_sync_hashes()
+
+            # Crear triggers de eliminación
+            self._crear_trigger_eliminacion_products()
+            self._crear_trigger_eliminacion_categories()
+            self._crear_trigger_eliminacion_customers()
+            self._crear_trigger_eliminacion_sellers()
+
+            # Crear triggers de actualización
+            self._crear_trigger_actualizacion_products()
+            self._crear_trigger_actualizacion_customers()
+
+            self._log("✅ Tablas y triggers de sincronización inicializados", "debug")
+            return True
+
+        except Exception as e:
+            self._log(f"⚠️ Error inicializando tablas sync: {e}", "warning")
+            return False
+
+    def _crear_indices_sync_hashes(self):
+        """Crea índices para sync_hashes."""
+        indices = [
+            ("idx_sync_hashes_lookup", "CREATE INDEX IF NOT EXISTS idx_sync_hashes_lookup ON sync_hashes(table_name, record_key, company_id)"),
+            ("idx_sync_hashes_table", "CREATE INDEX IF NOT EXISTS idx_sync_hashes_table ON sync_hashes(table_name, company_id)")
+        ]
+
+        for nombre_idx, query in indices:
+            try:
+                self.pg_cursor.execute(query)
+                self.pg_conn.commit()
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "already exists" not in error_msg:
+                    self._log(f"⚠️ Error creando índice {nombre_idx}: {e}", "warning")
+                self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_products(self):
+        """Crea trigger que marca productos como eliminados en sync_hashes."""
+        try:
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_product_deleted_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'products'
+                AND record_key = OLD.code;
+
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('products', OLD.code, md5(OLD.code::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_products_mark_deleted_sync_hashes ON products;
+
+            CREATE TRIGGER tr_products_mark_deleted_sync_hashes
+                AFTER DELETE ON products
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_product_deleted_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_categories(self):
+        """Crea trigger que marca department (categories) como eliminados."""
+        try:
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_department_deleted_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'categories'
+                AND record_key = OLD.code;
+
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('categories', OLD.code, md5(OLD.code::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_department_mark_deleted_sync_hashes ON department;
+
+            CREATE TRIGGER tr_department_mark_deleted_sync_hashes
+                AFTER DELETE ON department
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_department_deleted_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_customers(self):
+        """Crea trigger que marca customers como eliminados."""
+        try:
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'customers'
+                AND record_key = OLD.id::text;
+
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('customers', OLD.id::text, md5(OLD.id::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_customers_mark_deleted_sync_hashes ON customers;
+
+            CREATE TRIGGER tr_customers_mark_deleted_sync_hashes
+                AFTER DELETE ON customers
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_customer_deleted_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_sellers(self):
+        """Crea trigger que marca sellers como eliminados."""
+        try:
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted_sync_hashes()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE sync_hashes
+                SET deleted_at = NOW()
+                WHERE table_name = 'sellers'
+                AND record_key = OLD.id::text;
+
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
+                    VALUES ('sellers', OLD.id::text, md5(OLD.id::text), NOW());
+                END IF;
+
+                RETURN OLD;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_sellers_mark_deleted_sync_hashes ON sellers;
+
+            CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
+                AFTER DELETE ON sellers
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_seller_deleted_sync_hashes();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_actualizacion_products(self):
+        """Crea trigger que marca productos como pendientes de sincronización."""
+        try:
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_product_pending_sync()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE sync_hashes
+                SET pending_sync = TRUE, updated_at = NOW()
+                WHERE table_name = 'products'
+                AND record_key = NEW.code;
+
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync)
+                    VALUES ('products', NEW.code, md5(NEW.code::text), TRUE);
+                END IF;
+
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_products_mark_pending_sync ON products;
+
+            CREATE TRIGGER tr_products_mark_pending_sync
+                AFTER INSERT OR UPDATE ON products
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_product_pending_sync();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_actualizacion_customers(self):
+        """Crea trigger que marca customers como pendientes de sincronización."""
+        try:
+            create_function_query = """
+            CREATE OR REPLACE FUNCTION trigger_mark_customer_pending_sync()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE sync_hashes
+                SET pending_sync = TRUE, updated_at = NOW()
+                WHERE table_name = 'customers'
+                AND record_key = NEW.id::text;
+
+                IF NOT FOUND THEN
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync)
+                    VALUES ('customers', NEW.id::text, md5(NEW.id::text), TRUE);
+                END IF;
+
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+            DROP TRIGGER IF EXISTS tr_customers_mark_pending_sync ON customers;
+
+            CREATE TRIGGER tr_customers_mark_pending_sync
+                AFTER INSERT OR UPDATE ON customers
+                FOR EACH ROW
+                EXECUTE PROCEDURE trigger_mark_customer_pending_sync();
+            """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
 
     def initialize_api_clients(self) -> bool:
         """Inicializar clientes API después del login."""
