@@ -1744,15 +1744,21 @@ class ConfigWindow:
             Ejecuta la primera sincronización y luego inicia el System Tray
             """
             try:
+                print("\n[DEBUG] Iniciando ejecutar_primera_sync_y_tray()")
+
                 # Cargar configuración guardada
                 if not os.path.exists(CONFIG_FILE):
+                    print("[DEBUG] ERROR: No existe CONFIG_FILE")
                     messagebox.showerror("Error", "No se encontró configuración guardada")
                     return
 
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
 
+                print(f"[DEBUG] Config cargada: {config.get('company_email')}")
+
                 # Crear ventana de progreso para primera sincronización
+                print("[DEBUG] Creando ventana de sincronización...")
                 sync_window = tk.Toplevel(self.root)
                 sync_window.title("🔄 Primera Sincronización")
                 sync_window.geometry("600x300")
@@ -1779,22 +1785,29 @@ class ConfigWindow:
 
                 def ejecutar_sync_worker():
                     """Worker de sincronización en thread"""
+                    print("[DEBUG] Iniciando ejecutar_sync_worker()")
                     try:
                         # Crear logger
                         def sync_logger(msg, level="info"):
-                            sync_label.config(text=msg)
+                            print(f"[SYNC] {msg}")
+                            if sync_window.winfo_exists():
+                                sync_label.config(text=msg)
 
                         # Crear gestores
+                        print("[DEBUG] Creando APIAuthManager...")
                         auth_manager = APIAuthManager(
                             base_url=config['api_url'],
                             logger=sync_logger
                         )
 
                         # Login
-                        sync_label.config(text="🔐 Autenticando con API...")
+                        print("[DEBUG] Haciendo login a API...")
+                        sync_logger("🔐 Autenticando con API...")
                         auth_manager.login(config['api_email'], api_password)
                         auth_manager.validate_company(config['company_rif'], config['company_email'])
+                        print("[DEBUG] Login exitoso")
 
+                        print("[DEBUG] Creando APISyncManager...")
                         sync_manager = APISyncManager(
                             postgres_config={
                                 'host': config['postgres_host'],
@@ -1808,10 +1821,13 @@ class ConfigWindow:
                         )
 
                         # Conectar y sincronizar
-                        sync_label.config(text="🔗 Conectando a PostgreSQL...")
+                        print("[DEBUG] Conectando a PostgreSQL...")
+                        sync_logger("🔗 Conectando a PostgreSQL...")
                         if sync_manager.connect_postgresql() and sync_manager.initialize_api_clients():
-                            sync_label.config(text="🔄 Sincronizando datos (puede tardar varios minutos)...")
+                            print("[DEBUG] Conectado, iniciando sync_all()...")
+                            sync_logger("🔄 Sincronizando datos (puede tardar varios minutos)...")
                             result = sync_manager.sync_all()
+                            print("[DEBUG] sync_all() completado")
 
                             total = result.get('total', {})
                             sync_result = {
@@ -1823,6 +1839,7 @@ class ConfigWindow:
                                 'api_password': api_password
                             }
                         else:
+                            print("[DEBUG] Error de conexión")
                             sync_result = {
                                 'exito': False,
                                 'mensaje': "❌ Error de conexión a PostgreSQL o API",
@@ -1830,20 +1847,26 @@ class ConfigWindow:
                             }
 
                         sync_manager.close()
+                        print("[DEBUG] Sync manager cerrado")
 
                     except Exception as e:
+                        print(f"[DEBUG] ERROR en sync_worker: {e}")
+                        import traceback
+                        traceback.print_exc()
                         sync_result = {
                             'exito': False,
                             'mensaje': f"❌ Error: {str(e)}",
                             'api_password': api_password
                         }
 
+                    print("[DEBUG] Notificando completion...")
                     # Notificar completion
                     if sync_window.winfo_exists():
                         sync_window.event_generate('<<SyncComplete>>')
 
                 def on_sync_complete(event):
                     """Manejador de completion de sincronización"""
+                    print(f"[DEBUG] on_sync_complete llamado: exito={sync_result.get('exito')}")
                     if not sync_window.winfo_exists():
                         return
 
@@ -1851,13 +1874,16 @@ class ConfigWindow:
 
                     if sync_result['exito']:
                         sync_label.config(text=sync_result['mensaje'], foreground="green")
+                        print("[DEBUG] Sync exitoso, cerrando ventana en 3 seg...")
 
                         # Cerrar ventana de sincronización después de 3 segundos
                         sync_window.after(3000, lambda: sync_window.destroy() if sync_window.winfo_exists() else None)
 
                         # Iniciar System Tray después de cerrar
+                        print("[DEBUG] Programando inicio de System Tray en 3.5 seg...")
                         sync_window.after(3500, lambda: iniciar_system_tray(config, api_password))
                     else:
+                        print(f"[DEBUG] Sync falló: {sync_result['mensaje']}")
                         sync_label.config(text=sync_result['mensaje'], foreground="red")
                         tk.Button(sync_window, text="⚠️ Cerrar",
                                  command=sync_window.destroy).pack(pady=10)
@@ -1866,18 +1892,26 @@ class ConfigWindow:
                 sync_window.bind('<<SyncComplete>>', on_sync_complete)
 
                 # Iniciar thread de sincronización
-                sync_thread = threading.Thread(target=ejecutar_sync_worker, daemon=True)
+                print("[DEBUG] Iniciando thread de sincronización...")
+                sync_thread = threading.Thread(target=ejecutar_sync_worker, daemon=False)
                 sync_thread.start()
 
             except Exception as e:
+                print(f"[DEBUG] ERROR en ejecutar_primera_sync_y_tray: {e}")
+                import traceback
+                traceback.print_exc()
                 messagebox.showerror("Error", f"Error preparando sincronización:\n{e}")
 
         def iniciar_system_tray(config, api_password):
             """Inicia el servicio System Tray"""
             try:
+                print("\n[DEBUG] ===== INICIAR SYSTEM TRAY =====")
+                print(f"[DEBUG] Company: {config.get('company_email')}")
+
                 import tkinter as tk
                 # Destruir root principal si existe
                 if hasattr(self, 'root') and self.root.winfo_exists():
+                    print("[DEBUG] Destruyendo root principal...")
                     self.root.destroy()
 
                 # Crear e iniciar servicio System Tray
@@ -1885,10 +1919,16 @@ class ConfigWindow:
                 print("🔄 Iniciando modo System Tray...")
                 print("="*70)
 
+                print("[DEBUG] Creando SystemTrayService...")
                 tray_service = SystemTrayService(config, api_password)
+                print("[DEBUG] Llamando a tray_service.iniciar()...")
                 tray_service.iniciar()
+                print("[DEBUG] tray_service.iniciar() retornó (no debería llegar aquí)")
 
             except Exception as e:
+                print(f"[DEBUG] ERROR en iniciar_system_tray: {e}")
+                import traceback
+                traceback.print_exc()
                 messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
 
         def cerrar_ventana():
