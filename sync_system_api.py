@@ -1962,29 +1962,43 @@ class ConfigWindow:
             try:
                 print("\n[DEBUG] ===== INICIAR SYSTEM TRAY =====")
                 print(f"[DEBUG] Company: {config.get('company_email')}")
+                print(f"[DEBUG] API Password: {'***' if api_password else 'None'}")
 
-                import tkinter as tk
+                # Verificar que hay configuración válida
+                if not config:
+                    print("[DEBUG] ERROR: Config es None o vacío")
+                    messagebox.showerror("Error", "No hay configuración válida")
+                    return
+
+                print(f"[DEBUG] Config tiene {len(config)} keys")
+
                 # Destruir root principal si existe
                 if hasattr(self, 'root') and self.root.winfo_exists():
                     print("[DEBUG] Destruyendo root principal...")
                     self.root.destroy()
+                    print("[DEBUG] Root destruido")
+                else:
+                    print("[DEBUG] No hay root principal o ya fue destruido")
 
                 # Crear e iniciar servicio System Tray
                 print("\n" + "="*70)
                 print("🔄 Iniciando modo System Tray...")
                 print("="*70)
 
-                print("[DEBUG] Creando SystemTrayService...")
+                print("[DEBUG] Creando instancia de SystemTrayService...")
                 tray_service = SystemTrayService(config, api_password)
+                print("[DEBUG] SystemTrayService creada")
+
                 print("[DEBUG] Llamando a tray_service.iniciar()...")
+                print("[DEBUG] Esto iniciará el icono en la barra de tareas")
                 tray_service.iniciar()
-                print("[DEBUG] tray_service.iniciar() retornó (no debería llegar aquí)")
+                print("[DEBUG] tray_service.iniciar() retornó (no debería llegar aquí nunca)")
 
             except Exception as e:
                 print(f"[DEBUG] ERROR en iniciar_system_tray: {e}")
                 import traceback
                 traceback.print_exc()
-                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
+                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}\n\nRevisa la consola para detalles.")
 
         def cerrar_ventana():
             """Cerrar ventana y regresar"""
@@ -2894,7 +2908,14 @@ class SystemTrayService:
             print(f"Intervalo: {self.config.get('sync_interval_minutes', 30)} minutos")
             print()
 
+            # Verificar dependencias
+            print("[DEBUG] Verificando pystray...")
             import pystray
+            print(f"[DEBUG] pystray versión: {pystray.__version__ if hasattr(pystray, '__version__') else 'unknown'}")
+
+            print("[DEBUG] Verificando PIL/Pillow...")
+            from PIL import Image, ImageDraw
+            print(f"[DEBUG] PIL disponible")
 
             # Crear icono
             print("Creando icono de la bandeja del sistema...")
@@ -2905,6 +2926,7 @@ class SystemTrayService:
             print("✅ Icono creado correctamente")
 
             # Crear menú
+            print("[DEBUG] Creando menú contextual...")
             menu = pystray.Menu(
                 pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
                 pystray.MenuItem('📊 Ver Logs', self.ver_logs),
@@ -2912,6 +2934,7 @@ class SystemTrayService:
                 pystray.MenuItem('⚙️ Configuración', self.abrir_config),
                 pystray.MenuItem('❌ Salir', self.salir)
             )
+            print("[DEBUG] Menú creado")
 
             # Crear icono
             tooltip_text = f"""Sync API System
@@ -2919,6 +2942,7 @@ RIF: {self.config['company_rif']}
 
 Clic derecho para opciones"""
             self.icon = pystray.Icon("Sync API", icon_image, tooltip_text, menu)
+            print("[DEBUG] Icono pystray creado")
 
             # Iniciar sincronización automática en thread
             print("Iniciando thread de sincronización automática...")
@@ -2926,14 +2950,18 @@ Clic derecho para opciones"""
             sync_thread = threading.Thread(target=self.bucle_sincronizacion)
             sync_thread.daemon = True
             sync_thread.start()
+            print("[DEBUG] Thread de sincronización iniciado")
 
             # Ejecutar icono (bloqueante)
             print("✅ Servicio iniciado en la bandeja del sistema")
             print("💡 El icono está en la barra de tareas (junto al reloj)")
             print("💡 Clic derecho para ver opciones")
             print()
+            print("[DEBUG] Llamando a icon.run() (esto es bloqueante)...")
 
             self.icon.run()
+
+            print("[DEBUG] icon.run() retornó (no debería llegar aquí)")
 
         except ImportError as e:
             error_msg = f"Falta dependencia: {str(e)}"
@@ -2944,6 +2972,8 @@ Clic derecho para opciones"""
             print("⚠️ Interrupción por teclado (Ctrl+C)")
         except Exception as e:
             print(f"❌ ERROR en System Tray: {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
 
