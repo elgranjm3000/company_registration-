@@ -1593,15 +1593,24 @@ class ConfigWindow:
             progress_bar.stop()
 
             if resultado['exito']:
-                btn_cerrar.config(text="✅ Continuar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="✅ Verificación completada", foreground="green")
                 estado_paso_label.config(text="✅ Configuración verificada con éxito", foreground="green")
+
+                # Mostrar mensaje y AUTOMÁTICAMENTE ejecutar sincronización
+                messagebox.showinfo("✅ Configuración Guardada",
+                    resultado['mensaje'] +
+                    "\n\n🔄 Se ejecutará la primera sincronización automáticamente...")
+
+                # Ejecutar primera sincronización automáticamente
+                progreso.after(500, lambda: ejecutar_primera_sync_y_tray(resultado['api_password']))
+
+                # Cerrar ventana de config después de iniciar sync
+                progreso.after(1000, lambda: cerrar_ventana())
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
                 estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
-
-            messagebox.showinfo("Resultado", resultado['mensaje'])
+                messagebox.showinfo("Resultado", resultado['mensaje'])
 
         progreso.bind('<<VerificationComplete>>', on_verification_complete)
 
