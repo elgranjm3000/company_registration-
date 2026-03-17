@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Script de prueba para Sellers Sync
-Valida la sincronización de vendedores de PostgreSQL a API REST
+Script de prueba para Products Sync
+Valida la sincronización de productos de PostgreSQL a API REST
 """
 
 import sys
@@ -22,8 +22,8 @@ except ImportError:
     sys.exit(1)
 
 # Importar nuestros módulos
-from api_client.sellers import SellersClient
-from sync.sellers_sync import SellersSync
+from api_client.products import ProductsClient
+from sync.products_sync import ProductsSync
 
 
 # Configurar logging
@@ -32,7 +32,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('test_sellers_sync.log')
+        logging.FileHandler('test_products_sync.log')
     ]
 )
 
@@ -74,11 +74,11 @@ def connect_postgresql(config):
         return None
 
 
-def test_sellers_sync():
-    """Probar sincronización de vendedores"""
+def test_products_sync():
+    """Probar sincronización de productos"""
 
     logger.info("=" * 70)
-    logger.info("TEST: Sellers Sync (PostgreSQL → API REST)")
+    logger.info("TEST: Products Sync (PostgreSQL → API REST)")
     logger.info("=" * 70)
 
     # 1. Cargar configuración
@@ -106,11 +106,11 @@ def test_sellers_sync():
     logger.info("\n🌐 Step 3: Initializing API client...")
 
     try:
-        sellers_client = SellersClient(
+        products_client = ProductsClient(
             base_url=api_config['base_url'],
             api_key=api_config['api_key']
         )
-        logger.info("✅ Sellers API client initialized")
+        logger.info("✅ Products API client initialized")
     except Exception as e:
         logger.error(f"❌ Error initializing API client: {e}")
         pg_conn.close()
@@ -118,6 +118,14 @@ def test_sellers_sync():
 
     # 4. Obtener company_id
     logger.info("\n🏢 Step 4: Getting company_id...")
+
+    company_rif = config.get('company_rif')
+    company_email = config.get('company_email')
+
+    if not company_rif or not company_email:
+        logger.error("❌ company_rif and company_email required in config")
+        pg_conn.close()
+        return False
 
     # Usar company_id del config
     company_id = config.get('company_id')
@@ -129,25 +137,25 @@ def test_sellers_sync():
     logger.info(f"Using company_id: {company_id}")
 
     # 5. Ejecutar sincronización
-    logger.info("\n🔄 Step 5: Executing sellers sync...")
+    logger.info("\n🔄 Step 5: Executing products sync...")
 
     try:
-        sellers_sync = SellersSync(
+        products_sync = ProductsSync(
             pg_conn=pg_conn,
-            api_client=sellers_client,
+            api_client=products_client,
             company_id=company_id,
             logger=logger
         )
 
-        success = sellers_sync.execute()
+        success = products_sync.execute()
 
         if success:
             logger.info("\n" + "=" * 70)
-            logger.info("✅ TEST PASSED: Sellers sync completed successfully")
+            logger.info("✅ TEST PASSED: Products sync completed successfully")
             logger.info("=" * 70)
 
             # Mostrar estadísticas
-            stats = sellers_sync.stats
+            stats = products_sync.stats
             logger.info(f"📊 Results:")
             logger.info(f"   Created: {stats['created']}")
             logger.info(f"   Updated: {stats['updated']}")
@@ -157,7 +165,7 @@ def test_sellers_sync():
             return True
         else:
             logger.error("\n" + "=" * 70)
-            logger.error("❌ TEST FAILED: Sellers sync had errors")
+            logger.error("❌ TEST FAILED: Products sync had errors")
             logger.error("=" * 70)
             return False
 
@@ -191,33 +199,32 @@ def test_api_directly():
 
     try:
         # Crear cliente
-        client = SellersClient(
+        client = ProductsClient(
             base_url=api_config['base_url'],
             api_key=api_config['api_key']
         )
 
-        # Probar obtener vendedores
-        logger.info("\n📡 Testing GET /sellers...")
+        # Probar obtener productos
+        logger.info("\n📡 Testing GET /products...")
 
         company_id = config.get('company_id', 27)
 
-        sellers = list(client.get_all(company_id=company_id))
+        products = list(client.get_all(company_id=company_id))
 
-        logger.info(f"✅ Retrieved {len(sellers)} sellers")
+        logger.info(f"✅ Retrieved {len(products)} products")
 
-        for seller in sellers[:5]:  # Mostrar primeros 5
-            logger.info(f"   - {seller['code']}: {seller['user']['name']}")
+        for prod in products[:5]:  # Mostrar primeros 5
+            logger.info(f"   - {prod['code']}: {prod['name']} (${prod['price']})")
 
-        # Probar obtener mapa
-        logger.info("\n📡 Testing get_sellers_map()...")
+        # Probar obtener mapa de categorías
+        logger.info("\n📂 Testing categories map...")
 
-        sellers_map = client.get_sellers_map(company_id=company_id)
+        categories_map = client.get_categories_map(company_id=company_id)
 
-        logger.info(f"✅ Built map with {len(sellers_map)} entries")
+        logger.info(f"✅ Retrieved {len(categories_map)} categories")
 
-        # Mostrar algunos entries
-        for code, seller_id in list(sellers_map.items())[:3]:
-            logger.info(f"   - {code}: ID {seller_id}")
+        for name, cat_id in list(categories_map.items())[:5]:
+            logger.info(f"   - {name}: ID {cat_id}")
 
         return True
 
@@ -229,10 +236,10 @@ def test_api_directly():
 
 
 def test_sync_with_pending():
-    """Marcar algunos vendedores como pending_sync y probar sincronización"""
+    """Marcar algunos productos como pending_sync y probar sincronización"""
 
     logger.info("=" * 70)
-    logger.info("TEST: Sellers Sync with pending_sync")
+    logger.info("TEST: Products Sync with pending_sync")
     logger.info("=" * 70)
 
     config = load_config()
@@ -245,140 +252,45 @@ def test_sync_with_pending():
         return False
 
     try:
-        # Marcar algunos vendedores como pending_sync
-        logger.info("\n📝 Marking some sellers as pending_sync...")
+        # Marcar algunos productos como pending_sync
+        logger.info("\n📝 Marking some products as pending_sync...")
 
         company_id = config.get('company_id', 27)
 
         pg_cursor = pg_conn.cursor()
 
-        # Marcar primeros 5 vendedores como pending
+        # Marcar primeros 10 productos como pending
         pg_cursor.execute("""
             INSERT INTO sync_hashes (table_name, record_key, record_hash, company_id, pending_sync, updated_at)
-            SELECT 'sellers', code, MD5(code::text || description::text), %s, TRUE, NOW()
-            FROM sellers
+            SELECT 'products', code, MD5(code::text), %s, TRUE, NOW()
+            FROM products
             WHERE code IS NOT NULL
-              AND code != ''
-              AND description IS NOT NULL
-              AND description != ''
-            LIMIT 5
+            LIMIT 10
             ON CONFLICT (table_name, record_key, company_id)
             DO UPDATE SET pending_sync = TRUE, updated_at = NOW()
         """, (company_id,))
 
         pg_conn.commit()
 
-        logger.info("✅ Marked 5 sellers as pending_sync")
+        logger.info("✅ Marked 10 products as pending_sync")
 
         # Ahora ejecutar sincronización
         logger.info("\n🔄 Running sync...")
 
         api_config = config.get('api_config')
-        sellers_client = SellersClient(
+        products_client = ProductsClient(
             base_url=api_config['base_url'],
             api_key=api_config['api_key']
         )
 
-        sellers_sync = SellersSync(
+        products_sync = ProductsSync(
             pg_conn=pg_conn,
-            api_client=sellers_client,
+            api_client=products_client,
             company_id=company_id,
             logger=logger
         )
 
-        success = sellers_sync.execute()
-
-        if success:
-            logger.info("\n✅ TEST PASSED")
-        else:
-            logger.error("\n❌ TEST FAILED")
-
-        return success
-
-    except Exception as e:
-        logger.error(f"❌ Exception: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
-    finally:
-        pg_conn.close()
-
-
-def test_single_seller_sync():
-    """Probar sincronización de un solo vendedor (útil para debugging)"""
-
-    logger.info("=" * 70)
-    logger.info("TEST: Single Seller Sync")
-    logger.info("=" * 70)
-
-    config = load_config()
-    if not config:
-        return False
-
-    # Conectar a PostgreSQL
-    pg_conn = connect_postgresql(config)
-    if not pg_conn:
-        return False
-
-    try:
-        company_id = config.get('company_id', 27)
-        pg_cursor = pg_conn.cursor()
-
-        # Buscar un vendedor de prueba
-        pg_cursor.execute("""
-            SELECT s.code, s.description, u.email, u.password, u.status
-            FROM sellers s
-            LEFT JOIN users u ON s.user_id = u.id
-            WHERE s.code IS NOT NULL
-              AND s.description IS NOT NULL
-            LIMIT 1
-        """)
-
-        seller = pg_cursor.fetchone()
-
-        if not seller:
-            logger.error("❌ No sellers found in PostgreSQL")
-            return False
-
-        code, description, email, password, status = seller
-
-        logger.info(f"\n📝 Test seller:")
-        logger.info(f"   Code: {code}")
-        logger.info(f"   Description: {description}")
-        logger.info(f"   Email: {email}")
-        logger.info(f"   Has Password: {'Yes' if password else 'No'}")
-        logger.info(f"   Status: {status}")
-
-        # Marcar como pending
-        pg_cursor.execute("""
-            INSERT INTO sync_hashes (table_name, record_key, record_hash, company_id, pending_sync, updated_at)
-            VALUES ('sellers', %s, %s, %s, TRUE, NOW())
-            ON CONFLICT (table_name, record_key, company_id)
-            DO UPDATE SET pending_sync = TRUE, updated_at = NOW()
-        """, ('sellers', code, f'test_{code}', company_id))
-
-        pg_conn.commit()
-
-        logger.info("✅ Marked as pending_sync")
-
-        # Ejecutar sincronización
-        api_config = config.get('api_config')
-        sellers_client = SellersClient(
-            base_url=api_config['base_url'],
-            api_key=api_config['api_key']
-        )
-
-        sellers_sync = SellersSync(
-            pg_conn=pg_conn,
-            api_client=sellers_client,
-            company_id=company_id,
-            logger=logger
-        )
-
-        logger.info("\n🔄 Running sync...")
-
-        success = sellers_sync.execute()
+        success = products_sync.execute()
 
         if success:
             logger.info("\n✅ TEST PASSED")
@@ -400,24 +312,22 @@ def test_single_seller_sync():
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(description='Test Sellers Sync')
+    parser = argparse.ArgumentParser(description='Test Products Sync')
     parser.add_argument(
         '--mode',
-        choices=['full', 'api-only', 'pending', 'single'],
+        choices=['full', 'api-only', 'pending'],
         default='full',
-        help='Test mode: full (with PostgreSQL), api-only (API client only), pending (mark pending and sync), or single (sync one seller)'
+        help='Test mode: full (with PostgreSQL), api-only (API client only), or pending (mark pending and sync)'
     )
 
     args = parser.parse_args()
 
     if args.mode == 'full':
-        success = test_sellers_sync()
+        success = test_products_sync()
     elif args.mode == 'api-only':
         success = test_api_directly()
     elif args.mode == 'pending':
         success = test_sync_with_pending()
-    elif args.mode == 'single':
-        success = test_single_seller_sync()
     else:
         success = False
 

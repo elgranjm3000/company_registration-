@@ -46,7 +46,19 @@ Completa los siguientes datos:
 
 ### 3. Ejecutar el Sistema
 
-Después de configurar, puedes ejecutar el sistema de diferentes formas:
+#### ✅ Después de Configurar (Automático)
+
+Cuando guardas la configuración por primera vez, el sistema **automáticamente**:
+
+1. **Verifica la conexión** con PostgreSQL (3 pasos: PostgreSQL → API Login → Validar Empresa)
+2. **Ejecuta la primera sincronización** completa con ventana de progreso
+3. **Inicia el modo System Tray** en la barra de tareas
+
+Todo esto es **automático** - no necesitas hacer nada más después de configurar.
+
+#### Ejecuciones Manuales
+
+Después de la configuración inicial, puedes ejecutar el sistema manualmente de diferentes formas:
 
 ## 🎯 Modos de Ejecución
 

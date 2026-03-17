@@ -25,12 +25,26 @@ Completa los datos de:
 
 ### Paso 3: Ejecutar
 
-**Opción A: Modo Administrador (Recomendado)**
+**✨ AUTOMÁTICO (Después de Configurar)**
+
+Cuando guardas la configuración por primera vez, el sistema **automáticamente**:
+
+1. **Verifica la conexión** con PostgreSQL (3 pasos de verificación)
+2. **Ejecuta la primera sincronización** completa (muestra progreso)
+3. **Inicia el modo System Tray** en la barra de tareas
+
+**No necesitas hacer nada más** - el sistema se inicia automáticamente.
+
+---
+
+**Opciones Manuales (Solo si necesitas):**
+
+**Opción A: Modo Administrador**
 ```
 Doble clic en: MANAGER.bat
 ```
 
-**Opción B: Modo System Tray (Transparente)**
+**Opción B: Modo System Tray**
 ```
 Doble clic en: TRAY.bat
 ```

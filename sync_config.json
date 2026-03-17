@@ -1,0 +1,23 @@
+{
+  "postgres_host": "localhost",
+  "postgres_port": "5432",
+  "postgres_database": "nuevaprueba",
+  "postgres_user": "postgres",
+  "postgres_password": "muentes123.",
+
+  "company_rif": "J505261940",
+  "company_email": "elgranjm3000@gmail.com",
+  "company_id": 13,
+
+  "sync_interval_minutes": "30",
+
+  "configured": true,
+
+  "api_config": {
+    "base_url": "https://aspect-robots-labeled-competitions.trycloudflare.com/sales-apiWEB/public/api",
+    "api_key": "192|WMkevleEhtl1yoICdZu6myhC8aRN49p0e1OMyM14e0c20dd3",
+    "timeout": 30,
+    "max_retries": 3,
+    "batch_size": 5000
+  }
+}

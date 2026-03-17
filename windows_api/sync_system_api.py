@@ -1381,6 +1381,7 @@ class ConfigWindow:
 
                     # Todo exitoso
                     resultado['exito'] = True
+                    resultado['api_password'] = self.api_password_var.get()
                     resultado['mensaje'] = "✅ Configuración guardada correctamente\n\n✅ Conexión a PostgreSQL verificada\n✅ Autenticación API validada\n✅ Empresa validada\n\nEl sistema está listo para sincronizar."
 
                 except Exception as e:
@@ -1413,6 +1414,158 @@ class ConfigWindow:
 
             keep_gui_alive()
 
+        def ejecutar_primera_sync_y_tray(api_password):
+            """
+            Ejecuta la primera sincronización y luego inicia el System Tray
+            """
+            try:
+                # Cargar configuración guardada
+                if not os.path.exists(CONFIG_FILE):
+                    messagebox.showerror("Error", "No se encontró configuración guardada")
+                    return
+
+                with open(CONFIG_FILE, 'r') as f:
+                    config = json.load(f)
+
+                # Crear ventana de progreso para primera sincronización
+                sync_window = tk.Toplevel(self.root)
+                sync_window.title("🔄 Primera Sincronización")
+                sync_window.geometry("600x300")
+                sync_window.transient(self.root)
+                sync_window.grab_set()
+
+                # Centrar ventana
+                sync_window.update_idletasks()
+                x = (sync_window.winfo_screenwidth() // 2) - (sync_window.winfo_width() // 2)
+                y = (sync_window.winfo_screenheight() // 2) - (sync_window.winfo_height() // 2)
+                sync_window.geometry(f"+{x}+{y}")
+
+                # Widgets
+                tk.Label(sync_window, text="🔄 Ejecutando Primera Sincronización",
+                        font=("Arial", 14, "bold")).pack(pady=20)
+
+                sync_label = tk.Label(sync_window, text="Iniciando...",
+                                     font=("Arial", 11), wraplength=500)
+                sync_label.pack(pady=10)
+
+                progress_bar = ttk.Progressbar(sync_window, mode='indeterminate')
+                progress_bar.pack(fill='x', padx=50, pady=20)
+                progress_bar.start(10)
+
+                def ejecutar_sync_worker():
+                    """Worker de sincronización en thread"""
+                    try:
+                        # Crear logger
+                        def sync_logger(msg, level="info"):
+                            sync_label.config(text=msg)
+
+                        # Crear gestores
+                        auth_manager = APIAuthManager(
+                            base_url=config['api_url'],
+                            logger=sync_logger
+                        )
+
+                        # Login
+                        sync_label.config(text="🔐 Autenticando con API...")
+                        auth_manager.login(config['api_email'], api_password)
+                        auth_manager.validate_company(config['company_rif'], config['company_email'])
+
+                        sync_manager = APISyncManager(
+                            postgres_config={
+                                'host': config['postgres_host'],
+                                'port': config['postgres_port'],
+                                'database': config['postgres_database'],
+                                'user': config['postgres_user'],
+                                'password': config['postgres_password']
+                            },
+                            auth_manager=auth_manager,
+                            logger=sync_logger
+                        )
+
+                        # Conectar y sincronizar
+                        sync_label.config(text="🔗 Conectando a PostgreSQL...")
+                        if sync_manager.connect_postgresql() and sync_manager.initialize_api_clients():
+                            sync_label.config(text="🔄 Sincronizando datos (puede tardar varios minutos)...")
+                            result = sync_manager.sync_all()
+
+                            total = result.get('total', {})
+                            sync_result = {
+                                'exito': True,
+                                'mensaje': f"✅ Sincronización completada:\n"
+                                          f"   ✨ Nuevos: {total.get('created', 0)}\n"
+                                          f"   🔄 Modificados: {total.get('updated', 0)}\n"
+                                          f"   ❌ Eliminados: {total.get('deleted', 0)}",
+                                'api_password': api_password
+                            }
+                        else:
+                            sync_result = {
+                                'exito': False,
+                                'mensaje': "❌ Error de conexión a PostgreSQL o API",
+                                'api_password': api_password
+                            }
+
+                        sync_manager.close()
+
+                    except Exception as e:
+                        sync_result = {
+                            'exito': False,
+                            'mensaje': f"❌ Error: {str(e)}",
+                            'api_password': api_password
+                        }
+
+                    # Notificar completion
+                    if sync_window.winfo_exists():
+                        sync_window.event_generate('<<SyncComplete>>')
+
+                def on_sync_complete(event):
+                    """Manejador de completion de sincronización"""
+                    if not sync_window.winfo_exists():
+                        return
+
+                    progress_bar.stop()
+
+                    if sync_result['exito']:
+                        sync_label.config(text=sync_result['mensaje'], foreground="green")
+
+                        # Cerrar ventana de sincronización después de 3 segundos
+                        sync_window.after(3000, lambda: sync_window.destroy() if sync_window.winfo_exists() else None)
+
+                        # Iniciar System Tray después de cerrar
+                        sync_window.after(3500, lambda: iniciar_system_tray(config, api_password))
+                    else:
+                        sync_label.config(text=sync_result['mensaje'], foreground="red")
+                        tk.Button(sync_window, text="⚠️ Cerrar",
+                                 command=sync_window.destroy).pack(pady=10)
+
+                # Bind event
+                sync_window.bind('<<SyncComplete>>', on_sync_complete)
+
+                # Iniciar thread de sincronización
+                sync_thread = threading.Thread(target=ejecutar_sync_worker, daemon=True)
+                sync_thread.start()
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error preparando sincronización:\n{e}")
+
+        def iniciar_system_tray(config, api_password):
+            """Inicia el servicio System Tray"""
+            try:
+                import tkinter as tk
+                # Destruir root principal si existe
+                if hasattr(self, 'root') and self.root.winfo_exists():
+                    self.root.destroy()
+
+                # Crear e iniciar servicio System Tray
+                print("\n" + "="*70)
+                print("🔄 Iniciando modo System Tray...")
+                print("="*70)
+
+                tray_service = SystemTrayService(config, api_password)
+                tray_service.iniciar()
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
+
         def cerrar_ventana():
             """Cerrar ventana y regresar"""
             try:
@@ -1420,7 +1573,11 @@ class ConfigWindow:
                     progreso.destroy()
 
                 if resultado['exito']:
+                    # Cerrar ventana de config
                     self.root.destroy()
+
+                    # Ejecutar primera sincronización e iniciar System Tray
+                    ejecutar_primera_sync_y_tray(resultado['api_password'])
                 else:
                     # Si hubo error, mantener la ventana de config abierta
                     pass
