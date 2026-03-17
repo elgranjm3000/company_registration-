@@ -4,13 +4,15 @@
 -- FECHA: 2025-01-22
 -- DESCRIPCIÓN: Crea tabla para almacenar hashes MD5 de registros
 --              sincronizados, permitiendo detectar cambios
+-- COMPATIBILIDAD: PostgreSQL 9+
 -- ====================================================================
 
 -- Eliminar tabla si existe (opcional, comentar en producción)
 -- DROP TABLE IF EXISTS sync_hashes CASCADE;
 
--- Crear tabla principal
-CREATE TABLE IF NOT EXISTS sync_hashes (
+-- Crear tabla principal (PostgreSQL 9 compatible - sin IF NOT EXISTS)
+-- Nota: En PostgreSQL 9, primero verificar si existe antes de ejecutar
+CREATE TABLE sync_hashes (
     -- Clave primaria
     id SERIAL PRIMARY KEY,
 
@@ -31,14 +33,15 @@ CREATE TABLE IF NOT EXISTS sync_hashes (
     UNIQUE(table_name, record_key, company_id)
 );
 
--- Crear índices para optimizar búsquedas
-CREATE INDEX IF NOT EXISTS idx_sync_hashes_lookup
+-- Crear índices para optimizar búsquedas (PostgreSQL 9 compatible)
+-- Nota: En PostgreSQL 9, verificar si existe antes de crear
+CREATE INDEX idx_sync_hashes_lookup
     ON sync_hashes(table_name, record_key, company_id);
 
-CREATE INDEX IF NOT EXISTS idx_sync_hashes_table
+CREATE INDEX idx_sync_hashes_table
     ON sync_hashes(table_name, company_id);
 
-CREATE INDEX IF NOT EXISTS idx_sync_hashes_updated
+CREATE INDEX idx_sync_hashes_updated
     ON sync_hashes(updated_at DESC);
 
 -- Comentarios de tabla y columnas
