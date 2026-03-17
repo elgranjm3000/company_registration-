@@ -186,6 +186,16 @@ class BaseAPIClient:
                         f"Invalid API token (401): {response.text}"
                     )
 
+                if response.status_code == 403:
+                    # Forbidden - puede ser token inválido o permisos insuficientes
+                    try:
+                        error_detail = response.json()
+                    except:
+                        error_detail = response.text[:200]
+                    raise APIError(
+                        f"Access forbidden (403) for {endpoint}: {error_detail}"
+                    )
+
                 if response.status_code == 404:
                     raise NotFoundError(
                         f"Resource not found (404): {endpoint}"
