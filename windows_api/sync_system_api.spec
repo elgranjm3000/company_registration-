@@ -2,10 +2,6 @@
 # Spec file para compilar sync_system_api.py con PyInstaller
 # Incluye todas las dependencias para System Tray y API REST
 
-# Clave de encriptación para proteger el código
-# Generar nueva clave con: python -c "import secrets; print(secrets.token_hex(16))"
-block_cipher = bytes.fromhex('2a88b3d624531b019d61bb7cfb6e025b')
-
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
@@ -93,11 +89,10 @@ a = Analysis(
     excludes=['test', 'unittest', 'pytest', 'matplotlib', 'numpy', 'pandas'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,
