@@ -132,62 +132,41 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
         icono: Ruta al icono (opcional)
     """
     import platform
+    import threading
+
     sistema = platform.system()
 
-    try:
-        if sistema == "Windows":
-            # Windows: usar win10toast
-            from win10toast import ToastNotifier
-
-            toast = ToastNotifier()
-
-            # Forzar la creación de classAtom si no existe
-            if not hasattr(toast, 'classAtom'):
+    # Función que ejecuta la notificación en un thread separado para capturar errores
+    def _mostrar_notificacion_thread():
+        try:
+            if sistema == "Windows":
+                # Windows: usar win10toast
+                # Verificar que pywin32 esté disponible
                 try:
-                    import win32gui
-                    toast.classAtom = None
-                except:
-                    pass
+                    import win32con
+                except ImportError:
+                    return  # pywin32 no instalado, salir silenciosamente
 
-            # Intentar usar icono personalizado
-            icon_path = icono
-            if not icon_path:
-                try:
-                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                    possible_icons = [
-                        os.path.join(script_dir, "icon.ico"),
-                        os.path.join(script_dir, "icon.png"),
-                        os.path.join(script_dir, "app.ico"),
-                    ]
-                    for path in possible_icons:
-                        if os.path.exists(path):
-                            icon_path = path
-                            break
-                except:
-                    pass
+                from win10toast import ToastNotifier
 
-            toast.show_toast(
-                titulo,
-                mensaje,
-                duration=duracion * 1000,  # win10toast usa milisegundos
-                icon_path=icon_path,
-                threaded=True,
-            )
+                toast = ToastNotifier()
 
-        elif sistema == "Linux":
-            # Linux: usar notify2 (libnotify)
-            try:
-                import notify2
-                notify2.init("Sincronizador Chrystal")
+                # Forzar la creación de classAtom si no existe
+                if not hasattr(toast, 'classAtom'):
+                    try:
+                        import win32gui
+                        toast.classAtom = None
+                    except:
+                        pass
 
-                # Buscar icono
+                # Intentar usar icono personalizado
                 icon_path = icono
                 if not icon_path:
                     try:
                         script_dir = os.path.dirname(os.path.abspath(__file__))
                         possible_icons = [
-                            os.path.join(script_dir, "icon.png"),
                             os.path.join(script_dir, "icon.ico"),
+                            os.path.join(script_dir, "icon.png"),
                             os.path.join(script_dir, "app.ico"),
                         ]
                         for path in possible_icons:
@@ -197,41 +176,78 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     except:
                         pass
 
-                n = notify2.Notification(titulo, mensaje, icon_path)
-                n.set_timeout(duracion * 1000)
-                n.show()
-            except ImportError:
-                # notify2 no instalado, intentar con dbus directo
+                # Usar threaded=False para ejecutar sincrónicamente en nuestro thread
+                # y poder capturar errores
+                toast.show_toast(
+                    titulo,
+                    mensaje,
+                    duration=duracion,
+                    icon_path=icon_path,
+                    threaded=False,  # Cambiado a False para capturar errores
+                )
+
+            elif sistema == "Linux":
+                # Linux: usar notify2 (libnotify)
                 try:
-                    import dbus
-                    bus = dbus.SessionBus()
-                    notifications = bus.get_object('org.freedesktop.Notifications',
-                                                   '/org/freedesktop/Notifications')
-                    interface = dbus.Interface(notifications,
-                                              'org.freedesktop.Notifications')
-                    interface.Notify('Sincronizador Chrystal', 0, '', titulo, mensaje,
-                                   [], {}, duracion * 1000)
-                except:
-                    pass  # dbus no disponible, silencioso
+                    import notify2
+                    notify2.init("Sincronizador Chrystal")
 
-        elif sistema == "Darwin":  # macOS
-            # macOS: usar terminal-notifier
-            try:
-                import subprocess
-                cmd = ['terminal-notifier',
-                      '-title', titulo,
-                      '-message', mensaje,
-                      '-timeout', str(duracion)]
-                if icono:
-                    cmd.extend(['-appIcon', icono])
-                subprocess.run(cmd, check=False, capture_output=True)
-            except FileNotFoundError:
-                # terminal-notifier no instalado
-                pass
+                    # Buscar icono
+                    icon_path = icono
+                    if not icon_path:
+                        try:
+                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            possible_icons = [
+                                os.path.join(script_dir, "icon.png"),
+                                os.path.join(script_dir, "icon.ico"),
+                                os.path.join(script_dir, "app.ico"),
+                            ]
+                            for path in possible_icons:
+                                if os.path.exists(path):
+                                    icon_path = path
+                                    break
+                        except:
+                            pass
 
-    except Exception:
-        # Silencioso - cualquier error se ignora para no interrumpir el programa
-        pass
+                    n = notify2.Notification(titulo, mensaje, icon_path)
+                    n.set_timeout(duracion * 1000)
+                    n.show()
+                except ImportError:
+                    # notify2 no instalado, intentar con dbus directo
+                    try:
+                        import dbus
+                        bus = dbus.SessionBus()
+                        notifications = bus.get_object('org.freedesktop.Notifications',
+                                                       '/org/freedesktop/Notifications')
+                        interface = dbus.Interface(notifications,
+                                                  'org.freedesktop.Notifications')
+                        interface.Notify('Sincronizador Chrystal', 0, '', titulo, mensaje,
+                                       [], {}, duracion * 1000)
+                    except:
+                        pass  # dbus no disponible, silencioso
+
+            elif sistema == "Darwin":  # macOS
+                # macOS: usar terminal-notifier
+                try:
+                    import subprocess
+                    cmd = ['terminal-notifier',
+                          '-title', titulo,
+                          '-message', mensaje,
+                          '-timeout', str(duracion)]
+                    if icono:
+                        cmd.extend(['-appIcon', icono])
+                    subprocess.run(cmd, check=False, capture_output=True)
+                except FileNotFoundError:
+                    # terminal-notifier no instalado
+                    pass
+
+        except Exception:
+            # Silencioso - cualquier error se ignora para no interrumpir el programa
+            pass
+
+    # Ejecutar en un thread daemon para no bloquear
+    thread = threading.Thread(target=_mostrar_notificacion_thread, daemon=True)
+    thread.start()
 
 
 def mostrar_notificacion_windows(titulo: str, mensaje: str, duracion=5, logger=None):
