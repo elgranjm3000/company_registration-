@@ -396,24 +396,40 @@ class APIAuthManager:
         except:
             return True
 
-    def refresh_token_if_needed(self) -> bool:
+    def refresh_token_if_needed(self) -> dict:
         """
         Refrescar token si está por expirar.
 
         Returns:
-            True si el refresh fue exitoso o no fue necesario
+            Dict con:
+                - 'success': True si el refresh fue exitoso o no fue necesario
+                - 'token': El token actual (nuevo si se refrescó, existente si no)
+                - 'refreshed': True si se refrescó, False si no fue necesario
         """
         if not self.is_token_expired():
-            return True
+            return {
+                'success': True,
+                'token': self.api_token,
+                'refreshed': False
+            }
 
         self._log("🔄 Token por expirar, refrescando...")
 
         if not self.api_email or not self.api_password:
             self._log("❌ No hay credenciales para refresh", "error")
-            return False
+            return {
+                'success': False,
+                'token': None,
+                'refreshed': False
+            }
 
         result = self.login(self.api_email, self.api_password)
-        return result.get('success', False)
+
+        return {
+            'success': result.get('success', False),
+            'token': self.api_token,
+            'refreshed': result.get('success', False)
+        }
 
     def _log(self, message: str, level: str = "info"):
         """Log message."""
@@ -987,6 +1003,41 @@ class APISyncManager:
             self._log(f"❌ Error inicializando clientes API: {e}", "error")
             return False
 
+    def _update_client_tokens(self, new_token: str) -> bool:
+        """
+        Actualizar el token en todos los clientes API después de un refresh.
+
+        Args:
+            new_token: Nuevo token de autenticación
+
+        Returns:
+            True si se actualizaron todos los clientes correctamente
+        """
+        try:
+            # Actualizar el token en todos los clientes
+            clients_to_update = [
+                ('categories_client', self.categories_client),
+                ('products_client', self.products_client),
+                ('customers_client', self.customers_client),
+                ('sellers_client', self.sellers_client),
+                ('quotes_client', self.quotes_client)
+            ]
+
+            for client_name, client in clients_to_update:
+                if client is not None:
+                    client.api_key = new_token
+                    # Actualizar también el header de la sesión
+                    client.session.headers.update({
+                        'Authorization': f'Bearer {new_token}'
+                    })
+                    self._log(f"✅ Token actualizado en {client_name}", "debug")
+
+            return True
+
+        except Exception as e:
+            self._log(f"❌ Error actualizando tokens en clientes: {e}", "error")
+            return False
+
     def sync_all(self) -> dict:
         """
         Ejecutar sincronización completa de todas las entidades.
@@ -1000,9 +1051,17 @@ class APISyncManager:
         self._log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA")
         self._log("="*70)
 
-        if not self.auth_manager.refresh_token_if_needed():
+        # Refrescar token si es necesario y actualizar clientes
+        refresh_result = self.auth_manager.refresh_token_if_needed()
+        if not refresh_result['success']:
             self._log("❌ No se pudo refrescar el token", "error")
             return {'success': False, 'error': 'Token expired'}
+
+        # Si se refrescó el token, actualizar todos los clientes
+        if refresh_result.get('refreshed'):
+            self._log("🔄 Token refrescado, actualizando clientes API...")
+            if not self._update_client_tokens(refresh_result['token']):
+                self._log("⚠️ Warning: No se pudieron actualizar los tokens en todos los clientes", "warning")
 
         company_id = self.auth_manager.company_id
 
@@ -1136,9 +1195,16 @@ class APISyncManager:
         """Sincronizar solo categories."""
         self._log("\n📁 SINCRONIZANDO CATEGORIES...")
 
-        if not self.auth_manager.refresh_token_if_needed():
+        # Refrescar token si es necesario y actualizar clientes
+        refresh_result = self.auth_manager.refresh_token_if_needed()
+        if not refresh_result['success']:
             self._log("❌ No se pudo refrescar el token", "error")
             return {'success': False, 'stats': {}}
+
+        # Si se refrescó el token, actualizar todos los clientes
+        if refresh_result.get('refreshed'):
+            self._log("🔄 Token refrescado, actualizando clientes API...")
+            self._update_client_tokens(refresh_result['token'])
 
         company_id = self.auth_manager.company_id
 
@@ -1159,9 +1225,16 @@ class APISyncManager:
         """Sincronizar solo products."""
         self._log("\n📦 SINCRONIZANDO PRODUCTS...")
 
-        if not self.auth_manager.refresh_token_if_needed():
+        # Refrescar token si es necesario y actualizar clientes
+        refresh_result = self.auth_manager.refresh_token_if_needed()
+        if not refresh_result['success']:
             self._log("❌ No se pudo refrescar el token", "error")
             return {'success': False, 'stats': {}}
+
+        # Si se refrescó el token, actualizar todos los clientes
+        if refresh_result.get('refreshed'):
+            self._log("🔄 Token refrescado, actualizando clientes API...")
+            self._update_client_tokens(refresh_result['token'])
 
         company_id = self.auth_manager.company_id
 
@@ -1182,9 +1255,16 @@ class APISyncManager:
         """Sincronizar solo customers."""
         self._log("\n👥 SINCRONIZANDO CUSTOMERS...")
 
-        if not self.auth_manager.refresh_token_if_needed():
+        # Refrescar token si es necesario y actualizar clientes
+        refresh_result = self.auth_manager.refresh_token_if_needed()
+        if not refresh_result['success']:
             self._log("❌ No se pudo refrescar el token", "error")
             return {'success': False, 'stats': {}}
+
+        # Si se refrescó el token, actualizar todos los clientes
+        if refresh_result.get('refreshed'):
+            self._log("🔄 Token refrescado, actualizando clientes API...")
+            self._update_client_tokens(refresh_result['token'])
 
         company_id = self.auth_manager.company_id
 
@@ -1205,9 +1285,16 @@ class APISyncManager:
         """Sincronizar solo sellers."""
         self._log("\n👔 SINCRONIZANDO SELLERS...")
 
-        if not self.auth_manager.refresh_token_if_needed():
+        # Refrescar token si es necesario y actualizar clientes
+        refresh_result = self.auth_manager.refresh_token_if_needed()
+        if not refresh_result['success']:
             self._log("❌ No se pudo refrescar el token", "error")
             return {'success': False, 'stats': {}}
+
+        # Si se refrescó el token, actualizar todos los clientes
+        if refresh_result.get('refreshed'):
+            self._log("🔄 Token refrescado, actualizando clientes API...")
+            self._update_client_tokens(refresh_result['token'])
 
         company_id = self.auth_manager.company_id
 
@@ -1228,9 +1315,16 @@ class APISyncManager:
         """Sincronizar solo quotes."""
         self._log("\n💰 SINCRONIZANDO QUOTES...")
 
-        if not self.auth_manager.refresh_token_if_needed():
+        # Refrescar token si es necesario y actualizar clientes
+        refresh_result = self.auth_manager.refresh_token_if_needed()
+        if not refresh_result['success']:
             self._log("❌ No se pudo refrescar el token", "error")
             return {'success': False, 'stats': {}}
+
+        # Si se refrescó el token, actualizar todos los clientes
+        if refresh_result.get('refreshed'):
+            self._log("🔄 Token refrescado, actualizando clientes API...")
+            self._update_client_tokens(refresh_result['token'])
 
         company_id = self.auth_manager.company_id
 

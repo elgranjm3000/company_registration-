@@ -1,0 +1,274 @@
+
+[DEBUG] Iniciando ejecutar_primera_sync_y_tray()
+[DEBUG] Config cargada: muentes2@hotmail.com
+[DEBUG] api_password recibido: Sí
+[DEBUG] Creando ventana de sincronización...
+[DEBUG] Iniciando thread de sincronización...
+[DEBUG] Iniciando ejecutar_sync_worker()
+[DEBUG] Creando APIAuthManager...
+[DEBUG] Haciendo login a API...
+[SYNC] 🔐 Haciendo login a la API...
+[SYNC GUI] 🔐 Autenticando con API...
+[SYNC GUI] 🔐 Haciendo login a la API...
+[SYNC] ✅ Login exitoso
+[SYNC]    Token: 584|FMk24Taei5UW5Nuy...
+[SYNC]    Expira: 2026-03-25T07:23:00+00:00
+[SYNC] 🏢 Validando empresa: J195071884
+[SYNC] ✅ Empresa validada
+[SYNC]    Company ID: 56
+[SYNC]    Nombre: J195071884
+[DEBUG] Login exitoso
+[DEBUG] Creando APISyncManager...
+[DEBUG] Conectando a PostgreSQL...
+[SYNC] ✅ Conectado a PostgreSQL
+[SYNC] 🔧 Corrigiendo company_id NULL en sync_hashes...
+[SYNC] ✅ No hay registros con company_id NULL
+[SYNC] ✅ Tablas y triggers de sincronización inicializados
+[SYNC] ✅ Clientes API inicializados
+[DEBUG] Conectado, iniciando sync_all()...
+[SYNC] 
+======================================================================
+[SYNC] 🔄 INICIANDO SINCRONIZACIÓN COMPLETA
+[SYNC] ======================================================================
+[SYNC] 📝 Insertando company_id en sync_config: 56
+[SYNC] 
+📁 SINCRONIZANDO CATEGORIES...
+[SYNC] ======================================================================
+[SYNC] Starting CategoriesSync
+[SYNC] ======================================================================
+[SYNC] 🔍 Step 1: Detecting changes...
+[SYNC] Se encontraron 7 categorías en PostgreSQL
+[SYNC]   ✨ NUEVO: 00
+[SYNC]   ✨ NUEVO: 01
+[SYNC]   ✨ NUEVO: 02
+[SYNC]   ✨ NUEVO: 03
+[SYNC]   ✨ NUEVO: 04
+[SYNC]   ✨ NUEVO: 05
+[SYNC]   ✨ NUEVO: 06
+[SYNC] Cambios en categorías: 7 nuevos, 0 modificados, 0 eliminados
+[SYNC] 📊 Changes detected: 7 new, 0 modified, 0 deleted
+[SYNC] 🚀 Step 2: Syncing to API...
+[SYNC] Sincronizando 7 categorías a la API...
+[SYNC] 📋 Categories to sync (7):
+[SYNC]    - '00' → GENERICO
+[SYNC]    - '01' → PRINCIPAL
+[SYNC]    - '02' → VIVERES
+[SYNC]    - '03' → CHARCUTERIA
+[SYNC]    - '04' → LICORES
+[SYNC]    - '05' → PAPELERIA
+[SYNC]    - '06' → ADICIONAL
+[SYNC] ✅ Categorías sincronizadas: 7 creadas, 0 actualizadas
+[SYNC] ⚠️ La API no retornó 'data' con las categorías, usando GET fallback
+[SYNC] 💾 Step 4: Updating sync_hashes...
+[SYNC] Updated 7 sync_hashes records
+[SYNC] 
+[SYNC] ======================================================================
+[SYNC] SYNC SUMMARY
+[SYNC] ======================================================================
+[SYNC] Created: 7, Updated: 0, Deleted: 0, Errors: 0
+[SYNC] ======================================================================
+[SYNC] 
+📦 SINCRONIZANDO PRODUCTS...
+[SYNC] ======================================================================
+[SYNC] Starting ProductsSync
+[SYNC] ======================================================================
+[SYNC] 🔍 Step 1: Detecting changes...
+[SYNC] 🎯 Primera sincronización: obteniendo TODOS los productos
+[SYNC]    Total productos en PostgreSQL: 24
+[SYNC] Se recuperaron 5 productos de PostgreSQL
+[SYNC]   ✨ NUEVO: 01
+[SYNC]   ✨ NUEVO: 02
+[SYNC]   ✨ NUEVO: 03
+[SYNC]   ✨ NUEVO: 04
+[SYNC]   ✨ NUEVO: 05
+[SYNC] Cambios en productos: 5 nuevos, 0 modificados, 0 eliminados
+[SYNC] 📊 Changes detected: 5 new, 0 modified, 0 deleted
+[SYNC] 🚀 Step 2: Syncing to API...
+[SYNC] Sincronizando 5 productos a la API...
+[SYNC]    📦 Producto '01' → department_code: '01' → category_id: '01'
+[SYNC]    📦 Producto '02' → department_code: '01' → category_id: '01'
+[SYNC]    📦 Producto '03' → department_code: '01' → category_id: '01'
+[SYNC]    📦 Producto '04' → department_code: '01' → category_id: '01'
+[SYNC]    📦 Producto '05' → department_code: '01' → category_id: '01'
+[SYNC] ✅ Productos sincronizados: 5 creados, 0 actualizados
+[SYNC] 💾 Step 4: Updating sync_hashes...
+[SYNC] Updated 5 sync_hashes records
+[SYNC] 
+[SYNC] ======================================================================
+[SYNC] SYNC SUMMARY
+[SYNC] ======================================================================
+[SYNC] Created: 5, Updated: 0, Deleted: 0, Errors: 0
+[SYNC] ======================================================================
+[SYNC] 
+👥 SINCRONIZANDO CUSTOMERS...
+[SYNC] ======================================================================
+[SYNC] Starting CustomersSync
+[SYNC] ======================================================================
+[SYNC] 🔍 Step 1: Detecting changes...
+[SYNC] 🎯 Primera sincronización: obteniendo TODOS los clientes
+[SYNC]    Total clientes en PostgreSQL: 114
+[SYNC] Se recuperaron 114 clientes de PostgreSQL
+[SYNC]   ✨ NUEVO:  V19123572
+[SYNC]   ✨ NUEVO:  V19599699
+[SYNC]   ✨ NUEVO:  V-21057371
+[SYNC]   ✨ NUEVO:  V21281251
+[SYNC]   ✨ NUEVO:  V32643984
+[SYNC]   ✨ NUEVO: 0.0
+[SYNC]   ✨ NUEVO: 00
+[SYNC]   ✨ NUEVO: 01
+[SYNC]   ✨ NUEVO: 02
+[SYNC]   ✨ NUEVO: 10279810
+[SYNC]   ✨ NUEVO: 10485638
+[SYNC]   ✨ NUEVO: 10510037
+[SYNC]   ✨ NUEVO: 10632924
+[SYNC]   ✨ NUEVO: 10691997
+[SYNC]   ✨ NUEVO: 10786541
+[SYNC]   ✨ NUEVO: 10794802
+[SYNC]   ✨ NUEVO: 11118099
+[SYNC]   ✨ NUEVO: 11164910
+[SYNC]   ✨ NUEVO: 11201520
+[SYNC]   ✨ NUEVO: 11563705
+[SYNC]   ✨ NUEVO: 12059913
+[SYNC]   ✨ NUEVO: 12398596
+[SYNC]   ✨ NUEVO: 12533659
+[SYNC]   ✨ NUEVO: 12670323
+[SYNC]   ✨ NUEVO: 12711366
+[SYNC]   ✨ NUEVO: 12866034
+[SYNC]   ✨ NUEVO: 12904363
+[SYNC]   ✨ NUEVO: 13110331
+[SYNC]   ✨ NUEVO: 13218046
+[SYNC]   ✨ NUEVO: 13419486
+[SYNC]   ✨ NUEVO: 13432891
+[SYNC]   ✨ NUEVO: 134346
+[SYNC]   ✨ NUEVO: 13466646
+[SYNC]   ✨ NUEVO: 13545829
+[SYNC]   ✨ NUEVO: 13637637
+[SYNC]   ✨ NUEVO: 13979326
+[SYNC]   ✨ NUEVO: 14098303
+[SYNC]   ✨ NUEVO: 14406441
+[SYNC]   ✨ NUEVO: 14453133
+[SYNC]   ✨ NUEVO: 14528040
+[SYNC]   ✨ NUEVO: 14533866
+[SYNC]   ✨ NUEVO: 14830805
+[SYNC]   ✨ NUEVO: 15204407
+[SYNC]   ✨ NUEVO: 15.240.848
+[SYNC]   ✨ NUEVO: 15373399
+[SYNC]   ✨ NUEVO: 16029393
+[SYNC]   ✨ NUEVO: 16037143
+[SYNC]   ✨ NUEVO: 16450339
+[SYNC]   ✨ NUEVO: 16450915
+[SYNC]   ✨ NUEVO: 16452624
+[SYNC]   ✨ NUEVO: 16665
+[SYNC]   ✨ NUEVO: 16820476
+[SYNC]   ✨ NUEVO: 16910902
+[SYNC]   ✨ NUEVO: 16911034
+[SYNC]   ✨ NUEVO: 17052034
+[SYNC]   ✨ NUEVO: 17059902
+[SYNC]   ✨ NUEVO: 17453493
+[SYNC]   ✨ NUEVO: 17570151
+[SYNC]   ✨ NUEVO: 17632786
+[SYNC]   ✨ NUEVO: 17772965
+[SYNC]   ✨ NUEVO: 17773320
+[SYNC]   ✨ NUEVO: 18093340
+[SYNC]   ✨ NUEVO: 18304266
+[SYNC]   ✨ NUEVO: 18304801
+[SYNC]   ✨ NUEVO: 18367113
+[SYNC]   ✨ NUEVO: 18446925
+[SYNC]   ✨ NUEVO: 19116622
+[SYNC]   ✨ NUEVO: 19305271
+[SYNC]   ✨ NUEVO: 19507764
+[SYNC]   ✨ NUEVO: 19788862
+[SYNC]   ✨ NUEVO: 20418024
+[SYNC]   ✨ NUEVO: 20418874
+[SYNC]   ✨ NUEVO: 20980156
+[SYNC]   ✨ NUEVO: 20997625
+[SYNC]   ✨ NUEVO: 21132816
+[SYNC]   ✨ NUEVO: 21534608
+[SYNC]   ✨ NUEVO: 21573868
+[SYNC]   ✨ NUEVO: 22043076
+[SYNC]   ✨ NUEVO: 22346693
+[SYNC]   ✨ NUEVO: 22537737
+[SYNC]   ✨ NUEVO: 23651517
+[SYNC]   ✨ NUEVO: 23651607
+[SYNC]   ✨ NUEVO: 23651745
+[SYNC]   ✨ NUEVO: 23651840
+[SYNC]   ✨ NUEVO: 24280188
+[SYNC]   ✨ NUEVO: 25959068
+[SYNC]   ✨ NUEVO: 26100970
+[SYNC]   ✨ NUEVO: 26443722
+[SYNC]   ✨ NUEVO: 26893863
+[SYNC]   ✨ NUEVO: 27039508
+[SYNC]   ✨ NUEVO: 27454709
+[SYNC]   ✨ NUEVO: 27454941
+[SYNC]   ✨ NUEVO: 27807395
+[SYNC]   ✨ NUEVO: 28250065
+[SYNC]   ✨ NUEVO: 28361701.
+[SYNC]   ✨ NUEVO: 30305762
+[SYNC]   ✨ NUEVO: 30859147
+[SYNC]   ✨ NUEVO: 31005327
+[SYNC]   ✨ NUEVO: 310103070
+[SYNC]   ✨ NUEVO: 31955614
+[SYNC]   ✨ NUEVO: 31956081
+[SYNC]   ✨ NUEVO: 32214471
+[SYNC]   ✨ NUEVO: 3414872
+[SYNC]   ✨ NUEVO: 4316616
+[SYNC]   ✨ NUEVO: 995555
+[SYNC]   ✨ NUEVO: V02
+[SYNC]   ✨ NUEVO: V03
+[SYNC]   ✨ NUEVO: V13827924
+[SYNC]   ✨ NUEVO: V155566
+[SYNC]   ✨ NUEVO: V26443722
+[SYNC]   ✨ NUEVO: V27454941
+[SYNC]   ✨ NUEVO: V54544554
+[SYNC]   ✨ NUEVO: V5455655
+[SYNC]   ✨ NUEVO: V5554454
+[SYNC] Cambios en clientes: 114 nuevos, 0 modificados, 0 eliminados
+[SYNC] 📊 Changes detected: 114 new, 0 modified, 0 deleted
+[SYNC] 🚀 Step 2: Syncing to API...
+[SYNC] Sincronizando 114 clientes a la API...
+[SYNC] ❌ Errores sincronizando clientes: 114
+[SYNC] ❌ Detalles de errores (1 clientes fallaron):
+[SYNC]    1. ❌ Cliente 'N/A': Invalid API token (401): {"success":false,"message":"No autenticado. Se requiere un token v\u00e1lido.","error":"unauthenticated"}
+[SYNC] ❌ Sync to API failed
+[SYNC] 
+👔 SINCRONIZANDO SELLERS...
+[SYNC] ======================================================================
+[SYNC] Starting SellersSync
+[SYNC] ======================================================================
+[SYNC] 🔍 Step 1: Detecting changes...
+[SYNC] 🎯 Primera sincronización: obteniendo TODOS los vendedores
+[SYNC]    Total vendedores en PostgreSQL: 3
+[SYNC] Se recuperaron 3 vendedores de PostgreSQL
+[SYNC]   ✨ NUEVO: 00
+[SYNC]   ✨ NUEVO: 01
+[SYNC]   ✨ NUEVO: 02
+[SYNC] Cambios en vendedores: 3 nuevos, 0 modificados, 0 eliminados
+[SYNC] 📊 Changes detected: 3 new, 0 modified, 0 deleted
+[SYNC] 🚀 Step 2: Syncing to API...
+[SYNC] Sincronizando 3 vendedores a la API...
+[SYNC] bcrypt module not installed. Install it: pip install bcrypt
+[SYNC] ⚠️  No password found for seller 00, using default. CHANGE THIS IN PRODUCTION!
+[SYNC] ⚠️  No valid email for seller 00, using 00@temp.com. CHANGE THIS IN PRODUCTION!
+[SYNC] ⚠️  No valid email for seller 01, using 01@temp.com. CHANGE THIS IN PRODUCTION!
+[SYNC] ⚠️  No valid email for seller 02, using 02@temp.com. CHANGE THIS IN PRODUCTION!
+[SYNC] ❌ Errores sincronizando vendedores: 3
+[SYNC] ❌ Detalles de errores (1 vendedores fallaron):
+[SYNC]    1. ❌ Vendedor 'N/A': Invalid API token (401): {"success":false,"message":"No autenticado. Se requiere un token v\u00e1lido.","error":"unauthenticated"}
+[SYNC] ❌ Sync to API failed
+[SYNC] 
+💰 SINCRONIZANDO QUOTES...
+[SYNC] 💰 Detectando cotizaciones en estado draft pendientes de sincronización...
+[SYNC]    No hay cotizaciones en estado draft
+[SYNC] 
+======================================================================
+[SYNC] 📊 RESUMEN DE SINCRONIZACIÓN
+[SYNC] ======================================================================
+[SYNC] Created: 12
+[SYNC] Updated: 0
+[SYNC] Deleted: 0
+[SYNC] Errors: 117
+[DEBUG] sync_all() completado
+[DEBUG] Result sync: creado=0, updated=0, deleted=0
+[SYNC] ✅ Conexión PostgreSQL cerrada
+[DEBUG] Sync manager cerrado
+[DEBUG] Notificando completion...
