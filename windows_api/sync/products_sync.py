@@ -49,19 +49,22 @@ class ProductsSync(BaseSync):
         sync.execute()
     """
 
-    def __init__(self, pg_conn, api_client, company_id: int, logger=None):
+    def __init__(self, pg_conn, api_client, company_id: int, logger=None, categories_map=None):
         """
         Args:
             pg_conn: Conexión a PostgreSQL
             api_client: Instancia de ProductsClient
             company_id: ID de la empresa
             logger: Logger opcional
+            categories_map: Mapa de categorías {department_name: category_id} opcional.
+                           Si se proporciona, se usa directamente sin consultar la API.
         """
         super().__init__(pg_conn, api_client, company_id, logger)
         self.table_name = 'products'
 
-        # Cache de categorías {department_code: category_id}
-        self._categories_map = None
+        # Cache de categorías {department_name: category_id}
+        # Puede venir como parámetro o se construye desde la API
+        self._categories_map = categories_map
 
     # =========================================================================
     # DETECCIÓN DE CAMBIOS
@@ -338,6 +341,9 @@ class ProductsSync(BaseSync):
         # Obtener category_id desde el mapa de categorías (usando department_name)
         category_id = self._get_category_id(department_name)
 
+        # Log para diagnóstico: mostrar category_id asignado
+        self.debug(f"   📦 Producto '{code}' → department '{department_name}' → category_id: {category_id}")
+
         # Construir nombre (usar short_name si hay, sino description)
         name = (short_name[:255] if short_name else '')[:255]
         if not name:
@@ -378,20 +384,20 @@ class ProductsSync(BaseSync):
             'aliquot': float(safe_float(aliquot))
         }
 
-    def _get_category_id(self, department_code: str) -> int:
+    def _get_category_id(self, department_name: str) -> int:
         """
-        Obtener category_id desde la API para un department_code.
+        Obtener category_id para un department_name.
 
-        Usa cache para no consultar en cada producto.
+        Usa el mapa proporcionado o lo construye desde la API.
 
         Args:
-            department_code: Código de departamento de PostgreSQL
+            department_name: Nombre de departamento de PostgreSQL
 
         Returns:
             ID de la categoría o 1 si no encuentra
         """
         if self._categories_map is None:
-            # Construir mapa de categorías la primera vez
+            # Construir mapa de categorías desde la API
             self.info("📋 Building categories map from API...")
             self._categories_map = self.api_client.get_categories_map(self.company_id)
             self.info(f"📋 Categories map built with {len(self._categories_map)} entries")
@@ -404,12 +410,12 @@ class ProductsSync(BaseSync):
             else:
                 self.warning("⚠️ No categories found in API! All products will fail!")
 
-        # Buscar category_id por nombre (department_code)
-        category_id = self._categories_map.get(department_code)
+        # Buscar category_id por nombre (department_name)
+        category_id = self._categories_map.get(department_name)
 
         if not category_id:
             self.warning(
-                f"⚠️ Category NOT FOUND for department '{department_code}'"
+                f"⚠️ Category NOT FOUND for department '{department_name}'"
             )
             self.warning(
                 f"⚠️ Using default category_id=1 (may not exist in API)"
@@ -481,8 +487,33 @@ class ProductsSync(BaseSync):
                     )
                     return True
                 else:
-                    # Si hay errores en los datos, no reintentar (es error de validación)
+                    # Si hay errores en los datos, mostrar detalles
                     self.error(f"❌ Errores sincronizando productos: {self.stats['errors']}")
+
+                    # Mostrar detalles de errores
+                    error_details = result.get('error_details', [])
+                    if error_details:
+                        self.error(f"❌ Detalles de errores ({len(error_details)} productos fallaron):")
+                        for idx, error in enumerate(error_details[:20], 1):  # Mostrar primeros 20
+                            if isinstance(error, dict):
+                                code = error.get('code', error.get('product', {}).get('code', 'N/A'))
+                                err_msg = error.get('error', error.get('message', 'Unknown error'))
+
+                                # Si es error de categoría, mostrar el category_id enviado
+                                extra_info = ""
+                                if 'category' in err_msg.lower() and 'product' in error:
+                                    product_data = error.get('product', {})
+                                    sent_category_id = product_data.get('category_id', 'N/A')
+                                    department = product_data.get('department', 'N/A')
+                                    extra_info = f" [enviado category_id={sent_category_id} para department='{department}']"
+
+                                self.error(f"   {idx}. ❌ Producto '{code}': {err_msg}{extra_info}")
+                            else:
+                                self.error(f"   {idx}. ❌ {error}")
+
+                        if len(error_details) > 20:
+                            self.error(f"   ... y {len(error_details) - 20} errores más")
+
                     return False
 
             except Exception as e:

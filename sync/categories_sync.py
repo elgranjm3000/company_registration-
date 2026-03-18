@@ -38,6 +38,9 @@ class CategoriesSync(BaseSync):
         super().__init__(pg_conn, api_client, company_id, logger)
         self.table_name = 'categories'
 
+        # Mapa de categorías {name: id} poblado después del sync
+        self.categories_map = {}
+
     # =========================================================================
     # DETECCIÓN DE CAMBIOS
     # =========================================================================
@@ -225,10 +228,51 @@ class CategoriesSync(BaseSync):
                         f"✅ Categorías sincronizadas: {self.stats['created']} creadas, "
                         f"{self.stats['updated']} actualizadas"
                     )
+
+                    # Capturar el mapa de categorías desde el response de la API
+                    # La API retorna las categorías con sus IDs en 'data'
+                    sync_data = result.get('data', [])
+
+                    if sync_data:
+                        # Construir mapa {name: id} desde las categorías sincronizadas
+                        self.categories_map = {
+                            cat['name']: cat['id']
+                            for cat in sync_data
+                            if 'name' in cat and 'id' in cat
+                        }
+
+                        self.info(f"📋 Categories map construido con {len(self.categories_map)} entradas desde sync")
+
+                        # Mostrar mapa para diagnóstico
+                        if self.categories_map:
+                            self.info(f"📋 Mapa de categorías (department → category_id):")
+                            for name, cat_id in sorted(self.categories_map.items()):
+                                self.info(f"   '{name}' → ID: {cat_id}")
+                    else:
+                        self.warning("⚠️ La API no retornó 'data' con las categorías, usando GET fallback")
+                        # Fallback: obtener el mapa vía GET
+                        self.categories_map = self.api_client.get_categories_map(self.company_id)
+
                     return True
                 else:
-                    # Si hay errores en los datos, no reintentar (es error de validación)
+                    # Si hay errores en los datos, mostrar detalles
                     self.error(f"❌ Errores sincronizando categorías: {self.stats['errors']}")
+
+                    # Mostrar detalles de errores
+                    error_details = result.get('error_details', [])
+                    if error_details:
+                        self.error(f"❌ Detalles de errores ({len(error_details)} categorías fallaron):")
+                        for idx, error in enumerate(error_details[:20], 1):
+                            if isinstance(error, dict):
+                                name = error.get('name', error.get('category', {}).get('name', 'N/A'))
+                                err_msg = error.get('error', error.get('message', 'Unknown error'))
+                                self.error(f"   {idx}. ❌ Categoría '{name}': {err_msg}")
+                            else:
+                                self.error(f"   {idx}. ❌ {error}")
+
+                        if len(error_details) > 20:
+                            self.error(f"   ... y {len(error_details) - 20} errores más")
+
                     return False
 
             except Exception as e:

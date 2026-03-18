@@ -968,13 +968,14 @@ class APISyncManager:
         categories_sync.execute()
         self.stats['categories'] = categories_sync.stats.copy()
 
-        # 2. Products
+        # 2. Products (pasar el mapa de categorías desde CategoriesSync)
         self._log("\n📦 SINCRONIZANDO PRODUCTS...")
         products_sync = ProductsSync(
             self.pg_conn,
             self.products_client,
             company_id,
-            self.logger
+            self.logger,
+            categories_map=categories_sync.categories_map  # Pasar mapa de categorías
         )
         products_sync.execute()
         self.stats['products'] = products_sync.stats.copy()

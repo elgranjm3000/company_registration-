@@ -377,12 +377,24 @@ class SellersSync(BaseSync):
                     )
                     return True
                 else:
-                    # Si hay errores en los datos, no reintentar (es error de validación)
+                    # Si hay errores en los datos, mostrar detalles
                     self.error(f"❌ Errores sincronizando vendedores: {self.stats['errors']}")
+
                     # Mostrar detalles de errores
                     error_details = result.get('error_details', [])
-                    for error in error_details:
-                        self.error(f"   - {error}")
+                    if error_details:
+                        self.error(f"❌ Detalles de errores ({len(error_details)} vendedores fallaron):")
+                        for idx, error in enumerate(error_details[:20], 1):
+                            if isinstance(error, dict):
+                                code = error.get('code', error.get('seller', {}).get('code', 'N/A'))
+                                err_msg = error.get('error', error.get('message', 'Unknown error'))
+                                self.error(f"   {idx}. ❌ Vendedor '{code}': {err_msg}")
+                            else:
+                                self.error(f"   {idx}. ❌ {error}")
+
+                        if len(error_details) > 20:
+                            self.error(f"   ... y {len(error_details) - 20} errores más")
+
                     return False
 
             except Exception as e:
