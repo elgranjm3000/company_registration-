@@ -414,13 +414,9 @@ class ProductsSync(BaseSync):
         ) = pg_record
 
         # =====================================================================
-        # DETECTAR CAMBIO DE MONEDA Y CONVERTIR PRECIOS
+        # CONVERTIR PRECIOS SI ESTÁN EN VES ('01')
         # =====================================================================
         tipo_cambio = None
-
-        # Obtener coin anterior desde last_sync_data
-        last_sync_data = self._obtener_last_sync_data(self.table_name, code)
-        coin_anterior = last_sync_data.get('coin') if last_sync_data else None
 
         # Mapeo de códigos de moneda (PostgreSQL usa '01'/'02' o 'USD'/'VES')
         coin_map = {
@@ -430,21 +426,17 @@ class ProductsSync(BaseSync):
             'USD': 'USD'
         }
 
-        # Normalizar códigos de moneda
+        # Normalizar código de moneda
         coin_normalizado = coin_map.get(coin, coin) if coin else 'USD'
-        coin_anterior_normalizado = coin_map.get(coin_anterior, coin_anterior) if coin_anterior else None
 
-        # Detectar cambio de moneda
-        if coin_anterior_normalizado and coin_anterior_normalizado != coin_normalizado:
-            self.info(f"  💱 Cambio de moneda detectado: {code} - {coin_anterior_normalizado} → {coin_normalizado}")
+        # Siempre convertir de VES a USD cuando coin = '01' o 'VES'
+        if coin_normalizado in ['VES', '01']:
+            self.info(f"  💱 Producto en VES detectado: {code} - Convirtiendo a USD")
 
-            # Obtener tipo de cambio si es necesario
-            if (coin_anterior_normalizado in ['VES', '01'] and coin_normalizado in ['USD', '02']) or \
-               (coin_anterior_normalizado in ['USD', '02'] and coin_normalizado in ['VES', '01']):
-                tipo_cambio = self._obtener_tipo_cambio_ves_usd()
+            # Obtener tipo de cambio
+            tipo_cambio = self._obtener_tipo_cambio_ves_usd()
 
-            # Caso 1: VES ('01') → USD ('02')
-            if coin_anterior_normalizado in ['VES', '01'] and coin_normalizado in ['USD', '02'] and tipo_cambio:
+            if tipo_cambio:
                 self.info(f"     💱 Convirtiendo precios VES→USD (tasa: {tipo_cambio:.2f})")
                 price = self._convertir_ves_a_usd(safe_float(price), tipo_cambio)
                 cost = self._convertir_ves_a_usd(safe_float(cost), tipo_cambio)
@@ -452,14 +444,8 @@ class ProductsSync(BaseSync):
                 unitary_cost = self._convertir_ves_a_usd(safe_float(unitary_cost), tipo_cambio)
                 self.info(f"     → Price: {price:.4f} USD | Cost: {cost:.4f} USD")
 
-            # Caso 2: USD ('02') → VES ('01')
-            elif coin_anterior_normalizado in ['USD', '02'] and coin_normalizado in ['VES', '01'] and tipo_cambio:
-                self.info(f"     💱 Convirtiendo precios USD→VES (tasa: {tipo_cambio:.2f})")
-                price = self._convertir_usd_a_ves(safe_float(price), tipo_cambio)
-                cost = self._convertir_usd_a_ves(safe_float(cost), tipo_cambio)
-                higher_price = self._convertir_usd_a_ves(safe_float(higher_price), tipo_cambio)
-                unitary_cost = self._convertir_usd_a_ves(safe_float(unitary_cost), tipo_cambio)
-                self.info(f"     → Price: {price:.2f} VES | Cost: {cost:.2f} VES")
+                # Cambiar coin a USD para enviar a la API
+                coin_normalizado = 'USD'
 
         # =====================================================================
         # CONTINUAR CON TRANSFORMACIÓN NORMAL
