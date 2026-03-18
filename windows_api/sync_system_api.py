@@ -2109,6 +2109,210 @@ class ConfigWindow:
 
 
 # ==============================================================================
+# GUI - LAUNCHER WINDOW (Menú Principal)
+# ==============================================================================
+
+class LauncherWindow:
+    """Ventana principal del launcher para ejecutable .exe"""
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Sincronizador API REST - Chrystal")
+        self.root.geometry("600x500")
+        self.root.resizable(False, False)
+
+        # Centrar ventana
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+
+        self.create_widgets()
+
+    def create_widgets(self):
+        """Crear widgets del launcher"""
+        # Header con gradiente simulado
+        header = tk.Frame(self.root, bg="#2c3e50", height=100)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        # Título
+        title = tk.Label(header, text="🔄 Sincronizador API REST",
+                        font=("Arial", 20, "bold"), bg="#2c3e50", fg="white")
+        title.pack(pady=(20, 5))
+
+        subtitle = tk.Label(header, text="Sistema de Sincronización Chrystal",
+                           font=("Arial", 11), bg="#2c3e50", fg="#bdc3c7")
+        subtitle.pack()
+
+        # Contenido principal
+        main_frame = tk.Frame(self.root, bg="#ecf0f1", padx=30, pady=30)
+        main_frame.pack(fill="both", expand=True)
+
+        # Verificar si hay configuración
+        has_config = os.path.exists(CONFIG_FILE)
+
+        if not has_config:
+            # Mostrar mensaje si no hay configuración
+            warning_frame = tk.Frame(main_frame, bg="#fff3cd", borderwidth=2, relief="solid")
+            warning_frame.pack(fill="x", pady=(0, 20))
+
+            warning_label = tk.Label(warning_frame,
+                                   text="⚠️ Primera vez: Debe configurar el sistema antes de usarlo",
+                                   font=("Arial", 11, "bold"),
+                                   bg="#fff3cd", fg="#856404",
+                                   padx=20, pady=15)
+            warning_label.pack()
+
+        # Botones principales
+        btn_frame = tk.Frame(main_frame, bg="#ecf0f1")
+        btn_frame.pack(expand=True)
+
+        button_style = {
+            'font': ('Arial', 12),
+            'width': 35,
+            'height': 2,
+            'pady': 10
+        }
+
+        # Botón Configurar
+        tk.Button(btn_frame,
+                 text="⚙️ CONFIGURAR SISTEMA",
+                 command=self.launch_config,
+                 bg="#3498db", fg="white",
+                 **button_style).pack(pady=5)
+
+        # Botón Manager
+        tk.Button(btn_frame,
+                 text="🖥️ ABRIR MANAGER",
+                 command=self.launch_manager,
+                 bg="#2ecc71", fg="white",
+                 **button_style).pack(pady=5)
+
+        # Botón System Tray
+        tk.Button(btn_frame,
+                 text="📬 MODO SYSTEM TRAY",
+                 command=self.launch_tray,
+                 bg="#9b59b6", fg="white",
+                 **button_style).pack(pady=5)
+
+        # Botón Sincronizar Ahora
+        tk.Button(btn_frame,
+                 text="🔄 SINCRONIZAR AHORA",
+                 command=self.launch_sync,
+                 bg="#e67e22", fg="white",
+                 **button_style).pack(pady=5)
+
+        # Botón Reconfigurar
+        tk.Button(btn_frame,
+                 text="🔧 RECONFIGURAR",
+                 command=self.launch_reconfig,
+                 bg="#95a5a6", fg="white",
+                 **button_style).pack(pady=5)
+
+        # Footer
+        footer = tk.Frame(main_frame, bg="#ecf0f1")
+        footer.pack(fill="x", pady=(10, 0))
+
+        version_label = tk.Label(footer,
+                                text="v1.0 - Sistema de Sincronización PostgreSQL → API REST",
+                                font=("Arial", 9),
+                                bg="#ecf0f1", fg="#7f8c8d")
+        version_label.pack()
+
+    def launch_config(self):
+        """Lanzar modo configuración"""
+        self.root.destroy()
+        root = tk.Tk()
+        app = ConfigWindow(root)
+        root.mainloop()
+
+    def launch_manager(self):
+        """Lanzar modo manager"""
+        self.root.destroy()
+        root = tk.Tk()
+        app = ManagerWindow(root)
+        root.mainloop()
+
+    def launch_tray(self):
+        """Lanzar modo system tray"""
+        self.root.destroy()
+
+        # Cargar configuración
+        if not os.path.exists(CONFIG_FILE):
+            messagebox.showerror("Error", "No hay configuración. Ejecute 'Configurar Sistema' primero")
+            return
+
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error cargando configuración: {e}")
+            return
+
+        # Pedir password
+        import getpass
+        try:
+            api_password = getpass.getpass("Password de la API: ")
+        except:
+            # Si falla getpass (Windows a veces), usar tkinter
+            password_dialog = tk.Tk()
+            password_dialog.withdraw()
+            api_password = tk.simpledialog.askstring("Password", "Password de la API:", show='*')
+            password_dialog.destroy()
+
+            if not api_password:
+                return
+
+        # Iniciar System Tray
+        try:
+            tray = SystemTrayService(config, api_password)
+            tray.iniciar()
+        except Exception as e:
+            messagebox.showerror("Error", f"Error iniciando System Tray: {e}\n\nAsegúrese de tener instaladas las dependencias:\npip install pystray Pillow")
+
+    def launch_sync(self):
+        """Lanzar sincronización única"""
+        self.root.destroy()
+
+        # Cargar configuración
+        if not os.path.exists(CONFIG_FILE):
+            messagebox.showerror("Error", "No hay configuración. Ejecute 'Configurar Sistema' primero")
+            # Volver al launcher
+            root = tk.Tk()
+            app = LauncherWindow(root)
+            root.mainloop()
+            return
+
+        # Ejecutar sincronización en consola
+        import subprocess
+        import sys
+
+        if getattr(sys, 'frozen', False):
+            # Ejecutable compilado
+            subprocess.Popen([sys.executable, '--mode', 'sync'])
+        else:
+            # Script Python
+            subprocess.Popen([sys.executable, __file__, '--mode', 'sync'])
+
+    def launch_reconfig(self):
+        """Lanzar reconfiguración"""
+        result = messagebox.askyesno("Confirmar",
+                                    "¿Está seguro que desea borrar la configuración?\n\nTendrá que configurar el sistema nuevamente.")
+        if result:
+            # Borrar configuración
+            if os.path.exists(CONFIG_FILE):
+                os.remove(CONFIG_FILE)
+
+            messagebox.showinfo("Reconfiguración", "Configuración eliminada. Configure el sistema nuevamente.")
+
+            # Abrir configuración
+            self.launch_config()
+
+
+# ==============================================================================
 # GUI - MANAGER WINDOW
 # ==============================================================================
 
@@ -3309,6 +3513,21 @@ def run_service_loop():
 
 def main():
     """Función principal."""
+
+    # Verificar si es ejecutable compilado y no hay argumentos
+    # O si no se pasan argumentos explícitos
+    import sys
+    is_exe = getattr(sys, 'frozen', False)
+    no_args = len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[0].endswith('.exe'))
+
+    if is_exe and no_args:
+        # Mostrar launcher GUI
+        root = tk.Tk()
+        app = LauncherWindow(root)
+        root.mainloop()
+        return
+
+    # Modo normal con argumentos de línea de comandos
     parser = argparse.ArgumentParser(description="Sincronizador API REST")
     parser.add_argument("--mode", choices=["config", "manager", "reconfig", "sync", "service", "tray"],
                        default="manager", help="Modo de ejecución")
