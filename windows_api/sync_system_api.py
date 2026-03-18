@@ -1362,7 +1362,13 @@ class APISyncManager:
 
         return {
             'success': total_errors == 0,
-            'stats': self.stats
+            'stats': self.stats,
+            'total': {
+                'created': total_created,
+                'updated': total_updated,
+                'deleted': total_deleted,
+                'errors': total_errors
+            }
         }
 
     def sync_categories(self) -> dict:
