@@ -622,15 +622,22 @@ class APISyncManager:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_product_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener company_id desde sync_config
+                SELECT value::INTEGER INTO v_company_id
+                FROM sync_config
+                WHERE key = 'company_id';
+
                 UPDATE sync_hashes
                 SET deleted_at = NOW()
                 WHERE table_name = 'products'
                 AND record_key = OLD.code;
 
                 IF NOT FOUND THEN
-                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
-                    VALUES ('products', OLD.code, md5(OLD.code::text), NOW());
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+                    VALUES ('products', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
                 END IF;
 
                 RETURN OLD;
@@ -660,15 +667,22 @@ class APISyncManager:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_department_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener company_id desde sync_config
+                SELECT value::INTEGER INTO v_company_id
+                FROM sync_config
+                WHERE key = 'company_id';
+
                 UPDATE sync_hashes
                 SET deleted_at = NOW()
                 WHERE table_name = 'categories'
                 AND record_key = OLD.code;
 
                 IF NOT FOUND THEN
-                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
-                    VALUES ('categories', OLD.code, md5(OLD.code::text), NOW());
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+                    VALUES ('categories', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
                 END IF;
 
                 RETURN OLD;
@@ -698,15 +712,22 @@ class APISyncManager:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_customer_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener company_id desde sync_config
+                SELECT value::INTEGER INTO v_company_id
+                FROM sync_config
+                WHERE key = 'company_id';
+
                 UPDATE sync_hashes
                 SET deleted_at = NOW()
                 WHERE table_name = 'customers'
-                AND record_key = OLD.id::text;
+                AND record_key = OLD.code;
 
                 IF NOT FOUND THEN
-                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
-                    VALUES ('customers', OLD.id::text, md5(OLD.id::text), NOW());
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+                    VALUES ('customers', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
                 END IF;
 
                 RETURN OLD;
@@ -736,15 +757,22 @@ class APISyncManager:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_seller_deleted_sync_hashes()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener company_id desde sync_config
+                SELECT value::INTEGER INTO v_company_id
+                FROM sync_config
+                WHERE key = 'company_id';
+
                 UPDATE sync_hashes
                 SET deleted_at = NOW()
                 WHERE table_name = 'sellers'
-                AND record_key = OLD.id::text;
+                AND record_key = OLD.code;
 
                 IF NOT FOUND THEN
-                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at)
-                    VALUES ('sellers', OLD.id::text, md5(OLD.id::text), NOW());
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+                    VALUES ('sellers', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
                 END IF;
 
                 RETURN OLD;
@@ -774,15 +802,22 @@ class APISyncManager:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_product_pending_sync()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener company_id desde sync_config
+                SELECT value::INTEGER INTO v_company_id
+                FROM sync_config
+                WHERE key = 'company_id';
+
                 UPDATE sync_hashes
                 SET pending_sync = TRUE, updated_at = NOW()
                 WHERE table_name = 'products'
                 AND record_key = NEW.code;
 
                 IF NOT FOUND THEN
-                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync)
-                    VALUES ('products', NEW.code, md5(NEW.code::text), TRUE);
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id)
+                    VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id);
                 END IF;
 
                 RETURN NEW;
@@ -812,15 +847,22 @@ class APISyncManager:
             create_function_query = """
             CREATE OR REPLACE FUNCTION trigger_mark_customer_pending_sync()
             RETURNS TRIGGER AS $$
+            DECLARE
+                v_company_id INTEGER;
             BEGIN
+                -- Obtener company_id desde sync_config
+                SELECT value::INTEGER INTO v_company_id
+                FROM sync_config
+                WHERE key = 'company_id';
+
                 UPDATE sync_hashes
                 SET pending_sync = TRUE, updated_at = NOW()
                 WHERE table_name = 'customers'
-                AND record_key = NEW.id::text;
+                AND record_key = NEW.code;
 
                 IF NOT FOUND THEN
-                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync)
-                    VALUES ('customers', NEW.id::text, md5(NEW.id::text), TRUE);
+                    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id)
+                    VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id);
                 END IF;
 
                 RETURN NEW;
@@ -2735,8 +2777,7 @@ class ManagerWindow:
         """Abrir archivo de logs en editor de texto."""
         try:
             import subprocess
-            email = self.config.get('company_email') if self.config else 'user'
-            log_file = get_log_file(email)
+            log_file = get_log_file(self.config.get('company_email'))
 
             if not os.path.exists(log_file):
                 messagebox.showinfo("Logs", f"No existe archivo de logs aún:\n{log_file}")
