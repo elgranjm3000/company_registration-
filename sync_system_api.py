@@ -544,8 +544,14 @@ class APISyncManager:
                 self._crear_trigger_actualizacion_products()
                 self._crear_trigger_actualizacion_customers()
                 print("[DEBUG] Triggers creados")
+
+                # Corregir registros existentes con company_id NULL
+                self._corregir_company_id_sync_hashes()
             else:
                 print("[DEBUG] Triggers ya existen, omitiendo creación")
+
+                # Aún así, corregir registros con company_id NULL (por si acaso)
+                self._corregir_company_id_sync_hashes()
 
             self._log("✅ Tablas y triggers de sincronización inicializados", "debug")
             return True
@@ -884,6 +890,49 @@ class APISyncManager:
             self.pg_cursor.execute(create_trigger_query)
             self.pg_conn.commit()
         except Exception as e:
+            self.pg_conn.rollback()
+
+    def _corregir_company_id_sync_hashes(self):
+        """
+        Corrige registros de sync_hashes que tienen company_id NULL.
+
+        Esto es necesario porque los triggers antiguos no incluían el company_id.
+        Este método actualiza todos los registros NULL con el company_id correcto desde sync_config.
+        """
+        try:
+            self._log("🔧 Corrigiendo company_id NULL en sync_hashes...", "info")
+
+            # Verificar cuántos registros tienen company_id NULL
+            self.pg_cursor.execute("""
+                SELECT COUNT(*) FROM sync_hashes WHERE company_id IS NULL
+            """)
+            count_null = self.pg_cursor.fetchone()[0]
+
+            if count_null == 0:
+                self._log("✅ No hay registros con company_id NULL", "info")
+                return
+
+            self._log(f"📊 Se encontraron {count_null} registros con company_id NULL", "info")
+
+            # Actualizar todos los registros NULL con el company_id desde sync_config
+            result = self.pg_cursor.execute("""
+                UPDATE sync_hashes
+                SET company_id = (
+                    SELECT value::INTEGER
+                    FROM sync_config
+                    WHERE key = 'company_id'
+                ),
+                updated_at = NOW()
+                WHERE company_id IS NULL
+            """)
+
+            updated = self.pg_cursor.rowcount
+            self.pg_conn.commit()
+
+            self._log(f"✅ Corregidos {updated} registros de sync_hashes con company_id", "info")
+
+        except Exception as e:
+            self._log(f"⚠️ Error corrigiendo company_id en sync_hashes: {e}", "warning")
             self.pg_conn.rollback()
 
     def initialize_api_clients(self) -> bool:
