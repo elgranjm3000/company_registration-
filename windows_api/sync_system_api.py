@@ -2365,20 +2365,39 @@ class ManagerWindow:
         """Pedir password de la API."""
         dialog = tk.Toplevel(self.root)
         dialog.title("🔐 Login API")
-        dialog.geometry("400x200")
+        dialog.geometry("450x220")
+        dialog.resizable(False, False)
+
+        # Hacerla modal
         dialog.transient(self.root)
         dialog.grab_set()
 
-        # Centrar
+        # Centrar sobre la ventana padre
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
-        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        parent_x = self.root.winfo_x()
+        parent_y = self.root.winfo_y()
+        parent_width = self.root.winfo_width()
+        parent_height = self.root.winfo_height()
+
+        x = parent_x + (parent_width // 2) - 225  # 225 = mitad de 450
+        y = parent_y + (parent_height // 2) - 110  # 110 = mitad de 220
         dialog.geometry(f"+{x}+{y}")
 
-        tk.Label(dialog, text="Ingrese password de la API:", font=("Arial", 11)).pack(pady=20)
+        # Asegurar que la ventana se vea
+        dialog.lift()
+        dialog.attributes('-topmost', True)
+        dialog.after_idle(lambda: dialog.attributes('-topmost', False))
+        dialog.focus_force()
+
+        # Contenido
+        frame = tk.Frame(dialog, padx=30, pady=20)
+        frame.pack(fill="both", expand=True)
+
+        tk.Label(frame, text="🔐 Ingrese password de la API:",
+                font=("Arial", 12, "bold")).pack(pady=(0, 15))
 
         password_var = tk.StringVar()
-        entry = ttk.Entry(dialog, textvariable=password_var, show="*", width=30)
+        entry = ttk.Entry(frame, textvariable=password_var, show="*", width=35, font=("Arial", 11))
         entry.pack(pady=10)
         entry.focus()
 
@@ -2386,6 +2405,7 @@ class ManagerWindow:
             password = password_var.get()
             if not password:
                 messagebox.showwarning("Advertencia", "Ingrese el password", parent=dialog)
+                entry.focus()
                 return
 
             self.do_login(password, dialog)
@@ -2400,12 +2420,15 @@ class ManagerWindow:
             except:
                 pass
 
-        button_frame = tk.Frame(dialog)
-        button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Login", command=on_login).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Cancelar", command=on_cancel).pack(side="left", padx=5)
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=15)
+        ttk.Button(button_frame, text="✅ Login", command=on_login, width=12).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="❌ Cancelar", command=on_cancel, width=12).pack(side="left", padx=5)
 
         entry.bind("<Return>", lambda e: on_login())
+
+        # Asegurar focus
+        dialog.after(100, entry.focus)
 
     def do_login(self, password: str, dialog: tk.Tk):
         """Ejecutar login."""
@@ -3132,13 +3155,30 @@ class SystemTrayService:
             import tkinter as tk
             from tkinter import scrolledtext, ttk
 
-            log_window = tk.Toplevel()
+            # Crear ventana principal nueva (no Toplevel, porque no hay padre activo)
+            log_window = tk.Tk()
             log_window.title(f"Logs - Sync API ({self.config.get('company_rif', 'N/A')})")
-            log_window.geometry("800x600")
+            log_window.geometry("900x700")
+
+            # Centrar ventana
+            log_window.update_idletasks()
+            width = log_window.winfo_width()
+            height = log_window.winfo_height()
+            x = (log_window.winfo_screenwidth() // 2) - (width // 2)
+            y = (log_window.winfo_screenheight() // 2) - (height // 2)
+            log_window.geometry(f'{width}x{height}+{x}+{y}')
+
+            # Header
+            header = tk.Frame(log_window, bg="#2c3e50", height=50)
+            header.pack(fill="x")
+            header.pack_propagate(False)
+
+            tk.Label(header, text="📊 Logs del Sistema",
+                    font=("Arial", 14, "bold"), bg="#2c3e50", fg="white").pack(pady=12)
 
             # Área de texto
-            txt = scrolledtext.ScrolledText(log_window, state="normal", font=("Consolas", 9))
-            txt.pack(fill="both", expand=True)
+            txt = scrolledtext.ScrolledText(log_window, state="normal", font=("Consolas", 10))
+            txt.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
             # Cargar logs
             log_file = get_log_file(self.config.get('company_email'))
@@ -3146,20 +3186,30 @@ class SystemTrayService:
                 try:
                     with open(log_file, "r", encoding="utf-8", errors="replace") as f:
                         content = f.read()
+                    if not content.strip():
+                        content = "El archivo de logs está vacío."
                     txt.insert("1.0", content)
                     txt.see("end")
                 except Exception as e:
                     txt.insert("1.0", f"Error cargando logs: {e}")
             else:
-                txt.insert("1.0", "No hay archivo de logs aún")
+                txt.insert("1.0", f"No hay archivo de logs aún.\nUbicación esperada: {log_file}")
 
             txt.config(state="disabled")
 
             # Botón cerrar
-            tk.Button(log_window, text="❌ Cerrar", command=log_window.destroy).pack(pady=5)
+            btn_frame = tk.Frame(log_window)
+            btn_frame.pack(fill="x", pady=10)
+            tk.Button(btn_frame, text="❌ Cerrar", command=log_window.destroy,
+                     font=("Arial", 11), width=20).pack()
+
+            # Ejecutar mainloop
+            log_window.mainloop()
 
         except Exception as e:
             print(f"Error abriendo logs: {e}")
+            import traceback
+            traceback.print_exc()
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú"""
