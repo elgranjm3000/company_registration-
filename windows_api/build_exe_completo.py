@@ -63,8 +63,11 @@ def build_exe():
         # Modo una sola carpeta
         '--onedir',
 
-        # Mantener consola para ver logs
-        '--console',
+        # Ventana (porque usa tkinter) - SIN CONSOLA NEGRA
+        '--windowed',
+
+        # Ocultar consola completamente (no asusta al usuario)
+        '--noconsole',
 
         # Limpiar archivos temporales
         '--clean',

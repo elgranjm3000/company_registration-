@@ -1,14 +1,15 @@
 @echo off
-title Crear Ejecutable COMPLETO - Sync API System
+title Crear Ejecutable SIN CONSOLA - Sync API System
 
 cd /d "%~dp0"
 
 echo ========================================
-echo   CREAR EJECUTABLE .EXE - METODO COMPLETO
+echo   CREAR EJECUTABLE .EXE - SIN CONSOLA
 echo   Sync API System
 echo ========================================
 echo.
-echo Este metodo crea el .exe incluyendo todos los modulos explícitamente
+echo ✅ El .exe NO mostrara pantalla negra de consola
+echo ✅ Solo ventana GUI - Amigable para el cliente
 echo.
 
 REM Verificar Python
@@ -50,7 +51,8 @@ if not exist "sync" (
 echo ✅ Todos los archivos necesarios existen
 echo.
 
-echo Creando ejecutable con metodo completo...
+echo Creando ejecutable SIN CONSOLA (modo windowed)...
+echo Esto tomara varios minutos...
 echo.
 
 python build_exe_completo.py
@@ -64,12 +66,16 @@ if %errorlevel% neq 0 (
 
 echo.
 echo ========================================
-echo   ¡EJECUTABLE CREADO!
+echo   ¡EJECUTABLE CREADO SIN CONSOLA!
 echo ========================================
 echo.
-echo Ubicacion: dist\SyncAPISystem\
+echo ✅ Ubicacion: dist\SyncAPISystem\
+echo ✅ El .exe NO muestra pantalla negra
+echo ✅ Solo ventana GUI amigable
 echo.
-echo Para probar:
-echo   EJECUTAR_EXE_DEBUG.bat
+echo Para entregar al cliente:
+echo   1. Copiar carpeta dist\SyncAPISystem\
+echo   2. Comprimir en ZIP
+echo   3. Enviar al cliente
 echo.
 pause
