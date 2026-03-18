@@ -166,35 +166,20 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
 
         # Mostrar notificación nativa de Windows
         # threaded=True es CRÍTICO para no bloquear el programa
-        try:
-            result = toast.show_toast(
-                titulo,
-                mensaje,
-                duration=duracion,
-                icon_path=icon_path,
-                threaded=True,
-            )
-        except AttributeError as e:
-            if 'classAtom' in str(e):
-                # Error específico de win10toast - intentar una vez más con nueva instancia
-                toast = ToastNotifier()
-                try:
-                    result = toast.show_toast(
-                        titulo,
-                        mensaje,
-                        duration=duracion,
-                        icon_path=icon_path,
-                        threaded=True,
-                    )
-                except:
-                    pass
-            else:
-                raise
+        toast.show_toast(
+            titulo,
+            mensaje,
+            duration=duracion,
+            icon_path=icon_path,
+            threaded=True,
+        )
 
     except ImportError:
         pass  # win10toast no está instalado, silencioso
-    except Exception:
-        pass  # Cualquier error, silencioso para no interrumpir
+    except Exception as e:
+        # Log error pero no interrumpir programa
+        import sys
+        print(f"⚠️ Error mostrando notificación: {e}", file=sys.stderr)
 
 
 def mostrar_notificacion_windows(titulo: str, mensaje: str, duracion=5, logger=None):
@@ -3385,19 +3370,59 @@ class SystemTrayService:
 
                 sync_manager.close()
 
-                # Notificaciones desactivadas en System Tray para evitar errores de threads
-                # El usuario puede ver el estado en:
-                # - Tooltip del icono (last_sync_status)
-                # - Botón "Ver Logs" para ver detalles completos
+                # 📢 Notificación Windows de sincronización exitosa
+                if total.get('created', 0) > 0 or total.get('updated', 0) > 0:
+                    # Hay cambios - mostrar estadísticas
+                    stats = result.get('stats', {})
+                    parts = []
+                    for entity, entity_stats in stats.items():
+                        created = entity_stats.get('created', 0)
+                        updated = entity_stats.get('updated', 0)
+                        if created > 0 or updated > 0:
+                            parts.append(f"{entity.capitalize()}: {created} nuevos, {updated} mods")
+
+                    if parts:
+                        mensaje = " | ".join(parts)
+                        mostrar_banner(
+                            "✅ Sincronización Exitosa",
+                            mensaje,
+                            duracion=7 if es_manual else 5
+                        )
+                else:
+                    # No hay cambios
+                    mostrar_banner(
+                        "✅ Sincronización Completada",
+                        "No hay cambios para sincronizar",
+                        duracion=3 if es_manual else 2
+                    )
 
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error de conexión"
+                mostrar_banner(
+                    "❌ Error de Sincronización",
+                    "Error de conexión a la base de datos o API",
+                    duracion=10
+                )
 
         except Exception as e:
             tray_logger(f"❌ Error: {e}", "error")
             self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.last_sync_status = f"❌ Error: {str(e)[:30]}"
+
+            # 📢 Notificación Windows de error
+            if es_manual:
+                mostrar_banner(
+                    "⚠️ Error de Sincronización",
+                    str(e)[:100],
+                    duracion=10
+                )
+            else:
+                mostrar_banner(
+                    "⚠️ Sync Automático Falló",
+                    "Revisa los logs para más detalles",
+                    duracion=10
+                )
 
         finally:
             self.is_syncing = False
