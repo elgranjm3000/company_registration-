@@ -3294,11 +3294,8 @@ def main():
         root.mainloop()
 
     elif args.mode == "manager":
-        # Verificar que hay config
-        if not os.path.exists(CONFIG_FILE):
-            print("❌ No hay configuración. Ejecute --mode config primero")
-            sys.exit(1)
-
+        # Manager siempre abre, con o sin configuración
+        # (puede configurarse desde el botón "Configurar")
         root = tk.Tk()
         app = ManagerWindow(root)
         root.mainloop()
