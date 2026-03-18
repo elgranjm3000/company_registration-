@@ -148,7 +148,7 @@ class QuotesSync:
         register_date = self._parse_date(quote.get('created_at'))
 
         # Cliente
-        client_code = customer.get('code') or customer.get('rif') or ''
+        client_code = customer.get('rif') or ''
         client_name = customer.get('name') or ''
         client_address = customer.get('address') or ''
         client_phone = customer.get('phone') or ''
