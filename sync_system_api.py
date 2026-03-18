@@ -3520,10 +3520,79 @@ def main():
     no_args = len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[0].endswith('.exe'))
 
     if is_exe and no_args:
-        # Mostrar launcher GUI
-        root = tk.Tk()
-        app = LauncherWindow(root)
-        root.mainloop()
+        # MODO AUTOMÁTICO para .exe (como sync_system.py)
+        # 1. Si no hay config → abrir configuración → sync → tray
+        # 2. Si hay config → sync → tray
+
+        if not os.path.exists(CONFIG_FILE):
+            # No hay configuración - abrir modo config
+            root = tk.Tk()
+            app = ConfigWindow(root)
+            root.mainloop()
+            # Después de configurar, continuar con sync y tray
+        # Continuar con sincronización y tray (hay config o se acaba de crear)
+
+        # Cargar configuración
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        except Exception as e:
+            print(f"❌ Error cargando configuración: {e}")
+            return
+
+        # Pedir password con ventana GUI
+        import tkinter.simpledialog as simpledialog
+        pass_root = tk.Tk()
+        pass_root.withdraw()
+        api_password = simpledialog.askstring("🔐 Password de la API", "Ingrese su password:", show='*')
+        pass_root.destroy()
+
+        if not api_password:
+            return
+
+        # Ejecutar sincronización
+        print("\n" + "="*70)
+        print("🔄 SINCRONIZANDO...")
+        print("="*70)
+        try:
+            auth_manager = APIAuthManager(
+                base_url=config['api_url'],
+                logger=lambda msg, level="info": print(f"{'✅' if level == 'info' else '❌'} {msg}")
+            )
+
+            result = auth_manager.login(config['api_email'], api_password)
+            if not result.get('success'):
+                print(f"❌ Login falló: {result.get('error')}")
+                return
+
+            sync_manager = SyncManager(
+                config=config,
+                auth_manager=auth_manager,
+                logger=lambda msg, level="info": print(f"{'✅' if level == 'info' else '❌'} {msg}")
+            )
+
+            sync_manager.sync_all()
+            print("\n✅ Sincronización completada")
+
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # Iniciar System Tray
+        print("\n" + "="*70)
+        print("📬 INICIANDO SYSTEM TRAY...")
+        print("="*70)
+        print("El icono aparecerá junto al reloj")
+        print("Se sincronizará automáticamente cada", config.get('sync_interval_minutes', '30'), "minutos")
+        print("="*70 + "\n")
+
+        try:
+            tray = SystemTrayService(config, api_password)
+            tray.iniciar()
+        except Exception as e:
+            print(f"❌ Error iniciando System Tray: {e}")
+
         return
 
     # Modo normal con argumentos de línea de comandos
