@@ -3213,8 +3213,25 @@ class SystemTrayService:
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú"""
+        print("\n" + "="*70)
+        print("🔄 Sincronización manual solicitada desde el menú")
+        print("="*70)
+
         import threading
-        threading.Thread(target=self.ejecutar_sincronizacion, kwargs={'es_manual': True}, daemon=True).start()
+        import traceback
+
+        def sync_thread_wrapper():
+            try:
+                print("[DEBUG] Iniciando thread de sincronización manual...")
+                self.ejecutar_sincronizacion(es_manual=True)
+                print("[DEBUG] Thread de sincronización manual completado")
+            except Exception as e:
+                print(f"[DEBUG] Error en thread de sincronización manual: {e}")
+                traceback.print_exc()
+
+        thread = threading.Thread(target=sync_thread_wrapper, daemon=False)
+        thread.start()
+        print("[DEBUG] Thread iniciado (daemon=False)")
 
     def abrir_config(self):
         """Abre ventana de configuración"""
