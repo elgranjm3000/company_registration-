@@ -1181,9 +1181,15 @@ class APISyncManager:
 class ConfigWindow:
     """Ventana de configuración inicial."""
 
-    def __init__(self, root):
+    def __init__(self, root, callback=None):
+        """
+        Args:
+            root: Ventana Tkinter root
+            callback: Función opcional a llamar cuando se guarde la configuración
+        """
         self.root = root
         self.root.geometry("600x700")
+        self.callback = callback  # Callback para notificar cuando se guarde
 
         # Cargar configuración existente si hay
         existing_config = self.load_existing_config()
@@ -1529,8 +1535,13 @@ class ConfigWindow:
             with open(CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=2)
 
-            # Mostrar ventana de progreso
-            self._mostrar_ventana_progreso(config)
+            # Si hay un callback (desde Manager), llamarlo y cerrar
+            if self.callback:
+                self.callback(config)
+                self.root.destroy()
+            else:
+                # Mostrar ventana de progreso (comportamiento normal)
+                self._mostrar_ventana_progreso(config)
 
         except Exception as e:
             messagebox.showerror("Error", f"Error guardando configuración:\n{e}")
@@ -2109,15 +2120,15 @@ class ManagerWindow:
         self.root.title("Sincronizador API REST - Manager")
         self.root.geometry("800x600")
 
-        # Cargar configuración
+        # Cargar configuración (puede ser None si no existe)
         self.config = self.load_config()
         if not self.config:
-            messagebox.showerror("Error", "No hay configuración. Ejecute --mode config")
-            self.root.destroy()
-            return
+            # No cerrar la ventana, solo mostrar advertencia
+            self.log("⚠️ No hay configuración. Use el botón 'Configurar' para establecerla.")
 
-        # Configurar logging con archivo
-        self.log_func = setup_logging(self.config.get('company_email'))
+        # Configurar logging con archivo (o default si no hay config)
+        email = self.config.get('company_email') if self.config else 'user'
+        self.log_func = setup_logging(email)
 
         # Conectar logger de Python con la GUI
         add_gui_handler(self.log_func, self.log)
@@ -2131,8 +2142,11 @@ class ManagerWindow:
         # Crear widgets
         self.create_widgets()
 
-        # Pedir password al inicio
-        self.root.after(100, self.ask_password)
+        # Si hay configuración, pedir password al inicio
+        if self.config:
+            self.root.after(100, self.ask_password)
+        else:
+            self.log("ℹ️ Configure el sistema para comenzar")
 
     def load_config(self):
         """Cargar configuración desde archivo."""
@@ -2355,10 +2369,14 @@ class ManagerWindow:
         info_frame = tk.Frame(main_frame)
         info_frame.pack(fill="x", pady=5)
 
-        tk.Label(info_frame, text=f"🏢 Empresa: {self.config.get('company_rif')}",
-                font=("Arial", 10)).pack(side="left")
-        tk.Label(info_frame, text=f"📧 Email: {self.config.get('company_email')}",
-                font=("Arial", 10)).pack(side="left", padx=20)
+        if self.config:
+            tk.Label(info_frame, text=f"🏢 Empresa: {self.config.get('company_rif')}",
+                    font=("Arial", 10)).pack(side="left")
+            tk.Label(info_frame, text=f"📧 Email: {self.config.get('company_email')}",
+                    font=("Arial", 10)).pack(side="left", padx=20)
+        else:
+            tk.Label(info_frame, text="⚠️ No configurado",
+                    font=("Arial", 10), fg="orange").pack(side="left")
 
         # Panel de estado
         status_frame = tk.LabelFrame(main_frame, text="📊 Estado del Sistema", font=("Arial", 12, "bold"))
@@ -2430,7 +2448,8 @@ class ManagerWindow:
     def cargar_logs(self):
         """Cargar últimos logs del archivo."""
         try:
-            log_file = get_log_file(self.config.get('company_email'))
+            email = self.config.get('company_email') if self.config else 'user'
+            log_file = get_log_file(email)
             if os.path.exists(log_file):
                 with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
                     # Leer últimas 50 líneas
@@ -2457,16 +2476,40 @@ class ManagerWindow:
                 pass
 
     def configurar(self):
-        """Abrir configuración."""
-        messagebox.showinfo("Configuración",
-            "Para reconfigurar el sistema, cierre esta ventana y ejecute:\n"
-            "python3 sync_system_api.py --mode reconfig")
+        """Abrir ventana de configuración."""
+        # Crear ventana de configuración como Toplevel
+        config_window = tk.Toplevel(self.root)
+        config_window.title("⚙️ Configuración del Sincronizador API")
+        config_window.geometry("700x600")
+        config_window.transient(self.root)
+        config_window.grab_set()
+
+        # Crear instancia de ConfigWindow con callback
+        ConfigWindow(config_window, callback=self.on_config_saved)
+
+    def on_config_saved(self, config):
+        """Callback cuando se guarda la configuración desde el Manager."""
+        # Recargar configuración
+        self.config = self.load_config()
+
+        # Actualizar info de empresa en la UI
+        # (destruimos y recreamos los widgets para actualizar)
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        self.create_widgets()
+
+        # Si hay configuración, pedir password
+        if self.config:
+            self.root.after(100, self.ask_password)
+
+        self.log("✅ Configuración guardada exitosamente")
 
     def ver_logs(self):
         """Abrir archivo de logs en editor de texto."""
         try:
             import subprocess
-            log_file = get_log_file(self.config.get('company_email'))
+            email = self.config.get('company_email') if self.config else 'user'
+            log_file = get_log_file(email)
 
             if not os.path.exists(log_file):
                 messagebox.showinfo("Logs", f"No existe archivo de logs aún:\n{log_file}")
