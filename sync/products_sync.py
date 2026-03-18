@@ -3,7 +3,8 @@ Products Sync Module
 Sincronizador de productos de PostgreSQL a API REST
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+from datetime import datetime
 from .base import BaseSync
 
 
