@@ -392,16 +392,30 @@ class ProductsSync(BaseSync):
         """
         if self._categories_map is None:
             # Construir mapa de categorías la primera vez
-            self.info("Building categories map from API...")
+            self.info("📋 Building categories map from API...")
             self._categories_map = self.api_client.get_categories_map(self.company_id)
-            self.info(f"Categories map built with {len(self._categories_map)} entries")
+            self.info(f"📋 Categories map built with {len(self._categories_map)} entries")
+
+            # Mostrar categorías disponibles para diagnóstico
+            if self._categories_map:
+                self.info(f"📋 Available categories in API:")
+                for name, cat_id in sorted(self._categories_map.items()):
+                    self.info(f"   - '{name}' → ID: {cat_id}")
+            else:
+                self.warning("⚠️ No categories found in API! All products will fail!")
 
         # Buscar category_id por nombre (department_code)
         category_id = self._categories_map.get(department_code)
 
         if not category_id:
             self.warning(
-                f"Category not found for department '{department_code}', using default (1)"
+                f"⚠️ Category NOT FOUND for department '{department_code}'"
+            )
+            self.warning(
+                f"⚠️ Using default category_id=1 (may not exist in API)"
+            )
+            self.warning(
+                f"⚠️ Available categories: {list(self._categories_map.keys())[:10]}"
             )
             return 1
 

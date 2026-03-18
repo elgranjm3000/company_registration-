@@ -189,6 +189,13 @@ class CategoriesSync(BaseSync):
             for cat in todos_los_categories
         ]
 
+        # Mostrar categorías que se sincronizarán
+        self.info(f"📋 Categories to sync ({len(categories_api)}):")
+        for cat in categories_api[:20]:  # Mostrar primeras 20
+            self.info(f"   - '{cat['name']}' → {cat.get('description', 'No description')}")
+        if len(categories_api) > 20:
+            self.info(f"   ... and {len(categories_api) - 20} more")
+
         # Reintentos si falla todo el lote
         max_retries = 3
         for attempt in range(max_retries):
