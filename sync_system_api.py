@@ -2120,33 +2120,32 @@ class ManagerWindow:
         self.root.title("Sincronizador API REST - Manager")
         self.root.geometry("800x600")
 
-        # Cargar configuración (puede ser None si no existe)
-        self.config = self.load_config()
-        if not self.config:
-            # No cerrar la ventana, solo mostrar advertencia
-            self.log("⚠️ No hay configuración. Use el botón 'Configurar' para establecerla.")
-
-        # Configurar logging con archivo (o default si no hay config)
-        email = self.config.get('company_email') if self.config else 'user'
-        self.log_func = setup_logging(email)
-
-        # Conectar logger de Python con la GUI
-        add_gui_handler(self.log_func, self.log)
-
         # Auth Manager (en memoria)
         self.auth_manager = None
 
         # Sync Manager
         self.sync_manager = None
 
-        # Crear widgets
+        # Cargar configuración (puede ser None si no existe)
+        self.config = self.load_config()
+
+        # Configurar logging con archivo (o default si no hay config)
+        email = self.config.get('company_email') if self.config else 'user'
+        self.log_func = setup_logging(email)
+
+        # Crear widgets PRIMERO (antes de cualquier log)
         self.create_widgets()
 
-        # Si hay configuración, pedir password al inicio
-        if self.config:
-            self.root.after(100, self.ask_password)
-        else:
+        # Conectar logger de Python con la GUI (después de crear widgets)
+        add_gui_handler(self.log_func, self.log)
+
+        # AHORA ya podemos usar self.log()
+        if not self.config:
+            self.log("⚠️ No hay configuración. Use el botón 'Configurar' para establecerla.")
             self.log("ℹ️ Configure el sistema para comenzar")
+        else:
+            # Si hay configuración, pedir password al inicio
+            self.root.after(100, self.ask_password)
 
     def load_config(self):
         """Cargar configuración desde archivo."""
