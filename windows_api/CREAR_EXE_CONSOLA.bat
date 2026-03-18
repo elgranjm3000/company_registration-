@@ -89,8 +89,16 @@ pyinstaller --name SyncAPISystem ^
 	--hidden-import "hashlib" ^
 	--hidden-import "base64" ^
 	--hidden-import "winreg" ^
+	--hidden-import "win10toast" ^
+	--hidden-import "win10toast.toast" ^
+	--hidden-import "pywin32" ^
+	--hidden-import "win32gui" ^
+	--hidden-import "win32con" ^
+	--hidden-import "win32api" ^
 	--collect-all "psycopg2" ^
 	--collect-all "PIL" ^
+	--collect-all "win10toast" ^
+	--collect-all "pywin32" ^
 	sync_system_api.py
 
 if %errorlevel% neq 0 (
