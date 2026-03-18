@@ -120,22 +120,32 @@ def mostrar_notificacion_windows(titulo: str, mensaje: str, duracion=5, logger=N
     """
     Muestra notificación nativa de Windows 10/11 (Action Center).
 
+    Args:
+        titulo: Título de la notificación
+        mensaje: Mensaje principal
+        duracion: Duración en segundos (default 5)
+        logger: Logger opcional para mensajes de debug
+
     Características:
     - Notificación nativa de Windows 10/11
     - Aparece en esquina superior derecha
     - Se guarda en Centro de Acción
     - Icono personalizado si está disponible
     - Threaded para no bloquear
-
-    Args:
-        titulo: Título de la notificación
-        mensaje: Mensaje a mostrar
-        duracion: Duración en segundos (default: 5)
-        logger: Función de log opcional para mensajes de error
     """
     try:
         from win10toast import ToastNotifier
+
+        # WORKAROUND: Crear nueva instancia cada vez para evitar error classAtom
         toast = ToastNotifier()
+
+        # Forzar la creación de classAtom si no existe
+        if not hasattr(toast, 'classAtom'):
+            try:
+                import win32gui
+                toast.classAtom = None
+            except:
+                pass
 
         # Intentar usar icono personalizado si está disponible
         icon_path = None
@@ -153,21 +163,52 @@ def mostrar_notificacion_windows(titulo: str, mensaje: str, duracion=5, logger=N
         except:
             pass
 
-        result = toast.show_toast(
-            titulo,
-            mensaje,
-            duration=duracion,
-            icon_path=icon_path,
-            threaded=True,
-        )
+        # Mostrar notificación nativa de Windows
+        # threaded=True es CRÍTICO para no bloquear el programa
+        try:
+            result = toast.show_toast(
+                titulo,
+                mensaje,
+                duration=duracion,
+                icon_path=icon_path,
+                threaded=True,
+            )
+
+            # Log para debugging
+            if logger:
+                if result:
+                    logger(f"✅ Notificación Windows mostrada: {titulo}", "debug")
+                else:
+                    logger(f"⚠️ Notificación Windows falló: {titulo}", "warning")
+        except AttributeError as e:
+            if 'classAtom' in str(e):
+                # Error específico de win10toast - intentar una vez más con nueva instancia
+                if logger:
+                    logger("⚠️ Error classAtom detectado, reintentando...", "warning")
+                toast = ToastNotifier()
+                try:
+                    result = toast.show_toast(
+                        titulo,
+                        mensaje,
+                        duration=duracion,
+                        icon_path=icon_path,
+                        threaded=True,
+                    )
+                    if logger and result:
+                        logger(f"✅ Notificación Windows mostrada (retry): {titulo}", "debug")
+                except:
+                    if logger:
+                        logger(f"⚠️ Notificación Windows falló (retry): {titulo}", "warning")
+            else:
+                raise
 
     except ImportError:
         if logger:
             logger("⚠️ win10toast no está instalado. Las notificaciones de Windows no están disponibles.", "warning")
+            logger("   Para activarlas ejecute: pip install win10toast", "warning")
     except Exception as e:
         if logger:
-            logger(f"⚠️ Error mostrando notificación Windows: {e}", "warning")
-    # Silencioso si no hay logger
+            logger(f"❌ Error mostrando notificación: {e}", "error")
 
 
 def setup_logging(company_email=None):
