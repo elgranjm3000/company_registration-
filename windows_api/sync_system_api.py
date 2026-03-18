@@ -1018,7 +1018,7 @@ class APISyncManager:
 
             # Verificar si ya existe
             cursor.execute("""
-                SELECT value FROM sync_config WHERE key = 'current_company_id'
+                SELECT value FROM sync_config WHERE key = 'company_id'
             """)
             existe = cursor.fetchone()
 
@@ -1029,7 +1029,7 @@ class APISyncManager:
                     cursor.execute("""
                         UPDATE sync_config
                         SET value = %s, updated_at = NOW()
-                        WHERE key = 'current_company_id'
+                        WHERE key = 'company_id'
                     """, (str(company_id),))
                     self.pg_conn.commit()
                 else:
@@ -1038,7 +1038,7 @@ class APISyncManager:
                 self._log(f"📝 Insertando company_id en sync_config: {company_id}")
                 cursor.execute("""
                     INSERT INTO sync_config (key, value, updated_at)
-                    VALUES ('current_company_id', %s, NOW())
+                    VALUES ('company_id', %s, NOW())
                 """, (str(company_id),))
                 self.pg_conn.commit()
         except Exception as e:
@@ -2598,7 +2598,7 @@ class ManagerWindow:
 
                 # Verificar si ya existe
                 cursor.execute("""
-                    SELECT value FROM sync_config WHERE key = 'current_company_id'
+                    SELECT value FROM sync_config WHERE key = 'company_id'
                 """)
                 existe = cursor.fetchone()
 
@@ -2611,7 +2611,7 @@ class ManagerWindow:
                     cursor.execute("""
                         UPDATE sync_config
                         SET value = %s, updated_at = NOW()
-                        WHERE key = 'current_company_id'
+                        WHERE key = 'company_id'
                     """, (str(company_id),))
 
                     self.log(f"   Filas afectadas: {cursor.rowcount}")
@@ -2621,7 +2621,7 @@ class ManagerWindow:
                     # No existe: Insertar
                     cursor.execute("""
                         INSERT INTO sync_config (key, value, updated_at)
-                        VALUES ('current_company_id', %s, NOW())
+                        VALUES ('company_id', %s, NOW())
                     """, (str(company_id),))
 
                     self.log(f"   Insertado: {company_id}")
