@@ -3918,11 +3918,25 @@ def main():
                 print(f"❌ Login falló: {result.get('error')}")
                 return
 
-            sync_manager = SyncManager(
-                config=config,
+            sync_manager = APISyncManager(
+                postgres_config={
+                    'host': config['postgres_host'],
+                    'port': int(config['postgres_port']),
+                    'database': config['postgres_database'],
+                    'user': config['postgres_user'],
+                    'password': config['postgres_password']
+                },
                 auth_manager=auth_manager,
                 logger=lambda msg, level="info": print(f"{'✅' if level == 'info' else '❌'} {msg}")
             )
+
+            if not sync_manager.connect_postgresql():
+                print("❌ No se pudo conectar a PostgreSQL")
+                return
+
+            if not sync_manager.initialize_api_clients():
+                print("❌ No se pudieron inicializar los clientes API")
+                return
 
             sync_manager.sync_all()
             print("\n✅ Sincronización completada")
