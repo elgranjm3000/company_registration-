@@ -58,6 +58,11 @@ def build_exe_debug():
         '--hidden-import=PIL',
         '--hidden-import=PIL.Image',
         '--hidden-import=win10toast',
+        '--hidden-import=win10toast.toast',
+        '--hidden-import=pywin32',
+        '--hidden-import=win32gui',
+        '--hidden-import=win32con',
+        '--hidden-import=win32api',
         '--hidden-import=tkinter',
         '--hidden-import=tkinter.scrolledtext',
         '--hidden-import=bcrypt',
@@ -78,6 +83,7 @@ def build_exe_debug():
         '--collect-all=pystray',
         '--collect-all=Pillow',
         '--collect-all=win10toast',
+        '--collect-all=pywin32',
     ]
 
     print("Opciones de PyInstaller:")

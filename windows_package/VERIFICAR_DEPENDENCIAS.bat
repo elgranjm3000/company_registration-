@@ -26,6 +26,7 @@ pip show psycopg2-binary
 pip show pystray
 pip show Pillow
 pip show win10toast
+pip show pywin32
 echo.
 
 echo ========================================
