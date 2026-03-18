@@ -140,7 +140,7 @@ class SellersSync(BaseSync):
                 FROM sellers s
                 LEFT JOIN users u ON s.user_code = u.code
                 WHERE s.code IN ({placeholders})
-                  AND s.code IS NOT NULL AND s.code != ''
+                  AND s.code IS NOT NULL AND s.code != '' AND s.code <> 'N/A'
                   AND s.description IS NOT NULL AND s.description != ''
                   AND (u.email IS NULL OR TRIM(u.email) <> '' AND TRIM(u.email) <> '@')
                 ORDER BY s.code

@@ -1224,6 +1224,13 @@ class APISyncManager:
 
         company_id = self.auth_manager.company_id
 
+        # Validar que tengamos company_id
+        if not company_id:
+            self._log("❌ Error: No se pudo obtener company_id. Verifica que validate_company() se haya llamado correctamente.", "error")
+            return {'success': False, 'error': 'No company_id available', 'stats': {}}
+
+        self._log(f"✅ Company ID obtenido: {company_id}", "info")
+
         # ACTUALIZAR sync_config con el company_id (para que los triggers lo usen)
         try:
             # Primero hacer rollback para limpiar cualquier transacción abortada
