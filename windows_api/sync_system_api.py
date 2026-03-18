@@ -1056,6 +1056,8 @@ class APISyncManager:
 
         Esto es necesario porque los triggers antiguos no incluían el company_id.
         Este método actualiza todos los registros NULL con el company_id correcto desde sync_config.
+
+        Solo actualiza si NO existe ya un registro duplicado con el mismo (table_name, record_key, company_id).
         """
         try:
             self._log("🔧 Corrigiendo company_id NULL en sync_hashes...", "info")
@@ -1072,9 +1074,10 @@ class APISyncManager:
 
             self._log(f"📊 Se encontraron {count_null} registros con company_id NULL", "info")
 
-            # Actualizar todos los registros NULL con el company_id desde sync_config
+            # Actualizar solo los registros que NO tienen duplicado
+            # Usamos una subquery para evitar violar la restricción de unicidad
             result = self.pg_cursor.execute("""
-                UPDATE sync_hashes
+                UPDATE sync_hashes sh
                 SET company_id = (
                     SELECT value::INTEGER
                     FROM sync_config
@@ -1082,12 +1085,26 @@ class APISyncManager:
                 ),
                 updated_at = NOW()
                 WHERE company_id IS NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sync_hashes sh2
+                    WHERE sh2.table_name = sh.table_name
+                    AND sh2.record_key = sh.record_key
+                    AND sh2.company_id = (
+                        SELECT value::INTEGER
+                        FROM sync_config
+                        WHERE key = 'company_id'
+                    )
+                )
             """)
 
             updated = self.pg_cursor.rowcount
             self.pg_conn.commit()
 
-            self._log(f"✅ Corregidos {updated} registros de sync_hashes con company_id", "info")
+            if updated > 0:
+                self._log(f"✅ Corregidos {updated} registros de sync_hashes con company_id", "info")
+            else:
+                self._log("ℹ️ No se actualizaron registros (posibles duplicados ya existentes)", "info")
 
         except Exception as e:
             self._log(f"⚠️ Error corrigiendo company_id en sync_hashes: {e}", "warning")
@@ -1227,20 +1244,35 @@ class APISyncManager:
                 valor_actual = existe[0]
                 if valor_actual != str(company_id):
                     self._log(f"📝 Actualizando sync_config: {valor_actual} → {company_id}")
-                    cursor.execute("""
-                        UPDATE sync_config
-                        SET value = %s, updated_at = NOW()
-                        WHERE key = 'company_id'
-                    """, (str(company_id),))
+                    # Si company_id es None, usar NULL en lugar de string 'None'
+                    if company_id is None:
+                        cursor.execute("""
+                            UPDATE sync_config
+                            SET value = NULL, updated_at = NOW()
+                            WHERE key = 'company_id'
+                        """)
+                    else:
+                        cursor.execute("""
+                            UPDATE sync_config
+                            SET value = %s, updated_at = NOW()
+                            WHERE key = 'company_id'
+                        """, (str(company_id),))
                     self.pg_conn.commit()
                 else:
                     self._log(f"✅ sync_config ya tiene company_id correcto: {company_id}")
             else:
                 self._log(f"📝 Insertando company_id en sync_config: {company_id}")
-                cursor.execute("""
-                    INSERT INTO sync_config (key, value, updated_at)
-                    VALUES ('company_id', %s, NOW())
-                """, (str(company_id),))
+                # Si company_id es None, usar NULL en lugar de string 'None'
+                if company_id is None:
+                    cursor.execute("""
+                        INSERT INTO sync_config (key, value, updated_at)
+                        VALUES ('company_id', NULL, NOW())
+                    """)
+                else:
+                    cursor.execute("""
+                        INSERT INTO sync_config (key, value, updated_at)
+                        VALUES ('company_id', %s, NOW())
+                    """, (str(company_id),))
                 self.pg_conn.commit()
         except Exception as e:
             self._log(f"⚠️ Error actualizando sync_config: {e}", "warning")
