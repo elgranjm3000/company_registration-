@@ -2154,16 +2154,13 @@ class ConfigWindow:
                 if progreso.winfo_exists():
                     progreso.destroy()
 
-                if resultado['exito']:
-                    # PRIMERO: Ejecutar primera sincronización (crea nueva ventana)
-                    ejecutar_primera_sync_y_tray(resultado['api_password'])
+                # NOTA: Ya NO ejecutamos ejecutar_primera_sync_y_tray() aquí
+                # porque se ejecuta en on_verification_complete() (línea 2187)
+                # Esto evita que se ejecute dos veces
 
-                    # LUEGO: Cerrar ventana de config
-                    if self.root.winfo_exists():
-                        self.root.destroy()
-                else:
-                    # Si hubo error, mantener la ventana de config abierta
-                    pass
+                # Cerrar ventana de config
+                if self.root.winfo_exists():
+                    self.root.destroy()
             except:
                 pass
 
