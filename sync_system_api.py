@@ -2154,6 +2154,13 @@ class ConfigWindow:
 
                         while not sync_queue.empty():
                             msg = sync_queue.get_nowait()
+
+                            # Detectar señal de completado
+                            if msg == "__SYNC_COMPLETE__":
+                                on_sync_complete()
+                                return  # Dejar de procesar más mensajes
+
+                            # Mensaje normal de texto
                             if sync_window.winfo_exists():
                                 sync_label.config(text=msg)
                             log_debug(f"[SYNC GUI] {msg}")
@@ -2252,10 +2259,10 @@ class ConfigWindow:
                         }
 
                     log_debug("[DEBUG] Notificando completion...")
-                    # Notificar completion (event_generate es thread-safe)
-                    sync_window.event_generate('<<SyncComplete>>')
+                    # Poner señal de completado en la cola (thread-safe)
+                    sync_queue.put("__SYNC_COMPLETE__")
 
-                def on_sync_complete(event):
+                def on_sync_complete():
                     """Manejador de completion de sincronización"""
                     log_debug(f"[DEBUG] on_sync_complete llamado: exito={sync_result.get('exito')}")
                     if not sync_window.winfo_exists():
@@ -2282,9 +2289,6 @@ class ConfigWindow:
                         sync_label.config(text=sync_result['mensaje'], foreground="red")
                         tk.Button(sync_window, text="⚠️ Cerrar",
                                  command=sync_window.destroy).pack(pady=10)
-
-                # Bind event
-                sync_window.bind('<<SyncComplete>>', on_sync_complete)
 
                 # Iniciar thread de sincronización
                 log_debug("[DEBUG] Iniciando thread de sincronización...")
