@@ -56,9 +56,27 @@ Las notificaciones aparecerán en el **Notification Center** de macOS.
 
 ### Errores en Windows
 
-Si ves el error `pkg_resources.DistributionNotFound`, instala pywin32:
+**Error: `pkg_resources.DistributionNotFound: The 'win10toast' distribution was not found`**
+
+Este error indica que falta `pywin32`, que es una dependencia necesaria para win10toast.
+
+**Solución:**
 ```bash
 pip install pywin32
+```
+
+**Verificar instalación:**
+```bash
+python -c "import win32con; print('✅ pywin32 instalado')"
+```
+
+**Nota:** En Windows, necesitas AMBAS librerías:
+- `win10toast` - Para las notificaciones
+- `pywin32` - Dependencia necesaria para win10toast
+
+Instala ambas con:
+```bash
+pip install win10toast pywin32
 ```
 
 ### El programa funciona pero no veo notificaciones
