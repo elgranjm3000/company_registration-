@@ -338,11 +338,12 @@ class ProductsSync(BaseSync):
             allow_decimal            # 24
         ) = pg_record
 
-        # Obtener category_id desde el mapa de categorías (usando department_name)
-        category_id = self._get_category_id(department_name)
+        # category_id es el código del department de PostgreSQL
+        # Ej: 'GENERAL', 'ELECTRONICA', 'ALIMENTOS'
+        category_id = department if department else 'GENERAL'
 
         # Log para diagnóstico: mostrar category_id asignado
-        self.debug(f"   📦 Producto '{code}' → department '{department_name}' → category_id: {category_id}")
+        self.debug(f"   📦 Producto '{code}' → department_code: '{department}' → category_id: '{category_id}'")
 
         # Construir nombre (usar short_name si hay, sino description)
         name = (short_name[:255] if short_name else '')[:255]
