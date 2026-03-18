@@ -231,6 +231,9 @@ class ProductsSync(BaseSync):
                 # Obtener hash guardado
                 hash_guardado = self._obtener_hash_guardado(self.table_name, code)
 
+                # Extraer coin del producto (índice 10 según el query)
+                coin_actual = producto[10] if len(producto) > 10 else None
+
                 if hash_guardado is None:
                     # Nuevo
                     cambios['nuevos'].append(producto)
@@ -240,8 +243,12 @@ class ProductsSync(BaseSync):
                     cambios['modificados'].append(producto)
                     self.debug(f"  🔄 MODIFICADO: {code}")
 
-                # Guardar hash actual
-                self._guardar_hash(self.table_name, code, hash_actual)
+                # Guardar hash actual con last_sync_data (incluye coin)
+                data_sync = {
+                    'coin': coin_actual,
+                    'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+                self._guardar_hash(self.table_name, code, hash_actual, data_sync)
 
             # Detectar eliminados (usando trigger deleted_at)
             self.pg_cursor.execute("""
@@ -274,6 +281,73 @@ class ProductsSync(BaseSync):
             self.pg_conn.rollback()
 
         return cambios
+
+    # =========================================================================
+    # CONVERSIÓN DE MONEDA
+    # =========================================================================
+
+    def _obtener_tipo_cambio_ves_usd(self) -> Optional[float]:
+        """
+        Obtener tipo de cambio VES → USD desde la base de datos PostgreSQL.
+
+        Returns:
+            Tipo de cambio (ej: 36.5) o None si no está disponible
+        """
+        try:
+            # Buscar el tipo de cambio en la tabla de configuración
+            # Asumiendo que existe una tabla o campo con el tipo de cambio
+            self.pg_cursor.execute("""
+                SELECT
+                    CASE
+                        WHEN price > 0 THEN cost / price
+                        ELSE NULL
+                    END as tipo_cambio
+                FROM products
+                WHERE coin IN ('VES', '01')
+                  AND price > 0
+                  AND cost > 0
+                LIMIT 1
+            """)
+
+            result = self.pg_cursor.fetchone()
+            if result and result[0]:
+                tipo_cambio = float(result[0])
+                self.info(f"💱 Tipo de cambio VES→USD: {tipo_cambio:.2f}")
+                return tipo_cambio
+
+            # Valor por defecto si no se encuentra
+            self.warning("⚠️  No se pudo obtener tipo de cambio, usando 36.5 por defecto")
+            return 36.5
+
+        except Exception as e:
+            self.error(f"Error obteniendo tipo de cambio: {e}")
+            return 36.5  # Valor por defecto
+
+    def _convertir_ves_a_usd(self, monto: float, tipo_cambio: float) -> float:
+        """
+        Convertir monto de VES a USD.
+
+        Args:
+            monto: Monto en VES
+            tipo_cambio: Tipo de cambio (ej: 36.5 VES por USD)
+
+        Returns:
+            Monto en USD
+        """
+        return round(monto / tipo_cambio, 4)
+
+    def _convertir_usd_a_ves(self, monto: float, tipo_cambio: float) -> float:
+        """
+        Convertir monto de USD a VES.
+
+        Args:
+            monto: Monto en USD
+            tipo_cambio: Tipo de cambio (ej: 36.5 VES por USD)
+
+        Returns:
+            Monto en VES
+        """
+        return round(monto * tipo_cambio, 2)
 
     # =========================================================================
     # TRANSFORMACIÓN
@@ -337,6 +411,58 @@ class ProductsSync(BaseSync):
             unitary_cost,            # 23
             allow_decimal            # 24
         ) = pg_record
+
+        # =====================================================================
+        # DETECTAR CAMBIO DE MONEDA Y CONVERTIR PRECIOS
+        # =====================================================================
+        tipo_cambio = None
+
+        # Obtener coin anterior desde last_sync_data
+        last_sync_data = self._obtener_last_sync_data(self.table_name, code)
+        coin_anterior = last_sync_data.get('coin') if last_sync_data else None
+
+        # Mapeo de códigos de moneda (PostgreSQL usa '01'/'02' o 'USD'/'VES')
+        coin_map = {
+            '01': 'VES',
+            '02': 'USD',
+            'VES': 'VES',
+            'USD': 'USD'
+        }
+
+        # Normalizar códigos de moneda
+        coin_normalizado = coin_map.get(coin, coin) if coin else 'USD'
+        coin_anterior_normalizado = coin_map.get(coin_anterior, coin_anterior) if coin_anterior else None
+
+        # Detectar cambio de moneda
+        if coin_anterior_normalizado and coin_anterior_normalizado != coin_normalizado:
+            self.info(f"  💱 Cambio de moneda detectado: {code} - {coin_anterior_normalizado} → {coin_normalizado}")
+
+            # Obtener tipo de cambio si es necesario
+            if (coin_anterior_normalizado in ['VES', '01'] and coin_normalizado in ['USD', '02']) or \
+               (coin_anterior_normalizado in ['USD', '02'] and coin_normalizado in ['VES', '01']):
+                tipo_cambio = self._obtener_tipo_cambio_ves_usd()
+
+            # Caso 1: VES ('01') → USD ('02')
+            if coin_anterior_normalizado in ['VES', '01'] and coin_normalizado in ['USD', '02'] and tipo_cambio:
+                self.info(f"     💱 Convirtiendo precios VES→USD (tasa: {tipo_cambio:.2f})")
+                price = self._convertir_ves_a_usd(safe_float(price), tipo_cambio)
+                cost = self._convertir_ves_a_usd(safe_float(cost), tipo_cambio)
+                higher_price = self._convertir_ves_a_usd(safe_float(higher_price), tipo_cambio)
+                unitary_cost = self._convertir_ves_a_usd(safe_float(unitary_cost), tipo_cambio)
+                self.info(f"     → Price: {price:.4f} USD | Cost: {cost:.4f} USD")
+
+            # Caso 2: USD ('02') → VES ('01')
+            elif coin_anterior_normalizado in ['USD', '02'] and coin_normalizado in ['VES', '01'] and tipo_cambio:
+                self.info(f"     💱 Convirtiendo precios USD→VES (tasa: {tipo_cambio:.2f})")
+                price = self._convertir_usd_a_ves(safe_float(price), tipo_cambio)
+                cost = self._convertir_usd_a_ves(safe_float(cost), tipo_cambio)
+                higher_price = self._convertir_usd_a_ves(safe_float(higher_price), tipo_cambio)
+                unitary_cost = self._convertir_usd_a_ves(safe_float(unitary_cost), tipo_cambio)
+                self.info(f"     → Price: {price:.2f} VES | Cost: {cost:.2f} VES")
+
+        # =====================================================================
+        # CONTINUAR CON TRANSFORMACIÓN NORMAL
+        # =====================================================================
 
         # category_id es el código del department de PostgreSQL
         # Ej: 'GENERAL', 'ELECTRONICA', 'ALIMENTOS'

@@ -307,11 +307,42 @@ class BaseSync(ABC):
             self.error(f"Error getting saved hash: {e}")
             return None
 
+    def _obtener_last_sync_data(self, table_name: str, record_key: str) -> Optional[Dict]:
+        """
+        Obtener last_sync_data guardado en sync_hashes.
+
+        Args:
+            table_name: Nombre de la tabla ('products', etc.)
+            record_key: Clave del registro
+
+        Returns:
+            Dict con last_sync_data o None si no existe
+        """
+        try:
+            self.pg_cursor.execute("""
+                SELECT last_sync_data
+                FROM sync_hashes
+                WHERE table_name = %s
+                  AND record_key = %s
+                  AND company_id = %s
+            """, (table_name, record_key, self.company_id))
+
+            result = self.pg_cursor.fetchone()
+            if result and result[0]:
+                import json
+                return json.loads(result[0])
+            return None
+
+        except Exception as e:
+            self.error(f"Error getting last_sync_data: {e}")
+            return None
+
     def _guardar_hash(
         self,
         table_name: str,
         record_key: str,
-        record_hash: str
+        record_hash: str,
+        last_sync_data: Optional[Dict] = None
     ) -> None:
         """
         Guardar o actualizar hash en sync_hashes.
@@ -320,26 +351,33 @@ class BaseSync(ABC):
             table_name: Nombre de la tabla
             record_key: Clave del registro
             record_hash: Hash MD5 del registro
+            last_sync_data: Dict opcional con datos adicionales (ej: coin, status)
         """
         try:
+            import json
+
+            # Convertir last_sync_data a JSON string
+            last_sync_json = json.dumps(last_sync_data) if last_sync_data else None
+
             # Intentar UPDATE primero
             self.pg_cursor.execute("""
                 UPDATE sync_hashes
                 SET record_hash = %s,
+                    last_sync_data = %s,
                     updated_at = NOW()
                 WHERE table_name = %s
                   AND record_key = %s
                   AND company_id = %s
-            """, (record_hash, table_name, record_key, self.company_id))
+            """, (record_hash, last_sync_json, table_name, record_key, self.company_id))
 
             # Si no afectó ninguna fila, hacer INSERT
             if self.pg_cursor.rowcount == 0:
                 self.pg_cursor.execute("""
                     INSERT INTO sync_hashes (
                         table_name, record_key, record_hash, company_id,
-                        pending_sync, updated_at
-                    ) VALUES (%s, %s, %s, %s, FALSE, NOW())
-                """, (table_name, record_key, record_hash, self.company_id))
+                        last_sync_data, pending_sync, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, FALSE, NOW())
+                """, (table_name, record_key, record_hash, self.company_id, last_sync_json))
 
             self.pg_conn.commit()
 
