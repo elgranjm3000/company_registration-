@@ -116,17 +116,93 @@ def get_log_file(company_email=None):
     return os.path.join(LOGS_DIR, "sync_api.log")
 
 
+def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
+    """
+    Muestra notificación nativa de Windows 10/11 (Action Center)
+
+    Args:
+        titulo: Título de la notificación
+        mensaje: Mensaje principal
+        duracion: Duración en segundos (default 5)
+        icono: Ruta al icono (opcional)
+
+    Características:
+    - Notificación nativa de Windows 10/11
+    - Aparece en esquina superior derecha
+    - Se guarda en Centro de Acción
+    - Icono personalizado si está disponible
+    - Threaded para no bloquear
+    """
+    try:
+        from win10toast import ToastNotifier
+
+        # WORKAROUND: Crear nueva instancia cada vez para evitar error classAtom
+        toast = ToastNotifier()
+
+        # Forzar la creación de classAtom si no existe
+        if not hasattr(toast, 'classAtom'):
+            try:
+                import win32gui
+                toast.classAtom = None
+            except:
+                pass
+
+        # Intentar usar icono personalizado si está disponible
+        icon_path = icono
+        if not icon_path:
+            try:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                possible_icons = [
+                    os.path.join(script_dir, "icon.ico"),
+                    os.path.join(script_dir, "icon.png"),
+                    os.path.join(script_dir, "app.ico"),
+                ]
+                for path in possible_icons:
+                    if os.path.exists(path):
+                        icon_path = path
+                        break
+            except:
+                pass
+
+        # Mostrar notificación nativa de Windows
+        # threaded=True es CRÍTICO para no bloquear el programa
+        try:
+            result = toast.show_toast(
+                titulo,
+                mensaje,
+                duration=duracion,
+                icon_path=icon_path,
+                threaded=True,
+            )
+        except AttributeError as e:
+            if 'classAtom' in str(e):
+                # Error específico de win10toast - intentar una vez más con nueva instancia
+                toast = ToastNotifier()
+                try:
+                    result = toast.show_toast(
+                        titulo,
+                        mensaje,
+                        duration=duracion,
+                        icon_path=icon_path,
+                        threaded=True,
+                    )
+                except:
+                    pass
+            else:
+                raise
+
+    except ImportError:
+        pass  # win10toast no está instalado, silencioso
+    except Exception:
+        pass  # Cualquier error, silencioso para no interrumpir
+
+
 def mostrar_notificacion_windows(titulo: str, mensaje: str, duracion=5, logger=None):
     """
-    NO-OP: Las notificaciones de Windows están desactivadas.
-
-    La librería win10toast tiene múltiples bugs que causan errores en threads:
-    - AttributeError: 'ToastNotifier' object has no attribute 'classAtom'
-    - pywintypes.error: (87, 'CreateWindow', 'El parámetro no es correcto.')
-
-    El sistema de logs (logs/sync_api_{email}.log) es suficiente para notificar al usuario.
+    Wrapper para compatibilidad. NO llamar desde threads secundarios.
+    Usar mostrar_banner() directamente desde el main thread.
     """
-    pass  # Notificaciones desactivadas - usar sistema de logs
+    mostrar_banner(titulo, mensaje, duracion)
 
 
 def setup_logging(company_email=None):
@@ -3307,74 +3383,21 @@ class SystemTrayService:
                 tray_logger(f"   ❌ Eliminados:  {total.get('deleted', 0)}", "info")
                 tray_logger("", "info")
 
-                # 📢 Notificación Windows de sincronización exitosa
-                if total.get('created', 0) > 0 or total.get('updated', 0) > 0:
-                    # Hay cambios - mostrar estadísticas
-                    stats = result.get('stats', {})
-                    parts = []
-                    for entity, entity_stats in stats.items():
-                        created = entity_stats.get('created', 0)
-                        updated = entity_stats.get('updated', 0)
-                        if created > 0 or updated > 0:
-                            parts.append(f"{entity.capitalize()}: {created} nuevos, {updated} mods")
-
-                    if parts:
-                        mensaje = " | ".join(parts)
-                        mostrar_notificacion_windows(
-                            "✅ Sincronización Exitosa",
-                            mensaje,
-                            duracion=7 if es_manual else 5,
-                            logger=tray_logger
-                        )
-                    else:
-                        mostrar_notificacion_windows(
-                            "✅ Sincronización Exitosa",
-                            "Procesamento completado",
-                            duracion=5,
-                            logger=tray_logger
-                        )
-                else:
-                    # No hay cambios
-                    mostrar_notificacion_windows(
-                        "✅ Sincronización Exitosa",
-                        "No hubo cambios en esta sincronización",
-                        duracion=5 if es_manual else 3,
-                        logger=tray_logger
-                    )
-
                 sync_manager.close()
+
+                # Notificaciones desactivadas en System Tray para evitar errores de threads
+                # El usuario puede ver el estado en:
+                # - Tooltip del icono (last_sync_status)
+                # - Botón "Ver Logs" para ver detalles completos
+
             else:
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = "❌ Error de conexión"
-
-                # 📢 Notificación Windows de error
-                mostrar_notificacion_windows(
-                    "⚠️ Error de Sincronización",
-                    "Error de conexión a la base de datos",
-                    duracion=10,
-                    logger=tray_logger
-                )
 
         except Exception as e:
             tray_logger(f"❌ Error: {e}", "error")
             self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.last_sync_status = f"❌ Error: {str(e)[:30]}"
-
-            # 📢 Notificación Windows de error
-            if es_manual:
-                mostrar_notificacion_windows(
-                    "⚠️ Error de Sincronización",
-                    str(e)[:100],
-                    duracion=10,
-                    logger=tray_logger
-                )
-            else:
-                mostrar_notificacion_windows(
-                    "⚠️ Sync Automático Falló",
-                    "Revisa los logs para más detalles",
-                    duracion=10,
-                    logger=tray_logger
-                )
 
         finally:
             self.is_syncing = False
