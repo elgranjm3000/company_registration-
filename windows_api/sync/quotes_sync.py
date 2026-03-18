@@ -139,22 +139,22 @@ class QuotesSync:
         # Datos básicos del quote
         quote_id = quote.get('id')
         quote_number = quote.get('quote_number')
-        customer = quote.get('customer', {})
-        seller = quote.get('seller', {})
-        items = quote.get('items', [])
+        customer = quote.get('customer') or {}
+        seller = quote.get('seller') or {}
+        items = quote.get('items') or []
 
         # Fechas
         emission_date = self._parse_date(quote.get('quote_date'))
         register_date = self._parse_date(quote.get('created_at'))
 
         # Cliente
-        client_code = customer.get('code', customer.get('rif', ''))
-        client_name = customer.get('name', '')
-        client_address = customer.get('address', '')
-        client_phone = customer.get('phone', '')
+        client_code = customer.get('code') or customer.get('rif') or ''
+        client_name = customer.get('name') or ''
+        client_address = customer.get('address') or ''
+        client_phone = customer.get('phone') or ''
 
         # Vendedor
-        seller_name = seller.get('name', '')
+        seller_name = seller.get('name') or ''
 
         # Totales
         total_amount = float(quote.get('subtotal', 0))
