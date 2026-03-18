@@ -142,7 +142,7 @@ class SellersSync(BaseSync):
                 WHERE s.code IN ({placeholders})
                   AND s.code IS NOT NULL AND s.code != ''
                   AND s.description IS NOT NULL AND s.description != ''
-                  AND (u.email IS NULL OR u.email <> '@')
+                  AND (u.email IS NULL OR TRIM(u.email) <> '' AND TRIM(u.email) <> '@')
                 ORDER BY s.code
             """
 
@@ -268,10 +268,10 @@ class SellersSync(BaseSync):
                 f"using default. CHANGE THIS IN PRODUCTION!"
             )
 
-        # Validar email: usar email por defecto si es None o vacío
-        # Nota: Los emails con valor '@' ya fueron filtrados en el query
+        # Validar email: usar email por defecto si es None
+        # Nota: Los emails con valor '@', '' o solo espacios ya fueron filtrados en el query
         valid_email = email
-        if not email or email.strip() == '':
+        if not email:
             valid_email = f"{code.lower()}@temp.com"
             self.warning(
                 f"⚠️  No valid email for seller {code}, using {valid_email}. CHANGE THIS IN PRODUCTION!"
