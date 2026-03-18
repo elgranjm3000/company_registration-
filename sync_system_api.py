@@ -118,65 +118,119 @@ def get_log_file(company_email=None):
 
 def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     """
-    Muestra notificación nativa de Windows 10/11 (Action Center)
+    Muestra notificación nativa según el sistema operativo.
+
+    Multiplataforma:
+    - Windows: win10toast (Action Center)
+    - Linux: notify2 (Desktop Notifications)
+    - macOS: terminal-notifier (Notification Center)
 
     Args:
         titulo: Título de la notificación
         mensaje: Mensaje principal
         duracion: Duración en segundos (default 5)
         icono: Ruta al icono (opcional)
-
-    Características:
-    - Notificación nativa de Windows 10/11
-    - Aparece en esquina superior derecha
-    - Se guarda en Centro de Acción
-    - Icono personalizado si está disponible
-    - Threaded para no bloquear
     """
+    import platform
+    sistema = platform.system()
+
     try:
-        from win10toast import ToastNotifier
+        if sistema == "Windows":
+            # Windows: usar win10toast
+            from win10toast import ToastNotifier
 
-        # WORKAROUND: Crear nueva instancia cada vez para evitar error classAtom
-        toast = ToastNotifier()
+            toast = ToastNotifier()
 
-        # Forzar la creación de classAtom si no existe
-        if not hasattr(toast, 'classAtom'):
+            # Forzar la creación de classAtom si no existe
+            if not hasattr(toast, 'classAtom'):
+                try:
+                    import win32gui
+                    toast.classAtom = None
+                except:
+                    pass
+
+            # Intentar usar icono personalizado
+            icon_path = icono
+            if not icon_path:
+                try:
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    possible_icons = [
+                        os.path.join(script_dir, "icon.ico"),
+                        os.path.join(script_dir, "icon.png"),
+                        os.path.join(script_dir, "app.ico"),
+                    ]
+                    for path in possible_icons:
+                        if os.path.exists(path):
+                            icon_path = path
+                            break
+                except:
+                    pass
+
+            toast.show_toast(
+                titulo,
+                mensaje,
+                duration=duracion * 1000,  # win10toast usa milisegundos
+                icon_path=icon_path,
+                threaded=True,
+            )
+
+        elif sistema == "Linux":
+            # Linux: usar notify2 (libnotify)
             try:
-                import win32gui
-                toast.classAtom = None
-            except:
+                import notify2
+                notify2.init("Sincronizador Chrystal")
+
+                # Buscar icono
+                icon_path = icono
+                if not icon_path:
+                    try:
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        possible_icons = [
+                            os.path.join(script_dir, "icon.png"),
+                            os.path.join(script_dir, "icon.ico"),
+                            os.path.join(script_dir, "app.ico"),
+                        ]
+                        for path in possible_icons:
+                            if os.path.exists(path):
+                                icon_path = path
+                                break
+                    except:
+                        pass
+
+                n = notify2.Notification(titulo, mensaje, icon_path)
+                n.set_timeout(duracion * 1000)
+                n.show()
+            except ImportError:
+                # notify2 no instalado, intentar con dbus directo
+                try:
+                    import dbus
+                    bus = dbus.SessionBus()
+                    notifications = bus.get_object('org.freedesktop.Notifications',
+                                                   '/org/freedesktop/Notifications')
+                    interface = dbus.Interface(notifications,
+                                              'org.freedesktop.Notifications')
+                    interface.Notify('Sincronizador Chrystal', 0, '', titulo, mensaje,
+                                   [], {}, duracion * 1000)
+                except:
+                    pass  # dbus no disponible, silencioso
+
+        elif sistema == "Darwin":  # macOS
+            # macOS: usar terminal-notifier
+            try:
+                import subprocess
+                cmd = ['terminal-notifier',
+                      '-title', titulo,
+                      '-message', mensaje,
+                      '-timeout', str(duracion)]
+                if icono:
+                    cmd.extend(['-appIcon', icono])
+                subprocess.run(cmd, check=False, capture_output=True)
+            except FileNotFoundError:
+                # terminal-notifier no instalado
                 pass
 
-        # Intentar usar icono personalizado si está disponible
-        icon_path = icono
-        if not icon_path:
-            try:
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                possible_icons = [
-                    os.path.join(script_dir, "icon.ico"),
-                    os.path.join(script_dir, "icon.png"),
-                    os.path.join(script_dir, "app.ico"),
-                ]
-                for path in possible_icons:
-                    if os.path.exists(path):
-                        icon_path = path
-                        break
-            except:
-                pass
-
-        # Mostrar notificación nativa de Windows
-        # threaded=True es CRÍTICO para no bloquear el programa
-        toast.show_toast(
-            titulo,
-            mensaje,
-            duration=duracion,
-            icon_path=icon_path,
-            threaded=True,
-        )
-
-    except (ImportError, Exception) as e:
-        # Silencioso - cualquier error relacionado con win10toast se ignora
-        # Esto incluye: ImportError, pkg_resources.DistributionNotFound, etc.
+    except Exception:
+        # Silencioso - cualquier error se ignora para no interrumpir el programa
         pass
 
 
