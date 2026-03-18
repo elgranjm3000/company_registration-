@@ -2148,14 +2148,26 @@ class ConfigWindow:
                 def procesar_mensajes_queue():
                     """Procesa mensajes de la cola desde el main thread"""
                     try:
+                        # Verificar si la ventana aún existe
+                        if not sync_window.winfo_exists():
+                            return
+
                         while not sync_queue.empty():
                             msg = sync_queue.get_nowait()
-                            sync_label.config(text=msg)
+                            if sync_window.winfo_exists():
+                                sync_label.config(text=msg)
                             log_debug(f"[SYNC GUI] {msg}")
+                    except Exception as e:
+                        # Si la ventana fue destruida, dejar de procesar
+                        if "winfo exists" in str(e) or "application has been destroyed" in str(e):
+                            return
+                        pass
+                    # Programar próxima actualización solo si la ventana existe
+                    try:
+                        if sync_window.winfo_exists():
+                            sync_window.after(100, procesar_mensajes_queue)
                     except:
                         pass
-                    # Programar próxima actualización
-                    sync_window.after(100, procesar_mensajes_queue)
 
                 # Iniciar procesamiento de mensajes
                 procesar_mensajes_queue()
@@ -2249,7 +2261,10 @@ class ConfigWindow:
                     if not sync_window.winfo_exists():
                         return
 
-                    progress_bar.stop()
+                    try:
+                        progress_bar.stop()
+                    except:
+                        pass
 
                     if sync_result['exito']:
                         sync_label.config(text=sync_result['mensaje'], foreground="green")
