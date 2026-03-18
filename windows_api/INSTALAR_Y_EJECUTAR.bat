@@ -47,10 +47,13 @@ pip install Pillow 2>nul
 echo   - cryptography (Encriptacion)
 pip install cryptography 2>nul
 
+echo   - win10toast (Notificaciones Windows)
+pip install win10toast pywin32 2>nul
+
 echo.
 REM [3/4] Verificar dependencias
 echo Verificando imports...
-python -c "import psycopg2; import requests; import pystray; from PIL import Image; from cryptography.fernet import Fernet; print('OK: Todas las dependencias correctas')" 2>nul
+python -c "import psycopg2; import requests; import pystray; from PIL import Image; from cryptography.fernet import Fernet; import win32con; print('OK: Todas las dependencias correctas')" 2>nul
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: No se pudieron importar todas las dependencias
@@ -58,7 +61,7 @@ if %errorlevel% neq 0 (
     echo Posibles soluciones:
     echo   1. Asegurate de tener Python 3.8+ instalado
     echo   2. Ejecuta: python -m pip install --upgrade pip
-    echo   3. Ejecuta: pip install --upgrade psycopg2-binary requests pystray Pillow cryptography
+    echo   3. Ejecuta: pip install --upgrade psycopg2-binary requests pystray Pillow cryptography win10toast pywin32
     echo.
     pause
     exit /b 1

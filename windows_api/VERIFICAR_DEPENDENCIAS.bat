@@ -53,13 +53,21 @@ echo   - cryptography (Encriptacion)
 python -c "from cryptography.fernet import Fernet; print('     OK')" 2>nul
 if %errorlevel% neq 0 echo     FALTA: pip install cryptography
 
+echo   - win10toast (Notificaciones Windows)
+python -c "from win10toast import ToastNotifier; print('     OK')" 2>nul
+if %errorlevel% neq 0 echo     FALTA: pip install win10toast pywin32
+
+echo   - pywin32 (Dependencia de win10toast)
+python -c "import win32con; print('     OK')" 2>nul
+if %errorlevel% neq 0 echo     FALTA: pip install pywin32
+
 echo.
 
 REM [3/3] Intentar instalar dependencias faltantes
 echo [3/3] Intentando instalar dependencias faltantes...
 echo.
 
-pip install psycopg2-binary requests pystray Pillow cryptography 2>nul
+pip install psycopg2-binary requests pystray Pillow cryptography win10toast pywin32 2>nul
 
 echo.
 echo ========================================
@@ -67,12 +75,12 @@ echo   VERIFICACION FINAL
 echo ========================================
 echo.
 
-python -c "import psycopg2; import requests; import pystray; from PIL import Image; import tkinter; from cryptography.fernet import Fernet; print('OK: Todas las dependencias estan instaladas')" 2>nul
+python -c "import psycopg2; import requests; import pystray; from PIL import Image; import tkinter; from cryptography.fernet import Fernet; from win10toast import ToastNotifier; import win32con; print('OK: Todas las dependencias estan instaladas')" 2>nul
 if %errorlevel% neq 0 (
     echo ERROR: No se pudieron instalar todas las dependencias
     echo.
     echo Ejecuta manualmente:
-    echo   pip install psycopg2-binary requests pystray Pillow cryptography
+    echo   pip install psycopg2-binary requests pystray Pillow cryptography win10toast pywin32
     echo.
     pause
     exit /b 1

@@ -110,11 +110,20 @@ def build_exe():
         '--hidden-import=urllib3',
         # Winreg para auto-inicio
         '--hidden-import=winreg',
+        # Notificaciones Windows
+        '--hidden-import=win10toast',
+        '--hidden-import=win10toast.toast',
+        '--hidden-import=pywin32',
+        '--hidden-import=win32gui',
+        '--hidden-import=win32con',
+        '--hidden-import=win32api',
 
         # Incluir paquetes completos
         '--collect-all=psycopg2',
         '--collect-all=pystray',
         '--collect-all=Pillow',
+        '--collect-all=win10toast',
+        '--collect-all=pywin32',
     ]
 
     print("Opciones de PyInstaller:")
