@@ -174,12 +174,10 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
             threaded=True,
         )
 
-    except ImportError:
-        pass  # win10toast no está instalado, silencioso
-    except Exception as e:
-        # Log error pero no interrumpir programa
-        import sys
-        print(f"⚠️ Error mostrando notificación: {e}", file=sys.stderr)
+    except (ImportError, Exception) as e:
+        # Silencioso - cualquier error relacionado con win10toast se ignora
+        # Esto incluye: ImportError, pkg_resources.DistributionNotFound, etc.
+        pass
 
 
 def mostrar_notificacion_windows(titulo: str, mensaje: str, duracion=5, logger=None):
