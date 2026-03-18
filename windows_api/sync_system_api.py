@@ -3226,17 +3226,15 @@ class SystemTrayService:
         inicio = datetime.now()
 
         try:
-            print(f"{'='*70}")
-            if es_manual:
-                print(f"🔄 Sincronización MANUAL - {inicio.strftime('%Y-%m-%d %H:%M:%S')}")
-            else:
-                print(f"🔄 Sincronización AUTOMÁTICA - {inicio.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"{'='*70}\n")
+            # Usar el sistema de logging correcto (escribe en logs/sync_api_{email}.log)
+            tray_logger = setup_logging(self.config.get('company_email'))
 
-            # Crear logger
-            def tray_logger(msg, level="info"):
-                prefix = {'info': '✅', 'warning': '⚠️', 'error': '❌', 'debug': '🔍'}.get(level, 'ℹ️')
-                print(f"{prefix} {msg}")
+            tray_logger(f"{'='*70}", "info")
+            if es_manual:
+                tray_logger(f"🔄 Sincronización MANUAL - {inicio.strftime('%Y-%m-%d %H:%M:%S')}", "info")
+            else:
+                tray_logger(f"🔄 Sincronización AUTOMÁTICA - {inicio.strftime('%Y-%m-%d %H:%M:%S')}", "info")
+            tray_logger(f"{'='*70}\n", "info")
 
             # Crear gestores
             auth_manager = APIAuthManager(
@@ -3271,11 +3269,11 @@ class SystemTrayService:
                 self.last_sync_time = fin.strftime('%Y-%m-%d %H:%M:%S')
                 self.last_sync_status = f"✅ {total.get('created', 0)} nuevos, {total.get('updated', 0)} modificados"
 
-                print(f"\n📊 Completado en {duracion:.1f}s")
-                print(f"   ✨ Nuevos:      {total.get('created', 0)}")
-                print(f"   🔄 Modificados: {total.get('updated', 0)}")
-                print(f"   ❌ Eliminados:  {total.get('deleted', 0)}")
-                print()
+                tray_logger(f"\n📊 Completado en {duracion:.1f}s", "info")
+                tray_logger(f"   ✨ Nuevos:      {total.get('created', 0)}", "info")
+                tray_logger(f"   🔄 Modificados: {total.get('updated', 0)}", "info")
+                tray_logger(f"   ❌ Eliminados:  {total.get('deleted', 0)}", "info")
+                tray_logger("", "info")
 
                 sync_manager.close()
             else:
@@ -3283,7 +3281,7 @@ class SystemTrayService:
                 self.last_sync_status = "❌ Error de conexión"
 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            tray_logger(f"❌ Error: {e}", "error")
             self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.last_sync_status = f"❌ Error: {str(e)[:30]}"
 
@@ -3439,17 +3437,8 @@ class SystemTrayService:
 
     def iniciar(self):
         """Inicia el servicio system tray"""
-        # Abrir log en modo append
-        log_file = open("primera_sync_log.txt", "a", encoding="utf-8")
-
-        def log_debug(msg):
-            """Escribe a consola y archivo"""
-            print(msg)
-            try:
-                log_file.write(msg + "\n")
-                log_file.flush()
-            except:
-                pass
+        # Usar el sistema de logging correcto (logs/sync_api_{email}.log)
+        log_debug = setup_logging(self.config.get('company_email'))
 
         try:
             log_debug("="*70)
