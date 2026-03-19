@@ -289,24 +289,17 @@ class ProductsSync(BaseSync):
 
     def _obtener_tipo_cambio_ves_usd(self) -> Optional[float]:
         """
-        Obtener tipo de cambio VES → USD desde la base de datos PostgreSQL.
+        Obtener tipo de cambio VES → USD desde la tabla coin.
 
         Returns:
-            Tipo de cambio (ej: 36.5) o None si no está disponible
+            Tipo de cambio (sales_aliquot de coin '02') o None si no está disponible
         """
         try:
-            # Buscar el tipo de cambio en la tabla de configuración
-            # Asumiendo que existe una tabla o campo con el tipo de cambio
+            # Buscar el tipo de cambio en la tabla coin
             self.pg_cursor.execute("""
-                SELECT
-                    CASE
-                        WHEN price > 0 THEN cost / price
-                        ELSE NULL
-                    END as tipo_cambio
-                FROM products
-                WHERE coin IN ('VES', '01')
-                  AND price > 0
-                  AND cost > 0
+                SELECT sales_aliquot
+                FROM coin
+                WHERE code = '02'
                 LIMIT 1
             """)
 
@@ -317,7 +310,7 @@ class ProductsSync(BaseSync):
                 return tipo_cambio
 
             # Valor por defecto si no se encuentra
-            self.warning("⚠️  No se pudo obtener tipo de cambio, usando 36.5 por defecto")
+            self.warning("⚠️  No se pudo obtener tipo de cambio de tabla coin, usando 36.5 por defecto")
             return 36.5
 
         except Exception as e:
