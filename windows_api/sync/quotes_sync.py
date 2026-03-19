@@ -153,6 +153,7 @@ class QuotesSync:
         customer_name = customer.get('name') or ''
         client_code = customer_document_number  # Por defecto usar el document_number si no se encuentra
         client_name = customer_name or ''
+        client_name_fiscal = 0  # Valor por defecto
         client_address = customer.get('address') or ''
         client_phone = customer.get('phone') or ''
 
@@ -168,13 +169,14 @@ class QuotesSync:
         if search_value:
             try:
                 self.pg_cursor.execute("""
-                    SELECT code FROM clients WHERE code = %s LIMIT 1
+                    SELECT code, name_fiscal FROM clients WHERE code = %s LIMIT 1
                 """, (search_value,))
                 result = self.pg_cursor.fetchone()
                 if result:
                     client_code = result[0]
+                    client_name_fiscal = result[1] if result[1] is not None else 0
                     client_found = True
-                    self._log(f"     ✅ Cliente encontrado: {search_value} → Code {client_code}", "info")
+                    self._log(f"     ✅ Cliente encontrado: {search_value} → Code {client_code}, name_fiscal={client_name_fiscal}", "info")
                 else:
                     self._log(f"     ⚠️ Cliente no encontrado con code/RIF: {search_value}", "warning")
             except Exception as e:
@@ -199,12 +201,12 @@ class QuotesSync:
         sql_operation = """
             INSERT INTO sales_operation (
                 operation_type, document_no, emission_date, register_date,
-                client_code, client_id, client_name, client_address, client_phone,
+                client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
                 seller, total_amount, total_tax, discount, total,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -217,6 +219,7 @@ class QuotesSync:
             client_code,  # client_code
             customer_document_number,  # client_id (RIF)
             client_name,  # client_name
+            client_name_fiscal,  # client_name_fiscal
             client_address,  # client_address
             client_phone,  # client_phone
             seller_code,  # seller (code del vendedor o NULL)
