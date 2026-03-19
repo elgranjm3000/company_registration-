@@ -35,6 +35,17 @@ class QuotesSync:
         """Log message"""
         self.logger(msg, level)
 
+    def _get_mac_address(self) -> str:
+        """Obtener la MAC address del equipo"""
+        import uuid
+        try:
+            mac = uuid.getnode()
+            # Convertir a formato hexadecimal con separadores
+            mac_address = ':'.join(("%012X" % mac)[i:i+2] for i in range(0, 12, 2))
+            return mac_address
+        except Exception:
+            return '00:00:00:00:00:00'  # Valor por defecto si falla
+
     def _generar_hash_quote(self, quote: dict) -> str:
         """Generar hash MD5 de un quote para detectar cambios"""
         # Datos relevantes para el hash
@@ -148,6 +159,9 @@ class QuotesSync:
         register_date = self._parse_date(quote.get('created_at'))
         expiration_date = self._parse_date(quote.get('valid_until'))
 
+        # MAC Address del equipo
+        station = self._get_mac_address()
+
         # Cliente - Buscar code en tabla clients usando el document_number
         customer_document_number = customer.get('document_number') or ''  # RIF del cliente
         customer_code_api = customer.get('code') or ''  # Código del cliente desde la API
@@ -203,11 +217,11 @@ class QuotesSync:
             INSERT INTO sales_operation (
                 operation_type, document_no, emission_date, register_date, expiration_date,
                 client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
-                seller, credit_days, wait, total_amount, total_tax, discount, total,
+                seller, credit_days, wait, station, total_amount, total_tax, discount, total,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -227,6 +241,7 @@ class QuotesSync:
             seller_code,  # seller (code del vendedor o NULL)
             0,  # credit_days
             False,  # wait
+            station,  # station (MAC address)
             total_amount,  # total_amount
             tax_amount,  # total_tax
             discount_amount,  # discount
