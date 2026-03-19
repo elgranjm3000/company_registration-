@@ -199,12 +199,12 @@ class QuotesSync:
         sql_operation = """
             INSERT INTO sales_operation (
                 operation_type, document_no, emission_date, register_date,
-                client_code, client_name, client_address, client_phone,
+                client_code, client_id, client_name, client_address, client_phone,
                 seller, total_amount, total_tax, discount, total,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -215,6 +215,7 @@ class QuotesSync:
             emission_date,  # emission_date
             register_date,  # register_date
             client_code,  # client_code
+            customer_document_number,  # client_id (RIF)
             client_name,  # client_name
             client_address,  # client_address
             client_phone,  # client_phone
