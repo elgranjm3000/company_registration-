@@ -224,7 +224,7 @@ class QuotesSync:
             total,  # total
             False,  # pending
             False,  # canceled
-            'USD',  # coin_code (default)
+            '02',  # coin_code (código de moneda)
             '',  # address_send (vacío)
             '',  # contact_send (vacío)
             ''   # phone_send (vacío)
