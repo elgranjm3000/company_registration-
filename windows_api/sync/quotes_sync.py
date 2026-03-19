@@ -246,6 +246,7 @@ class QuotesSync:
         total_tax_details = 0.0  # TOTAL DE IMPUESTOS
         total_details = 0.0      # TOTAL DETALLES CON DESCUENTOS INCLUIDO
         total_net_cost = 0.0     # TOTAL COSTO NETO SIN IMPUESTOS
+        total_tax_cost = 0.0     # TOTAL COSTO IMPUESTOS
         total_exempt = 0.0       # TOTAL EXENTO
 
         for item in items:
@@ -266,6 +267,7 @@ class QuotesSync:
 
             # Para costos, usar el mismo cálculo si no hay costo específico
             total_net_cost += item_net
+            total_tax_cost += item_tax              # Sumar impuestos al costo
 
             # Si el item no tiene impuesto (tax_amount = 0), es exento
             if item_tax == 0:
@@ -280,12 +282,12 @@ class QuotesSync:
                 total_amount, total_net_details, total_tax_details, total_details,
                 percent_discount, discount, percent_freight, freight_tax, freight_aliquot,
                 total_net, total_tax, total,
-                total_net_cost, total_exempt,
+                total_net_cost, total_tax_cost, total_exempt,
                 shopping_order_date, shopping_order_document_no,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -303,7 +305,7 @@ class QuotesSync:
             client_name_fiscal,  # client_name_fiscal
             client_address,  # client_address
             client_phone,  # client_phone
-            seller_code,  # seller (code del vendedor o NULL)
+            seller_code,  # seller (code del vendedor o '00')
             0,  # credit_days
             False,  # wait
             True,  # begin_used
@@ -323,6 +325,7 @@ class QuotesSync:
             total_tax_details,  # total_tax (TOTAL DE IMPUESTOS)
             total,  # total (total con impuesto)
             total_net_cost,  # total_net_cost (TOTAL COSTO NETO SIN IMPUESTOS)
+            total_tax_cost,  # total_tax_cost (TOTAL COSTO IMPUESTOS)
             total_exempt,  # total_exempt (TOTAL EXENTO)
             shopping_order_date,  # shopping_order_date (fecha actual yyyy-mm-dd)
             '',  # shopping_order_document_no (vacío)
