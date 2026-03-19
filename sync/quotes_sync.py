@@ -217,11 +217,11 @@ class QuotesSync:
             INSERT INTO sales_operation (
                 operation_type, document_no, emission_date, register_date, expiration_date,
                 client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
-                seller, credit_days, wait, station, total_amount, total_tax, discount, total,
+                seller, credit_days, wait, station, store, locations, total_amount, total_tax, discount, total,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -242,6 +242,8 @@ class QuotesSync:
             0,  # credit_days
             False,  # wait
             station,  # station (MAC address)
+            '00',  # store
+            '00',  # locations
             total_amount,  # total_amount
             tax_amount,  # total_tax
             discount_amount,  # discount
