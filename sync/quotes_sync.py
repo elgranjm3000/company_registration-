@@ -147,11 +147,27 @@ class QuotesSync:
         emission_date = self._parse_date(quote.get('quote_date'))
         register_date = self._parse_date(quote.get('created_at'))
 
-        # Cliente
-        client_code = customer.get('rif') or ''
+        # Cliente - Buscar code en tabla clients usando el rif
+        customer_rif = customer.get('rif') or ''
+        client_code = customer_rif  # Por defecto usar el rif si no se encuentra
         client_name = customer.get('name') or ''
         client_address = customer.get('address') or ''
         client_phone = customer.get('phone') or ''
+
+        # Si hay rif, buscar el code en la tabla clients
+        if customer_rif:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT code FROM clients WHERE rif = %s LIMIT 1
+                """, (customer_rif,))
+                result = self.pg_cursor.fetchone()
+                if result:
+                    client_code = result[0]
+                    self._log(f"     Cliente encontrado: RIF {customer_rif} → Code {client_code}", "debug")
+                else:
+                    self._log(f"     Cliente no encontrado con RIF {customer_rif}, usando RIF como code", "warning")
+            except Exception as e:
+                self._log(f"     Error buscando cliente: {e}", "warning")
 
         # Vendedor
         seller_name = seller.get('name') or ''
