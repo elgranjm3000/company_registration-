@@ -162,6 +162,10 @@ class QuotesSync:
         # MAC Address del equipo
         station = self._get_mac_address()
 
+        # Fecha actual para shopping_order_date
+        from datetime import date
+        shopping_order_date = date.today()  # Formato yyyy-mm-dd
+
         # Cliente - Buscar code en tabla clients usando el document_number
         customer_document_number = customer.get('document_number') or ''  # RIF del cliente
         customer_code_api = customer.get('code') or ''  # Código del cliente desde la API
@@ -244,10 +248,11 @@ class QuotesSync:
                 percent_discount, discount, percent_freight,
                 total_net, total_tax, total,
                 total_net_cost,
+                shopping_order_date,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -281,6 +286,7 @@ class QuotesSync:
             total_tax_details,  # total_tax (TOTAL DE IMPUESTOS)
             total,  # total (total con impuesto)
             total_net_cost,  # total_net_cost (TOTAL COSTO NETO SIN IMPUESTOS)
+            shopping_order_date,  # shopping_order_date (fecha actual yyyy-mm-dd)
             False,  # pending
             False,  # canceled
             '02',  # coin_code (código de moneda)
