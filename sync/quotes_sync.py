@@ -159,63 +159,31 @@ class QuotesSync:
         # Debug: Mostrar datos del cliente recibidos
         self._log(f"     Datos cliente API - RIF: '{customer_rif}', Code: '{customer_code_api}', Name: '{customer_name}'", "debug")
 
-        # Estrategia de búsqueda en orden de prioridad:
-        # 1. Si hay RIF, buscar por RIF en el campo code
-        # 2. Si no hay RIF pero hay code de la API, buscar por code
-        # 3. Si no hay ninguno, buscar por nombre
+        # Buscar cliente en tabla clients por el campo code (que contiene el RIF)
         client_found = False
 
-        if customer_rif:
+        # Prioridad: usar customer.rif primero, luego customer.code de la API
+        search_value = customer_rif if customer_rif else customer_code_api
+
+        if search_value:
             try:
                 self.pg_cursor.execute("""
                     SELECT code FROM clients WHERE code = %s LIMIT 1
-                """, (customer_rif,))
+                """, (search_value,))
                 result = self.pg_cursor.fetchone()
                 if result:
                     client_code = result[0]
                     client_found = True
-                    self._log(f"     ✅ Cliente encontrado por RIF: {customer_rif} → Code {client_code}", "info")
+                    self._log(f"     ✅ Cliente encontrado: {search_value} → Code {client_code}", "info")
                 else:
-                    self._log(f"     ⚠️ Cliente no encontrado con RIF: {customer_rif}", "warning")
+                    self._log(f"     ⚠️ Cliente no encontrado con code/RIF: {search_value}", "warning")
             except Exception as e:
-                self._log(f"     ❌ Error buscando cliente por RIF: {e}", "error")
+                self._log(f"     ❌ Error buscando cliente: {e}", "error")
 
-        # Si no se encontró por RIF y hay code de la API, buscar por code
-        if not client_found and customer_code_api and customer_code_api != customer_rif:
-            try:
-                self.pg_cursor.execute("""
-                    SELECT code FROM clients WHERE code = %s LIMIT 1
-                """, (customer_code_api,))
-                result = self.pg_cursor.fetchone()
-                if result:
-                    client_code = result[0]
-                    client_found = True
-                    self._log(f"     ✅ Cliente encontrado por CODE: {customer_code_api} → Code {client_code}", "info")
-                else:
-                    self._log(f"     ⚠️ Cliente no encontrado con CODE: {customer_code_api}", "warning")
-            except Exception as e:
-                self._log(f"     ❌ Error buscando cliente por CODE: {e}", "error")
-
-        # Si no se encontró por RIF ni code, intentar buscar por nombre (como último recurso)
-        if not client_found and customer_name:
-            try:
-                self.pg_cursor.execute("""
-                    SELECT code FROM clients WHERE name = %s LIMIT 1
-                """, (customer_name,))
-                result = self.pg_cursor.fetchone()
-                if result:
-                    client_code = result[0]
-                    client_found = True
-                    self._log(f"     ✅ Cliente encontrado por NAME: {customer_name} → Code {client_code}", "info")
-                else:
-                    self._log(f"     ⚠️ Cliente no encontrado con NAME: {customer_name}", "warning")
-            except Exception as e:
-                self._log(f"     ❌ Error buscando cliente por NAME: {e}", "error")
-
-        # Si después de todo no se encontró, abortar esta cotización
+        # Si no se encontró, abortar esta cotización
         if not client_found:
-            self._log(f"     ❌ ERROR: No se pudo encontrar el cliente en la tabla clients (RIF={customer_rif}, Code={customer_code_api}, Name={customer_name})", "error")
-            raise Exception(f"Cliente no encontrado en tabla clients. RIF='{customer_rif}', Code='{customer_code_api}', Name='{customer_name}'")
+            self._log(f"     ❌ ERROR: No se pudo encontrar el cliente en la tabla clients. RIF='{customer_rif}', Code API='{customer_code_api}'", "error")
+            raise Exception(f"Cliente no encontrado en tabla clients. RIF='{customer_rif}', Code='{customer_code_api}'")
 
         # Vendedor
         seller_name = seller.get('name') or ''
