@@ -212,14 +212,27 @@ class QuotesSync:
         discount_amount = float(quote.get('discount_amount', 0))
         total = float(quote.get('total', 0))
 
-        # Calcular total_net_details (total de items sin impuesto)
-        total_net_details = 0.0
+        # Calcular totales de items
+        total_net_details = 0.0  # TOTAL NETO SIN IMPUESTOS
+        total_tax_details = 0.0  # TOTAL DE IMPUESTOS
+        total_details = 0.0      # TOTAL DETALLES CON DESCUENTOS INCLUIDO
+        total_net_cost = 0.0     # TOTAL COSTO NETO SIN IMPUESTOS
+
         for item in items:
             unit_price = float(item.get('unit_price', 0))
             quantity = float(item.get('quantity', 0))
             item_discount = float(item.get('discount_amount', 0))
+            item_tax = float(item.get('tax_amount', 0))
+
             # Total del item sin impuesto: (precio * cantidad) - descuento
-            total_net_details += (unit_price * quantity) - item_discount
+            item_net = (unit_price * quantity) - item_discount
+
+            total_net_details += item_net           # Sumar al total neto
+            total_tax_details += item_tax            # Sumar impuestos
+            total_details += item_net + item_tax    # Sumar con impuesto (total con descuento incluido)
+
+            # Para costos, usar el mismo cálculo si no hay costo específico
+            total_net_cost += item_net
 
         # Insertar sales_operation (encabezado)
         sql_operation = """
@@ -227,11 +240,14 @@ class QuotesSync:
                 operation_type, document_no, emission_date, register_date, expiration_date,
                 client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
                 seller, credit_days, wait, station, store, locations,
-                total_amount, total_net_details, total_tax, discount, total,
+                total_amount, total_net_details, total_tax_details, total_details,
+                percent_discount, discount, percent_freight,
+                total_net, total_tax, total,
+                total_net_cost,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -255,10 +271,16 @@ class QuotesSync:
             '00',  # store
             '00',  # locations
             total_amount,  # total_amount (cantidad de items)
-            total_net_details,  # total_net_details (total sin impuesto)
-            tax_amount,  # total_tax
-            discount_amount,  # discount
-            total,  # total
+            total_net_details,  # total_net_details (TOTAL NETO SIN IMPUESTOS)
+            total_tax_details,  # total_tax_details (TOTAL DE IMPUESTOS)
+            total_details,  # total_details (TOTAL DETALLES CON DESCUENTOS INCLUIDO)
+            0,  # percent_discount
+            0,  # discount
+            0,  # percent_freight
+            total_net_details,  # total_net (TOTAL DE NETO SIN IMPUESTOS)
+            total_tax_details,  # total_tax (TOTAL DE IMPUESTOS)
+            total,  # total (total con impuesto)
+            total_net_cost,  # total_net_cost (TOTAL COSTO NETO SIN IMPUESTOS)
             False,  # pending
             False,  # canceled
             '02',  # coin_code (código de moneda)
