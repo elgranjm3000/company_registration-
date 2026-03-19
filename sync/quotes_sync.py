@@ -246,6 +246,7 @@ class QuotesSync:
         total_tax_details = 0.0  # TOTAL DE IMPUESTOS
         total_details = 0.0      # TOTAL DETALLES CON DESCUENTOS INCLUIDO
         total_net_cost = 0.0     # TOTAL COSTO NETO SIN IMPUESTOS
+        total_exempt = 0.0       # TOTAL EXENTO
 
         for item in items:
             unit_price = float(item.get('unit_price', 0))
@@ -266,6 +267,10 @@ class QuotesSync:
             # Para costos, usar el mismo cálculo si no hay costo específico
             total_net_cost += item_net
 
+            # Si el item no tiene impuesto (tax_amount = 0), es exento
+            if item_tax == 0:
+                total_exempt += item_net
+
         # Insertar sales_operation (encabezado)
         sql_operation = """
             INSERT INTO sales_operation (
@@ -273,14 +278,14 @@ class QuotesSync:
                 client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
                 seller, credit_days, wait, begin_used, station, store, locations,
                 total_amount, total_net_details, total_tax_details, total_details,
-                percent_discount, discount, percent_freight,
+                percent_discount, discount, percent_freight, freight_tax, freight_aliquot,
                 total_net, total_tax, total,
-                total_net_cost,
-                shopping_order_date,
+                total_net_cost, total_exempt,
+                shopping_order_date, shopping_order_document_no,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -312,11 +317,15 @@ class QuotesSync:
             0,  # percent_discount
             0,  # discount
             0,  # percent_freight
+            '01',  # freight_tax
+            16,  # freight_aliquot
             total_net_details,  # total_net (TOTAL DE NETO SIN IMPUESTOS)
             total_tax_details,  # total_tax (TOTAL DE IMPUESTOS)
             total,  # total (total con impuesto)
             total_net_cost,  # total_net_cost (TOTAL COSTO NETO SIN IMPUESTOS)
+            total_exempt,  # total_exempt (TOTAL EXENTO)
             shopping_order_date,  # shopping_order_date (fecha actual yyyy-mm-dd)
+            '',  # shopping_order_document_no (vacío)
             True,  # pending
             False,  # canceled
             '02',  # coin_code (código de moneda)
