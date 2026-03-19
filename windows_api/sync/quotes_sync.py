@@ -273,6 +273,9 @@ class QuotesSync:
             if item_tax == 0:
                 total_exempt += item_net
 
+        # Calcular total_cost (TOTAL DE COSTO CON IMPUESTO)
+        total_cost = total_net_cost + total_tax_cost
+
         # Insertar sales_operation (encabezado)
         sql_operation = """
             INSERT INTO sales_operation (
@@ -282,12 +285,12 @@ class QuotesSync:
                 total_amount, total_net_details, total_tax_details, total_details,
                 percent_discount, discount, percent_freight, freight_tax, freight_aliquot,
                 total_net, total_tax, total,
-                total_net_cost, total_tax_cost, total_exempt,
+                total_net_cost, total_tax_cost, total_cost, total_exempt,
                 shopping_order_date, shopping_order_document_no,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -326,6 +329,7 @@ class QuotesSync:
             total,  # total (total con impuesto)
             total_net_cost,  # total_net_cost (TOTAL COSTO NETO SIN IMPUESTOS)
             total_tax_cost,  # total_tax_cost (TOTAL COSTO IMPUESTOS)
+            total_cost,  # total_cost (TOTAL DE COSTO CON IMPUESTO)
             total_exempt,  # total_exempt (TOTAL EXENTO)
             shopping_order_date,  # shopping_order_date (fecha actual yyyy-mm-dd)
             '',  # shopping_order_document_no (vacío)
