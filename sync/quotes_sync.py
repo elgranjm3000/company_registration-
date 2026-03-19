@@ -316,7 +316,7 @@ class QuotesSync:
             total,  # total (total con impuesto)
             total_net_cost,  # total_net_cost (TOTAL COSTO NETO SIN IMPUESTOS)
             shopping_order_date,  # shopping_order_date (fecha actual yyyy-mm-dd)
-            True,  # pending
+            False,  # pending
             False,  # canceled
             '02',  # coin_code (código de moneda)
             '',  # address_send (vacío)
