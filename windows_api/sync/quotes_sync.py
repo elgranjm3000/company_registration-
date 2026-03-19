@@ -212,16 +212,26 @@ class QuotesSync:
         discount_amount = float(quote.get('discount_amount', 0))
         total = float(quote.get('total', 0))
 
+        # Calcular total_net_details (total de items sin impuesto)
+        total_net_details = 0.0
+        for item in items:
+            unit_price = float(item.get('unit_price', 0))
+            quantity = float(item.get('quantity', 0))
+            item_discount = float(item.get('discount_amount', 0))
+            # Total del item sin impuesto: (precio * cantidad) - descuento
+            total_net_details += (unit_price * quantity) - item_discount
+
         # Insertar sales_operation (encabezado)
         sql_operation = """
             INSERT INTO sales_operation (
                 operation_type, document_no, emission_date, register_date, expiration_date,
                 client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
-                seller, credit_days, wait, station, store, locations, total_amount, total_tax, discount, total,
+                seller, credit_days, wait, station, store, locations,
+                total_amount, total_net_details, total_tax, discount, total,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -244,7 +254,8 @@ class QuotesSync:
             station,  # station (MAC address)
             '00',  # store
             '00',  # locations
-            total_amount,  # total_amount
+            total_amount,  # total_amount (cantidad de items)
+            total_net_details,  # total_net_details (total sin impuesto)
             tax_amount,  # total_tax
             discount_amount,  # discount
             total,  # total
