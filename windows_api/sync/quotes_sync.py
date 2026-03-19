@@ -249,9 +249,9 @@ class QuotesSync:
         sql_detalle = """
             INSERT INTO sales_operation_details (
                 main_correlative, code_product, description_product, description,
-                amount, price, discount, total_tax, total
+                amount, price, discount, total_tax, total, coin_code
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
 
@@ -264,7 +264,8 @@ class QuotesSync:
             float(item.get('unit_price', 0)),
             float(item.get('discount_amount', 0)),
             float(item.get('tax_amount', 0)),
-            float(item.get('total', 0))
+            float(item.get('total', 0)),
+            '02'  # coin_code (USD)
         ))
 
         self._log(f"     Insertado ítem: {item.get('name')}", "debug")
