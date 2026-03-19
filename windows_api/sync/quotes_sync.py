@@ -241,23 +241,24 @@ class QuotesSync:
         self.pg_conn.commit()
         return correlative
 
-    def _insertar_item(self, correlative: int, item: dict, quote_number: str):
+    def _insertar_item(self, main_correlative: int, item: dict, quote_number: str):
         """Insertar item del quote en sales_operation_details"""
         product = item.get('product', {})
-        product_code = product.get('code') if product else None
+        code_product = product.get('code') if product else None
 
         sql_detalle = """
             INSERT INTO sales_operation_details (
-                correlative, product_code, description,
-                quantity, unit_price, discount, tax, total
+                main_correlative, code_product, description_product, description,
+                amount, price, discount, total_tax, total
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
 
         self.pg_cursor.execute(sql_detalle, (
-            correlative,
-            product_code,
+            main_correlative,
+            code_product,
+            item.get('name', ''),
             item.get('name', ''),
             float(item.get('quantity', 0)),
             float(item.get('unit_price', 0)),
