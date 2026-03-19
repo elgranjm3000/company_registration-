@@ -146,6 +146,7 @@ class QuotesSync:
         # Fechas
         emission_date = self._parse_date(quote.get('quote_date'))
         register_date = self._parse_date(quote.get('created_at'))
+        expiration_date = self._parse_date(quote.get('valid_until'))
 
         # Cliente - Buscar code en tabla clients usando el document_number
         customer_document_number = customer.get('document_number') or ''  # RIF del cliente
@@ -200,13 +201,13 @@ class QuotesSync:
         # Insertar sales_operation (encabezado)
         sql_operation = """
             INSERT INTO sales_operation (
-                operation_type, document_no, emission_date, register_date,
+                operation_type, document_no, emission_date, register_date, expiration_date,
                 client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
                 seller, credit_days, total_amount, total_tax, discount, total,
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -216,6 +217,7 @@ class QuotesSync:
             str(quote_number),  # document_no
             emission_date,  # emission_date
             register_date,  # register_date
+            expiration_date,  # expiration_date
             client_code,  # client_code
             customer_document_number,  # client_id (RIF)
             client_name,  # client_name
