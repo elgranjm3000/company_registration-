@@ -241,7 +241,7 @@ class QuotesSync:
         # Insertar sales_operation (encabezado)
         sql_operation = """
             INSERT INTO sales_operation (
-                operation_type, document_no, emission_date, register_date, expiration_date,
+                operation_type, document_no, document_no_internal, emission_date, register_date, expiration_date,
                 client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
                 seller, credit_days, wait, station, store, locations,
                 total_amount, total_net_details, total_tax_details, total_details,
@@ -252,7 +252,7 @@ class QuotesSync:
                 pending, canceled, coin_code,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -260,6 +260,7 @@ class QuotesSync:
         self.pg_cursor.execute(sql_operation, (
             'BUDGET',  # operation_type
             str(quote_number),  # document_no
+            str(quote_number),  # document_no_internal (mismo que document_no)
             emission_date,  # emission_date
             register_date,  # register_date
             expiration_date,  # expiration_date
