@@ -46,6 +46,28 @@ class QuotesSync:
         except Exception:
             return '00:00:00:00:00:00'  # Valor por defecto si falla
 
+    def _ensure_station_exists(self, station_mac: str):
+        """Verificar que la MAC existe en stations, si no, insertarla"""
+        try:
+            # Verificar si ya existe
+            self.pg_cursor.execute("""
+                SELECT code FROM stations WHERE code = %s LIMIT 1
+            """, (station_mac,))
+
+            result = self.pg_cursor.fetchone()
+            if result:
+                self._log(f"     ✅ Estación ya existe: {station_mac}", "debug")
+            else:
+                # Insertar nueva estación
+                self.pg_cursor.execute("""
+                    INSERT INTO stations (code, description, sale_point)
+                    VALUES (%s, %s, %s)
+                """, (station_mac, station_mac, '00'))
+                self.pg_conn.commit()
+                self._log(f"     ➕ Estación insertada: {station_mac}", "info")
+        except Exception as e:
+            self._log(f"     ⚠️ Error verificando estación: {e}", "warning")
+
     def _generar_hash_quote(self, quote: dict) -> str:
         """Generar hash MD5 de un quote para detectar cambios"""
         # Datos relevantes para el hash
@@ -161,6 +183,9 @@ class QuotesSync:
 
         # MAC Address del equipo
         station = self._get_mac_address()
+
+        # Verificar/insertar MAC en tabla stations
+        self._ensure_station_exists(station)
 
         # Fecha actual para shopping_order_date
         from datetime import date
