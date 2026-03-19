@@ -207,7 +207,7 @@ class QuotesSync:
         seller_name = seller.get('name') or ''  # Solo para mostrar, no se usa en FK
 
         # Totales
-        total_amount = float(quote.get('subtotal', 0))
+        total_amount = len(items)  # Cantidad de items
         tax_amount = float(quote.get('tax_amount', 0))
         discount_amount = float(quote.get('discount_amount', 0))
         total = float(quote.get('total', 0))
