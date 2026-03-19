@@ -231,8 +231,8 @@ class QuotesSync:
             self._log(f"     ❌ ERROR: No se pudo encontrar el cliente en la tabla clients. Document_Number='{customer_document_number}', Code API='{customer_code_api}'", "error")
             raise Exception(f"Cliente no encontrado en tabla clients. Document_Number='{customer_document_number}', Code='{customer_code_api}'")
 
-        # Vendedor - Usar seller.code directamente, o NULL si no existe
-        seller_code = seller.get('code') if seller.get('code') else None
+        # Vendedor - Usar seller.code directamente, o '00' si no existe
+        seller_code = seller.get('code') if seller.get('code') else '00'
         seller_name = seller.get('name') or ''  # Solo para mostrar, no se usa en FK
 
         # Totales
