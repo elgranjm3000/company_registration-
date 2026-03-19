@@ -236,7 +236,7 @@ class QuotesSync:
         seller_name = seller.get('name') or ''  # Solo para mostrar, no se usa en FK
 
         # Totales
-        total_amount = len(items)  # Cantidad de items
+        total_amount = 0.0  # Suma de cantidades de items
         tax_amount = float(quote.get('tax_amount', 0))
         discount_amount = float(quote.get('discount_amount', 0))
         total = float(quote.get('total', 0))
@@ -252,6 +252,9 @@ class QuotesSync:
             quantity = float(item.get('quantity', 0))
             item_discount = float(item.get('discount_amount', 0))
             item_tax = float(item.get('tax_amount', 0))
+
+            # Sumar cantidad de items
+            total_amount += quantity
 
             # Total del item sin impuesto: (precio * cantidad) - descuento
             item_net = (unit_price * quantity) - item_discount
@@ -301,7 +304,7 @@ class QuotesSync:
             station,  # station (MAC address)
             '00',  # store
             '00',  # locations
-            total_amount,  # total_amount (cantidad de items)
+            total_amount,  # total_amount (suma de cantidades de items)
             total_net_details,  # total_net_details (TOTAL NETO SIN IMPUESTOS)
             total_tax_details,  # total_tax_details (TOTAL DE IMPUESTOS)
             total_details,  # total_details (TOTAL DETALLES CON DESCUENTOS INCLUIDO)
