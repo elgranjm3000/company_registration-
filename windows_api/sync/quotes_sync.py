@@ -147,23 +147,23 @@ class QuotesSync:
         emission_date = self._parse_date(quote.get('quote_date'))
         register_date = self._parse_date(quote.get('created_at'))
 
-        # Cliente - Buscar code en tabla clients usando el rif
-        customer_rif = customer.get('rif') or ''
+        # Cliente - Buscar code en tabla clients usando el document_number
+        customer_document_number = customer.get('document_number') or ''  # RIF del cliente
         customer_code_api = customer.get('code') or ''  # Código del cliente desde la API
         customer_name = customer.get('name') or ''
-        client_code = customer_rif  # Por defecto usar el rif si no se encuentra
+        client_code = customer_document_number  # Por defecto usar el document_number si no se encuentra
         client_name = customer_name or ''
         client_address = customer.get('address') or ''
         client_phone = customer.get('phone') or ''
 
         # Debug: Mostrar datos del cliente recibidos
-        self._log(f"     Datos cliente API - RIF: '{customer_rif}', Code: '{customer_code_api}', Name: '{customer_name}'", "debug")
+        self._log(f"     Datos cliente API - Document_Number: '{customer_document_number}', Code: '{customer_code_api}', Name: '{customer_name}'", "debug")
 
         # Buscar cliente en tabla clients por el campo code (que contiene el RIF)
         client_found = False
 
-        # Prioridad: usar customer.rif primero, luego customer.code de la API
-        search_value = customer_rif if customer_rif else customer_code_api
+        # Prioridad: usar customer.document_number primero (RIF), luego customer.code de la API
+        search_value = customer_document_number if customer_document_number else customer_code_api
 
         if search_value:
             try:
@@ -182,8 +182,8 @@ class QuotesSync:
 
         # Si no se encontró, abortar esta cotización
         if not client_found:
-            self._log(f"     ❌ ERROR: No se pudo encontrar el cliente en la tabla clients. RIF='{customer_rif}', Code API='{customer_code_api}'", "error")
-            raise Exception(f"Cliente no encontrado en tabla clients. RIF='{customer_rif}', Code='{customer_code_api}'")
+            self._log(f"     ❌ ERROR: No se pudo encontrar el cliente en la tabla clients. Document_Number='{customer_document_number}', Code API='{customer_code_api}'", "error")
+            raise Exception(f"Cliente no encontrado en tabla clients. Document_Number='{customer_document_number}', Code='{customer_code_api}'")
 
         # Vendedor
         seller_name = seller.get('name') or ''
