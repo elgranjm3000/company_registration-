@@ -238,6 +238,9 @@ class QuotesSync:
         for item in items:
             self._insertar_item(correlative, item, quote_number)
 
+        # Insertar impuestos (sales_operation_taxes y sales_operation_taxes_coins)
+        self._insertar_impuestos(correlative, quote)
+
         self.pg_conn.commit()
         return correlative
 
@@ -269,6 +272,63 @@ class QuotesSync:
         ))
 
         self._log(f"     Insertado ítem: {item.get('name')}", "debug")
+
+    def _insertar_impuestos(self, correlative: int, quote: dict):
+        """Insertar impuestos del quote en sales_operation_taxes y sales_operation_taxes_coins"""
+        from decimal import Decimal
+
+        # Obtener datos del impuesto
+        quote_tax_amount = float(quote.get('tax_amount', 0))
+        quote_subtotal = float(quote.get('subtotal', 0))
+        quote_discount = float(quote.get('discount_amount', 0))
+
+        # Solo insertar si hay impuestos
+        if quote_tax_amount > 0 and quote_subtotal > 0:
+            # Calcular alícuota
+            quote_aliquot = (quote_tax_amount / quote_subtotal * 100)
+
+            # Base imponible (subtotal menos descuento)
+            taxable_amount = quote_subtotal - quote_discount
+
+            # Código de impuesto (IVA General 16%)
+            tax_code = '01'
+
+            self._log(f"     Insertando impuesto: aliquot={quote_aliquot:.2f}%, taxable={taxable_amount:.2f}, tax={quote_tax_amount:.2f}", "debug")
+
+            # Insertar en sales_operation_taxes
+            sql_tax = """
+                INSERT INTO sales_operation_taxes (
+                    main_correlative, taxe_code, aliquot, taxable, tax, tax_type
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """
+
+            self.pg_cursor.execute(sql_tax, (
+                correlative,
+                tax_code,
+                quote_aliquot,
+                taxable_amount,
+                quote_tax_amount,
+                1  # tax_type
+            ))
+
+            # Insertar en sales_operation_taxes_coins (solo USD '02')
+            sql_tax_coins = """
+                INSERT INTO sales_operation_taxes_coins (
+                    main_correlative, main_taxe_code, taxable, tax, coin_code
+                ) VALUES (%s, %s, %s, %s, %s)
+            """
+
+            self.pg_cursor.execute(sql_tax_coins, (
+                correlative,
+                tax_code,
+                taxable_amount,
+                quote_tax_amount,
+                '02'  # coin_code (USD)
+            ))
+
+            self._log(f"     Insertado impuesto en sales_operation_taxes y sales_operation_taxes_coins", "debug")
+        else:
+            self._log(f"     No hay impuestos para insertar (tax_amount={quote_tax_amount})", "debug")
 
     def _guardar_hash(self, quote: dict):
         """Guardar hash en sync_hashes"""
