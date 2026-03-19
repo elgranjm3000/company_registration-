@@ -160,7 +160,7 @@ class QuotesSync:
         self._log(f"     Datos cliente API - RIF: '{customer_rif}', Code: '{customer_code_api}', Name: '{customer_name}'", "debug")
 
         # Estrategia de búsqueda en orden de prioridad:
-        # 1. Si hay RIF, buscar por RIF
+        # 1. Si hay RIF, buscar por RIF en el campo code
         # 2. Si no hay RIF pero hay code de la API, buscar por code
         # 3. Si no hay ninguno, buscar por nombre
         client_found = False
@@ -168,7 +168,7 @@ class QuotesSync:
         if customer_rif:
             try:
                 self.pg_cursor.execute("""
-                    SELECT code FROM clients WHERE rif = %s LIMIT 1
+                    SELECT code FROM clients WHERE code = %s LIMIT 1
                 """, (customer_rif,))
                 result = self.pg_cursor.fetchone()
                 if result:
@@ -181,7 +181,7 @@ class QuotesSync:
                 self._log(f"     ❌ Error buscando cliente por RIF: {e}", "error")
 
         # Si no se encontró por RIF y hay code de la API, buscar por code
-        if not client_found and customer_code_api:
+        if not client_found and customer_code_api and customer_code_api != customer_rif:
             try:
                 self.pg_cursor.execute("""
                     SELECT code FROM clients WHERE code = %s LIMIT 1
