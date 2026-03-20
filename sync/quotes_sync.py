@@ -433,6 +433,7 @@ class QuotesSync:
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
+            RETURNING line
         """
 
         self.pg_cursor.execute(sql_detalle, (
@@ -467,7 +468,56 @@ class QuotesSync:
             product_type
         ))
 
+        # Obtener el line del detalle insertado
+        line = self.pg_cursor.fetchone()[0]
+
         self._log(f"     Insertado ítem: {item.get('name')}", "debug")
+
+        # Insertar en sales_operation_details_coins
+        self._insertar_detail_coins(main_correlative, line, unitary_cost, unit_price,
+                                    total_net_cost, total_tax_cost, total_cost,
+                                    total_net_gross, total_tax_gross, total_gross,
+                                    discount_amount, total_net, tax_amount, item_total)
+
+    def _insertar_detail_coins(self, main_correlative: int, line: int,
+                               unitary_cost: float, price: float,
+                               total_net_cost: float, total_tax_cost: float, total_cost: float,
+                               total_net_gross: float, total_tax_gross: float, total_gross: float,
+                               discount: float, total_net: float, total_tax: float, total: float):
+        """Insertar en sales_operation_details_coins (solo USD '02' por ahora)"""
+        try:
+            sql_detail_coins = """
+                INSERT INTO sales_operation_details_coins (
+                    main_correlative, main_line, unitary_cost, price,
+                    total_net_cost, total_tax_cost, total_cost,
+                    total_net_gross, total_tax_gross, total_gross,
+                    discount, total_net, total_tax, total, coin_code
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+
+            # Insertar en USD ('02')
+            self.pg_cursor.execute(sql_detail_coins, (
+                main_correlative,
+                line,
+                unitary_cost,
+                price,
+                total_net_cost,
+                total_tax_cost,
+                total_cost,
+                total_net_gross,
+                total_tax_gross,
+                total_gross,
+                discount,
+                total_net,
+                total_tax,
+                total,
+                '02'  # USD
+            ))
+
+            self._log(f"     Insertado en sales_operation_details_coins (USD)", "debug")
+
+        except Exception as e:
+            self._log(f"     ⚠️ Error insertando en sales_operation_details_coins: {e}", "warning")
 
     def _insertar_impuestos(self, correlative: int, quote: dict):
         """Insertar impuestos del quote en sales_operation_taxes y sales_operation_taxes_coins"""
