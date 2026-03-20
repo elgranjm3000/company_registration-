@@ -257,13 +257,8 @@ class CustomersSync(BaseSync):
             codigo_final = client_id if client_id else f"TEMP-{hash(client_id)}"
 
         # Limpiar espacios en blanco de todos los campos
-        # Email inválido → generar email temporal basado en document_number
+        # Email se envía tal cual (incluyendo '@' si ese es el valor en BD)
         email_clean = (email or '').strip()
-        if not email_clean or email_clean == '@':
-            # Generar email temporal: client_id@temp.local
-            # Esto cumple con NOT NULL y formato de email básico
-            doc_num = (client_id or code or 'temp').strip()
-            email_clean = f"{doc_num}@temp.local"
 
         return {
             'codigo': (codigo_final or '').strip(),             # Eliminar espacios al inicio/final
