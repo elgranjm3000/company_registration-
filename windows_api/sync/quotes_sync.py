@@ -393,6 +393,7 @@ class QuotesSync:
         sale_tax = float(product.get('sale_tax', 0)) if product else 0.0
         sale_aliquot = float(product.get('aliquot', 0)) if product else 0.0
         buy_aliquot = float(product.get('buy_aliquot', 0)) if product else 0.0
+        product_type = product.get('product_type', '') if product else ''
 
         # Datos del item
         quantity = float(item.get('quantity', 0))
@@ -403,6 +404,16 @@ class QuotesSync:
 
         # Calcular subtotal (precio * cantidad)
         subtotal = unit_price * quantity
+
+        # Calcular total_net y total_tax
+        total_net = subtotal - discount_amount  # TOTAL NETO SIN IMPUESTO
+        total_tax = tax_amount  # TOTAL CON IMPUESTO
+
+        # Calcular pending_amount (igual a amount)
+        pending_amount = quantity
+
+        # buy_tax: código de tipo de impuesto
+        buy_tax = '01'  # IVA General por defecto
 
         # Calcular costos según fórmula de smart_sync_complete.py
         total_net_cost = round(unitary_cost * quantity, 2)  # unitary_cost * cantidad
@@ -421,9 +432,10 @@ class QuotesSync:
                 store, location,
                 unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot,
                 total_net_cost, total_tax_cost, total_cost,
-                total_net_gross, total_tax_gross, total_gross
+                total_net_gross, total_tax_gross, total_gross,
+                total_net, total_tax, pending_amount, buy_tax, buy_aliquot, product_type
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
 
@@ -451,7 +463,13 @@ class QuotesSync:
             total_cost,
             total_net_gross,
             total_tax_gross,
-            total_gross
+            total_gross,
+            total_net,
+            total_tax,
+            pending_amount,
+            buy_tax,
+            buy_aliquot,
+            product_type
         ))
 
         self._log(f"     Insertado ítem: {item.get('name')}", "debug")
