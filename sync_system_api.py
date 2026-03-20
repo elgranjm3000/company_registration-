@@ -1628,8 +1628,9 @@ class ConfigWindow:
         api_frame = ttk.Frame(notebook)
         notebook.add(api_frame, text="🔐 API REST")
 
-        ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
-        ttk.Entry(api_frame, textvariable=self.api_url_var, width=60).pack(padx=10, pady=5)
+        # URL de la API fija, no mostrada al usuario
+        # ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
+        # ttk.Entry(api_frame, textvariable=self.api_url_var, width=60).pack(padx=10, pady=5)
 
         ttk.Label(api_frame, text="Email:").pack(anchor="w", padx=10, pady=(10,0))
         ttk.Entry(api_frame, textvariable=self.api_email_var, width=60).pack(padx=10, pady=5)
