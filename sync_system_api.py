@@ -1052,58 +1052,46 @@ class APISyncManager:
         """
         statements = []
         current_statement = []
-        in_dollar_block = False
-        dollar_depth = 0
+        in_function = False
 
         for line in sql_content.split('\n'):
             stripped = line.strip()
 
-            # Ignorar líneas vacías y comentarios
-            if not stripped or stripped.startswith('--'):
+            # Ignorar comentarios de una línea que no son parte de statements
+            if stripped.startswith('--') and not in_function:
                 continue
 
-            # Detectar inicio/fin de bloque $$
-            if stripped.startswith('$$'):
-                if not in_dollar_block:
-                    # Inicio de bloque $$
-                    in_dollar_block = True
-                    dollar_depth = 1
-                    current_statement.append(line)
-                else:
-                    # Fin de bloque $$
-                    dollar_depth -= 1
-                    current_statement.append(line)
-                    if dollar_depth == 0:
-                        in_dollar_block = False
-                continue
-
-            # Si estamos dentro de un bloque $$
-            if in_dollar_block:
+            # Detectar inicio de función CREATE OR REPLACE FUNCTION
+            if stripped.startswith('CREATE OR REPLACE FUNCTION'):
+                in_function = True
                 current_statement.append(line)
-                # Detectar si cerramos el bloque
-                if '$$' in line and 'LANGUAGE' in line:
-                    # El bloque terminó, buscar el ; que cierra el CREATE FUNCTION
-                    continue
-                # Verificar si encontramos el final del bloque
-                if '$$;' in line or line.endswith('$$;'):
-                    # Bloque completo terminado
-                    in_dollar_block = False
-                    dollar_depth = 0
-                    # El statement actual está completo
+                continue
+
+            # Si estamos dentro de una función
+            if in_function:
+                current_statement.append(line)
+                # Detectar el final de la función (termina con $$ LANGUAGE plpgsql;)
+                if stripped.endswith('$$ LANGUAGE plpgsql;') or \
+                   stripped.endswith('$$ LANGUAGE plpgsql'):
+                    # Función completa
                     stmt = '\n'.join(current_statement)
                     statements.append(stmt)
                     current_statement = []
+                    in_function = False
                 continue
 
-            # Si no estamos en bloque $$, buscar ; como separador
-            if not in_dollar_block:
+            # Si no estamos en una función, procesar normal
+            if not in_function:
+                # Ignorar líneas vacías
+                if not stripped:
+                    continue
+
                 current_statement.append(line)
                 # Si la línea termina con ; es el fin del statement
                 if line.rstrip().endswith(';'):
                     stmt = '\n'.join(current_statement)
                     statements.append(stmt)
                     current_statement = []
-                continue
 
         # Agregar cualquier statement restante
         if current_statement:
@@ -1432,10 +1420,23 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
         try:
             print("[DEBUG] Ejecutando SQL embebido para crear triggers...")
 
-            # Ejecutar todo el SQL de una vez (PostgreSQL puede manejar múltiples statements)
-            self.pg_cursor.execute(sql_content)
+            # Dividir el SQL en statements individuales respetando $$...$$
+            statements = self._split_sql_statements(sql_content)
+
+            print(f"[DEBUG] Ejecutando {len(statements)} statements...")
+
+            # Ejecutar cada statement individualmente
+            for i, statement in enumerate(statements, 1):
+                if statement.strip():  # Solo ejecutar si no está vacío
+                    try:
+                        self.pg_cursor.execute(statement)
+                    except Exception as stmt_error:
+                        print(f"[DEBUG] Error en statement {i}: {str(stmt_error)[:200]}")
+                        # Continuar con el siguiente statement
+                        continue
+
             self.pg_conn.commit()
-            print("[DEBUG] ✅ Triggers creados exitosamente desde SQL embebido")
+            print(f"[DEBUG] ✅ Triggers creados exitosamente desde SQL embebido ({len(statements)} statements)")
 
         except Exception as e:
             print(f"[DEBUG] Error ejecutando SQL embebido: {e}")
