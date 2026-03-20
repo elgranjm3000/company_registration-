@@ -440,7 +440,7 @@ class QuotesSync:
             main_correlative,
             code_product,
             description_product,
-            description_product,  # description = description_product
+            '',  # description = string vacío
             quantity,
             unit_price,
             discount_amount,
