@@ -52,6 +52,7 @@ import hashlib
 import re
 import threading
 import queue
+import ctypes
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -141,83 +142,120 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     def _mostrar_notificacion_thread():
         try:
             if sistema == "Windows":
-                # Windows: intentar usar win10toast, pero silenciar errores de pkg_resources
+                # Windows: notificaciones nativas con Balloon Tip (sin win10toast)
                 try:
                     import win32con
                     import win32gui
-                    from win10toast import ToastNotifier
+                    import win32api
 
-                    toast = ToastNotifier()
+                    # Crear ventana oculta para las notificaciones
+                    hInstance = win32gui.GetModuleHandle(None)
+                    className = "SincronizadorChrystalNotification"
 
-                    # Forzar la creación de classAtom si no existe
-                    if not hasattr(toast, 'classAtom'):
-                        toast.classAtom = None
+                    # Callback para procesar mensajes de ventana
+                    def wnd_proc(hwnd, msg, wparam, lparam):
+                        return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
 
-                    # SIEMPRE crear ventana oculta para notificaciones (modo --windowed)
+                    # Registrar clase de ventana
+                    wc = win32gui.WNDCLASS()
+                    wc.hInstance = hInstance
+                    wc.lpszClassName = className
+                    wc.lpfnWndProc = wnd_proc
+                    wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
+
+                    # Intentar registrar la clase
                     try:
-                        hInstance = win32gui.GetModuleHandle(None)
-                        className = "PythonHiddenWindow"
-
-                        # Callback para procesar mensajes de ventana
-                        def wnd_proc(hwnd, msg, wparam, lparam):
-                            return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
-
-                        # Registrar clase de ventana
-                        wc = win32gui.WNDCLASS()
-                        wc.hInstance = hInstance
-                        wc.lpszClassName = className
-                        wc.lpfnWndProc = wnd_proc
-                        wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
-                        wc.hbrBackground = win32con.COLOR_WINDOW + 1
-
-                        # Intentar registrar la clase
-                        try:
-                            win32gui.RegisterClass(wc)
-                        except:
-                            pass  # Clase ya registrada
-
-                        # Crear ventana oculta
-                        style = win32con.WS_OVERLAPPEDWINDOW | win32con.WS_SYSMENU
-                        hwnd = win32gui.CreateWindowEx(
-                            0, className, "HiddenWindow", style,
-                            0, 0, 100, 100, 0, 0, hInstance, None
-                        )
-                        win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
-
-                        # Forzar que toast use esta ventana
-                        toast._hwnd = hwnd
+                        win32gui.RegisterClass(wc)
                     except:
-                        pass  # Si falla la creación de ventana, continuar sin ella
+                        pass  # Clase ya registrada
 
-                    # Intentar usar icono personalizado
-                    icon_path = icono
-                    if not icon_path:
-                        try:
+                    # Crear ventana oculta
+                    style = win32con.WS_OVERLAPPEDWINDOW | win32con.WS_SYSMENU
+                    hwnd = win32gui.CreateWindowEx(
+                        0, className, "Sincronizador Chrystal", style,
+                        0, 0, 100, 100, 0, 0, hInstance, None
+                    )
+                    win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+
+                    # Cargar icono
+                    hicon = None
+                    try:
+                        icon_path = icono
+                        if not icon_path:
                             script_dir = os.path.dirname(os.path.abspath(__file__))
                             possible_icons = [
                                 os.path.join(script_dir, "icon.ico"),
-                                os.path.join(script_dir, "icon.png"),
                                 os.path.join(script_dir, "app.ico"),
                             ]
                             for path in possible_icons:
                                 if os.path.exists(path):
-                                    icon_path = path
+                                    hicon = win32gui.LoadImage(
+                                        None, path,
+                                        win32con.IMAGE_ICON,
+                                        0, 0,
+                                        win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE
+                                    )
                                     break
-                        except:
-                            pass
+                    except:
+                        pass
 
-                    # Intentar mostrar notificación
-                    toast.show_toast(
-                        titulo,
-                        mensaje,
-                        duration=duracion,
-                        icon_path=icon_path,
-                        threaded=False,
-                    )
+                    # Crear estructura NOTIFYICONDATA
+                    class NOTIFYICONDATA(ctypes.Structure):
+                        _fields_ = [
+                            ("cbSize", ctypes.c_ulong),
+                            ("hWnd", ctypes.c_void_p),
+                            ("uID", ctypes.c_uint),
+                            ("uFlags", ctypes.c_uint),
+                            ("uCallbackMessage", ctypes.c_uint),
+                            ("hIcon", ctypes.c_void_p),
+                            ("szTip", ctypes.c_char * 128),
+                            ("szInfo", ctypes.c_char * 256),
+                            ("uTimeoutOrVersion", ctypes.c_uint),
+                            ("szInfoTitle", ctypes.c_char * 64),
+                            ("dwInfoFlags", ctypes.c_uint),
+                        ]
+
+                    NIF_ICON = 0x00000002
+                    NIF_MESSAGE = 0x00000001
+                    NIF_INFO = 0x00000010
+                    NIM_ADD = 0x00000000
+                    NIM_DELETE = 0x00000002
+                    NIIF_INFO = 0x00000001
+                    NIIF_WARNING = 0x00000002
+                    NIIF_ERROR = 0x00000003
+
+                    # Codificar strings a bytes
+                    titulo_bytes = titulo.encode('utf-8')[:63]
+                    mensaje_bytes = mensaje.encode('utf-8')[:255]
+                    tip_bytes = "Sincronizador Chrystal".encode('utf-8')[:127]
+
+                    # Crear estructura de notificación
+                    nid = NOTIFYICONDATA()
+                    nid.cbSize = ctypes.sizeof(NOTIFYICONDATA)
+                    nid.hWnd = hwnd
+                    nid.uID = 1
+                    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_INFO
+                    nid.uCallbackMessage = win32con.WM_USER + 20
+                    nid.hIcon = hicon if hicon else win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
+                    nid.szTip = tip_bytes
+                    nid.szInfo = mensaje_bytes
+                    nid.uTimeoutOrVersion = duracion * 1000  # Convertir a milisegundos
+                    nid.szInfoTitle = titulo_bytes
+                    nid.dwInfoFlags = NIIF_INFO
+
+                    # Mostrar notificación
+                    ctypes.windll.shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
+
+                    # Esperar un momento para que se muestre
+                    time.sleep(duracion)
+
+                    # Eliminar icono de la bandeja
+                    ctypes.windll.shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+
                     print(f"[DEBUG] Notificación mostrada: {titulo}")
 
                 except Exception as e:
-                    # Si falla win10toast, mostrar el error para debug
+                    # Si falla, mostrar el error para debug
                     print(f"[DEBUG] Error en notificación: {e}")
 
             elif sistema == "Linux":
