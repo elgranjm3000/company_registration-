@@ -101,7 +101,8 @@ except ImportError as e:
 # CONFIGURACIÓN
 # ==============================================================================
 
-CONFIG_FILE = "sync_config_api.json"
+# Ruta absoluta en el home del usuario para configuración
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 
 if not os.path.exists(LOGS_DIR):
