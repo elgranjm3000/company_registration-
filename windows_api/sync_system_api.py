@@ -101,7 +101,8 @@ except ImportError as e:
 # CONFIGURACIÓN
 # ==============================================================================
 
-CONFIG_FILE = "sync_config_api.json"
+# Ruta absoluta en el home del usuario para configuración
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 
 if not os.path.exists(LOGS_DIR):
@@ -1584,7 +1585,7 @@ class ConfigWindow:
             self.root.title("⚙️ Nueva Configuración - Sincronizador API")
 
         # Variables
-        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://aspect-robots-labeled-competitions.trycloudflare.com/sales-apiWEB/public/api"))
+        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://chrystal.com.ve/mobile/public/api"))
         self.api_email_var = tk.StringVar(value=existing_config.get('api_email', ''))
         self.api_password_var = tk.StringVar()  # Password nunca se carga
 
@@ -1628,8 +1629,9 @@ class ConfigWindow:
         api_frame = ttk.Frame(notebook)
         notebook.add(api_frame, text="🔐 API REST")
 
-        ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
-        ttk.Entry(api_frame, textvariable=self.api_url_var, width=60).pack(padx=10, pady=5)
+        # URL de la API fija, no mostrada al usuario
+        # ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
+        # ttk.Entry(api_frame, textvariable=self.api_url_var, width=60).pack(padx=10, pady=5)
 
         ttk.Label(api_frame, text="Email:").pack(anchor="w", padx=10, pady=(10,0))
         ttk.Entry(api_frame, textvariable=self.api_email_var, width=60).pack(padx=10, pady=5)
