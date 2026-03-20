@@ -22,29 +22,12 @@ if %errorlevel% neq 0 (
 echo Creando ejecutable SIN consola...
 echo.
 
-pyinstaller --name=SyncAPISystem ^
-    --onedir ^
-    --windowed ^
-    --noconsole ^
-    --clean ^
-    --noconfirm ^
-    --log-level=INFO ^
-    --add-data="config_encryption.py;." ^
-    --add-data="api_client;base" ^
-    --add-data="sync;base" ^
-    --hidden-import=psycopg2 ^
-    --hidden-import=requests ^
-    --hidden-import=pystray ^
-    --hidden-import=PIL ^
-    --hidden-import=tkinter ^
-    --hidden-import=cryptography ^
-    --hidden-import=config_encryption ^
-    --hidden-import=api_client ^
-    --hidden-import=sync ^
-    --collect-all=psycopg2 ^
-    --collect-all=pystray ^
-    --collect-all=Pillow ^
-    sync_system_api.spec
+REM Limpiar build anterior
+if exist build rmdir /s /q build
+if exist dist rmdir /s /q dist
+
+REM Usar archivo .spec especifico para modo sin consola
+pyinstaller --clean sync_system_api_windowed.spec
 
 if %errorlevel% neq 0 (
     echo.
@@ -58,8 +41,9 @@ echo ========================================
 echo   ¡EJECUTABLE CREADO!
 echo ========================================
 echo.
-echo Ubicacion: dist\SyncAPISystem\
+echo Ubicacion: dist\SyncAPISystem.exe
 echo.
 echo NOTA: Sin consola - modo produccion
+echo       Las notificaciones funcionaran correctamente
 echo.
 pause

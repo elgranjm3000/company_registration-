@@ -26,80 +26,8 @@ REM Limpiar build anterior
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 
-pyinstaller --name SyncAPISystem ^
-	--onefile ^
-	--console ^
-	--clean ^
-	--add-data "api_client;api_client" ^
-	--add-data "sync;sync" ^
-	--add-data "config_encryption.py;." ^
-	--hidden-import "api_client" ^
-	--hidden-import "api_client.base" ^
-	--hidden-import "api_client.categories" ^
-	--hidden-import "api_client.company" ^
-	--hidden-import "api_client.customers" ^
-	--hidden-import "api_client.products" ^
-	--hidden-import "api_client.quotes" ^
-	--hidden-import "api_client.sellers" ^
-	--hidden-import "sync" ^
-	--hidden-import "sync.base" ^
-	--hidden-import "sync.categories_sync" ^
-	--hidden-import "sync.customers_sync" ^
-	--hidden-import "sync.products_sync" ^
-	--hidden-import "sync.quotes_sync" ^
-	--hidden-import "sync.sellers_sync" ^
-	--hidden-import "config_encryption" ^
-	--hidden-import "psycopg2" ^
-	--hidden-import "psycopg2.extensions" ^
-	--hidden-import "psycopg2.extras" ^
-	--hidden-import "psycopg2.pool" ^
-	--hidden-import "pystray" ^
-	--hidden-import "pystray._appindicator" ^
-	--hidden-import "pystray._darwin" ^
-	--hidden-import "pystray._util" ^
-	--hidden-import "pystray._win32" ^
-	--hidden-import "PIL" ^
-	--hidden-import "PIL.Image" ^
-	--hidden-import "PIL.ImageDraw" ^
-	--hidden-import "PIL.ImageFont" ^
-	--hidden-import "requests" ^
-	--hidden-import "requests.adapters" ^
-	--hidden-import "requests.auth" ^
-	--hidden-import "requests.models" ^
-	--hidden-import "requests.sessions" ^
-	--hidden-import "urllib3" ^
-	--hidden-import "cryptography" ^
-	--hidden-import "cryptography.fernet" ^
-	--hidden-import "cryptography.hazmat" ^
-	--hidden-import "cryptography.hazmat.primitives" ^
-	--hidden-import "cryptography.hazmat.backends" ^
-	--hidden-import "tkinter" ^
-	--hidden-import "tkinter.ttk" ^
-	--hidden-import "tkinter.scrolledtext" ^
-	--hidden-import "tkinter.messagebox" ^
-	--hidden-import "tkinter.filedialog" ^
-	--hidden-import "threading" ^
-	--hidden-import "queue" ^
-	--hidden-import "json" ^
-	--hidden-import "datetime" ^
-	--hidden-import "os" ^
-	--hidden-import "sys" ^
-	--hidden-import "time" ^
-	--hidden-import "logging" ^
-	--hidden-import "hashlib" ^
-	--hidden-import "base64" ^
-	--hidden-import "winreg" ^
-	--hidden-import "win10toast" ^
-	--hidden-import "win10toast.toast" ^
-	--hidden-import "pywin32" ^
-	--hidden-import "win32gui" ^
-	--hidden-import "win32con" ^
-	--hidden-import "win32api" ^
-	--collect-all "psycopg2" ^
-	--collect-all "PIL" ^
-	--collect-all "win10toast" ^
-	--collect-all "pywin32" ^
-	sync_system_api.py
+REM Usar archivo .spec especifico para modo con consola
+pyinstaller --clean sync_system_api_console.spec
 
 if %errorlevel% neq 0 (
     echo.
@@ -114,5 +42,7 @@ echo   ¡EJECUTABLE CREADO!
 echo ========================================
 echo.
 echo Ubicacion: dist\SyncAPISystem.exe
+echo.
+echo NOTA: Con consola - modo debug
 echo.
 pause
