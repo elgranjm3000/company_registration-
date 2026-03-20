@@ -2,13 +2,21 @@
 # Spec file para compilar sync_system_api.py CON CONSOLA
 # Incluye todas las dependencias para System Tray y API REST
 
-# Construir lista de datas (sin None)
+from PyInstaller.utils.hooks import collect_all
+
+# Collect all win10toast data (incluye metadatos .egg-info/.dist-info)
+win10toast_datas, win10toast_binaries, win10toast_hiddenimports = collect_all('win10toast')
+
+# Collect all pywin32 data
+pywin32_datas, pywin32_binaries, pywin32_hiddenimports = collect_all('pywin32')
+
+# Construir lista de datas
 datas_list = [
     # Agregar módulos del sistema
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-]
+] + win10toast_datas + pywin32_datas
 
 # Agregar icono solo si existe
 if os.path.exists('icon.ico'):
@@ -17,7 +25,7 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=[],
+    binaries=win10toast_binaries + pywin32_binaries,
     datas=datas_list,
     hiddenimports=[
         # Módulos principales de la aplicación
@@ -105,8 +113,8 @@ a = Analysis(
         'pywin32.win32service',
         'pythoncom',
         'pywintypes',
-    ],
-    hookspath=['.'],  # Buscar hooks en el directorio actual (hook-win10toast.py)
+    ] + win10toast_hiddenimports + pywin32_hiddenimports,
+    hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=['test', 'unittest', 'pytest', 'matplotlib', 'numpy', 'pandas'],
