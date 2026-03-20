@@ -362,31 +362,21 @@ class QuotesSync:
         # Obtener description del producto
         description_product = product.get('description', '') if product else item.get('name', '')
 
-        # Buscar unit en products_units usando product_code
+        # Buscar unit y conversion_factor en products_units usando product_code
         unit = None
-        if code_product:
-            try:
-                self.pg_cursor.execute("""
-                    SELECT correlative FROM products_units WHERE product_code = %s LIMIT 1
-                """, (code_product,))
-                result = self.pg_cursor.fetchone()
-                if result:
-                    unit = result[0]
-            except Exception as e:
-                self._log(f"     ⚠️ Error buscando unit: {e}", "warning")
-
-        # Buscar conversion_factor en products_unit usando code
         conversion_factor = 1.0
         if code_product:
             try:
                 self.pg_cursor.execute("""
-                    SELECT conversion_factor FROM products_unit WHERE product_code = %s LIMIT 1
+                    SELECT correlative, conversion_factor FROM products_units WHERE product_code = %s LIMIT 1
                 """, (code_product,))
                 result = self.pg_cursor.fetchone()
-                if result and result[0]:
-                    conversion_factor = float(result[0])
+                if result:
+                    unit = result[0]
+                    if result[1]:
+                        conversion_factor = float(result[1])
             except Exception as e:
-                self._log(f"     ⚠️ Error buscando conversion_factor: {e}", "warning")
+                self._log(f"     ⚠️ Error buscando datos en products_units: {e}", "warning")
 
         # Obtener datos del producto
         unitary_cost = float(product.get('unitary_cost', 0)) if product else 0.0
