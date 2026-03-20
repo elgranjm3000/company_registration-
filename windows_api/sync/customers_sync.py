@@ -134,7 +134,6 @@ class CustomersSync(BaseSync):
                 FROM clients
                 WHERE code IN ({placeholders})
                   AND code IS NOT NULL AND code != ''
-                  AND description IS NOT NULL AND description != ''
                 ORDER BY code
             """
 
@@ -242,6 +241,11 @@ class CustomersSync(BaseSync):
         # Usar contact como name si no hay description
         name = description if description else (contact if contact else '')
 
+        # Si name sigue vacío, usar document_number o code como último fallback
+        # (name es required en el backend)
+        if not name or name.strip() == '':
+            name = client_id if client_id else code
+
         # Mapear status de PostgreSQL a formato API
         # Asumimos: '01' = active, otro = inactive
         status_mapped = 'active' if status == '01' else 'inactive'
@@ -323,6 +327,16 @@ class CustomersSync(BaseSync):
                     company_id=self.company_id,
                     customers=customers_api
                 )
+
+                # DEBUG: Mostrar respuesta del backend
+                self.info(f"\n{'='*70}")
+                self.info(f"📥 RESPUESTA DEL BACKEND")
+                self.info(f"{'='*70}")
+                self.info(f"Respuesta cruda: {result}")
+                self.info(f"Created: {result.get('created', 0)}")
+                self.info(f"Updated: {result.get('updated', 0)}")
+                self.info(f"Errors: {result.get('errors', 0)}")
+                self.info(f"{'='*70}\n")
 
                 # Actualizar estadísticas
                 self.stats['created'] = result.get('created', 0)

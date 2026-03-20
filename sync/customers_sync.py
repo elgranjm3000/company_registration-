@@ -134,7 +134,6 @@ class CustomersSync(BaseSync):
                 FROM clients
                 WHERE code IN ({placeholders})
                   AND code IS NOT NULL AND code != ''
-                  AND description IS NOT NULL AND description != ''
                 ORDER BY code
             """
 
@@ -242,6 +241,11 @@ class CustomersSync(BaseSync):
         # Usar contact como name si no hay description
         name = description if description else (contact if contact else '')
 
+        # Si name sigue vacío, usar document_number o code como último fallback
+        # (name es required en el backend)
+        if not name or name.strip() == '':
+            name = client_id if client_id else code
+
         # Mapear status de PostgreSQL a formato API
         # Asumimos: '01' = active, otro = inactive
         status_mapped = 'active' if status == '01' else 'inactive'
@@ -304,11 +308,39 @@ class CustomersSync(BaseSync):
                     import time
                     time.sleep(wait_time)
 
+                # DEBUG: Mostrar detalles ANTES de enviar
+                self.info(f"\n{'='*70}")
+                self.info(f"📤 ENVIANDO CLIENTES AL API")
+                self.info(f"{'='*70}")
+                self.info(f"Company ID: {self.company_id}")
+                self.info(f"Total clientes a enviar: {len(customers_api)}")
+                self.info(f"Intento: {attempt + 1}/{max_retries}")
+
+                # Mostrar primeros 5 clientes para ver qué se envía
+                self.info(f"\nPrimeros 5 clientes que se enviarán:")
+                for i, cust in enumerate(customers_api[:5], 1):
+                    self.info(f"  {i}. codigo={cust.get('codigo')}, document_number={cust.get('document_number')}, name={cust.get('name')}")
+
+                if len(customers_api) > 5:
+                    self.info(f"  ... y {len(customers_api) - 5} clientes más")
+
+                self.info(f"{'='*70}\n")
+
                 # Enviar a API en lotes
                 result = self.api_client.sync_batch(
                     company_id=self.company_id,
                     customers=customers_api
                 )
+
+                # DEBUG: Mostrar respuesta del backend
+                self.info(f"\n{'='*70}")
+                self.info(f"📥 RESPUESTA DEL BACKEND")
+                self.info(f"{'='*70}")
+                self.info(f"Respuesta cruda: {result}")
+                self.info(f"Created: {result.get('created', 0)}")
+                self.info(f"Updated: {result.get('updated', 0)}")
+                self.info(f"Errors: {result.get('errors', 0)}")
+                self.info(f"{'='*70}\n")
 
                 # Actualizar estadísticas
                 self.stats['created'] = result.get('created', 0)
