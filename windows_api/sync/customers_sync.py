@@ -448,6 +448,171 @@ class CustomersSync(BaseSync):
             return str(registro.get('code', ''))
         return str(registro)
 
+    # =========================================================================
+    # SINCRONIZACIÓN DESDE API REST → POSTGRESQL
+    # =========================================================================
+
+    def detect_new_from_api(self) -> List[Dict]:
+        """
+        Detectar NUEVOS clientes en la API REST que no existen en PostgreSQL.
+
+        Returns:
+            Lista de dicts con clientes nuevos desde la API
+        """
+        nuevos_clientes = []
+
+        try:
+            self.info("\n" + "="*70)
+            self.info("📥 DETECTANDO NUEVOS CLIENTES DESDE API REST")
+            self.info("="*70)
+
+            # 1. Obtener todos los clientes desde la API
+            self.info(f"Obteniendo clientes de la API REST (company_id={self.company_id})...")
+            clientes_api = list(self.api_client.get_all(company_id=self.company_id))
+            self.info(f"   Total clientes en API: {len(clientes_api)}")
+
+            # 2. Obtener códigos existentes en PostgreSQL
+            self.pg_cursor.execute("SELECT code FROM clients")
+            codigos_pg = {row[0] for row in self.pg_cursor.fetchall()}
+            self.info(f"   Total clientes en PostgreSQL: {len(codigos_pg)}")
+
+            # 3. Detectar nuevos (existen en API pero no en PG)
+            for cliente_api in clientes_api:
+                codigo_api = cliente_api.get('codigo')
+
+                if codigo_api and codigo_api not in codigos_pg:
+                    nuevos_clientes.append(cliente_api)
+                    self.info(f"   ✨ NUEVO detectado: {codigo_api} - {cliente_api.get('name')}")
+
+            self.info(f"\n📊 Total nuevos clientes detectados: {len(nuevos_clientes)}")
+            self.info("="*70 + "\n")
+
+            return nuevos_clientes
+
+        except Exception as e:
+            self.error(f"❌ Error detectando nuevos desde API: {e}")
+            import traceback
+            self.error(traceback.format_exc())
+            return []
+
+    def sync_new_from_api(self, nuevos_clientes: List[Dict]) -> int:
+        """
+        Insertar NUEVOS clientes desde la API REST a PostgreSQL.
+
+        Args:
+            nuevos_clientes: Lista de clientes nuevos desde la API
+
+        Returns:
+            Cantidad de clientes insertados
+        """
+        if not nuevos_clientes:
+            self.info("No hay nuevos clientes para insertar desde la API")
+            return 0
+
+        try:
+            self.info(f"\nInsertando {len(nuevos_clientes)} nuevos clientes a PostgreSQL...")
+
+            insertados = 0
+
+            for cliente in nuevos_clientes:
+                try:
+                    # Mapear estado de API a PostgreSQL
+                    status_pg = '01' if cliente.get('status') == 'active' else '02'
+
+                    # Insertar en PostgreSQL
+                    self.pg_cursor.execute("""
+                        INSERT INTO clients (
+                            code, description, address, client_id,
+                            email, phone, contact, status
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s
+                        )
+                    """, (
+                        cliente.get('codigo'),          # code
+                        cliente.get('name'),            # description
+                        cliente.get('address'),         # address
+                        cliente.get('document_number'), # client_id
+                        cliente.get('email'),           # email
+                        cliente.get('phone'),           # phone
+                        cliente.get('name'),            # contact (usar name)
+                        status_pg                       # status
+                    ))
+
+                    insertados += 1
+                    self.info(f"   ✅ Insertado: {cliente.get('codigo')} - {cliente.get('name')}")
+
+                except Exception as e:
+                    self.error(f"   ❌ Error insertando {cliente.get('codigo')}: {e}")
+                    continue
+
+            # Commit de todos los inserts
+            self.pg_conn.commit()
+            self.info(f"\n✅ Total insertados: {insertados} de {len(nuevos_clientes)}")
+
+            # Actualizar sync_hashes (marcar como sincronizados)
+            self._update_sync_hashes_after_insert(nuevos_clientes)
+
+            return insertados
+
+        except Exception as e:
+            self.error(f"❌ Error insertando nuevos desde API: {e}")
+            self.pg_conn.rollback()
+            return 0
+
+    def _update_sync_hashes_after_insert(self, clientes: List[Dict]):
+        """
+        Actualizar sync_hashes después de insertar clientes desde la API.
+
+        Args:
+            clientes: Lista de clientes insertados
+        """
+        try:
+            for cliente in clientes:
+                codigo = cliente.get('codigo')
+
+                # Generar hash del cliente
+                # Simular el tuple de PostgreSQL para generar el hash
+                pg_tuple = (
+                    codigo,                           # code
+                    cliente.get('name'),              # description
+                    cliente.get('address'),           # address
+                    cliente.get('document_number'),   # client_id
+                    cliente.get('email'),             # email
+                    cliente.get('phone'),             # phone
+                    cliente.get('name'),              # contact
+                    '01' if cliente.get('status') == 'active' else '02'  # status
+                )
+
+                hash_valor = self._generar_hash(pg_tuple)
+
+                # Insertar en sync_hashes como ya sincronizado
+                self.pg_cursor.execute("""
+                    INSERT INTO sync_hashes (
+                        table_name, record_key, company_id,
+                        hash_value, pending_sync, synced_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, NOW()
+                    )
+                    ON CONFLICT (table_name, record_key, company_id)
+                    DO UPDATE SET
+                        hash_value = EXCLUDED.hash_value,
+                        pending_sync = FALSE,
+                        synced_at = NOW()
+                """, (
+                    'customers',
+                    codigo,
+                    self.company_id,
+                    hash_valor,
+                    False  # pending_sync = FALSE porque ya viene de la API
+                ))
+
+            self.pg_conn.commit()
+            self.info(f"✅ Actualizados {len(clientes)} registros en sync_hashes")
+
+        except Exception as e:
+            self.error(f"⚠️  Error actualizando sync_hashes: {e}")
+            self.pg_conn.rollback()
+
     def _get_table_name(self) -> str:
         """Retornar nombre de la tabla para sync_hashes"""
         return 'customers'
