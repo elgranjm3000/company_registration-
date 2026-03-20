@@ -630,7 +630,20 @@ class QuotesSync:
                 '02'  # coin_code (USD)
             ))
 
-            self._log(f"     Insertado impuesto en sales_operation_taxes y sales_operation_taxes_coins", "debug")
+            # Obtener tasa BCV e insertar en Bolívares
+            bcv_rate = self._get_bcv_rate()
+            taxable_amount_bcv = round(taxable_amount * bcv_rate, 2)
+            quote_tax_amount_bcv = round(quote_tax_amount * bcv_rate, 2)
+
+            self.pg_cursor.execute(sql_tax_coins, (
+                correlative,
+                tax_code,
+                taxable_amount_bcv,
+                quote_tax_amount_bcv,
+                '01'  # coin_code (Bolívares)
+            ))
+
+            self._log(f"     Insertado impuesto en sales_operation_taxes y sales_operation_taxes_coins (USD y BS, tasa={bcv_rate})", "debug")
         else:
             self._log(f"     No hay impuestos para insertar (tax_amount={quote_tax_amount})", "debug")
 
