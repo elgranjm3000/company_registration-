@@ -489,16 +489,22 @@ class CustomersSync(BaseSync):
             clientes_api = list(self.api_client.get_all(company_id=self.company_id))
             self.info(f"   Total clientes en API: {len(clientes_api)}")
 
-            # 2. Obtener códigos existentes en PostgreSQL
-            self.pg_cursor.execute("SELECT code FROM clients")
-            codigos_pg = {row[0] for row in self.pg_cursor.fetchall()}
-            self.info(f"   Total clientes en PostgreSQL: {len(codigos_pg)}")
+            # 2. Obtener códigos YA SINCRONIZADOS desde sync_hashes
+            self.pg_cursor.execute("""
+                SELECT record_key
+                FROM sync_hashes
+                WHERE table_name = 'customers'
+                  AND company_id = %s
+                  AND deleted_at IS NULL
+            """, (self.company_id,))
+            codigos_sincronizados = {row[0] for row in self.pg_cursor.fetchall()}
+            self.info(f"   Total clientes ya sincronizados: {len(codigos_sincronizados)}")
 
-            # 3. Detectar nuevos (existen en API pero no en PG)
+            # 3. Detectar nuevos (existen en API pero NO están en sync_hashes)
             for cliente_api in clientes_api:
                 codigo_api = cliente_api.get('codigo')
 
-                if codigo_api and codigo_api not in codigos_pg:
+                if codigo_api and codigo_api not in codigos_sincronizados:
                     nuevos_clientes.append(cliente_api)
                     self.info(f"   ✨ NUEVO detectado: {codigo_api} - {cliente_api.get('name')}")
 
