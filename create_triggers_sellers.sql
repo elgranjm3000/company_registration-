@@ -9,7 +9,7 @@ BEGIN
     -- Obtener el company_id desde sync_config
     SELECT value INTO v_company_id
     FROM sync_config
-    WHERE key = 'current_company_id';
+    WHERE key = 'company_id';
 
     -- Si no existe, usar 1 como fallback
     IF v_company_id IS NULL THEN
@@ -45,7 +45,7 @@ BEGIN
     -- Obtener el company_id desde sync_config
     SELECT value INTO v_company_id
     FROM sync_config
-    WHERE key = 'current_company_id';
+    WHERE key = 'company_id';
 
     -- Si no existe, usar 1 como fallback
     IF v_company_id IS NULL THEN
