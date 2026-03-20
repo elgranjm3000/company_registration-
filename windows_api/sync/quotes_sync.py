@@ -386,7 +386,15 @@ class QuotesSync:
 
         # Obtener datos del producto
         unitary_cost = float(product.get('unitary_cost', 0)) if product else 0.0
-        sale_tax = float(product.get('sale_tax', 0)) if product else 0.0
+
+        # sale_tax: formatear como string de 2 dígitos (ej: 1 -> '01', 16 -> '16')
+        sale_tax_raw = product.get('sale_tax', '0') if product else '0'
+        if isinstance(sale_tax_raw, (int, float)):
+            sale_tax_value = int(float(sale_tax_raw))
+            sale_tax = f"{sale_tax_value:02d}"  # Formatear como 2 dígitos
+        else:
+            sale_tax = str(sale_tax_raw).zfill(2)  # Asegurar 2 dígitos
+
         sale_aliquot = float(product.get('aliquot', 0)) if product else 0.0
         buy_aliquot = float(product.get('buy_aliquot', 0)) if product else 0.0
         product_type = product.get('product_type', '') if product else ''
