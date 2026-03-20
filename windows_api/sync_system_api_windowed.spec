@@ -14,11 +14,16 @@ datas_list = [
 if os.path.exists('icon.ico'):
     datas_list.append(('icon.ico', '.'))
 
+from PyInstaller.utils.hooks import collect_all
+
+# Colectar win10toast completo (incluye metadatos .egg-info)
+win10toast_datas = collect_all('win10toast')
+
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
     binaries=[],
-    datas=datas_list,
+    datas=datas_list + win10toast_datas,
     hiddenimports=[
         # Módulos principales de la aplicación
         'api_client',
@@ -114,13 +119,6 @@ a = Analysis(
     win_private_assemblies=False,
     noarchive=False,
 )
-
-# collect_all para incluir win10toast completo con sus metadatos
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
-
-# Incluir win10toast completo
-a.datas += collect_data_files('win10toast')
-a.datas += collect_submodules('win10toast')
 
 pyz = PYZ(a.pure, a.zipped_data)
 
