@@ -627,11 +627,12 @@ class QuotesSync:
             INSERT INTO sales_operation_taxes (
                 main_correlative, taxe_code, aliquot, taxable, tax, tax_type
             ) VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING line
         """
 
         sql_tax_coins = """
             INSERT INTO sales_operation_taxes_coins (
-                main_correlative, main_taxe_code, taxable, tax, coin_code
+                main_correlative, main_line, taxable, tax, coin_code
             ) VALUES (%s, %s, %s, %s, %s)
         """
 
@@ -645,7 +646,7 @@ class QuotesSync:
             if tax_amount > 0:
                 self._log(f"     Insertando impuesto tipo={tax_code}: aliquot={aliquot:.2f}%, taxable={taxable_amount:.2f}, tax={tax_amount:.2f}, ítems={count}", "debug")
 
-                # Insertar en sales_operation_taxes
+                # Insertar en sales_operation_taxes y obtener line
                 self.pg_cursor.execute(sql_tax, (
                     correlative,
                     tax_code,
@@ -655,10 +656,12 @@ class QuotesSync:
                     1  # tax_type
                 ))
 
+                tax_line = self.pg_cursor.fetchone()[0]
+
                 # Insertar en USD ('02')
                 self.pg_cursor.execute(sql_tax_coins, (
                     correlative,
-                    tax_code,
+                    tax_line,
                     taxable_amount,
                     tax_amount,
                     '02'  # USD
@@ -670,7 +673,7 @@ class QuotesSync:
 
                 self.pg_cursor.execute(sql_tax_coins, (
                     correlative,
-                    tax_code,
+                    tax_line,
                     taxable_amount_bcv,
                     tax_amount_bcv,
                     '01'  # Bolívares
