@@ -79,3 +79,50 @@ CREATE TRIGGER tr_clients_mark_updated_sync_hashes
     AFTER UPDATE ON clients
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_client_updated_sync_hashes();
+
+-- Trigger para DELETE en clients
+CREATE OR REPLACE FUNCTION trigger_mark_client_deleted_sync_hashes()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+    v_exists INTEGER;
+BEGIN
+    -- Obtener el company_id desde sync_config
+    SELECT value INTO v_company_id
+    FROM sync_config
+    WHERE key = 'current_company_id';
+
+    -- Si no existe, usar 1 como fallback
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    -- Verificar si ya existe el registro en sync_hashes
+    SELECT COUNT(*) INTO v_exists
+    FROM sync_hashes
+    WHERE table_name = 'customers'
+    AND record_key = OLD.code
+    AND company_id = v_company_id;
+
+    -- Si existe, actualizar deleted_at
+    IF v_exists > 0 THEN
+        UPDATE sync_hashes
+        SET deleted_at = NOW()
+        WHERE table_name = 'customers'
+        AND record_key = OLD.code
+        AND company_id = v_company_id;
+    ELSE
+        -- Si no existe, insertar nuevo registro con deleted_at
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+        VALUES ('customers', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_clients_mark_deleted_sync_hashes ON clients;
+CREATE TRIGGER tr_clients_mark_deleted_sync_hashes
+    AFTER DELETE ON clients
+    FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_client_deleted_sync_hashes();
