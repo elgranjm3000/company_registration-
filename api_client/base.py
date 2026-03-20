@@ -275,18 +275,28 @@ class BaseAPIClient:
         raise APIError("Max retries exceeded")
 
     def _log_request(self, method: str, endpoint: str, params: Optional[Dict], json_data: Optional[Dict]):
-        """Log información de la request saliente (solo endpoint, sin datos sensibles)."""
+        """Log información de la request saliente."""
         try:
-            # Solo mostrar endpoint y método, NO mostrar datos enviados
+            # Mostrar endpoint y método
             msg = f"📤 {method} {endpoint}"
 
-            # Si hay datos, solo mostrar cantidad
+            # Si hay datos, mostrar cantidad
             if json_data and method in ['POST', 'PUT', 'PATCH']:
                 if isinstance(json_data, dict):
                     if 'products' in json_data:
                         msg += f" ({len(json_data['products'])} products)"
                     elif 'customers' in json_data:
                         msg += f" ({len(json_data['customers'])} customers)"
+                        # DEBUG: Mostrar primer customer para ver qué campos se envían
+                        if len(json_data['customers']) > 0:
+                            import json
+                            print(f"\n{'='*70}")
+                            print(f"📤 REQUEST PAYLOAD DETALLADO - {endpoint}")
+                            print(f"{'='*70}")
+                            print(f"Company ID: {json_data.get('company_id')}")
+                            print(f"Primer customer completo:")
+                            print(json.dumps(json_data['customers'][0], indent=2, ensure_ascii=False))
+                            print(f"{'='*70}\n")
                     elif 'sellers' in json_data:
                         msg += f" ({len(json_data['sellers'])} sellers)"
                     elif 'categories' in json_data:
@@ -296,7 +306,7 @@ class BaseAPIClient:
                 else:
                     msg += " (data)"
 
-            self.logger.debug(msg)  # Usar debug para no saturar logs de info
+            self.logger.info(msg)  # Cambiar a info para verlo siempre
         except Exception:
             pass  # No fallar el request por error de logging
 
