@@ -488,7 +488,8 @@ class ProductsSync(BaseSync):
             'buy_tax': str(buy_tax) if buy_tax else '0',
             'buy_aliquot': float(safe_float(buy_aliquot)),
             'sale_tax': str(sale_tax) if sale_tax else '16',
-            'aliquot': float(safe_float(aliquot))
+            'aliquot': float(safe_float(aliquot)),
+            'product_type': product_type if product_type else 'P'  # Tipo de producto (P=Producto, C=Combo, etc.)
         }
 
     def _get_category_id(self, department_name: str) -> int:
