@@ -145,6 +145,7 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                 # Verificar que pywin32 esté disponible
                 try:
                     import win32con
+                    import win32gui
                 except ImportError:
                     return  # pywin32 no instalado, salir silenciosamente
 
@@ -154,11 +155,44 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
 
                 # Forzar la creación de classAtom si no existe
                 if not hasattr(toast, 'classAtom'):
-                    try:
-                        import win32gui
-                        toast.classAtom = None
-                    except:
-                        pass
+                    toast.classAtom = None
+
+                # Si no hay ventana consola (modo --windowed), crear ventana oculta
+                # Esto es necesario para que win10toast funcione
+                try:
+                    # Intentar obtener la ventana actual
+                    hwnd = win32gui.GetForegroundWindow()
+                    if not hwnd or hwnd == 0:
+                        # No hay ventana, crear una ventana oculta
+                        # Esta ventana será usada como parent para las notificaciones
+                        hInstance = win32gui.GetModuleHandle(None)
+                        className = "PythonHiddenWindow"
+
+                        # Registrar clase de ventana
+                        wc = win32gui.WNDCLASS()
+                        wc.hInstance = hInstance
+                        wc.lpszClassName = className
+                        wc.lpfnWndProc = lambda hwnd, msg, wparam, lparam: win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
+
+                        # Intentar registrar la clase (puede ya estar registrada)
+                        try:
+                            win32gui.RegisterClass(wc)
+                        except:
+                            pass  # Clase ya registrada, es normal
+
+                        # Crear ventana oculta
+                        style = win32con.WS_POPUP | win32con.WS_SYSMENU
+                        hwnd = win32gui.CreateWindowEx(
+                            0, className, "HiddenWindow", style,
+                            0, 0, 0, 0, 0, 0, hInstance, None
+                        )
+                        win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+
+                        # Asignar esta ventana al toast
+                        toast._hwnd = hwnd
+                except:
+                    # Si falla la creación de ventana oculta, continuar sin ella
+                    pass
 
                 # Intentar usar icono personalizado
                 icon_path = icono
