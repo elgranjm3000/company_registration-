@@ -206,7 +206,9 @@ class ProductsClient(BaseAPIClient):
                             'buy_tax': '0',                 # REQUERIDO
                             'buy_aliquot': 0.0,             # REQUERIDO
                             'sale_tax': '16',               # REQUERIDO
-                            'aliquot': 16.0                # REQUERIDO
+                            'aliquot': 16.0,               # REQUERIDO
+                            'product_type': 'P',            # Tipo de producto (P=Producto, C=Combo)
+                            'unidad': 'Pound'               # Unidad de medida
                         }
             batch_size: Tamaño de lote (default usa self.batch_size)
 
