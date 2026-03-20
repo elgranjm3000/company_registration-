@@ -256,13 +256,14 @@ class CustomersSync(BaseSync):
             print(f"⚠️  WARNING: Cliente con code VACÍO (usando client_id '{client_id}')")
             codigo_final = client_id if client_id else f"TEMP-{hash(client_id)}"
 
+        # Limpiar espacios en blanco de todos los campos
         return {
-            'codigo': codigo_final,             # code de PostgreSQL -> campo 'codigo'
-            'document_number': client_id,       # client_id de PostgreSQL
-            'name': name,
-            'email': email if email else None,
-            'phone': phone if phone else None,
-            'address': address if address else None,
+            'codigo': (codigo_final or '').strip(),             # Eliminar espacios al inicio/final
+            'document_number': (client_id or '').strip(),       # Eliminar espacios al inicio/final
+            'name': (name or '').strip(),
+            'email': (email or '').strip() if email and email.strip() != '@' else None,  # Email inválido → None
+            'phone': (phone or '').strip() if phone else None,
+            'address': (address or '').strip() if address else None,
             'status': status_mapped
         }
 
