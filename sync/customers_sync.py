@@ -605,6 +605,9 @@ class CustomersSync(BaseSync):
             self.pg_conn.commit()
             self.info(f"\n✅ Total insertados: {insertados} de {len(nuevos_clientes)}")
 
+            # Actualizar estadísticas
+            self.stats['created'] += insertados
+
             # Actualizar sync_hashes (marcar como sincronizados)
             self._update_sync_hashes_after_insert(nuevos_clientes)
 
