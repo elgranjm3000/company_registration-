@@ -115,6 +115,13 @@ a = Analysis(
     noarchive=False,
 )
 
+# collect_all para incluir win10toast completo con sus metadatos
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+# Incluir win10toast completo
+a.datas += collect_data_files('win10toast')
+a.datas += collect_submodules('win10toast')
+
 pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
