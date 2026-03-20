@@ -246,9 +246,17 @@ class CustomersSync(BaseSync):
         # Asumimos: '01' = active, otro = inactive
         status_mapped = 'active' if status == '01' else 'inactive'
 
+        # VALIDACIÓN: code no debe estar vacío
+        codigo_final = code
+        if not code or code.strip() == '':
+            self.warning(
+                f"⚠️  Cliente con code VACÍO (usando client_id '{client_id}' como codigo)"
+            )
+            codigo_final = client_id if client_id else f"TEMP-{hash(client_id)}"
+
         return {
-            'codigo': code,                  # code de PostgreSQL -> campo "codigo" del endpoint
-            'document_number': client_id,    # client_id de PostgreSQL
+            'codigo': codigo_final,             # code de PostgreSQL (o client_id si code está vacío)
+            'document_number': client_id,       # client_id de PostgreSQL
             'name': name,
             'email': email if email else None,
             'phone': phone if phone else None,
