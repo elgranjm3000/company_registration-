@@ -362,12 +362,12 @@ class QuotesSync:
         # Obtener description del producto
         description_product = product.get('description', '') if product else item.get('name', '')
 
-        # Buscar unit en products_units usando code
+        # Buscar unit en products_units usando product_code
         unit = None
         if code_product:
             try:
                 self.pg_cursor.execute("""
-                    SELECT correlative FROM products_units WHERE code = %s LIMIT 1
+                    SELECT correlative FROM products_units WHERE product_code = %s LIMIT 1
                 """, (code_product,))
                 result = self.pg_cursor.fetchone()
                 if result:
