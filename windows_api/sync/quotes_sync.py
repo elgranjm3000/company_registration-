@@ -46,8 +46,8 @@ class QuotesSync:
         except Exception:
             return '00:00:00:00:00:00'  # Valor por defecto si falla
 
-    def _ensure_station_exists(self, station_mac: str):
-        """Verificar que la MAC existe en stations, si no, insertarla"""
+    def _ensure_station_exists(self, station_mac: str) -> str:
+        """Verificar que la MAC existe en stations, si no, insertarla. Retorna el code de la estación."""
         try:
             # Verificar si ya existe
             self.pg_cursor.execute("""
@@ -56,17 +56,23 @@ class QuotesSync:
 
             result = self.pg_cursor.fetchone()
             if result:
-                self._log(f"     ✅ Estación ya existe: {station_mac}", "debug")
+                station_code = result[0]
+                self._log(f"     ✅ Estación ya existe: {station_mac} → code={station_code}", "debug")
+                return station_code
             else:
                 # Insertar nueva estación
                 self.pg_cursor.execute("""
                     INSERT INTO stations (code, description, sale_point)
                     VALUES (%s, %s, %s)
+                    RETURNING code
                 """, (station_mac, station_mac, '00'))
                 self.pg_conn.commit()
-                self._log(f"     ➕ Estación insertada: {station_mac}", "info")
+                new_code = self.pg_cursor.fetchone()[0]
+                self._log(f"     ➕ Estación insertada: {station_mac} → code={new_code}", "info")
+                return new_code
         except Exception as e:
             self._log(f"     ⚠️ Error verificando estación: {e}", "warning")
+            return station_mac  # Retornar el MAC original en caso de error
 
     def _generar_hash_quote(self, quote: dict) -> str:
         """Generar hash MD5 de un quote para detectar cambios"""
@@ -182,10 +188,10 @@ class QuotesSync:
         expiration_date = self._parse_date(quote.get('valid_until'))
 
         # MAC Address del equipo
-        station = self._get_mac_address()
+        station_mac = self._get_mac_address()
 
-        # Verificar/insertar MAC en tabla stations
-        self._ensure_station_exists(station)
+        # Verificar/insertar MAC en tabla stations y obtener el code
+        station = self._ensure_station_exists(station_mac)
 
         # Fecha actual para shopping_order_date
         from datetime import date
