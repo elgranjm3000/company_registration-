@@ -1158,26 +1158,27 @@ class APISyncManager:
             with open(sql_file, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
 
-            # Dividir el SQL en statements individuales respetando $$...$$
-            statements = self._split_sql_statements(sql_content)
+            print(f"[DEBUG] Ejecutando SQL desde: {sql_file}")
 
-            print(f"[DEBUG] Ejecutando {len(statements)} statements SQL desde: {sql_file}")
-
-            # Ejecutar cada statement individualmente
-            for i, statement in enumerate(statements, 1):
-                if statement:  # Solo ejecutar si no está vacío
-                    try:
-                        self.pg_cursor.execute(statement)
-                        if i % 10 == 0:
-                            self.pg_conn.commit()  # Commit cada 10 statements
-                    except Exception as stmt_error:
-                        print(f"[DEBUG] Error en statement {i}: {str(stmt_error)[:100]}")
-                        # Continuar con el siguiente statement
-                        continue
-
-            # Commit final
-            self.pg_conn.commit()
-            print(f"[DEBUG] ✅ Triggers creados exitosamente ({len(statements)} statements ejecutados)")
+            # Ejecutar todo el SQL de una vez (PostgreSQL puede manejar múltiples statements)
+            try:
+                self.pg_cursor.execute(sql_content)
+                self.pg_conn.commit()
+                print(f"[DEBUG] ✅ Triggers creados exitosamente")
+            except Exception as e:
+                print(f"[DEBUG] Error ejecutando SQL: {e}")
+                self.pg_conn.rollback()
+                # Fallback: intentar crear triggers desde código Python
+                print("[DEBUG] Creando triggers desde código Python (fallback)...")
+                try:
+                    self._crear_trigger_eliminacion_products()
+                    self._crear_trigger_eliminacion_categories()
+                    self._crear_trigger_eliminacion_customers()
+                    self._crear_trigger_eliminacion_sellers()
+                    self._crear_trigger_actualizacion_products()
+                    self._crear_trigger_actualizacion_customers()
+                except Exception as e2:
+                    print(f"[DEBUG] Error en fallback: {e2}")
 
         except Exception as e:
             print(f"[DEBUG] Error ejecutando archivo SQL: {e}")
