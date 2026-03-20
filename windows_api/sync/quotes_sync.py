@@ -385,7 +385,7 @@ class QuotesSync:
                 self._log(f"     ⚠️ Error buscando datos en products_units: {e}", "warning")
 
         # Obtener datos del producto
-        unitary_cost = float(product.get('unitary_cost', 0)) if product else 0.0
+        unitary_cost = round(float(product.get('unitary_cost', 0)) if product else 0.0, 4)  # 4 decimales
         sale_tax = product.get('sale_tax', '01') if product else '01'  # Ya viene como '01', '02', etc.
         sale_aliquot = float(product.get('aliquot', 0)) if product else 0.0
         buy_aliquot = float(product.get('buy_aliquot', 0)) if product else 0.0
@@ -439,7 +439,7 @@ class QuotesSync:
             main_correlative,
             code_product,
             description_product,
-            item.get('name', ''),
+            description_product,  # description = description_product
             quantity,
             unit_price,
             discount_amount,
