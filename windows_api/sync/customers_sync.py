@@ -259,11 +259,16 @@ class CustomersSync(BaseSync):
             codigo_final = client_id if client_id else f"TEMP-{hash(client_id)}"
 
         # Limpiar espacios en blanco de todos los campos
+        # Email inválido → string vacío (backend tiene NOT NULL constraint)
+        email_clean = (email or '').strip()
+        if not email_clean or email_clean == '@':
+            email_clean = ''  # String vacío en lugar de None
+
         return {
             'codigo': (codigo_final or '').strip(),             # Eliminar espacios al inicio/final
             'document_number': (client_id or '').strip(),       # Eliminar espacios al inicio/final
             'name': (name or '').strip(),
-            'email': (email or '').strip() if email and email.strip() != '@' else None,  # Email inválido → None
+            'email': email_clean,
             'phone': (phone or '').strip() if phone else None,
             'address': (address or '').strip() if address else None,
             'status': status_mapped
