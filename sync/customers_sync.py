@@ -316,6 +316,21 @@ class CustomersSync(BaseSync):
                 self.info(f"Total clientes a enviar: {len(customers_api)}")
                 self.info(f"Intento: {attempt + 1}/{max_retries}")
 
+                # Validar que todos los clientes tengan los campos requeridos
+                self.info(f"\n✅ Validando campos requeridos...")
+                sin_name = []
+                sin_doc_number = []
+                for i, cust in enumerate(customers_api):
+                    if not cust.get('name') or cust.get('name').strip() == '':
+                        sin_name.append(i)
+                    if not cust.get('document_number') or cust.get('document_number').strip() == '':
+                        sin_doc_number.append(i)
+
+                if sin_name:
+                    self.warning(f"   ⚠️  {len(sin_name)} clientes sin name (índices: {sin_name[:10]}...)")
+                if sin_doc_number:
+                    self.warning(f"   ⚠️  {len(sin_doc_number)} clientes sin document_number (índices: {sin_doc_number[:10]}...)")
+
                 # Mostrar primeros 5 clientes para ver qué se envía
                 self.info(f"\nPrimeros 5 clientes que se enviarán:")
                 for i, cust in enumerate(customers_api[:5], 1):
@@ -336,10 +351,21 @@ class CustomersSync(BaseSync):
                 self.info(f"\n{'='*70}")
                 self.info(f"📥 RESPUESTA DEL BACKEND")
                 self.info(f"{'='*70}")
-                self.info(f"Respuesta cruda: {result}")
+                self.info(f"Enviados: {len(customers_api)}")
                 self.info(f"Created: {result.get('created', 0)}")
                 self.info(f"Updated: {result.get('updated', 0)}")
                 self.info(f"Errors: {result.get('errors', 0)}")
+                self.info(f"Total procesados: {result.get('created', 0) + result.get('updated', 0) + result.get('errors', 0)}")
+
+                diferencia = len(customers_api) - (result.get('created', 0) + result.get('updated', 0) + result.get('errors', 0))
+                if diferencia != 0:
+                    self.warning(f"⚠️  DIFERENCIA: {diferencia} clientes no fueron procesados")
+
+                if result.get('error_details'):
+                    self.info(f"\n❌ Detalles de errores:")
+                    for i, error in enumerate(result.get('error_details', [])[:10], 1):
+                        self.error(f"   {i}. {error}")
+
                 self.info(f"{'='*70}\n")
 
                 # Actualizar estadísticas
