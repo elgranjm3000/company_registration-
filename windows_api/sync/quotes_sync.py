@@ -484,8 +484,11 @@ class QuotesSync:
                                total_net_cost: float, total_tax_cost: float, total_cost: float,
                                total_net_gross: float, total_tax_gross: float, total_gross: float,
                                discount: float, total_net: float, total_tax: float, total: float):
-        """Insertar en sales_operation_details_coins (solo USD '02' por ahora)"""
+        """Insertar en sales_operation_details_coins (USD '02' y Bolívares '01')"""
         try:
+            # Obtener tasa de cambio desde tabla coin
+            bcv_rate = self._get_bcv_rate()
+
             sql_detail_coins = """
                 INSERT INTO sales_operation_details_coins (
                     main_correlative, main_line, unitary_cost, price,
@@ -514,10 +517,65 @@ class QuotesSync:
                 '02'  # USD
             ))
 
-            self._log(f"     Insertado en sales_operation_details_coins (USD)", "debug")
+            # Calcular valores en Bolívares
+            unitary_cost_bcv = round(unitary_cost * bcv_rate, 2)
+            price_bcv = round(price * bcv_rate, 2)
+            total_net_cost_bcv = round(total_net_cost * bcv_rate, 2)
+            total_tax_cost_bcv = round(total_tax_cost * bcv_rate, 2)
+            total_cost_bcv = round(total_cost * bcv_rate, 2)
+            total_net_gross_bcv = round(total_net_gross * bcv_rate, 2)
+            total_tax_gross_bcv = round(total_tax_gross * bcv_rate, 2)
+            total_gross_bcv = round(total_gross * bcv_rate, 2)
+            discount_bcv = round(discount * bcv_rate, 2)
+            total_net_bcv = round(total_net * bcv_rate, 2)
+            total_tax_bcv = round(total_tax * bcv_rate, 2)
+            total_bcv = round(total * bcv_rate, 2)
+
+            # Insertar en Bolívares ('01')
+            self.pg_cursor.execute(sql_detail_coins, (
+                main_correlative,
+                line,
+                unitary_cost_bcv,
+                price_bcv,
+                total_net_cost_bcv,
+                total_tax_cost_bcv,
+                total_cost_bcv,
+                total_net_gross_bcv,
+                total_tax_gross_bcv,
+                total_gross_bcv,
+                discount_bcv,
+                total_net_bcv,
+                total_tax_bcv,
+                total_bcv,
+                '01'  # Bolívares
+            ))
+
+            self._log(f"     Insertado en sales_operation_details_coins (USD y BS, tasa={bcv_rate})", "debug")
 
         except Exception as e:
             self._log(f"     ⚠️ Error insertando en sales_operation_details_coins: {e}", "warning")
+
+    def _get_bcv_rate(self) -> float:
+        """Obtener tasa de cambio BCV desde tabla coin"""
+        try:
+            self.pg_cursor.execute("""
+                SELECT sales_aliquot
+                FROM coin
+                WHERE code = '02'
+                LIMIT 1
+            """)
+
+            result = self.pg_cursor.fetchone()
+            if result and result[0]:
+                return float(result[0])
+
+            # Valor por defecto si no se encuentra
+            self._log(f"     ⚠️ No se encontró tasa BCV en tabla coin, usando default 170", "warning")
+            return 170.0
+
+        except Exception as e:
+            self._log(f"     ⚠️ Error obteniendo tasa BCV: {e}, usando default 170", "warning")
+            return 170.0
 
     def _insertar_impuestos(self, correlative: int, quote: dict):
         """Insertar impuestos del quote en sales_operation_taxes y sales_operation_taxes_coins"""
