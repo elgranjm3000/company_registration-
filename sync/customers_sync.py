@@ -218,7 +218,8 @@ class CustomersSync(BaseSync):
         Returns:
             Dict con formato esperado por la API:
                 {
-                    'document_number': 'V12345678',
+                    'codigo': 'V12345678',          # code de PostgreSQL
+                    'document_number': '12345678',   # client_id de PostgreSQL
                     'name': 'Juan Pérez',
                     'email': 'juan@email.com',
                     'phone': '+58-414-1234567',
@@ -228,10 +229,10 @@ class CustomersSync(BaseSync):
         """
         # Extraer campos del tuple
         (
-            code,            # 0 - Usar como document_number
+            code,            # 0 - código de cliente -> campo 'codigo'
             description,     # 1 - Usar como name
             address,         # 2
-            client_id,       # 3 - No usado (interno de PG)
+            client_id,       # 3 - ID interno -> campo 'document_number'
             email,           # 4
             phone,           # 5
             contact,         # 6
@@ -245,8 +246,15 @@ class CustomersSync(BaseSync):
         # Asumimos: '01' = active, otro = inactive
         status_mapped = 'active' if status == '01' else 'inactive'
 
+        # VALIDACIÓN: code no debe estar vacío
+        codigo_final = code
+        if not code or code.strip() == '':
+            print(f"⚠️  WARNING: Cliente con code VACÍO (usando client_id '{client_id}')")
+            codigo_final = client_id if client_id else f"TEMP-{hash(client_id)}"
+
         return {
-            'document_number': code,
+            'codigo': codigo_final,             # code de PostgreSQL -> campo 'codigo'
+            'document_number': client_id,       # client_id de PostgreSQL
             'name': name,
             'email': email if email else None,
             'phone': phone if phone else None,
