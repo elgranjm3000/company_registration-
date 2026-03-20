@@ -218,7 +218,8 @@ class CustomersSync(BaseSync):
         Returns:
             Dict con formato esperado por la API:
                 {
-                    'document_number': 'V12345678',
+                    'codigo': 'V12345678',          # code de PostgreSQL
+                    'document_number': '12345678',   # client_id de PostgreSQL
                     'name': 'Juan Pérez',
                     'email': 'juan@email.com',
                     'phone': '+58-414-1234567',
@@ -246,7 +247,8 @@ class CustomersSync(BaseSync):
         status_mapped = 'active' if status == '01' else 'inactive'
 
         return {
-            'document_number': code,
+            'codigo': code,                  # code de PostgreSQL -> campo "codigo" del endpoint
+            'document_number': client_id,    # client_id de PostgreSQL
             'name': name,
             'email': email if email else None,
             'phone': phone if phone else None,
