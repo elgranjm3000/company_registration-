@@ -616,3 +616,83 @@ class CustomersSync(BaseSync):
     def _get_table_name(self) -> str:
         """Retornar nombre de la tabla para sync_hashes"""
         return 'customers'
+
+    # =========================================================================
+    # MÉTODO PRINCIPAL DE SINCRONIZACIÓN BIDIRECCIONAL
+    # =========================================================================
+
+    def execute(self) -> Dict[str, int]:
+        """
+        Ejecutar sincronización completa bidireccional:
+        1. PostgreSQL → API REST (cambios locales)
+        2. API REST → PostgreSQL (nuevos clientes del backend)
+
+        Returns:
+            Dict con estadísticas:
+            {
+                'to_api_created': 0,
+                'to_api_updated': 0,
+                'to_api_deleted': 0,
+                'from_api_new': 0
+            }
+        """
+        stats = {
+            'to_api_created': 0,
+            'to_api_updated': 0,
+            'to_api_deleted': 0,
+            'from_api_new': 0
+        }
+
+        try:
+            self.info("\n" + "="*70)
+            self.info("🔄 SINCRONIZACIÓN BIDIRECCIONAL DE CLIENTES")
+            self.info("="*70)
+
+            # ===================================================================
+            # PASO 1: PostgreSQL → API REST (cambios locales)
+            # ===================================================================
+            self.info("\n📤 PASO 1: Sincronizando cambios LOCALES a la API REST...")
+            self.info("-"*70)
+
+            cambios = self.detect_changes()
+
+            # Sincronizar nuevos y modificados
+            if cambios['nuevos'] or cambios['modificados']:
+                self.sync_to_api(cambios)
+                stats['to_api_created'] = self.stats.get('created', 0)
+                stats['to_api_updated'] = self.stats.get('updated', 0)
+
+            # Sincronizar eliminados
+            if cambios['eliminados']:
+                self.delete_from_api(cambios['eliminados'])
+                stats['to_api_deleted'] = self.stats.get('deleted', 0)
+
+            # ===================================================================
+            # PASO 2: API REST → PostgreSQL (nuevos desde backend)
+            # ===================================================================
+            self.info("\n📥 PASO 2: Detectando NUEVOS clientes desde API REST...")
+            self.info("-"*70)
+
+            nuevos_desde_api = self.detect_new_from_api()
+
+            if nuevos_desde_api:
+                insertados = self.sync_new_from_api(nuevos_desde_api)
+                stats['from_api_new'] = insertados
+
+            # ===================================================================
+            # RESUMEN
+            # ===================================================================
+            self.info("\n" + "="*70)
+            self.info("✅ SINCRONIZACIÓN BIDIRECCIONAL COMPLETADA")
+            self.info("="*70)
+            self.info(f"📤 A API REST: {stats['to_api_created']} creados, {stats['to_api_updated']} actualizados, {stats['to_api_deleted']} eliminados")
+            self.info(f"📥 DESDE API: {stats['from_api_new']} nuevos clientes importados")
+            self.info("="*70 + "\n")
+
+            return stats
+
+        except Exception as e:
+            self.error(f"❌ Error en sincronización bidireccional: {e}")
+            import traceback
+            self.error(traceback.format_exc())
+            return stats
