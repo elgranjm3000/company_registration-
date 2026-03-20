@@ -1420,8 +1420,50 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
         try:
             print("[DEBUG] Ejecutando SQL embebido para crear triggers...")
 
-            # Dividir el SQL en statements individuales respetando $$...$$
-            statements = self._split_sql_statements(sql_content)
+            # Dividir el SQL por puntos y coma, pero manteniendo las funciones completas
+            # Las funciones terminan con $$ LANGUAGE plpgsql;
+            statements = []
+            current_stmt = []
+            in_function = False
+
+            for line in sql_content.split('\n'):
+                stripped = line.strip()
+
+                # Ignorar comentarios
+                if stripped.startswith('--') and not in_function:
+                    continue
+
+                # Detectar inicio de función
+                if stripped.startswith('CREATE OR REPLACE FUNCTION'):
+                    in_function = True
+                    current_stmt.append(line)
+                    continue
+
+                # Dentro de una función
+                if in_function:
+                    current_stmt.append(line)
+                    # Fin de función
+                    if 'LANGUAGE' in stripped and 'plpgsql' in stripped:
+                        if stripped.endswith(';'):
+                            stmt = '\n'.join(current_stmt)
+                            statements.append(stmt)
+                            current_stmt = []
+                            in_function = False
+                    continue
+
+                # Fuera de función
+                if not in_function and stripped:
+                    current_stmt.append(line)
+                    if line.rstrip().endswith(';'):
+                        stmt = '\n'.join(current_stmt)
+                        statements.append(stmt)
+                        current_stmt = []
+
+            # Agregar lo que reste
+            if current_stmt:
+                stmt = '\n'.join(current_stmt)
+                if stmt.strip():
+                    statements.append(stmt)
 
             print(f"[DEBUG] Ejecutando {len(statements)} statements...")
 
@@ -1432,11 +1474,13 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
                         self.pg_cursor.execute(statement)
                     except Exception as stmt_error:
                         print(f"[DEBUG] Error en statement {i}: {str(stmt_error)[:200]}")
+                        # Hacer rollback para limpiar el estado
+                        self.pg_conn.rollback()
                         # Continuar con el siguiente statement
                         continue
 
             self.pg_conn.commit()
-            print(f"[DEBUG] ✅ Triggers creados exitosamente desde SQL embebido ({len(statements)} statements)")
+            print(f"[DEBUG] ✅ Triggers creados exitosamente desde SQL embebido")
 
         except Exception as e:
             print(f"[DEBUG] Error ejecutando SQL embebido: {e}")
