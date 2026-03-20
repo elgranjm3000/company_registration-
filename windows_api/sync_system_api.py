@@ -1048,11 +1048,13 @@ class APISyncManager:
 
             # Buscar el archivo SQL en varias ubicaciones (para .exe y desarrollo)
             sql_file_locations = [
-                # 1. Mismo directorio que el script (para .exe)
+                # 1. Directorio temporal de PyInstaller (para .exe empaquetado)
+                os.path.join(sys._MEIPASS, 'create_triggers_all_versions.sql') if getattr(sys, 'frozen', False) else None,
+                # 2. Mismo directorio que el script (para .exe)
                 os.path.join(script_dir, 'create_triggers_all_versions.sql'),
-                # 2. Directorio padre (para desarrollo)
+                # 3. Directorio padre (para desarrollo)
                 os.path.join(script_dir, '..', 'create_triggers_all_versions.sql'),
-                # 3. Directorio del ejecutable si está empaquetado
+                # 4. Directorio del ejecutable (fallback para .exe)
                 os.path.join(os.path.dirname(sys.executable), 'create_triggers_all_versions.sql') if getattr(sys, 'frozen', False) else None
             ]
 
