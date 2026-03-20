@@ -490,7 +490,8 @@ class ProductsSync(BaseSync):
             'sale_tax': str(sale_tax) if sale_tax else '16',
             'aliquot': float(safe_float(aliquot)),
             'product_type': product_type if product_type else 'P',  # Tipo de producto (P=Producto, C=Combo, etc.)
-            'unidad': unidad if unidad else 'Unidad'  # Descripción de la unidad de medida
+            'unidad': unidad if unidad else 'Unidad',  # Descripción de la unidad de medida
+            'allow_decimal': bool(allow_decimal) if allow_decimal is not None else False  # Permite decimales (booleano)
         }
 
     def _get_category_id(self, department_name: str) -> int:
