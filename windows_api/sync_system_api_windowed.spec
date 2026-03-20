@@ -87,9 +87,14 @@ a = Analysis(
         'hashlib',
         'base64',
         'winreg',  # Windows Registry para auto-inicio
-        # Notificaciones Windows
+        # Notificaciones Windows - IMPORTANTES
         'win10toast',
         'win10toast.toast',
+        'pkg_resources',
+        'pkg_resources.extern',
+        'pkg_resources.extern.packaging',
+        'packaging',
+        'packaging.version',
         'pywin32',
         'pywin32.win32api',
         'pywin32.win32con',
