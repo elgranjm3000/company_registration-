@@ -285,6 +285,18 @@ class CustomersSync(BaseSync):
             for cust in todos_los_customers
         ]
 
+        # DEBUG: Mostrar payload que se va a enviar
+        self.info(f"\n{'='*70}")
+        self.info(f"📤 ENVIANDO CLIENTES A LA API")
+        self.info(f"{'='*70}")
+        self.info(f"Company ID: {self.company_id}")
+        self.info(f"Total clientes: {len(customers_api)}")
+        if len(customers_api) > 0:
+            self.info(f"\n📋 Primer cliente (ejemplo):")
+            import json
+            self.info(json.dumps(customers_api[0], indent=2, ensure_ascii=False))
+        self.info(f"{'='*70}\n")
+
         # Reintentos si falla todo el lote
         max_retries = 3
         for attempt in range(max_retries):
