@@ -1584,7 +1584,7 @@ class ConfigWindow:
             self.root.title("⚙️ Nueva Configuración - Sincronizador API")
 
         # Variables
-        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://aspect-robots-labeled-competitions.trycloudflare.com/sales-apiWEB/public/api"))
+        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://chrystal.com.ve/mobile/public/api"))
         self.api_email_var = tk.StringVar(value=existing_config.get('api_email', ''))
         self.api_password_var = tk.StringVar()  # Password nunca se carga
 
