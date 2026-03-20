@@ -632,8 +632,8 @@ class QuotesSync:
 
         sql_tax_coins = """
             INSERT INTO sales_operation_taxes_coins (
-                main_correlative, main_line, taxable, tax, coin_code
-            ) VALUES (%s, %s, %s, %s, %s)
+                main_correlative, main_line, main_taxe_code, taxable, tax, coin_code
+            ) VALUES (%s, %s, %s, %s, %s, %s)
         """
 
         for tax_code, values in sorted(taxes_by_type.items()):
@@ -662,6 +662,7 @@ class QuotesSync:
                 self.pg_cursor.execute(sql_tax_coins, (
                     correlative,
                     tax_line,
+                    tax_code,
                     taxable_amount,
                     tax_amount,
                     '02'  # USD
@@ -674,6 +675,7 @@ class QuotesSync:
                 self.pg_cursor.execute(sql_tax_coins, (
                     correlative,
                     tax_line,
+                    tax_code,
                     taxable_amount_bcv,
                     tax_amount_bcv,
                     '01'  # Bolívares
