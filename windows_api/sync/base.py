@@ -370,13 +370,13 @@ class BaseSync(ABC):
                   AND company_id = %s
             """, (record_hash, last_sync_json, table_name, record_key, self.company_id))
 
-            # Si no afectó ninguna fila, hacer INSERT
+            # Si no afectó ninguna fila, hacer INSERT con pending_sync = TRUE
             if self.pg_cursor.rowcount == 0:
                 self.pg_cursor.execute("""
                     INSERT INTO sync_hashes (
                         table_name, record_key, record_hash, company_id,
                         last_sync_data, pending_sync, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, FALSE, NOW())
+                    ) VALUES (%s, %s, %s, %s, %s, TRUE, NOW())
                 """, (table_name, record_key, record_hash, self.company_id, last_sync_json))
 
             self.pg_conn.commit()

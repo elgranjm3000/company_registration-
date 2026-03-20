@@ -714,9 +714,14 @@ class CustomersSync(BaseSync):
 
             # Sincronizar nuevos y modificados
             if cambios['nuevos'] or cambios['modificados']:
-                self.sync_to_api(cambios)
+                success = self.sync_to_api(cambios)
                 stats['to_api_created'] = self.stats.get('created', 0)
                 stats['to_api_updated'] = self.stats.get('updated', 0)
+
+                # Si la sincronización fue exitosa, marcar como sincronizados en sync_hashes
+                if success and (self.stats.get('created', 0) > 0 or self.stats.get('updated', 0) > 0):
+                    self._update_sync_hashes(cambios)
+                    self.info(f"✅ Actualizados {len(cambios['nuevos']) + len(cambios['modificados'])} registros en sync_hashes")
 
             # Sincronizar eliminados
             if cambios['eliminados']:
