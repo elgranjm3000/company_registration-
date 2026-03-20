@@ -141,97 +141,92 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     def _mostrar_notificacion_thread():
         try:
             if sistema == "Windows":
-                # Windows: usar win10toast
-                # Verificar que pywin32 esté disponible
+                # Windows: intentar usar win10toast, pero silenciar errores de pkg_resources
                 try:
                     import win32con
                     import win32gui
-                except ImportError:
-                    print("[DEBUG Notificaciones] pywin32 no instalado")
-                    return  # pywin32 no instalado, salir silenciosamente
+                    from win10toast import ToastNotifier
 
-                from win10toast import ToastNotifier
+                    toast = ToastNotifier()
 
-                toast = ToastNotifier()
+                    # Forzar la creación de classAtom si no existe
+                    if not hasattr(toast, 'classAtom'):
+                        toast.classAtom = None
 
-                # Forzar la creación de classAtom si no existe
-                if not hasattr(toast, 'classAtom'):
-                    toast.classAtom = None
-
-                # SIEMPRE crear ventana oculta para notificaciones (modo --windowed)
-                # Esto es necesario porque win10toast necesita una ventana parent
-                try:
-                    hInstance = win32gui.GetModuleHandle(None)
-                    className = "PythonHiddenWindow"
-
-                    # Callback para procesar mensajes de ventana
-                    def wnd_proc(hwnd, msg, wparam, lparam):
-                        return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
-
-                    # Registrar clase de ventana
-                    wc = win32gui.WNDCLASS()
-                    wc.hInstance = hInstance
-                    wc.lpszClassName = className
-                    wc.lpfnWndProc = wnd_proc
-                    wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
-                    wc.hbrBackground = win32con.COLOR_WINDOW + 1
-
-                    # Intentar registrar la clase
+                    # SIEMPRE crear ventana oculta para notificaciones (modo --windowed)
                     try:
-                        win32gui.RegisterClass(wc)
-                    except Exception as e:
-                        print(f"[DEBUG Notificaciones] Clase ya registrada o error: {e}")
+                        hInstance = win32gui.GetModuleHandle(None)
+                        className = "PythonHiddenWindow"
 
-                    # Crear ventana oculta
-                    style = win32con.WS_OVERLAPPEDWINDOW | win32con.WS_SYSMENU
-                    hwnd = win32gui.CreateWindowEx(
-                        0, className, "HiddenWindow", style,
-                        0, 0, 100, 100, 0, 0, hInstance, None
-                    )
-                    win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+                        # Callback para procesar mensajes de ventana
+                        def wnd_proc(hwnd, msg, wparam, lparam):
+                            return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
 
-                    # Forzar que toast use esta ventana
-                    toast._hwnd = hwnd
-                    print(f"[DEBUG Notificaciones] Ventana oculta creada: hwnd={hwnd}")
+                        # Registrar clase de ventana
+                        wc = win32gui.WNDCLASS()
+                        wc.hInstance = hInstance
+                        wc.lpszClassName = className
+                        wc.lpfnWndProc = wnd_proc
+                        wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
+                        wc.hbrBackground = win32con.COLOR_WINDOW + 1
 
-                except Exception as e:
-                    print(f"[DEBUG Notificaciones] Error creando ventana oculta: {e}")
-                    import traceback
-                    traceback.print_exc()
+                        # Intentar registrar la clase
+                        try:
+                            win32gui.RegisterClass(wc)
+                        except:
+                            pass  # Clase ya registrada
 
-                # Intentar usar icono personalizado
-                icon_path = icono
-                if not icon_path:
-                    try:
-                        script_dir = os.path.dirname(os.path.abspath(__file__))
-                        possible_icons = [
-                            os.path.join(script_dir, "icon.ico"),
-                            os.path.join(script_dir, "icon.png"),
-                            os.path.join(script_dir, "app.ico"),
-                        ]
-                        for path in possible_icons:
-                            if os.path.exists(path):
-                                icon_path = path
-                                break
+                        # Crear ventana oculta
+                        style = win32con.WS_OVERLAPPEDWINDOW | win32con.WS_SYSMENU
+                        hwnd = win32gui.CreateWindowEx(
+                            0, className, "HiddenWindow", style,
+                            0, 0, 100, 100, 0, 0, hInstance, None
+                        )
+                        win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+
+                        # Forzar que toast use esta ventana
+                        toast._hwnd = hwnd
                     except:
-                        pass
+                        pass  # Si falla la creación de ventana, continuar sin ella
 
-                print(f"[DEBUG Notificaciones] Mostrando: {titulo} - {mensaje}")
-                # Usar threaded=False para ejecutar sincrónicamente en nuestro thread
-                # y poder capturar errores
-                try:
+                    # Intentar usar icono personalizado
+                    icon_path = icono
+                    if not icon_path:
+                        try:
+                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            possible_icons = [
+                                os.path.join(script_dir, "icon.ico"),
+                                os.path.join(script_dir, "icon.png"),
+                                os.path.join(script_dir, "app.ico"),
+                            ]
+                            for path in possible_icons:
+                                if os.path.exists(path):
+                                    icon_path = path
+                                    break
+                        except:
+                            pass
+
+                    # Intentar mostrar notificación
                     toast.show_toast(
                         titulo,
                         mensaje,
                         duration=duracion,
                         icon_path=icon_path,
-                        threaded=False,  # Cambiado a False para capturar errores
+                        threaded=False,
                     )
-                    print("[DEBUG Notificaciones] Toast mostrado exitosamente")
+                    print(f"[DEBUG] Notificación mostrada: {titulo}")
+
                 except Exception as e:
-                    print(f"[DEBUG Notificaciones] Error mostrando toast: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    # Si falla win10toast (por ejemplo, error de pkg_resources),
+                    # silenciosamente no hacemos nada. La notificación no es crítica.
+                    error_str = str(e)
+                    if 'DistributionNotFound' in error_str and 'win10toast' in error_str:
+                        # Este error es esperado cuando PyInstaller no incluye los metadatos
+                        # No mostrar el error para no confundir al usuario
+                        print(f"[DEBUG] Notificación: {titulo} - {mensaje} (sin notificación visual)")
+                    else:
+                        # Otros errores sí los mostramos para debug
+                        print(f"[DEBUG] Error en notificación: {e}")
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
