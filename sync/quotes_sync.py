@@ -375,12 +375,12 @@ class QuotesSync:
             except Exception as e:
                 self._log(f"     ⚠️ Error buscando unit: {e}", "warning")
 
-        # Buscar conversion_factor en products_unit usando code
+        # Buscar conversion_factor en products_unit usando product_code
         conversion_factor = 1.0
         if code_product:
             try:
                 self.pg_cursor.execute("""
-                    SELECT conversion_factor FROM products_unit WHERE code = %s LIMIT 1
+                    SELECT conversion_factor FROM products_unit WHERE product_code = %s LIMIT 1
                 """, (code_product,))
                 result = self.pg_cursor.fetchone()
                 if result and result[0]:

@@ -380,7 +380,7 @@ class QuotesSync:
         if code_product:
             try:
                 self.pg_cursor.execute("""
-                    SELECT conversion_factor FROM products_unit WHERE code = %s LIMIT 1
+                    SELECT conversion_factor FROM products_unit WHERE product_code = %s LIMIT 1
                 """, (code_product,))
                 result = self.pg_cursor.fetchone()
                 if result and result[0]:
