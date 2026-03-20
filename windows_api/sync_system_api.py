@@ -147,6 +147,7 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     import win32con
                     import win32gui
                 except ImportError:
+                    print("[DEBUG Notificaciones] pywin32 no instalado")
                     return  # pywin32 no instalado, salir silenciosamente
 
                 from win10toast import ToastNotifier
@@ -157,42 +158,46 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                 if not hasattr(toast, 'classAtom'):
                     toast.classAtom = None
 
-                # Si no hay ventana consola (modo --windowed), crear ventana oculta
-                # Esto es necesario para que win10toast funcione
+                # SIEMPRE crear ventana oculta para notificaciones (modo --windowed)
+                # Esto es necesario porque win10toast necesita una ventana parent
                 try:
-                    # Intentar obtener la ventana actual
-                    hwnd = win32gui.GetForegroundWindow()
-                    if not hwnd or hwnd == 0:
-                        # No hay ventana, crear una ventana oculta
-                        # Esta ventana será usada como parent para las notificaciones
-                        hInstance = win32gui.GetModuleHandle(None)
-                        className = "PythonHiddenWindow"
+                    hInstance = win32gui.GetModuleHandle(None)
+                    className = "PythonHiddenWindow"
 
-                        # Registrar clase de ventana
-                        wc = win32gui.WNDCLASS()
-                        wc.hInstance = hInstance
-                        wc.lpszClassName = className
-                        wc.lpfnWndProc = lambda hwnd, msg, wparam, lparam: win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
+                    # Callback para procesar mensajes de ventana
+                    def wnd_proc(hwnd, msg, wparam, lparam):
+                        return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
 
-                        # Intentar registrar la clase (puede ya estar registrada)
-                        try:
-                            win32gui.RegisterClass(wc)
-                        except:
-                            pass  # Clase ya registrada, es normal
+                    # Registrar clase de ventana
+                    wc = win32gui.WNDCLASS()
+                    wc.hInstance = hInstance
+                    wc.lpszClassName = className
+                    wc.lpfnWndProc = wnd_proc
+                    wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
+                    wc.hbrBackground = win32con.COLOR_WINDOW + 1
 
-                        # Crear ventana oculta
-                        style = win32con.WS_POPUP | win32con.WS_SYSMENU
-                        hwnd = win32gui.CreateWindowEx(
-                            0, className, "HiddenWindow", style,
-                            0, 0, 0, 0, 0, 0, hInstance, None
-                        )
-                        win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+                    # Intentar registrar la clase
+                    try:
+                        win32gui.RegisterClass(wc)
+                    except Exception as e:
+                        print(f"[DEBUG Notificaciones] Clase ya registrada o error: {e}")
 
-                        # Asignar esta ventana al toast
-                        toast._hwnd = hwnd
-                except:
-                    # Si falla la creación de ventana oculta, continuar sin ella
-                    pass
+                    # Crear ventana oculta
+                    style = win32con.WS_OVERLAPPEDWINDOW | win32con.WS_SYSMENU
+                    hwnd = win32gui.CreateWindowEx(
+                        0, className, "HiddenWindow", style,
+                        0, 0, 100, 100, 0, 0, hInstance, None
+                    )
+                    win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+
+                    # Forzar que toast use esta ventana
+                    toast._hwnd = hwnd
+                    print(f"[DEBUG Notificaciones] Ventana oculta creada: hwnd={hwnd}")
+
+                except Exception as e:
+                    print(f"[DEBUG Notificaciones] Error creando ventana oculta: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 # Intentar usar icono personalizado
                 icon_path = icono
@@ -211,15 +216,22 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     except:
                         pass
 
+                print(f"[DEBUG Notificaciones] Mostrando: {titulo} - {mensaje}")
                 # Usar threaded=False para ejecutar sincrónicamente en nuestro thread
                 # y poder capturar errores
-                toast.show_toast(
-                    titulo,
-                    mensaje,
-                    duration=duracion,
-                    icon_path=icon_path,
-                    threaded=False,  # Cambiado a False para capturar errores
-                )
+                try:
+                    toast.show_toast(
+                        titulo,
+                        mensaje,
+                        duration=duracion,
+                        icon_path=icon_path,
+                        threaded=False,  # Cambiado a False para capturar errores
+                    )
+                    print("[DEBUG Notificaciones] Toast mostrado exitosamente")
+                except Exception as e:
+                    print(f"[DEBUG Notificaciones] Error mostrando toast: {e}")
+                    import traceback
+                    traceback.print_exc()
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
