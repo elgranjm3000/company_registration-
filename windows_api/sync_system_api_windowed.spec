@@ -106,7 +106,7 @@ a = Analysis(
         'pythoncom',
         'pywintypes',
     ],
-    hookspath=[],
+    hookspath=['.'],  # Buscar hooks en el directorio actual (hook-win10toast.py)
     hooksconfig={},
     runtime_hooks=[],
     excludes=['test', 'unittest', 'pytest', 'matplotlib', 'numpy', 'pandas'],

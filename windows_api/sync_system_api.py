@@ -217,16 +217,8 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     print(f"[DEBUG] Notificación mostrada: {titulo}")
 
                 except Exception as e:
-                    # Si falla win10toast (por ejemplo, error de pkg_resources),
-                    # silenciosamente no hacemos nada. La notificación no es crítica.
-                    error_str = str(e)
-                    if 'DistributionNotFound' in error_str and 'win10toast' in error_str:
-                        # Este error es esperado cuando PyInstaller no incluye los metadatos
-                        # No mostrar el error para no confundir al usuario
-                        print(f"[DEBUG] Notificación: {titulo} - {mensaje} (sin notificación visual)")
-                    else:
-                        # Otros errores sí los mostramos para debug
-                        print(f"[DEBUG] Error en notificación: {e}")
+                    # Si falla win10toast, mostrar el error para debug
+                    print(f"[DEBUG] Error en notificación: {e}")
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
