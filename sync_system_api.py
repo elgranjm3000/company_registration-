@@ -1037,6 +1037,82 @@ class APISyncManager:
         except Exception as e:
             self.pg_conn.rollback()
 
+    def _split_sql_statements(self, sql_content):
+        """
+        Divide el contenido SQL en statements individuales respetando los bloques $$...$$
+
+        PostgreSQL usa $$ como delimitador para funciones, así que no podemos
+        simplemente dividir por ; porque rompería las funciones.
+
+        Args:
+            sql_content: Contenido completo del archivo SQL
+
+        Returns:
+            Lista de statements SQL completos
+        """
+        statements = []
+        current_statement = []
+        in_dollar_block = False
+        dollar_depth = 0
+
+        for line in sql_content.split('\n'):
+            stripped = line.strip()
+
+            # Ignorar líneas vacías y comentarios
+            if not stripped or stripped.startswith('--'):
+                continue
+
+            # Detectar inicio/fin de bloque $$
+            if stripped.startswith('$$'):
+                if not in_dollar_block:
+                    # Inicio de bloque $$
+                    in_dollar_block = True
+                    dollar_depth = 1
+                    current_statement.append(line)
+                else:
+                    # Fin de bloque $$
+                    dollar_depth -= 1
+                    current_statement.append(line)
+                    if dollar_depth == 0:
+                        in_dollar_block = False
+                continue
+
+            # Si estamos dentro de un bloque $$
+            if in_dollar_block:
+                current_statement.append(line)
+                # Detectar si cerramos el bloque
+                if '$$' in line and 'LANGUAGE' in line:
+                    # El bloque terminó, buscar el ; que cierra el CREATE FUNCTION
+                    continue
+                # Verificar si encontramos el final del bloque
+                if '$$;' in line or line.endswith('$$;'):
+                    # Bloque completo terminado
+                    in_dollar_block = False
+                    dollar_depth = 0
+                    # El statement actual está completo
+                    stmt = '\n'.join(current_statement)
+                    statements.append(stmt)
+                    current_statement = []
+                continue
+
+            # Si no estamos en bloque $$, buscar ; como separador
+            if not in_dollar_block:
+                current_statement.append(line)
+                # Si la línea termina con ; es el fin del statement
+                if line.rstrip().endswith(';'):
+                    stmt = '\n'.join(current_statement)
+                    statements.append(stmt)
+                    current_statement = []
+                continue
+
+        # Agregar cualquier statement restante
+        if current_statement:
+            stmt = '\n'.join(current_statement)
+            if stmt.strip():
+                statements.append(stmt)
+
+        return statements
+
     def _crear_triggers_desde_sql(self):
         """
         Crea o actualiza todos los triggers ejecutando el archivo SQL.
@@ -1064,15 +1140,8 @@ class APISyncManager:
             with open(sql_file, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
 
-            # Dividir el SQL en statements individuales (separados por ;)
-            # Filtrar statements vacíos y comentarios
-            statements = []
-            for statement in sql_content.split(';'):
-                # Eliminar espacios en blanco y saltos de línea
-                statement = statement.strip()
-                # Ignorar statements vacíos y comentarios
-                if statement and not statement.startswith('--'):
-                    statements.append(statement)
+            # Dividir el SQL en statements individuales respetando $$...$$
+            statements = self._split_sql_statements(sql_content)
 
             print(f"[DEBUG] Ejecutando {len(statements)} statements SQL desde: {sql_file}")
 
