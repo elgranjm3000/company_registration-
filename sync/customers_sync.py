@@ -519,9 +519,9 @@ class CustomersSync(BaseSync):
             clientes_api = list(self.api_client.get_all(company_id=self.company_id))
             self.info(f"   Total clientes en API: {len(clientes_api)}")
 
-            # 2. Obtener códigos YA SINCRONIZADOS desde sync_hashes
+            # 2. Obtener códigos YA SINCRONIZADOS desde sync_hashes (con TRIM para eliminar espacios)
             self.pg_cursor.execute("""
-                SELECT record_key
+                SELECT TRIM(record_key) as record_key
                 FROM sync_hashes
                 WHERE table_name = 'customers'
                   AND company_id = %s
@@ -532,7 +532,7 @@ class CustomersSync(BaseSync):
 
             # 3. Detectar nuevos (existen en API pero NO están en sync_hashes)
             for cliente_api in clientes_api:
-                codigo_api = cliente_api.get('codigo')
+                codigo_api = (cliente_api.get('codigo') or '').strip()
 
                 if codigo_api and codigo_api not in codigos_sincronizados:
                     nuevos_clientes.append(cliente_api)
