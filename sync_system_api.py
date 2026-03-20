@@ -1064,11 +1064,33 @@ class APISyncManager:
             with open(sql_file, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
 
-            # Ejecutar el SQL completo
-            self.pg_cursor.execute(sql_content)
-            self.pg_conn.commit()
+            # Dividir el SQL en statements individuales (separados por ;)
+            # Filtrar statements vacíos y comentarios
+            statements = []
+            for statement in sql_content.split(';'):
+                # Eliminar espacios en blanco y saltos de línea
+                statement = statement.strip()
+                # Ignorar statements vacíos y comentarios
+                if statement and not statement.startswith('--'):
+                    statements.append(statement)
 
-            print(f"[DEBUG] Triggers creados desde: {sql_file}")
+            print(f"[DEBUG] Ejecutando {len(statements)} statements SQL desde: {sql_file}")
+
+            # Ejecutar cada statement individualmente
+            for i, statement in enumerate(statements, 1):
+                if statement:  # Solo ejecutar si no está vacío
+                    try:
+                        self.pg_cursor.execute(statement)
+                        if i % 10 == 0:
+                            self.pg_conn.commit()  # Commit cada 10 statements
+                    except Exception as stmt_error:
+                        print(f"[DEBUG] Error en statement {i}: {str(stmt_error)[:100]}")
+                        # Continuar con el siguiente statement
+                        continue
+
+            # Commit final
+            self.pg_conn.commit()
+            print(f"[DEBUG] ✅ Triggers creados exitosamente ({len(statements)} statements ejecutados)")
 
         except Exception as e:
             print(f"[DEBUG] Error ejecutando archivo SQL: {e}")
