@@ -424,14 +424,14 @@ class QuotesSync:
         sql_detalle = """
             INSERT INTO sales_operation_details (
                 main_correlative, code_product, description_product, description,
-                amount, price, discount, total_tax, total, coin_code,
+                amount, price, discount, total, coin_code,
                 store, locations,
                 unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot,
                 total_net_cost, total_tax_cost, total_cost,
                 total_net_gross, total_tax_gross, total_gross,
                 total_net, total_tax, pending_amount, buy_tax, buy_aliquot, product_type
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
 
@@ -443,7 +443,6 @@ class QuotesSync:
             quantity,
             unit_price,
             discount_amount,
-            tax_amount,
             item_total,
             '02',  # coin_code (USD)
             '00',  # store
