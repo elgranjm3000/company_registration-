@@ -590,13 +590,13 @@ class CustomersSync(BaseSync):
                 self.pg_cursor.execute("""
                     INSERT INTO sync_hashes (
                         table_name, record_key, company_id,
-                        hash_value, pending_sync, synced_at
+                        record_hash, pending_sync, synced_at
                     ) VALUES (
                         %s, %s, %s, %s, %s, NOW()
                     )
                     ON CONFLICT (table_name, record_key, company_id)
                     DO UPDATE SET
-                        hash_value = EXCLUDED.hash_value,
+                        record_hash = EXCLUDED.record_hash,
                         pending_sync = FALSE,
                         synced_at = NOW()
                 """, (
