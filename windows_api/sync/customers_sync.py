@@ -510,7 +510,8 @@ class CustomersSync(BaseSync):
             return 0
 
         try:
-            self.info(f"\nInsertando {len(nuevos_clientes)} nuevos clientes a PostgreSQL...")
+            cantidad = len(nuevos_clientes)
+            self.info("\nInsertando {} nuevos clientes a PostgreSQL...".format(cantidad))
 
             insertados = 0
 
