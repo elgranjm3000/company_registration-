@@ -2179,9 +2179,13 @@ class ConfigWindow:
 
             keep_gui_alive()
 
-        def ejecutar_primera_sync_y_tray(api_password):
+        def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
             """
             Ejecuta la primera sincronización y luego inicia el System Tray
+
+            Args:
+                api_password: Password de la API
+                cerrar_ventana_callback: Función para cerrar la ventana de progreso después de la sync
             """
             # Archivo de log para diagnóstico
             log_file = open("primera_sync_log.txt", "w", encoding="utf-8")
@@ -2367,10 +2371,14 @@ class ConfigWindow:
 
                     if sync_result['exito']:
                         sync_label.config(text=sync_result['mensaje'], foreground="green")
-                        log_debug("[DEBUG] Sync exitoso, cerrando ventana en 3 seg...")
+                        log_debug("[DEBUG] Sync exitoso, cerrando ventanas en 3 seg...")
 
                         # Cerrar ventana de sincronización después de 3 segundos
                         sync_window.after(3000, lambda: sync_window.destroy() if sync_window.winfo_exists() else None)
+
+                        # Cerrar ventana de progreso (config) después de 3 segundos
+                        if cerrar_ventana_callback:
+                            sync_window.after(3000, cerrar_ventana_callback)
 
                         # Iniciar System Tray después de cerrar
                         log_debug("[DEBUG] Programando inicio de System Tray en 3.5 seg...")
@@ -2381,6 +2389,10 @@ class ConfigWindow:
                         sync_label.config(text=sync_result['mensaje'], foreground="red")
                         tk.Button(sync_window, text="⚠️ Cerrar",
                                  command=sync_window.destroy).pack(pady=10)
+
+                        # Cerrar ventana de progreso también si falló
+                        if cerrar_ventana_callback:
+                            sync_window.after(3000, cerrar_ventana_callback)
 
                 # Iniciar thread de sincronización
                 log_debug("[DEBUG] Iniciando thread de sincronización...")
@@ -2481,10 +2493,8 @@ class ConfigWindow:
                     "\n\n🔄 Se ejecutará la primera sincronización automáticamente...")
 
                 # Ejecutar primera sincronización automáticamente
-                progreso.after(500, lambda: ejecutar_primera_sync_y_tray(resultado['api_password']))
-
-                # Cerrar ventana de config después de iniciar sync
-                progreso.after(1000, lambda: cerrar_ventana())
+                # NOTA: La ventana progreso se cerrará DESPUÉS de que termine la sincronización
+                progreso.after(500, lambda: ejecutar_primera_sync_y_tray(resultado['api_password'], cerrar_ventana))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
