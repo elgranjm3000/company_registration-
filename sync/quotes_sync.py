@@ -359,20 +359,55 @@ class QuotesSync:
         product = item.get('product', {})
         code_product = product.get('code') if product else None
 
+        # Obtener description del producto
+        description_product = product.get('description', '') if product else item.get('name', '')
+
+        # Buscar unit en products_units usando code
+        unit = None
+        if code_product:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT correlative FROM products_units WHERE code = %s LIMIT 1
+                """, (code_product,))
+                result = self.pg_cursor.fetchone()
+                if result:
+                    unit = result[0]
+            except Exception as e:
+                self._log(f"     ⚠️ Error buscando unit: {e}", "warning")
+
+        # Buscar conversion_factor en products_unit usando code
+        conversion_factor = 1.0
+        if code_product:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT conversion_factor FROM products_unit WHERE code = %s LIMIT 1
+                """, (code_product,))
+                result = self.pg_cursor.fetchone()
+                if result and result[0]:
+                    conversion_factor = float(result[0])
+            except Exception as e:
+                self._log(f"     ⚠️ Error buscando conversion_factor: {e}", "warning")
+
+        # Obtener datos del producto
+        unitary_cost = float(product.get('unitary_cost', 0)) if product else 0.0
+        sale_tax = float(product.get('sale_tax', 0)) if product else 0.0
+        sale_aliquot = float(product.get('aliquot', 0)) if product else 0.0
+
         sql_detalle = """
             INSERT INTO sales_operation_details (
                 main_correlative, code_product, description_product, description,
                 amount, price, discount, total_tax, total, coin_code,
-                store, location
+                store, location,
+                unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
 
         self.pg_cursor.execute(sql_detalle, (
             main_correlative,
             code_product,
-            item.get('name', ''),
+            description_product,
             item.get('name', ''),
             float(item.get('quantity', 0)),
             float(item.get('unit_price', 0)),
@@ -381,7 +416,13 @@ class QuotesSync:
             float(item.get('total', 0)),
             '02',  # coin_code (USD)
             '00',  # store
-            '00'   # location
+            '00',  # location
+            unit,
+            conversion_factor,
+            0,  # unit_type
+            unitary_cost,
+            sale_tax,
+            sale_aliquot
         ))
 
         self._log(f"     Insertado ítem: {item.get('name')}", "debug")
