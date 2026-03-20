@@ -2476,6 +2476,29 @@ class ConfigWindow:
             except:
                 pass
 
+        def cerrar_ventana_y_iniciar_tray(api_password):
+            """Cerrar ventana de progreso y directamente iniciar System Tray"""
+            try:
+                # Cerrar ventana de progreso
+                if progreso.winfo_exists():
+                    progreso.destroy()
+
+                # Cerrar ventana principal de config
+                if self.root.winfo_exists():
+                    self.root.destroy()
+
+                # Cargar configuración guardada
+                if os.path.exists(CONFIG_FILE):
+                    with open(CONFIG_FILE, 'r') as f:
+                        config = json.load(f)
+
+                    # Iniciar System Tray directamente (sin primera sincronización)
+                    iniciar_system_tray(config, api_password)
+                else:
+                    messagebox.showerror("Error", "No se encontró configuración guardada")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
+
         # Manejar evento de finalización
         def on_verification_complete(event):
             if not progreso.winfo_exists():
@@ -2487,14 +2510,13 @@ class ConfigWindow:
                 estado_label.config(text="✅ Verificación completada", foreground="green")
                 estado_paso_label.config(text="✅ Configuración verificada con éxito", foreground="green")
 
-                # Mostrar mensaje y AUTOMÁTICAMENTE ejecutar sincronización
+                # Mostrar mensaje y directamente iniciar System Tray (sin primera sincronización)
                 messagebox.showinfo("✅ Configuración Guardada",
                     resultado['mensaje'] +
-                    "\n\n🔄 Se ejecutará la primera sincronización automáticamente...")
+                    "\n\n🔄 Iniciando System Tray...\nEl sistema se sincronizará automáticamente según la configuración.")
 
-                # Ejecutar primera sincronización automáticamente
-                # NOTA: La ventana progreso se cerrará DESPUÉS de que termine la sincronización
-                progreso.after(500, lambda: ejecutar_primera_sync_y_tray(resultado['api_password'], cerrar_ventana))
+                # Cerrar ventana de config y directamente iniciar System Tray
+                progreso.after(1000, lambda: cerrar_ventana_y_iniciar_tray(resultado['api_password']))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
