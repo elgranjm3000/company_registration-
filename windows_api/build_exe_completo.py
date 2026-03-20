@@ -85,8 +85,7 @@ def build_exe():
         *[f'--add-data={f};sync' for f in sync_files],
         # config_encryption
         '--add-data=config_encryption.py;.',
-        # triggers SQL
-        '--add-data=create_triggers_all_versions.sql;.',
+        # NOTA: Los triggers SQL ahora están embebidos en sync_system_api.py
     ]
 
     # ===== HIDDEN IMPORTS =====
