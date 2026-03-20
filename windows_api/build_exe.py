@@ -40,6 +40,7 @@ def build_exe():
 
         # Agregar todos los datos necesarios
         '--add-data=config_encryption.py;.',
+        '--add-data=create_triggers_all_versions.sql;.',
         '--add-data=api_client;base',
         '--add-data=api_client\\base.py;base',
         '--add-data=api_client\\categories.py;base',

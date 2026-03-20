@@ -1045,11 +1045,27 @@ class APISyncManager:
         try:
             # Obtener el directorio del script actual
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            sql_file = os.path.join(script_dir, '..', 'create_triggers_all_versions.sql')
+
+            # Buscar el archivo SQL en varias ubicaciones (para .exe y desarrollo)
+            sql_file_locations = [
+                # 1. Mismo directorio que el script (para .exe)
+                os.path.join(script_dir, 'create_triggers_all_versions.sql'),
+                # 2. Directorio padre (para desarrollo)
+                os.path.join(script_dir, '..', 'create_triggers_all_versions.sql'),
+                # 3. Directorio del ejecutable si está empaquetado
+                os.path.join(os.path.dirname(sys.executable), 'create_triggers_all_versions.sql') if getattr(sys, 'frozen', False) else None
+            ]
+
+            sql_file = None
+            for location in sql_file_locations:
+                if location and os.path.exists(location):
+                    sql_file = location
+                    break
 
             # Verificar si el archivo existe
-            if not os.path.exists(sql_file):
-                print(f"[DEBUG] Archivo SQL no encontrado: {sql_file}")
+            if not sql_file:
+                print(f"[DEBUG] Archivo SQL no encontrado en ninguna ubicación")
+                print(f"[DEBUG] Buscado en: {sql_file_locations}")
                 print("[DEBUG] Creando triggers desde código Python (fallback)...")
                 # Fallback: crear triggers desde código Python
                 self._crear_trigger_eliminacion_products()
