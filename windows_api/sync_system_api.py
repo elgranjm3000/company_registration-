@@ -690,27 +690,13 @@ class APISyncManager:
             # Crear índices (son seguros con IF NOT EXISTS)
             self._crear_indices_sync_hashes()
 
-            # Solo crear triggers si la tabla sync_hashes se acaba de crear
-            if not sync_hashes_existe:
-                print("[DEBUG] Creando triggers...")
-                # Crear triggers de eliminación
-                self._crear_trigger_eliminacion_products()
-                self._crear_trigger_eliminacion_categories()
-                self._crear_trigger_eliminacion_customers()
-                self._crear_trigger_eliminacion_sellers()
+            # SIEMPRE crear/actualizar triggers (usando CREATE OR REPLACE que es seguro)
+            print("[DEBUG] Creando/actualizando triggers...")
+            self._crear_triggers_desde_sql()
+            print("[DEBUG] Triggers creados/actualizados")
 
-                # Crear triggers de actualización
-                self._crear_trigger_actualizacion_products()
-                self._crear_trigger_actualizacion_customers()
-                print("[DEBUG] Triggers creados")
-
-                # Corregir registros existentes con company_id NULL
-                self._corregir_company_id_sync_hashes()
-            else:
-                print("[DEBUG] Triggers ya existen, omitiendo creación")
-
-                # Aún así, corregir registros con company_id NULL (por si acaso)
-                self._corregir_company_id_sync_hashes()
+            # Corregir registros existentes con company_id NULL
+            self._corregir_company_id_sync_hashes()
 
             self._log("✅ Tablas y triggers de sincronización inicializados", "debug")
             return True
@@ -1050,6 +1036,54 @@ class APISyncManager:
             self.pg_conn.commit()
         except Exception as e:
             self.pg_conn.rollback()
+
+    def _crear_triggers_desde_sql(self):
+        """
+        Crea o actualiza todos los triggers ejecutando el archivo SQL.
+        Este método es compatible con todas las versiones de PostgreSQL.
+        """
+        try:
+            # Obtener el directorio del script actual
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            sql_file = os.path.join(script_dir, '..', 'create_triggers_all_versions.sql')
+
+            # Verificar si el archivo existe
+            if not os.path.exists(sql_file):
+                print(f"[DEBUG] Archivo SQL no encontrado: {sql_file}")
+                print("[DEBUG] Creando triggers desde código Python (fallback)...")
+                # Fallback: crear triggers desde código Python
+                self._crear_trigger_eliminacion_products()
+                self._crear_trigger_eliminacion_categories()
+                self._crear_trigger_eliminacion_customers()
+                self._crear_trigger_eliminacion_sellers()
+                self._crear_trigger_actualizacion_products()
+                self._crear_trigger_actualizacion_customers()
+                return
+
+            # Leer el archivo SQL
+            with open(sql_file, 'r', encoding='utf-8') as f:
+                sql_content = f.read()
+
+            # Ejecutar el SQL completo
+            self.pg_cursor.execute(sql_content)
+            self.pg_conn.commit()
+
+            print(f"[DEBUG] Triggers creados desde: {sql_file}")
+
+        except Exception as e:
+            print(f"[DEBUG] Error ejecutando archivo SQL: {e}")
+            self.pg_conn.rollback()
+            # Fallback: intentar crear triggers desde código Python
+            print("[DEBUG] Creando triggers desde código Python (fallback)...")
+            try:
+                self._crear_trigger_eliminacion_products()
+                self._crear_trigger_eliminacion_categories()
+                self._crear_trigger_eliminacion_customers()
+                self._crear_trigger_eliminacion_sellers()
+                self._crear_trigger_actualizacion_products()
+                self._crear_trigger_actualizacion_customers()
+            except Exception as e2:
+                print(f"[DEBUG] Error en fallback: {e2}")
 
     def _corregir_company_id_sync_hashes(self):
         """
