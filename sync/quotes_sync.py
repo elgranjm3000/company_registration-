@@ -578,74 +578,106 @@ class QuotesSync:
             return 170.0
 
     def _insertar_impuestos(self, correlative: int, quote: dict):
-        """Insertar impuestos del quote en sales_operation_taxes y sales_operation_taxes_coins"""
+        """Insertar impuestos del quote en sales_operation_taxes y sales_operation_taxes_coins
+
+        Agrupa los ítems por tipo de impuesto (sale_tax) e inserta un registro por cada tipo.
+        """
         from decimal import Decimal
+        from collections import defaultdict
 
-        # Obtener datos del impuesto
-        quote_tax_amount = float(quote.get('tax_amount', 0))
-        quote_subtotal = float(quote.get('subtotal', 0))
-        quote_discount = float(quote.get('discount_amount', 0))
+        items = quote.get('items', [])
 
-        # Solo insertar si hay impuestos
-        if quote_tax_amount > 0 and quote_subtotal > 0:
-            # Calcular alícuota
-            quote_aliquot = (quote_tax_amount / quote_subtotal * 100)
+        if not items:
+            self._log(f"     No hay ítems para procesar impuestos", "debug")
+            return
 
-            # Base imponible (subtotal menos descuento)
-            taxable_amount = quote_subtotal - quote_discount
+        # Agrupar ítems por sale_tax (tipo de impuesto)
+        taxes_by_type = defaultdict(lambda: {
+            'taxable': 0.0,
+            'tax': 0.0,
+            'aliquot': 0.0,
+            'count': 0
+        })
 
-            # Código de impuesto (IVA General 16%)
-            tax_code = '01'
+        # Procesar cada ítem
+        for item in items:
+            product = item.get('product', {})
+            sale_tax = product.get('sale_tax', '01') if product else '01'
+            sale_aliquot = float(product.get('aliquot', 0)) if product else 0.0
 
-            self._log(f"     Insertando impuesto: aliquot={quote_aliquot:.2f}%, taxable={taxable_amount:.2f}, tax={quote_tax_amount:.2f}", "debug")
+            # Calcular subtotal del ítem (precio * cantidad - descuento)
+            quantity = float(item.get('quantity', 0))
+            unit_price = float(item.get('unit_price', 0))
+            discount_amount = float(item.get('discount_amount', 0))
+            tax_amount = float(item.get('tax_amount', 0))
 
-            # Insertar en sales_operation_taxes
-            sql_tax = """
-                INSERT INTO sales_operation_taxes (
-                    main_correlative, taxe_code, aliquot, taxable, tax, tax_type
-                ) VALUES (%s, %s, %s, %s, %s, %s)
-            """
+            subtotal = (unit_price * quantity) - discount_amount
 
-            self.pg_cursor.execute(sql_tax, (
-                correlative,
-                tax_code,
-                quote_aliquot,
-                taxable_amount,
-                quote_tax_amount,
-                1  # tax_type
-            ))
+            # Acumular por tipo de impuesto
+            taxes_by_type[sale_tax]['taxable'] += subtotal
+            taxes_by_type[sale_tax]['tax'] += tax_amount
+            taxes_by_type[sale_tax]['aliquot'] = sale_aliquot
+            taxes_by_type[sale_tax]['count'] += 1
 
-            # Insertar en sales_operation_taxes_coins (solo USD '02')
-            sql_tax_coins = """
-                INSERT INTO sales_operation_taxes_coins (
-                    main_correlative, main_taxe_code, taxable, tax, coin_code
-                ) VALUES (%s, %s, %s, %s, %s)
-            """
+        # Obtener tasa BCV
+        bcv_rate = self._get_bcv_rate()
 
-            self.pg_cursor.execute(sql_tax_coins, (
-                correlative,
-                tax_code,
-                taxable_amount,
-                quote_tax_amount,
-                '02'  # coin_code (USD)
-            ))
+        # Insertar un registro por cada tipo de impuesto
+        sql_tax = """
+            INSERT INTO sales_operation_taxes (
+                main_correlative, taxe_code, aliquot, taxable, tax, tax_type
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+        """
 
-            # Obtener tasa BCV e insertar en Bolívares
-            bcv_rate = self._get_bcv_rate()
-            taxable_amount_bcv = round(taxable_amount * bcv_rate, 2)
-            quote_tax_amount_bcv = round(quote_tax_amount * bcv_rate, 2)
+        sql_tax_coins = """
+            INSERT INTO sales_operation_taxes_coins (
+                main_correlative, main_taxe_code, taxable, tax, coin_code
+            ) VALUES (%s, %s, %s, %s, %s)
+        """
 
-            self.pg_cursor.execute(sql_tax_coins, (
-                correlative,
-                tax_code,
-                taxable_amount_bcv,
-                quote_tax_amount_bcv,
-                '01'  # coin_code (Bolívares)
-            ))
+        for tax_code, values in sorted(taxes_by_type.items()):
+            taxable_amount = round(values['taxable'], 2)
+            tax_amount = round(values['tax'], 2)
+            aliquot = values['aliquot']
+            count = values['count']
 
-            self._log(f"     Insertado impuesto en sales_operation_taxes y sales_operation_taxes_coins (USD y BS, tasa={bcv_rate})", "debug")
-        else:
-            self._log(f"     No hay impuestos para insertar (tax_amount={quote_tax_amount})", "debug")
+            # Solo insertar si hay monto de impuesto
+            if tax_amount > 0:
+                self._log(f"     Insertando impuesto tipo={tax_code}: aliquot={aliquot:.2f}%, taxable={taxable_amount:.2f}, tax={tax_amount:.2f}, ítems={count}", "debug")
+
+                # Insertar en sales_operation_taxes
+                self.pg_cursor.execute(sql_tax, (
+                    correlative,
+                    tax_code,
+                    aliquot,
+                    taxable_amount,
+                    tax_amount,
+                    1  # tax_type
+                ))
+
+                # Insertar en USD ('02')
+                self.pg_cursor.execute(sql_tax_coins, (
+                    correlative,
+                    tax_code,
+                    taxable_amount,
+                    tax_amount,
+                    '02'  # USD
+                ))
+
+                # Insertar en Bolívares ('01')
+                taxable_amount_bcv = round(taxable_amount * bcv_rate, 2)
+                tax_amount_bcv = round(tax_amount * bcv_rate, 2)
+
+                self.pg_cursor.execute(sql_tax_coins, (
+                    correlative,
+                    tax_code,
+                    taxable_amount_bcv,
+                    tax_amount_bcv,
+                    '01'  # Bolívares
+                ))
+
+        total_types = len([v for v in taxes_by_type.values() if v['tax'] > 0])
+        self._log(f"     Insertados {total_types} tipos de impuestos en sales_operation_taxes", "debug")
 
     def _guardar_hash(self, quote: dict):
         """Guardar hash en sync_hashes"""
