@@ -17,7 +17,7 @@ if os.path.exists('icon.ico'):
 from PyInstaller.utils.hooks import collect_all
 
 # Colectar win10toast completo (incluye metadatos .egg-info)
-win10toast_datas = collect_all('win10toast')
+win10toast_datas = list(collect_all('win10toast'))
 
 a = Analysis(
     ['sync_system_api.py'],
