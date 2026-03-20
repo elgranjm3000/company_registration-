@@ -392,15 +392,38 @@ class QuotesSync:
         unitary_cost = float(product.get('unitary_cost', 0)) if product else 0.0
         sale_tax = float(product.get('sale_tax', 0)) if product else 0.0
         sale_aliquot = float(product.get('aliquot', 0)) if product else 0.0
+        buy_aliquot = float(product.get('buy_aliquot', 0)) if product else 0.0
+
+        # Datos del item
+        quantity = float(item.get('quantity', 0))
+        unit_price = float(item.get('unit_price', 0))
+        discount_amount = float(item.get('discount_amount', 0))
+        tax_amount = float(item.get('tax_amount', 0))
+        item_total = float(item.get('total', 0))
+
+        # Calcular subtotal (precio * cantidad)
+        subtotal = unit_price * quantity
+
+        # Calcular costos según fórmula de smart_sync_complete.py
+        total_net_cost = round(unitary_cost * quantity, 2)  # unitary_cost * cantidad
+        total_tax_cost = round(unitary_cost * (buy_aliquot / 100) * quantity, 2) if buy_aliquot > 0 else 0.0  # unitary_cost * buy_aliquot/100 * cantidad
+        total_cost = round(total_net_cost + total_tax_cost, 2)  # total_net_cost + total_tax_cost
+
+        # Calcular gross
+        total_net_gross = subtotal  # subtotal del item
+        total_tax_gross = tax_amount  # impuesto del item
+        total_gross = item_total  # total del item
 
         sql_detalle = """
             INSERT INTO sales_operation_details (
                 main_correlative, code_product, description_product, description,
                 amount, price, discount, total_tax, total, coin_code,
                 store, location,
-                unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot
+                unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot,
+                total_net_cost, total_tax_cost, total_cost,
+                total_net_gross, total_tax_gross, total_gross
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
 
@@ -409,11 +432,11 @@ class QuotesSync:
             code_product,
             description_product,
             item.get('name', ''),
-            float(item.get('quantity', 0)),
-            float(item.get('unit_price', 0)),
-            float(item.get('discount_amount', 0)),
-            float(item.get('tax_amount', 0)),
-            float(item.get('total', 0)),
+            quantity,
+            unit_price,
+            discount_amount,
+            tax_amount,
+            item_total,
             '02',  # coin_code (USD)
             '00',  # store
             '00',  # location
@@ -422,7 +445,13 @@ class QuotesSync:
             0,  # unit_type
             unitary_cost,
             sale_tax,
-            sale_aliquot
+            sale_aliquot,
+            total_net_cost,
+            total_tax_cost,
+            total_cost,
+            total_net_gross,
+            total_tax_gross,
+            total_gross
         ))
 
         self._log(f"     Insertado ítem: {item.get('name')}", "debug")
