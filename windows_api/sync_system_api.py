@@ -1121,7 +1121,6 @@ CREATE OR REPLACE FUNCTION trigger_mark_product_updated_sync_hashes()
 RETURNS TRIGGER AS $$
 DECLARE
     v_company_id INTEGER;
-    v_pg_version TEXT;
     v_exists INTEGER;
 BEGIN
     -- Obtener el company_id desde sync_config
@@ -1134,36 +1133,24 @@ BEGIN
         v_company_id := 1;
     END IF;
 
-    -- Detectar versión de PostgreSQL
-    SELECT substring(version() from 'PostgreSQL ([0-9]+\.[0-9]+)') INTO v_pg_version;
+    -- Verificar si ya existe el registro
+    SELECT COUNT(*) INTO v_exists
+    FROM sync_hashes
+    WHERE table_name = 'products'
+    AND record_key = NEW.code
+    AND company_id = v_company_id;
 
-    -- PostgreSQL 9.5+ usa ON CONFLICT (más eficiente)
-    IF v_pg_version::float >= 9.5 THEN
-        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-        VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
-        ON CONFLICT (table_name, record_key, company_id)
-        DO UPDATE SET
-            pending_sync = TRUE,
-            updated_at = NOW();
-    ELSE
-        -- PostgreSQL 9.0-9.4 usa IF/THEN
-        SELECT COUNT(*) INTO v_exists
-        FROM sync_hashes
+    -- Si existe, actualizar; si no, insertar
+    IF v_exists > 0 THEN
+        UPDATE sync_hashes
+        SET pending_sync = TRUE,
+            updated_at = NOW()
         WHERE table_name = 'products'
         AND record_key = NEW.code
         AND company_id = v_company_id;
-
-        IF v_exists > 0 THEN
-            UPDATE sync_hashes
-            SET pending_sync = TRUE,
-                updated_at = NOW()
-            WHERE table_name = 'products'
-            AND record_key = NEW.code
-            AND company_id = v_company_id;
-        ELSE
-            INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-            VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
-        END IF;
+    ELSE
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
     END IF;
 
     RETURN NEW;
@@ -1191,7 +1178,6 @@ CREATE OR REPLACE FUNCTION trigger_mark_client_updated_sync_hashes()
 RETURNS TRIGGER AS $$
 DECLARE
     v_company_id INTEGER;
-    v_pg_version TEXT;
     v_exists INTEGER;
 BEGIN
     -- Obtener el company_id desde sync_config
@@ -1204,36 +1190,24 @@ BEGIN
         v_company_id := 1;
     END IF;
 
-    -- Detectar versión de PostgreSQL
-    SELECT substring(version() from 'PostgreSQL ([0-9]+\.[0-9]+)') INTO v_pg_version;
+    -- Verificar si ya existe el registro
+    SELECT COUNT(*) INTO v_exists
+    FROM sync_hashes
+    WHERE table_name = 'customers'
+    AND record_key = NEW.code
+    AND company_id = v_company_id;
 
-    -- PostgreSQL 9.5+ usa ON CONFLICT
-    IF v_pg_version::float >= 9.5 THEN
-        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-        VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
-        ON CONFLICT (table_name, record_key, company_id)
-        DO UPDATE SET
-            pending_sync = TRUE,
-            updated_at = NOW();
-    ELSE
-        -- PostgreSQL 9.0-9.4 usa IF/THEN
-        SELECT COUNT(*) INTO v_exists
-        FROM sync_hashes
+    -- Si existe, actualizar; si no, insertar
+    IF v_exists > 0 THEN
+        UPDATE sync_hashes
+        SET pending_sync = TRUE,
+            updated_at = NOW()
         WHERE table_name = 'customers'
         AND record_key = NEW.code
         AND company_id = v_company_id;
-
-        IF v_exists > 0 THEN
-            UPDATE sync_hashes
-            SET pending_sync = TRUE,
-                updated_at = NOW()
-            WHERE table_name = 'customers'
-            AND record_key = NEW.code
-            AND company_id = v_company_id;
-        ELSE
-            INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-            VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
-        END IF;
+    ELSE
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('customers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
     END IF;
 
     RETURN NEW;
@@ -1308,7 +1282,6 @@ CREATE OR REPLACE FUNCTION trigger_mark_seller_updated_sync_hashes()
 RETURNS TRIGGER AS $$
 DECLARE
     v_company_id INTEGER;
-    v_pg_version TEXT;
     v_exists INTEGER;
 BEGIN
     -- Obtener el company_id desde sync_config
@@ -1321,36 +1294,24 @@ BEGIN
         v_company_id := 1;
     END IF;
 
-    -- Detectar versión de PostgreSQL
-    SELECT substring(version() from 'PostgreSQL ([0-9]+\.[0-9]+)') INTO v_pg_version;
+    -- Verificar si ya existe el registro
+    SELECT COUNT(*) INTO v_exists
+    FROM sync_hashes
+    WHERE table_name = 'sellers'
+    AND record_key = NEW.code
+    AND company_id = v_company_id;
 
-    -- PostgreSQL 9.5+ usa ON CONFLICT
-    IF v_pg_version::float >= 9.5 THEN
-        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-        VALUES ('sellers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
-        ON CONFLICT (table_name, record_key, company_id)
-        DO UPDATE SET
-            pending_sync = TRUE,
-            updated_at = NOW();
-    ELSE
-        -- PostgreSQL 9.0-9.4 usa IF/THEN
-        SELECT COUNT(*) INTO v_exists
-        FROM sync_hashes
+    -- Si existe, actualizar; si no, insertar
+    IF v_exists > 0 THEN
+        UPDATE sync_hashes
+        SET pending_sync = TRUE,
+            updated_at = NOW()
         WHERE table_name = 'sellers'
         AND record_key = NEW.code
         AND company_id = v_company_id;
-
-        IF v_exists > 0 THEN
-            UPDATE sync_hashes
-            SET pending_sync = TRUE,
-                updated_at = NOW()
-            WHERE table_name = 'sellers'
-            AND record_key = NEW.code
-            AND company_id = v_company_id;
-        ELSE
-            INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-            VALUES ('sellers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
-        END IF;
+    ELSE
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('sellers', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
     END IF;
 
     RETURN NEW;
