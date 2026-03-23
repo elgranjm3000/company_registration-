@@ -581,9 +581,9 @@ class CustomersSync(BaseSync):
                     self.pg_cursor.execute("""
                         INSERT INTO clients (
                             code, description, address, client_id,
-                            email, phone, contact, status
+                            email, phone, contact, status, generic_client
                         ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                     """, (
                         cliente.get('codigo'),          # code
@@ -593,7 +593,8 @@ class CustomersSync(BaseSync):
                         cliente.get('email'),           # email
                         cliente.get('phone'),           # phone
                         cliente.get('name'),            # contact (usar name)
-                        status_pg                       # status
+                        status_pg,                      # status
+                        False                           # generic_client
                     ))
 
                     insertados += 1
