@@ -579,9 +579,9 @@ class CustomersSync(BaseSync):
                     self.pg_cursor.execute("""
                         INSERT INTO clients (
                             code, description, address, client_id,
-                            email, phone, contact, status, generic_client
+                            email, phone, contact, name_fiscal, status, generic_client
                         ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                     """, (
                         cliente.get('codigo'),          # code
@@ -590,7 +590,8 @@ class CustomersSync(BaseSync):
                         cliente.get('document_number'), # client_id
                         cliente.get('email'),           # email
                         cliente.get('phone'),           # phone
-                        cliente.get('name'),            # contact (usar name)
+                        cliente.get('contact'),         # contact (campo del API)
+                        cliente.get('document_type'),   # name_fiscal (document_type del API)
                         status_pg,                      # status
                         False                           # generic_client
                     ))
