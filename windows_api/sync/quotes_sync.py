@@ -666,46 +666,44 @@ class QuotesSync:
             aliquot = values['aliquot']
             count = values['count']
 
-            # Solo insertar si hay monto de impuesto
-            if tax_amount > 0:
-                self._log(f"     Insertando impuesto tipo={tax_code}: aliquot={aliquot:.2f}%, taxable={taxable_amount:.2f}, tax={tax_amount:.2f}, ítems={count}", "debug")
+            self._log(f"     Insertando impuesto tipo={tax_code}: aliquot={aliquot:.2f}%, taxable={taxable_amount:.2f}, tax={tax_amount:.2f}, ítems={count}", "debug")
 
-                # Insertar en sales_operation_taxes y obtener line
-                self.pg_cursor.execute(sql_tax, (
-                    correlative,
-                    tax_code,
-                    aliquot,
-                    taxable_amount,
-                    tax_amount,
-                    1  # tax_type
-                ))
+            # Insertar en sales_operation_taxes y obtener line
+            self.pg_cursor.execute(sql_tax, (
+                correlative,
+                tax_code,
+                aliquot,
+                taxable_amount,
+                tax_amount,
+                1  # tax_type
+            ))
 
-                tax_line = self.pg_cursor.fetchone()[0]
+            tax_line = self.pg_cursor.fetchone()[0]
 
-                # Insertar en USD ('02')
-                self.pg_cursor.execute(sql_tax_coins, (
-                    correlative,
-                    tax_line,
-                    tax_code,
-                    taxable_amount,
-                    tax_amount,
-                    '02'  # USD
-                ))
+            # Insertar en USD ('02')
+            self.pg_cursor.execute(sql_tax_coins, (
+                correlative,
+                tax_line,
+                tax_code,
+                taxable_amount,
+                tax_amount,
+                '02'  # USD
+            ))
 
-                # Insertar en Bolívares ('01')
-                taxable_amount_bcv = round(taxable_amount * bcv_rate, 2)
-                tax_amount_bcv = round(tax_amount * bcv_rate, 2)
+            # Insertar en Bolívares ('01')
+            taxable_amount_bcv = round(taxable_amount * bcv_rate, 2)
+            tax_amount_bcv = round(tax_amount * bcv_rate, 2)
 
-                self.pg_cursor.execute(sql_tax_coins, (
-                    correlative,
-                    tax_line,
-                    tax_code,
-                    taxable_amount_bcv,
-                    tax_amount_bcv,
-                    '01'  # Bolívares
-                ))
+            self.pg_cursor.execute(sql_tax_coins, (
+                correlative,
+                tax_line,
+                tax_code,
+                taxable_amount_bcv,
+                tax_amount_bcv,
+                '01'  # Bolívares
+            ))
 
-        total_types = len([v for v in taxes_by_type.values() if v['tax'] > 0])
+        total_types = len(taxes_by_type)
         self._log(f"     Insertados {total_types} tipos de impuestos en sales_operation_taxes", "debug")
 
     def _insertar_sales_operation_coins(self, correlative: int, quote: dict,
