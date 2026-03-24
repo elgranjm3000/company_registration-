@@ -771,48 +771,42 @@ class QuotesSync:
 
         # Insertar en Bolívares (coin_code = '01')
         try:
-            # Obtener aliquots de la tabla coin para USD (para conversión)
+            # Obtener aliquots de la tabla coin para Bs
             self.pg_cursor.execute("""
                 SELECT buy_aliquot, sales_aliquot, factor_type
                 FROM coin
                 WHERE code = %s
-            """, ('02',))  # Obtener sales_aliquot de USD para convertir
-            result_coin_usd = self.pg_cursor.fetchone()
+            """, ('01',))  # Buscar coin_code='01' en tabla coin
+            result_coin = self.pg_cursor.fetchone()
 
-            # Obtener factor_type de Bs
-            self.pg_cursor.execute("""
-                SELECT factor_type
-                FROM coin
-                WHERE code = %s
-            """, ('01',))
-            result_coin_bs = self.pg_cursor.fetchone()
-
-            if result_coin_usd and result_coin_bs:
-                sales_aliquot_usd = result_coin_usd[1]  # sales_aliquot de USD
-                factor_type_bs = result_coin_bs[0]         # factor_type de Bs
+            if result_coin:
+                buy_aliquot_bs = result_coin[0]      # buy_aliquot de Bs
+                sales_aliquot_bs = result_coin[1]    # sales_aliquot de Bs
+                factor_type_bs = result_coin[2]      # factor_type de Bs
             else:
                 # Valores por defecto si no encuentra la moneda
-                sales_aliquot_usd = 1.0
+                buy_aliquot_bs = 1.0
+                sales_aliquot_bs = 1.0
                 factor_type_bs = 0
 
-            # Calcular montos en Bolívares usando sales_aliquot de USD
-            total_net_details_bs = round(total_net_details * sales_aliquot_usd, 2)
-            total_tax_details_bs = round(total_tax_details * sales_aliquot_usd, 2)
-            total_details_bs = round(total_details * sales_aliquot_usd, 2)
-            discount_amount_bs = round(discount_amount * sales_aliquot_usd, 2)
+            # Calcular montos en Bolívares usando sales_aliquot de Bs
+            total_net_details_bs = round(total_net_details * sales_aliquot_bs, 2)
+            total_tax_details_bs = round(total_tax_details * sales_aliquot_bs, 2)
+            total_details_bs = round(total_details * sales_aliquot_bs, 2)
+            discount_amount_bs = round(discount_amount * sales_aliquot_bs, 2)
 
             # Calcular costos en Bolívares
-            total_net_cost_bs = round(total_net_cost * sales_aliquot_usd, 2)
-            total_tax_cost_bs = round(total_tax_cost * sales_aliquot_usd, 2)
-            total_cost_bs = round(total_cost * sales_aliquot_usd, 2)
-            total_exempt_bs = round(total_exempt * sales_aliquot_usd, 2)
+            total_net_cost_bs = round(total_net_cost * sales_aliquot_bs, 2)
+            total_tax_cost_bs = round(total_tax_cost * sales_aliquot_bs, 2)
+            total_cost_bs = round(total_cost * sales_aliquot_bs, 2)
+            total_exempt_bs = round(total_exempt * sales_aliquot_bs, 2)
 
             self.pg_cursor.execute(sql_coins, (
                 correlative,               # main_correlative
                 '01',                     # coin_code (Bolívares)
                 factor_type_bs,           # factor_type de la tabla coin
-                sales_aliquot_usd,        # buy_aliquot (usar sales_aliquot de USD)
-                sales_aliquot_usd,        # sales_aliquot (usar sales_aliquot de USD)
+                buy_aliquot_bs,           # buy_aliquot de Bs
+                sales_aliquot_bs,         # sales_aliquot de Bs
                 total_net_details_bs,     # total_net_details (convertido a Bs)
                 total_tax_details_bs,     # total_tax_details (convertido a Bs)
                 total_details_bs,         # total_details (convertido a Bs)
@@ -835,7 +829,7 @@ class QuotesSync:
                 0.0,                      # retention_municipal_prorration
                 total_exempt_bs           # total_exempt (convertido a Bs)
             ))
-            self._log(f"     Insertado en sales_operation_coins (Bs, tasa={sales_aliquot_usd})", "debug")
+            self._log(f"     Insertado en sales_operation_coins (Bs, sales_aliquot={sales_aliquot_bs})", "debug")
         except Exception as e:
             self._log(f"     ⚠️ Error insertando en sales_operation_coins (Bs): {e}", "warning")
 
