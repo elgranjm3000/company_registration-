@@ -506,6 +506,7 @@ class CustomersSync(BaseSync):
     def detect_new_from_api(self) -> List[Dict]:
         """
         Detectar NUEVOS clientes en la API REST que no existen en PostgreSQL.
+        Usa from_date para solo descargar clientes modificados desde la última sincronización.
 
         Returns:
             Lista de dicts con clientes nuevos desde la API
@@ -517,10 +518,23 @@ class CustomersSync(BaseSync):
             self.info("📥 DETECTANDO NUEVOS CLIENTES DESDE API REST")
             self.info("="*70)
 
-            # 1. Obtener todos los clientes desde la API
-            self.info(f"Obteniendo clientes de la API REST (company_id={self.company_id})...")
-            clientes_api = list(self.api_client.get_all(company_id=self.company_id))
-            self.info(f"   Total clientes en API: {len(clientes_api)}")
+            # 1. Obtener fecha de última sincronización
+            from_date = self._get_last_sync_date()
+
+            # 2. Obtener clientes desde la API con from_date (optimizado)
+            if from_date:
+                self.info(f"Obteniendo clientes modificados desde: {from_date}")
+                clientes_api = list(self.api_client.get_all(
+                    company_id=self.company_id,
+                    from_date=from_date  # ✅ Solo modificados desde esta fecha
+                ))
+            else:
+                self.info(f"Obteniendo TODOS los clientes (primera sincronización)")
+                clientes_api = list(self.api_client.get_all(
+                    company_id=self.company_id
+                ))
+
+            self.info(f"   Total clientes obtenidos de API: {len(clientes_api)}")
 
             # 2. Obtener códigos YA SINCRONIZADOS desde sync_hashes (con TRIM para eliminar espacios)
             self.pg_cursor.execute("""
@@ -676,6 +690,59 @@ class CustomersSync(BaseSync):
             self.error(f"⚠️  Error actualizando sync_hashes: {e}")
             self.pg_conn.rollback()
 
+    def _get_last_sync_date(self) -> str:
+        """
+        Obtener fecha de última sincronización desde sync_config.
+
+        Returns:
+            Fecha en formato ISO o None si es primera vez
+        """
+        try:
+            self.pg_cursor.execute("""
+                SELECT value
+                FROM sync_config
+                WHERE key = %s
+            """, ('customers_last_sync_from_api',))
+
+            result = self.pg_cursor.fetchone()
+
+            if result and result[0]:
+                last_date = result[0]
+                self.info(f"   📅 Última sincronización desde API: {last_date}")
+                return last_date
+            else:
+                self.info(f"   📅 Primera sincronización desde API (sin from_date)")
+                return None
+
+        except Exception as e:
+            self.warning(f"   ⚠️  Error obteniendo última fecha: {e}")
+            return None
+
+    def _save_last_sync_date(self):
+        """
+        Guardar fecha actual en sync_config como última sincronización desde API.
+        """
+        try:
+            from datetime import datetime
+
+            # Fecha actual en formato ISO para API
+            current_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000000Z')
+
+            self.pg_cursor.execute("""
+                INSERT INTO sync_config (key, value, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (key)
+                DO UPDATE SET
+                    value = EXCLUDED.value,
+                    updated_at = NOW()
+            """, ('customers_last_sync_from_api', current_date))
+
+            self.pg_conn.commit()
+            self.info(f"   ✅ Fecha de sincronización guardada: {current_date}")
+
+        except Exception as e:
+            self.warning(f"   ⚠️  Error guardando fecha: {e}")
+
     def _get_table_name(self) -> str:
         """Retornar nombre de la tabla para sync_hashes"""
         return 'customers'
@@ -747,6 +814,10 @@ class CustomersSync(BaseSync):
                 insertados = self.sync_new_from_api(nuevos_desde_api)
                 stats['from_api_new'] = insertados
 
+                # ✅ GUARDAR fecha después de sincronizar exitosamente
+                if insertados > 0:
+                    self._save_last_sync_date()
+
             # ===================================================================
             # RESUMEN
             # ===================================================================
@@ -755,6 +826,7 @@ class CustomersSync(BaseSync):
             self.info("="*70)
             self.info(f"📤 A API REST: {stats['to_api_created']} creados, {stats['to_api_updated']} actualizados, {stats['to_api_deleted']} eliminados")
             self.info(f"📥 DESDE API: {stats['from_api_new']} nuevos clientes importados")
+            self.info(f"📅 Próxima sincronización usará from_date (solo modificados)")
             self.info("="*70 + "\n")
 
             return stats
