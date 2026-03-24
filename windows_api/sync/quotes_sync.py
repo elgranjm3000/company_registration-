@@ -765,7 +765,7 @@ class QuotesSync:
                 total_net_cost,       # total_net_cost
                 total_tax_cost,       # total_tax_cost
                 total_cost,           # total_cost
-                total_details,        # total_operation
+                0.0,                  # total_operation (SIEMPRE 0)
                 0.0,                  # total_retention_tax
                 0.0,                  # total_retention_municipal
                 0.0,                  # total_retention_islr
@@ -840,7 +840,7 @@ class QuotesSync:
                 total_net_cost_bs,        # total_net_cost (convertido a Bs)
                 total_tax_cost_bs,        # total_tax_cost (convertido a Bs)
                 total_cost_bs,            # total_cost (convertido a Bs)
-                total_details_bs,         # total_operation (convertido a Bs)
+                0.0,                      # total_operation (SIEMPRE 0)
                 0.0,                      # total_retention_tax
                 0.0,                      # total_retention_municipal
                 0.0,                      # total_retention_islr
