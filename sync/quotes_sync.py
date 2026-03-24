@@ -303,7 +303,7 @@ class QuotesSync:
                 total_net_cost, total_tax_cost, total_cost, total_exempt,
                 shopping_order_date, shopping_order_document_no,
                 pending, canceled, coin_code,
-                control_no, description, operations_comment,
+                control_no, description, operation_comments,
                 address_send, contact_send, phone_send
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
@@ -354,7 +354,7 @@ class QuotesSync:
             '02',  # coin_code (código de moneda)
             '',  # control_no (vacío)
             '',  # description (vacío)
-            '',  # operations_comment (vacío)
+            '',  # operation_comments (vacío)
             '',  # address_send (vacío)
             '',  # contact_send (vacío)
             ''   # phone_send (vacío)
