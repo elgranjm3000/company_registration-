@@ -253,6 +253,7 @@ class QuotesSync:
         total_details = 0.0      # TOTAL DETALLES CON DESCUENTOS INCLUIDO
         total_net_cost = 0.0     # TOTAL COSTO NETO SIN IMPUESTOS
         total_tax_cost = 0.0     # TOTAL COSTO IMPUESTOS
+        total_cost = 0.0         # TOTAL COSTO CON IMPUESTO
         total_exempt = 0.0       # TOTAL EXENTO
 
         for item in items:
@@ -271,16 +272,24 @@ class QuotesSync:
             total_tax_details += item_tax            # Sumar impuestos
             total_details += item_net + item_tax    # Sumar con impuesto (total con descuento incluido)
 
-            # Para costos, usar el mismo cálculo si no hay costo específico
-            total_net_cost += item_net
-            total_tax_cost += item_tax              # Sumar impuestos al costo
-
             # Si el item no tiene impuesto (tax_amount = 0), es exento
             if item_tax == 0:
                 total_exempt += item_net
 
-        # Calcular total_cost (TOTAL DE COSTO CON IMPUESTO)
-        total_cost = total_net_cost + total_tax_cost
+            # ✅ CORRECCIÓN: Calcular costos como se hace en sales_operation_details (líneas 422-424)
+            product = item.get('product', {})
+            unitary_cost = round(float(product.get('unitary_cost', 0)) if product else 0.0, 4)
+            buy_aliquot = float(product.get('buy_aliquot', 0)) if product else 0.0
+
+            # Los mismos cálculos que en _insertar_item():
+            item_total_net_cost = round(unitary_cost * quantity, 2)  # línea 422
+            item_total_tax_cost = round(unitary_cost * (buy_aliquot / 100) * quantity, 2) if buy_aliquot > 0 else 0.0  # línea 423
+            item_total_cost = round(item_total_net_cost + item_total_tax_cost, 2)  # línea 424
+
+            # Sumar al total (será usado en sales_operation_coins)
+            total_net_cost += item_total_net_cost
+            total_tax_cost += item_total_tax_cost
+            total_cost += item_total_cost
 
         # Insertar sales_operation (encabezado)
         sql_operation = """
