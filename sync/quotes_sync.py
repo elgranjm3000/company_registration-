@@ -719,7 +719,7 @@ class QuotesSync:
             self.pg_cursor.execute(sql_coins, (
                 correlative,           # main_correlative
                 '02',                 # coin_code (USD)
-                1,                    # factor_type
+                1,                    # factor_type (USD es 1)
                 bcv_rate,             # buy_aliquot
                 bcv_rate,             # sales_aliquot
                 subtotal,             # total_net_details
@@ -742,7 +742,7 @@ class QuotesSync:
             self.pg_cursor.execute(sql_coins, (
                 correlative,           # main_correlative
                 '01',                 # coin_code (Bolívares)
-                1,                    # factor_type
+                0,                    # factor_type (Bolívares es 0)
                 bcv_rate,             # buy_aliquot
                 bcv_rate,             # sales_aliquot
                 subtotal_bcv,         # total_net_details (convertido)
