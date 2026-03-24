@@ -716,12 +716,30 @@ class QuotesSync:
 
         # Insertar en USD (coin_code = '02')
         try:
+            # Obtener aliquots de la tabla coin
+            self.pg_cursor.execute("""
+                SELECT buy_aliquot, sales_aliquot, factor_type
+                FROM coin
+                WHERE code = %s
+            """, ('02',))
+            result_coin = self.pg_cursor.fetchone()
+
+            if result_coin:
+                buy_aliquot_usd = result_coin[0]
+                sales_aliquot_usd = result_coin[1]
+                factor_type_usd = result_coin[2]
+            else:
+                # Valores por defecto si no encuentra la moneda
+                buy_aliquot_usd = bcv_rate
+                sales_aliquot_usd = bcv_rate
+                factor_type_usd = 1
+
             self.pg_cursor.execute(sql_coins, (
                 correlative,           # main_correlative
                 '02',                 # coin_code (USD)
-                1,                    # factor_type (USD es 1)
-                bcv_rate,             # buy_aliquot
-                bcv_rate,             # sales_aliquot
+                factor_type_usd,      # factor_type de la tabla coin
+                buy_aliquot_usd,      # buy_aliquot de la tabla coin
+                sales_aliquot_usd,    # sales_aliquot de la tabla coin
                 subtotal,             # total_net_details
                 tax_amount,           # total_tax_details
                 total,                # total_details
@@ -733,18 +751,36 @@ class QuotesSync:
                 0.0,                  # credit
                 0.0                   # cash
             ))
-            self._log(f"     Insertado en sales_operation_coins (USD, tasa={bcv_rate})", "debug")
+            self._log(f"     Insertado en sales_operation_coins (USD, buy_aliquot={buy_aliquot_usd}, sales_aliquot={sales_aliquot_usd})", "debug")
         except Exception as e:
             self._log(f"     ⚠️ Error insertando en sales_operation_coins (USD): {e}", "warning")
 
         # Insertar en Bolívares (coin_code = '01')
         try:
+            # Obtener aliquots de la tabla coin
+            self.pg_cursor.execute("""
+                SELECT buy_aliquot, sales_aliquot, factor_type
+                FROM coin
+                WHERE code = %s
+            """, ('01',))
+            result_coin = self.pg_cursor.fetchone()
+
+            if result_coin:
+                buy_aliquot_bs = result_coin[0]
+                sales_aliquot_bs = result_coin[1]
+                factor_type_bs = result_coin[2]
+            else:
+                # Valores por defecto si no encuentra la moneda
+                buy_aliquot_bs = 1.0
+                sales_aliquot_bs = 1.0
+                factor_type_bs = 0
+
             self.pg_cursor.execute(sql_coins, (
                 correlative,           # main_correlative
                 '01',                 # coin_code (Bolívares)
-                0,                    # factor_type (Bolívares es 0)
-                bcv_rate,             # buy_aliquot
-                bcv_rate,             # sales_aliquot
+                factor_type_bs,       # factor_type de la tabla coin
+                buy_aliquot_bs,       # buy_aliquot de la tabla coin
+                sales_aliquot_bs,     # sales_aliquot de la tabla coin
                 subtotal_bcv,         # total_net_details (convertido)
                 tax_amount_bcv,       # total_tax_details (convertido)
                 total_bcv,            # total_details (convertido)
@@ -756,7 +792,7 @@ class QuotesSync:
                 0.0,                  # credit
                 0.0                   # cash
             ))
-            self._log(f"     Insertado en sales_operation_coins (Bs, tasa={bcv_rate})", "debug")
+            self._log(f"     Insertado en sales_operation_coins (Bs, buy_aliquot={buy_aliquot_bs}, sales_aliquot={sales_aliquot_bs})", "debug")
         except Exception as e:
             self._log(f"     ⚠️ Error insertando en sales_operation_coins (Bs): {e}", "warning")
 
