@@ -303,9 +303,10 @@ class QuotesSync:
                 total_net_cost, total_tax_cost, total_cost, total_exempt,
                 shopping_order_date, shopping_order_document_no,
                 pending, canceled, coin_code,
+                control_no, description, operations_comment,
                 address_send, contact_send, phone_send
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING correlative
         """
@@ -351,6 +352,9 @@ class QuotesSync:
             True,  # pending
             False,  # canceled
             '02',  # coin_code (código de moneda)
+            '',  # control_no (vacío)
+            '',  # description (vacío)
+            '',  # operations_comment (vacío)
             '',  # address_send (vacío)
             '',  # contact_send (vacío)
             ''   # phone_send (vacío)
