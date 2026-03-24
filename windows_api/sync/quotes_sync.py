@@ -444,6 +444,7 @@ class QuotesSync:
         sql_detalle = """
             INSERT INTO sales_operation_details (
                 main_correlative, code_product, description_product, description,
+                referenc, mark, model,
                 amount, price, discount, total, coin_code,
                 store, locations,
                 unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot,
@@ -451,7 +452,7 @@ class QuotesSync:
                 total_net_gross, total_tax_gross, total_gross,
                 total_net, total_tax, pending_amount, buy_tax, buy_aliquot, product_type
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING line
         """
@@ -461,6 +462,9 @@ class QuotesSync:
             code_product,
             description_product,
             '',  # description = string vacío
+            '',  # referenc = string vacío
+            '',  # mark = string vacío
+            '',  # model = string vacío
             quantity,
             unit_price,
             discount_amount,
