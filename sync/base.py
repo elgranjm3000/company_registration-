@@ -7,7 +7,7 @@ Implementa el patrón Template Method para reutilizar lógica común.
 import hashlib
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 
 
