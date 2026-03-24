@@ -390,7 +390,7 @@ class QuotesSync:
 
         # Buscar unit y conversion_factor en products_units usando product_code
         unit = None
-        conversion_factor = 1.0
+        conversion_factor = 0.0
         if code_product:
             try:
                 self.pg_cursor.execute("""
