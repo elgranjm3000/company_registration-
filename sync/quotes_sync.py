@@ -697,10 +697,14 @@ class QuotesSync:
                                        total_net_cost: float, total_tax_cost: float,
                                        total_cost: float, total_exempt: float):
         """Insertar monedas de la operación (USD y Bolívares)"""
+        self._log(f"     🔝 Iniciando inserción en sales_operation_coins para correlative={correlative}", "debug")
+
         # Totales del quote (para referencia)
         subtotal = float(quote.get('subtotal', 0))
         tax_amount = float(quote.get('tax_amount', 0))
         total = float(quote.get('total', 0))
+
+        self._log(f"     📊 Montos a procesar: net={total_net_details}, tax={total_tax_details}, total={total_details}, discount={discount_amount}", "debug")
 
         # SQL para insertar en sales_operation_coins
         sql_coins = """
@@ -719,6 +723,8 @@ class QuotesSync:
 
         # Insertar en USD (coin_code = '02')
         try:
+            self._log(f"     💵 Insertando USD (coin_code='02')...", "debug")
+
             # Obtener aliquots de la tabla coin
             self.pg_cursor.execute("""
                 SELECT buy_aliquot, sales_aliquot, factor_type
@@ -731,11 +737,13 @@ class QuotesSync:
                 buy_aliquot_usd = result_coin[0]
                 sales_aliquot_usd = result_coin[1]
                 factor_type_usd = result_coin[2]
+                self._log(f"     ✅ Coin USD encontrado: buy={buy_aliquot_usd}, sales={sales_aliquot_usd}, factor={factor_type_usd}", "debug")
             else:
                 # Valores por defecto si no encuentra la moneda
                 buy_aliquot_usd = 1.0
                 sales_aliquot_usd = 1.0
                 factor_type_usd = 1
+                self._log(f"     ⚠️ Coin USD NO encontrado, usando defaults", "warning")
 
             self.pg_cursor.execute(sql_coins, (
                 correlative,           # main_correlative
@@ -765,12 +773,16 @@ class QuotesSync:
                 0.0,                  # retention_municipal_prorration
                 total_exempt          # total_exempt
             ))
-            self._log(f"     Insertado en sales_operation_coins (USD, buy_aliquot={buy_aliquot_usd}, sales_aliquot={sales_aliquot_usd})", "debug")
+            self._log(f"     ✅ Insertado en sales_operation_coins (USD, buy_aliquot={buy_aliquot_usd}, sales_aliquot={sales_aliquot_usd})", "debug")
         except Exception as e:
-            self._log(f"     ⚠️ Error insertando en sales_operation_coins (USD): {e}", "warning")
+            self._log(f"     ❌ Error insertando en sales_operation_coins (USD): {e}", "error")
+            import traceback
+            self._log(f"     Stack trace: {traceback.format_exc()}", "error")
 
         # Insertar en Bolívares (coin_code = '01')
         try:
+            self._log(f"     🪙 Insertando Bs (coin_code='01')...", "debug")
+
             # Obtener aliquots de la tabla coin para Bs (para guardar en la tabla)
             self.pg_cursor.execute("""
                 SELECT buy_aliquot, sales_aliquot, factor_type
@@ -791,14 +803,17 @@ class QuotesSync:
                 buy_aliquot_bs = result_coin_bs[0]      # buy_aliquot de Bs
                 sales_aliquot_bs = result_coin_bs[1]    # sales_aliquot de Bs
                 factor_type_bs = result_coin_bs[2]      # factor_type de Bs
+                self._log(f"     ✅ Coin Bs encontrado: buy={buy_aliquot_bs}, sales={sales_aliquot_bs}, factor={factor_type_bs}", "debug")
             else:
                 # Valores por defecto si no encuentra la moneda
                 buy_aliquot_bs = 1.0
                 sales_aliquot_bs = 1.0
                 factor_type_bs = 0
+                self._log(f"     ⚠️ Coin Bs NO encontrado, usando defaults", "warning")
 
             # Obtener tasa de conversión de USD
             sales_aliquot_usd = result_coin_usd[0] if result_coin_usd else 1.0
+            self._log(f"     📊 Tasa USD para conversión: {sales_aliquot_usd}", "debug")
 
             # Calcular montos en Bolívares usando sales_aliquot de USD
             total_net_details_bs = round(total_net_details * sales_aliquot_usd, 2)
@@ -840,9 +855,11 @@ class QuotesSync:
                 0.0,                      # retention_municipal_prorration
                 total_exempt_bs           # total_exempt (convertido a Bs)
             ))
-            self._log(f"     Insertado en sales_operation_coins (Bs, sales_aliquot_bs={sales_aliquot_bs}, tasa_usd={sales_aliquot_usd})", "debug")
+            self._log(f"     ✅ Insertado en sales_operation_coins (Bs, sales_aliquot_bs={sales_aliquot_bs}, tasa_usd={sales_aliquot_usd})", "debug")
         except Exception as e:
-            self._log(f"     ⚠️ Error insertando en sales_operation_coins (Bs): {e}", "warning")
+            self._log(f"     ❌ Error insertando en sales_operation_coins (Bs): {e}", "error")
+            import traceback
+            self._log(f"     Stack trace: {traceback.format_exc()}", "error")
 
     def _guardar_hash(self, quote: dict):
         """Guardar hash en sync_hashes"""
