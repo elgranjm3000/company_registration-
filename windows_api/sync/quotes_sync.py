@@ -646,6 +646,18 @@ class QuotesSync:
         # Obtener tasa BCV
         bcv_rate = self._get_bcv_rate()
 
+        # Obtener tax_type de la tabla taxes para cada tax_code
+        tax_codes_list = list(taxes_by_type.keys())
+        if tax_codes_list:
+            placeholders = ','.join(['%s'] * len(tax_codes_list))
+            self.pg_cursor.execute(f"""
+                SELECT code, line FROM taxes WHERE code IN ({placeholders})
+            """, tax_codes_list)
+
+            tax_types_dict = {row[0]: row[1] for row in self.pg_cursor.fetchall()}
+        else:
+            tax_types_dict = {}
+
         # Insertar un registro por cada tipo de impuesto
         sql_tax = """
             INSERT INTO sales_operation_taxes (
@@ -668,6 +680,9 @@ class QuotesSync:
 
             self._log(f"     Insertando impuesto tipo={tax_code}: aliquot={aliquot:.2f}%, taxable={taxable_amount:.2f}, tax={tax_amount:.2f}, ítems={count}", "debug")
 
+            # Obtener tax_type desde la tabla taxes
+            tax_type = tax_types_dict.get(tax_code, 1)
+
             # Insertar en sales_operation_taxes y obtener line
             self.pg_cursor.execute(sql_tax, (
                 correlative,
@@ -675,7 +690,7 @@ class QuotesSync:
                 aliquot,
                 taxable_amount,
                 tax_amount,
-                1  # tax_type
+                tax_type
             ))
 
             tax_line = self.pg_cursor.fetchone()[0]
