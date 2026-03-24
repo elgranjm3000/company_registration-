@@ -142,33 +142,46 @@ class CustomersSync(BaseSync):
 
             self.info(f"Se recuperaron {len(customers)} clientes de PostgreSQL")
 
-            claves_actuales = []
+            # ✅ OPTIMIZACIÓN: Obtener todos los hashes de una vez
+            self.info(f"   📥 Obteniendo hashes guardados (modo optimizado)...")
+            record_keys = [customer[0] for customer in customers]
+            hashes_guardados = self._obtener_hashes_masivo(self.table_name, record_keys)
+            self.info(f"   ✅ Obtenidos {len(hashes_guardados)} hashes")
 
             # Detectar nuevos y modificados
-            for customer in customers:
+            hashes_para_guardar = []  # Preparar para guardado masivo
+
+            for i, customer in enumerate(customers):
                 if not self.sync_running:
                     break
 
+                # Mostrar progreso cada 5000 clientes
+                if (i + 1) % 5000 == 0:
+                    self.info(f"   🔄 Procesando {i + 1}/{len(customers)} clientes...")
+
                 code = customer[0]
-                claves_actuales.append(code)
 
                 # Generar hash actual
                 hash_actual = self._generar_hash(customer)
 
-                # Obtener hash guardado
-                hash_guardado = self._obtener_hash_guardado(self.table_name, code)
+                # Buscar hash guardado en diccionario (O(1))
+                hash_guardado = hashes_guardados.get(code)
 
                 if hash_guardado is None:
                     # Nuevo
                     cambios['nuevos'].append(customer)
-                    self.debug(f"  ✨ NUEVO: {code}")
                 elif hash_guardado != hash_actual:
                     # Modificado
                     cambios['modificados'].append(customer)
-                    self.debug(f"  🔄 MODIFICADO: {code}")
 
-                # Guardar hash actual
-                self._guardar_hash(self.table_name, code, hash_actual)
+                # Preparar para guardado masivo
+                hashes_para_guardar.append((code, hash_actual))
+
+            # ✅ OPTIMIZACIÓN: Guardar todos los hashes de una vez
+            if hashes_para_guardar:
+                self.info(f"   💾 Guardando {len(hashes_para_guardar)} hashes (modo optimizado)...")
+                self._guardar_hashes_masivo(self.table_name, hashes_para_guardar)
+                self.info(f"   ✅ Hashes guardados")
 
             # Detectar eliminados (usando trigger deleted_at)
             self.pg_cursor.execute("""

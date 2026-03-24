@@ -385,6 +385,93 @@ class BaseSync(ABC):
             self.error(f"Error saving hash: {e}")
             self.pg_conn.rollback()
 
+    def _obtener_hashes_masivo(self, table_name: str, record_keys: List[str]) -> Dict[str, str]:
+        """
+        Obtener hashes guardados para múltiples registros de una sola vez (OPTIMIZADO).
+
+        En lugar de hacer N queries individuales, hace 1 solo query con IN.
+
+        Args:
+            table_name: Nombre de la tabla
+            record_keys: Lista de record_keys a buscar
+
+        Returns:
+            Dict {record_key: record_hash}
+        """
+        try:
+            if not record_keys:
+                return {}
+
+            # Construir placeholders IN
+            placeholders = ','.join(['%s'] * len(record_keys))
+
+            self.pg_cursor.execute(f"""
+                SELECT record_key, record_hash
+                FROM sync_hashes
+                WHERE table_name = %s
+                  AND record_key IN ({placeholders})
+                  AND company_id = %s
+            """, [table_name] + record_keys + [self.company_id])
+
+            # Convertir a diccionario para búsqueda O(1)
+            hashes_dict = {row[0]: row[1] for row in self.pg_cursor.fetchall()}
+
+            return hashes_dict
+
+        except Exception as e:
+            self.error(f"Error obteniendo hashes masivo: {e}")
+            return {}
+
+    def _guardar_hashes_masivo(
+        self,
+        table_name: str,
+        hashes_data: List[Tuple[str, str]]  # [(record_key, record_hash), ...]
+    ) -> None:
+        """
+        Guardar o actualizar múltiples hashes de una sola vez usando executemany (OPTIMIZADO).
+
+        En lugar de hacer N queries individuales, hace 1 solo executemany.
+
+        Args:
+            table_name: Nombre de la tabla
+            hashes_data: Lista de tuplas (record_key, record_hash)
+        """
+        try:
+            if not hashes_data:
+                return
+
+            from datetime import datetime
+
+            # Preparar datos para INSERT/UPDATE masivo
+            data_to_insert = []
+            current_time = datetime.now()
+
+            for record_key, record_hash in hashes_data:
+                data_to_insert.append((
+                    table_name,
+                    record_key,
+                    record_hash,
+                    self.company_id,
+                    current_time
+                ))
+
+            # Usar INSERT ... ON CONFLICT DO UPDATE para upsert masivo
+            self.pg_cursor.executemany("""
+                INSERT INTO sync_hashes (
+                    table_name, record_key, record_hash, company_id, updated_at
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (table_name, record_key, company_id)
+                DO UPDATE SET
+                    record_hash = EXCLUDED.record_hash,
+                    updated_at = EXCLUDED.updated_at
+            """, data_to_insert)
+
+            self.pg_conn.commit()
+
+        except Exception as e:
+            self.error(f"Error guardando hashes masivo: {e}")
+            self.pg_conn.rollback()
+
     def _update_sync_hashes(self, changes: Dict[str, List]) -> None:
         """
         Actualizar sync_hashes después de sincronizar exitosamente.
