@@ -697,25 +697,10 @@ class QuotesSync:
                                        total_net_cost: float, total_tax_cost: float,
                                        total_cost: float, total_exempt: float):
         """Insertar monedas de la operación (USD y Bolívares)"""
-        # Obtener tasa BCV del quote
-        bcv_rate = float(quote.get('bcv_rate', 170))  # Valor por defecto 170 si no viene
-
         # Totales del quote (para referencia)
         subtotal = float(quote.get('subtotal', 0))
         tax_amount = float(quote.get('tax_amount', 0))
         total = float(quote.get('total', 0))
-
-        # Calcular montos en Bolívares
-        total_net_details_bcv = round(total_net_details * bcv_rate, 2)
-        total_tax_details_bcv = round(total_tax_details * bcv_rate, 2)
-        total_details_bcv = round(total_details * bcv_rate, 2)
-        discount_amount_bcv = round(discount_amount * bcv_rate, 2)
-
-        # Calcular costos en Bolívares
-        total_net_cost_bcv = round(total_net_cost * bcv_rate, 2)
-        total_tax_cost_bcv = round(total_tax_cost * bcv_rate, 2)
-        total_cost_bcv = round(total_cost * bcv_rate, 2)
-        total_exempt_bcv = round(total_exempt * bcv_rate, 2)
 
         # SQL para insertar en sales_operation_coins
         sql_coins = """
@@ -748,8 +733,8 @@ class QuotesSync:
                 factor_type_usd = result_coin[2]
             else:
                 # Valores por defecto si no encuentra la moneda
-                buy_aliquot_usd = bcv_rate
-                sales_aliquot_usd = bcv_rate
+                buy_aliquot_usd = 1.0
+                sales_aliquot_usd = 1.0
                 factor_type_usd = 1
 
             self.pg_cursor.execute(sql_coins, (
@@ -758,9 +743,9 @@ class QuotesSync:
                 factor_type_usd,      # factor_type de la tabla coin
                 buy_aliquot_usd,      # buy_aliquot de la tabla coin
                 sales_aliquot_usd,    # sales_aliquot de la tabla coin
-                total_net_details,    # total_net_details
-                total_tax_details,    # total_tax_details
-                total_details,        # total_details
+                total_net_details,    # total_net_details (directo, viene en USD)
+                total_tax_details,    # total_tax_details (directo, viene en USD)
+                total_details,        # total_details (directo, viene en USD)
                 discount_amount,      # discount
                 0.0,                  # freight
                 total_net_details - discount_amount,  # total_net
@@ -771,7 +756,7 @@ class QuotesSync:
                 total_net_cost,       # total_net_cost
                 total_tax_cost,       # total_tax_cost
                 total_cost,           # total_cost
-                total_details,        # total_operation (igual a total_details)
+                total_details,        # total_operation
                 0.0,                  # total_retention_tax
                 0.0,                  # total_retention_municipal
                 0.0,                  # total_retention_islr
@@ -786,53 +771,71 @@ class QuotesSync:
 
         # Insertar en Bolívares (coin_code = '01')
         try:
-            # Obtener aliquots de la tabla coin
+            # Obtener aliquots de la tabla coin para USD (para conversión)
             self.pg_cursor.execute("""
                 SELECT buy_aliquot, sales_aliquot, factor_type
                 FROM coin
                 WHERE code = %s
-            """, ('01',))
-            result_coin = self.pg_cursor.fetchone()
+            """, ('02',))  # Obtener sales_aliquot de USD para convertir
+            result_coin_usd = self.pg_cursor.fetchone()
 
-            if result_coin:
-                buy_aliquot_bs = result_coin[0]
-                sales_aliquot_bs = result_coin[1]
-                factor_type_bs = result_coin[2]
+            # Obtener factor_type de Bs
+            self.pg_cursor.execute("""
+                SELECT factor_type
+                FROM coin
+                WHERE code = %s
+            """, ('01',))
+            result_coin_bs = self.pg_cursor.fetchone()
+
+            if result_coin_usd and result_coin_bs:
+                sales_aliquot_usd = result_coin_usd[1]  # sales_aliquot de USD
+                factor_type_bs = result_coin_bs[0]         # factor_type de Bs
             else:
                 # Valores por defecto si no encuentra la moneda
-                buy_aliquot_bs = 1.0
-                sales_aliquot_bs = 1.0
+                sales_aliquot_usd = 1.0
                 factor_type_bs = 0
+
+            # Calcular montos en Bolívares usando sales_aliquot de USD
+            total_net_details_bs = round(total_net_details * sales_aliquot_usd, 2)
+            total_tax_details_bs = round(total_tax_details * sales_aliquot_usd, 2)
+            total_details_bs = round(total_details * sales_aliquot_usd, 2)
+            discount_amount_bs = round(discount_amount * sales_aliquot_usd, 2)
+
+            # Calcular costos en Bolívares
+            total_net_cost_bs = round(total_net_cost * sales_aliquot_usd, 2)
+            total_tax_cost_bs = round(total_tax_cost * sales_aliquot_usd, 2)
+            total_cost_bs = round(total_cost * sales_aliquot_usd, 2)
+            total_exempt_bs = round(total_exempt * sales_aliquot_usd, 2)
 
             self.pg_cursor.execute(sql_coins, (
                 correlative,               # main_correlative
                 '01',                     # coin_code (Bolívares)
                 factor_type_bs,           # factor_type de la tabla coin
-                buy_aliquot_bs,           # buy_aliquot de la tabla coin
-                sales_aliquot_bs,         # sales_aliquot de la tabla coin
-                total_net_details_bcv,    # total_net_details (convertido)
-                total_tax_details_bcv,    # total_tax_details (convertido)
-                total_details_bcv,        # total_details (convertido)
-                discount_amount_bcv,      # discount (convertido)
+                sales_aliquot_usd,        # buy_aliquot (usar sales_aliquot de USD)
+                sales_aliquot_usd,        # sales_aliquot (usar sales_aliquot de USD)
+                total_net_details_bs,     # total_net_details (convertido a Bs)
+                total_tax_details_bs,     # total_tax_details (convertido a Bs)
+                total_details_bs,         # total_details (convertido a Bs)
+                discount_amount_bs,      # discount (convertido a Bs)
                 0.0,                      # freight
-                total_net_details_bcv - discount_amount_bcv,  # total_net (convertido)
-                total_tax_details_bcv,    # total_tax (convertido)
-                total_details_bcv,        # total (convertido)
+                total_net_details_bs - discount_amount_bs,  # total_net (convertido a Bs)
+                total_tax_details_bs,     # total_tax (convertido a Bs)
+                total_details_bs,         # total (convertido a Bs)
                 0.0,                      # credit
                 0.0,                      # cash
-                total_net_cost_bcv,       # total_net_cost (convertido)
-                total_tax_cost_bcv,       # total_tax_cost (convertido)
-                total_cost_bcv,           # total_cost (convertido)
-                total_details_bcv,        # total_operation (convertido)
+                total_net_cost_bs,        # total_net_cost (convertido a Bs)
+                total_tax_cost_bs,        # total_tax_cost (convertido a Bs)
+                total_cost_bs,            # total_cost (convertido a Bs)
+                total_details_bs,         # total_operation (convertido a Bs)
                 0.0,                      # total_retention_tax
                 0.0,                      # total_retention_municipal
                 0.0,                      # total_retention_islr
                 0.0,                      # retention_tax_prorration
                 0.0,                      # retention_islr_prorration
                 0.0,                      # retention_municipal_prorration
-                total_exempt_bcv          # total_exempt (convertido)
+                total_exempt_bs           # total_exempt (convertido a Bs)
             ))
-            self._log(f"     Insertado en sales_operation_coins (Bs, buy_aliquot={buy_aliquot_bs}, sales_aliquot={sales_aliquot_bs})", "debug")
+            self._log(f"     Insertado en sales_operation_coins (Bs, tasa={sales_aliquot_usd})", "debug")
         except Exception as e:
             self._log(f"     ⚠️ Error insertando en sales_operation_coins (Bs): {e}", "warning")
 
