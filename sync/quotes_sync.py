@@ -718,7 +718,7 @@ class QuotesSync:
                 total_retention_tax, total_retention_municipal, total_retention_islr,
                 retention_tax_prorration, retention_islr_prorration, retention_municipal_prorration,
                 total_exempt
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         # Insertar en USD (coin_code = '02')
