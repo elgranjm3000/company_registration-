@@ -350,6 +350,9 @@ class QuotesSync:
         correlative = self.pg_cursor.fetchone()[0]
         self._log(f"     Insertada venta #{correlative}", "debug")
 
+        # Insertar monedas de la operación (sales_operation_coins)
+        self._insertar_sales_operation_coins(correlative, quote)
+
         # Insertar items (sales_operation_details)
         for item in items:
             self._insertar_item(correlative, item, quote_number)
@@ -683,6 +686,79 @@ class QuotesSync:
 
         total_types = len([v for v in taxes_by_type.values() if v['tax'] > 0])
         self._log(f"     Insertados {total_types} tipos de impuestos en sales_operation_taxes", "debug")
+
+    def _insertar_sales_operation_coins(self, correlative: int, quote: dict):
+        """Insertar monedas de la operación (USD y Bolívares)"""
+        # Obtener tasa BCV del quote
+        bcv_rate = float(quote.get('bcv_rate', 170))  # Valor por defecto 170 si no viene
+
+        # Totales del quote
+        subtotal = float(quote.get('subtotal', 0))
+        tax_amount = float(quote.get('tax_amount', 0))
+        total = float(quote.get('total', 0))
+        discount_amount = float(quote.get('discount_amount', 0))
+
+        # Calcular montos en Bolívares
+        subtotal_bcv = round(subtotal * bcv_rate, 2)
+        tax_amount_bcv = round(tax_amount * bcv_rate, 2)
+        total_bcv = round(total * bcv_rate, 2)
+        discount_amount_bcv = round(discount_amount * bcv_rate, 2)
+
+        # SQL para insertar en sales_operation_coins
+        sql_coins = """
+            INSERT INTO sales_operation_coins (
+                main_correlative, coin_code, factor_type, buy_aliquot, sales_aliquot,
+                total_net_details, total_tax_details, total_details,
+                discount, freight, total_net, total_tax, total,
+                credit, cash
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+
+        # Insertar en USD (coin_code = '02')
+        try:
+            self.pg_cursor.execute(sql_coins, (
+                correlative,           # main_correlative
+                '02',                 # coin_code (USD)
+                1,                    # factor_type
+                bcv_rate,             # buy_aliquot
+                bcv_rate,             # sales_aliquot
+                subtotal,             # total_net_details
+                tax_amount,           # total_tax_details
+                total,                # total_details
+                discount_amount,      # discount
+                0.0,                  # freight
+                subtotal - discount_amount,  # total_net (subtotal - descuento)
+                tax_amount,           # total_tax
+                total,                # total
+                0.0,                  # credit
+                0.0                   # cash
+            ))
+            self._log(f"     Insertado en sales_operation_coins (USD, tasa={bcv_rate})", "debug")
+        except Exception as e:
+            self._log(f"     ⚠️ Error insertando en sales_operation_coins (USD): {e}", "warning")
+
+        # Insertar en Bolívares (coin_code = '01')
+        try:
+            self.pg_cursor.execute(sql_coins, (
+                correlative,           # main_correlative
+                '01',                 # coin_code (Bolívares)
+                1,                    # factor_type
+                bcv_rate,             # buy_aliquot
+                bcv_rate,             # sales_aliquot
+                subtotal_bcv,         # total_net_details (convertido)
+                tax_amount_bcv,       # total_tax_details (convertido)
+                total_bcv,            # total_details (convertido)
+                discount_amount_bcv,  # discount (convertido)
+                0.0,                  # freight
+                subtotal_bcv - discount_amount_bcv,  # total_net (convertido)
+                tax_amount_bcv,       # total_tax (convertido)
+                total_bcv,            # total (convertido)
+                0.0,                  # credit
+                0.0                   # cash
+            ))
+            self._log(f"     Insertado en sales_operation_coins (Bs, tasa={bcv_rate})", "debug")
+        except Exception as e:
+            self._log(f"     ⚠️ Error insertando en sales_operation_coins (Bs): {e}", "warning")
 
     def _guardar_hash(self, quote: dict):
         """Guardar hash en sync_hashes"""
