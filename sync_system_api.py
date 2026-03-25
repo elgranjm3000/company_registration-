@@ -451,11 +451,30 @@ class APIAuthManager:
                     }
 
             self._log(f"❌ Login falló: {response.status_code}", "error")
-            return {'success': False, 'error': f'HTTP {response.status_code}'}
+
+            # Mensajes amigables según código de error
+            if response.status_code == 401:
+                return {'success': False, 'error': 'Credenciales inválidas. Verifica tu email y password de la API.'}
+            elif response.status_code == 404:
+                return {'success': False, 'error': 'URL de la API no encontrada. Verifica la dirección configurada.'}
+            elif response.status_code == 500:
+                return {'success': False, 'error': 'Error interno del servidor. Intente más tarde o contacte soporte.'}
+            elif response.status_code == 503:
+                return {'success': False, 'error': 'Servicio no disponible. Intente más tarde.'}
+            else:
+                return {'success': False, 'error': f'Error de conexión ({response.status_code}). Verifique su conexión a internet.'}
 
         except Exception as e:
+            error_str = str(e).lower()
             self._log(f"❌ Error en login: {e}", "error")
-            return {'success': False, 'error': str(e)}
+
+            # Mensajes amigables para excepciones comunes
+            if 'connection' in error_str or 'timed out' in error_str:
+                return {'success': False, 'error': 'No se pudo conectar a la API. Verifique su conexión a internet y la URL configurada.'}
+            elif 'timeout' in error_str:
+                return {'success': False, 'error': 'Tiempo de espera agotado. La API está tardando demasiado en responder.'}
+            else:
+                return {'success': False, 'error': 'Error de conexión. Verifique la URL de la API y sus credenciales.'}
 
     def validate_company(self, rif: str, email: str) -> dict:
         """
@@ -2561,7 +2580,23 @@ class ConfigWindow:
 
                 except Exception as e:
                     resultado['exito'] = False
-                    resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error durante verificación:\n\n{str(e)}\n\nLa configuración se guardó pero hay\nproblemas de conexión. Verifica los datos."
+
+                    # Mensaje de error amigable
+                    error_msg = str(e)
+
+                    # Extraer el mensaje de error más amigable si está disponible
+                    if "Error autenticando API:" in error_msg:
+                        # El error ya viene del login con mensaje amigable
+                        error_amigable = error_msg.split("Login falló: ")[-1] if "Login falló: " in error_msg else error_msg
+                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error de autenticación:\n\n{error_amigable}\n\nVerifica:\n• Email y Password de la API\n• URL de la API configurada\n• Conexión a internet"
+                    elif "Error validando empresa:" in error_msg:
+                        # Error validando empresa
+                        error_amigable = error_msg.split("Validación falló: ")[-1] if "Validación falló: " in error_msg else error_msg
+                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error validando empresa:\n\n{error_amigable}\n\nVerifica:\n• RIF de la empresa\n• Email de la empresa"
+                    elif "Error conectando a PostgreSQL:" in error_msg:
+                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error de base de datos:\n\n{error_msg}\n\nVerifica:\n• Host de PostgreSQL\n• Puerto de conexión\n• Nombre de la base de datos\n• Usuario y contraseña"
+                    else:
+                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error durante verificación:\n\n{error_msg}\n\nLa configuración se guardó pero hay\nproblemas de conexión. Verifica los datos."
 
                 finally:
                     # Cerrar conexiones
