@@ -2203,6 +2203,54 @@ class ConfigWindow:
                 else:
                     messagebox.showerror("❌ Error", f"Login falló: {data.get('message', 'Error desconocido')}")
                     self.log("❌ API: Login falló")
+            elif response.status_code == 401:
+                # Error de autenticación
+                error_msg = "Credenciales incorrectas\n\n"
+                try:
+                    error_detail = response.json()
+                    error_msg += error_detail.get('message', 'Verifica tu email y password')
+                except:
+                    error_msg += "Verifica tu email y password"
+
+                messagebox.showerror("❌ Error de Autenticación", error_msg)
+                self.log(f"❌ API: Credenciales inválidas (401)")
+            elif response.status_code == 422:
+                # Error de validación
+                error_msg = "Datos de validación incorrectos\n\n"
+                try:
+                    error_detail = response.json()
+                    # Obtener mensaje general
+                    if 'message' in error_detail:
+                        error_msg += f"{error_detail['message']}\n\n"
+
+                    # Obtener errores específicos por campo
+                    if 'errors' in error_detail:
+                        errors_dict = error_detail['errors']
+                        for field, messages in errors_dict.items():
+                            if isinstance(messages, list) and messages:
+                                # Traducir campos comunes
+                                field_name = field
+                                if field == 'email':
+                                    field_name = 'Email'
+                                elif field == 'password':
+                                    field_name = 'Password'
+                                elif field == 'company_id':
+                                    field_name = 'ID de Empresa'
+
+                                # Traducir mensajes comunes
+                                message_es = messages[0]
+                                if 'required' in message_es.lower():
+                                    message_es = f"El campo {field_name} es obligatorio"
+                                elif 'email' in message_es.lower() and 'valid' in message_es.lower():
+                                    message_es = f"El formato del {field_name} no es válido"
+
+                                error_msg += f"• {message_es}\n"
+
+                except:
+                    error_msg += "Verifica los datos ingresados"
+
+                messagebox.showerror("❌ Error de Validación", error_msg)
+                self.log(f"❌ API: Error de validación (422)")
             elif response.status_code >= 500:
                 # Error del servidor (500, 502, 503, etc)
                 error_msg = f"Error del servidor ({response.status_code})\n\n"
@@ -2218,7 +2266,18 @@ class ConfigWindow:
                 self.log(f"❌ API: Error del servidor {response.status_code}")
                 self.log(f"   Detalle: {response.text[:200]}")
             else:
-                messagebox.showerror("❌ Error", f"Error HTTP {response.status_code}: {response.text[:100]}")
+                # Otros errores
+                error_msg = f"Error HTTP {response.status_code}\n\n"
+                try:
+                    error_detail = response.json()
+                    if 'message' in error_detail:
+                        error_msg += error_detail['message']
+                    else:
+                        error_msg += response.text[:100]
+                except:
+                    error_msg += response.text[:100]
+
+                messagebox.showerror("❌ Error", error_msg)
                 self.log(f"❌ API: Error HTTP {response.status_code}")
 
         except requests.exceptions.Timeout:
