@@ -485,7 +485,23 @@ class APIAuthManager:
 
             self._log(f"❌ Login falló: {response.status_code}", "error")
 
-            # Mensajes amigables según código de error
+            # Intentar obtener el mensaje del JSON de respuesta
+            try:
+                response_data = response.json()
+                # Si viene un 'message' en el JSON, usar ese
+                if 'message' in response_data:
+                    api_message = response_data['message']
+                    self._log(f"   Mensaje API: {api_message}", "error")
+                    return {'success': False, 'error': api_message}
+                # Si viene un 'error' en el JSON
+                elif 'error' in response_data:
+                    api_error = response_data['error']
+                    self._log(f"   Error API: {api_error}", "error")
+                    return {'success': False, 'error': api_error}
+            except:
+                pass  # Si no puedo parsear el JSON, usar mensajes por defecto
+
+            # Mensajes amigables según código de error (si no hay mensaje específico)
             if response.status_code == 401:
                 return {'success': False, 'error': 'Credenciales inválidas. Verifica tu email y password de la API.'}
             elif response.status_code == 404:
