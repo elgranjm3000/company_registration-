@@ -503,7 +503,7 @@ class APIAuthManager:
 
             # Mensajes amigables según código de error (si no hay mensaje específico)
             if response.status_code == 401:
-                return {'success': False, 'error': 'Credenciales inválidas. Verifica tu email y password de la API.'}
+                return {'success': False, 'error': 'Credenciales inválidas. Contacta al administrador del sistema.'}
             elif response.status_code == 404:
                 return {'success': False, 'error': 'URL de la API no encontrada. Verifica la dirección configurada.'}
             elif response.status_code == 500:
@@ -2241,9 +2241,9 @@ class ConfigWindow:
                 error_msg = "Credenciales incorrectas\n\n"
                 try:
                     error_detail = response.json()
-                    error_msg += error_detail.get('message', 'Verifica tu email y password')
+                    error_msg += error_detail.get('message', 'Contacta al administrador del sistema para verificar tus credenciales.')
                 except:
-                    error_msg += "Verifica tu email y password"
+                    error_msg += "Contacta al administrador del sistema para verificar tus credenciales."
 
                 messagebox.showerror("❌ Error de Autenticación", error_msg)
                 self.log(f"❌ API: Credenciales inválidas (401)")
@@ -2788,7 +2788,7 @@ class ConfigWindow:
                     if "Error autenticando API:" in error_msg:
                         # El error ya viene del login con mensaje amigable
                         error_amigable = error_msg.split("Login falló: ")[-1] if "Login falló: " in error_msg else error_msg
-                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error de autenticación:\n\n{error_amigable}\n\nVerifica:\n• Email y Password de la API\n• URL de la API configurada\n• Conexión a internet"
+                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error de autenticación:\n\n{error_amigable}\n\nContacta al administrador del sistema para verificar tus credenciales de acceso."
                     elif "Error validando empresa:" in error_msg:
                         # Error validando empresa
                         error_amigable = error_msg.split("Validación falló: ")[-1] if "Validación falló: " in error_msg else error_msg
