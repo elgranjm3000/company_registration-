@@ -602,15 +602,27 @@ class CustomersSync(BaseSync):
                     # Mapear estado de API a PostgreSQL
                     status_pg = '01' if cliente.get('status') == 'active' else '02'
 
+                    # Determinar client_type basado en name_fiscal (document_type)
+                    name_fiscal = cliente.get('document_type', '0')
+                    if name_fiscal == '0':
+                        client_type = '01'
+                    elif name_fiscal == '1':
+                        client_type = '02'
+                    elif name_fiscal == '2':
+                        client_type = '03'
+                    else:
+                        client_type = '01'  # Default
+
                     # Insertar en PostgreSQL
                     self.pg_cursor.execute("""
                         INSERT INTO clients (
                             code, description, address, client_id,
                             email, phone, contact, name_fiscal, status, generic_client,
+                            client_type,
                             country, province, city, town, area_sales, seller, client_group,
                             credit_days, credit_limit, discount
                         ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                     """, (
                         cliente.get('codigo'),          # code
@@ -620,9 +632,10 @@ class CustomersSync(BaseSync):
                         cliente.get('email'),           # email
                         cliente.get('phone'),           # phone
                         cliente.get('contact'),         # contact (campo del API)
-                        cliente.get('document_type'),   # name_fiscal (document_type del API)
+                        name_fiscal,                    # name_fiscal (document_type del API)
                         status_pg,                      # status
                         False,                          # generic_client
+                        client_type,                    # client_type (basado en name_fiscal)
                         '00',                           # country
                         '00',                           # province
                         '00',                           # city
