@@ -2161,7 +2161,7 @@ class ConfigWindow:
 
         # Validar campos requeridos
         if not api_url or not email or not password:
-            messagebox.showwarning("Advertencia", "Por favor complete URL, Email y Password de la API")
+            messagebox.showwarning("Advertencia", "Por favor complete Email y Password de la API")
             return
 
         # Deshabilitar botón durante la prueba
@@ -2196,8 +2196,7 @@ class ConfigWindow:
                         "✅ Conexión Exitosa",
                         f"Conexión a la API establecida correctamente.\n\n"
                         f"Usuario: {user.get('email', 'N/A')}\n"
-                        f"Nombre: {user.get('name', 'N/A')}\n"
-                        f"Token: {user_data.get('token', '')[:20]}..."
+                        f"Nombre: {user.get('name', 'N/A')}\n"                        
                     )
                     self.log("✅ API: Conexión exitosa")
                 else:
@@ -4093,7 +4092,21 @@ class SystemTrayService:
             )
 
             # Login
-            auth_manager.login(self.config['api_email'], self.api_password)
+            login_result = auth_manager.login(self.config['api_email'], self.api_password)
+            if not login_result.get('success'):
+                error_msg = login_result.get('error', 'Error de autenticación')
+                tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "❌ Credenciales incorrectas"
+
+                # Mostrar mensaje visual al usuario
+                mostrar_banner(
+                    "❌ Error de Autenticación",
+                    f"{error_msg}\n\nContacta al administrador del sistema.",
+                    duracion=15
+                )
+                return
+
             auth_manager.validate_company(self.config['company_rif'], self.config['company_email'])
 
             sync_manager = APISyncManager(
