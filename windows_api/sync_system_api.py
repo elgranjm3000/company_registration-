@@ -2511,14 +2511,21 @@ class ConfigWindow:
             return
 
         try:
+            # Importar módulo de encriptación
+            from config_encryption import encrypt_password
+
             # Convertir RIF a mayúsculas
             company_rif = self.company_rif_var.get().strip().upper()
+
+            # Encriptar password de la API antes de guardarlo
+            api_password_plain = self.api_password_var.get()
+            api_password_encrypted = encrypt_password(api_password_plain)
 
             # Crear configuración
             config = {
                 'api_url': self.api_url_var.get(),
                 'api_email': self.api_email_var.get(),
-                # Password NO se guarda (se pedirá al iniciar)
+                'api_password_encrypted': api_password_encrypted,  # Password encriptado
                 'postgres_host': self.pg_host_var.get(),
                 'postgres_port': self.pg_port_var.get(),
                 'postgres_database': self.pg_database_var.get(),
@@ -3285,19 +3292,35 @@ class LauncherWindow:
             messagebox.showerror("Error", f"Error cargando configuración: {e}")
             return
 
-        # Pedir password
-        import getpass
-        try:
-            api_password = getpass.getpass("Password de la API: ")
-        except:
-            # Si falla getpass (Windows a veces), usar tkinter
-            password_dialog = tk.Tk()
-            password_dialog.withdraw()
-            api_password = tk.simpledialog.askstring("Password", "Password de la API:", show='*')
-            password_dialog.destroy()
+        # Intentar obtener password de la API desde la configuración encriptada
+        api_password = None
 
-            if not api_password:
-                return
+        if 'api_password_encrypted' in config:
+            try:
+                from config_encryption import decrypt_password
+                api_password = decrypt_password(config['api_password_encrypted'])
+                if api_password:
+                    print("✅ Password de la API cargado desde configuración encriptada")
+                else:
+                    print("⚠️  Password desencriptado está vacío")
+            except Exception as e:
+                print(f"⚠️  Error desencriptando password: {e}")
+
+        # Si no hay password en config o falló desencriptación, pedirlo manualmente
+        if not api_password:
+            print("🔐 Se requiere password de la API...")
+            import getpass
+            try:
+                api_password = getpass.getpass("Password de la API: ")
+            except:
+                # Si falla getpass (Windows a veces), usar tkinter
+                password_dialog = tk.Tk()
+                password_dialog.withdraw()
+                api_password = tk.simpledialog.askstring("Password", "Password de la API:", show='*')
+                password_dialog.destroy()
+
+                if not api_password:
+                    return
 
         # Iniciar System Tray
         try:
