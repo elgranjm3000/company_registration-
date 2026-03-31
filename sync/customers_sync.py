@@ -607,9 +607,10 @@ class CustomersSync(BaseSync):
                         INSERT INTO clients (
                             code, description, address, client_id,
                             email, phone, contact, name_fiscal, status, generic_client,
-                            country, province, city, town, area_sales, seller, client_group
+                            country, province, city, town, area_sales, seller, client_group,
+                            credit_days, credit_limit, discount
                         ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                     """, (
                         cliente.get('codigo'),          # code
@@ -628,7 +629,10 @@ class CustomersSync(BaseSync):
                         '00',                           # town
                         '00',                           # area_sales
                         '00',                           # seller
-                        '00'                            # client_group
+                        '00',                           # client_group
+                        0,                              # credit_days
+                        0,                              # credit_limit
+                        0                               # discount
                     ))
 
                     insertados += 1
