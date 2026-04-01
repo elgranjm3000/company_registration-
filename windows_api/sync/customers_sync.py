@@ -615,11 +615,81 @@ class CustomersSync(BaseSync):
                     else:
                         client_type = '01'  # Default
 
-                    # Crear savepoint para poder revertir solo este insert si falla
-                    self.pg_cursor.execute("SAVEPOINT insert_client")
+                    # VERIFICAR SI EL CLIENTE YA EXISTE EN clients
+                    self.pg_cursor.execute("""
+                        SELECT code FROM clients WHERE code = %s
+                    """, (cliente.get('codigo'),))
 
-                    try:
-                        # Insertar en PostgreSQL
+                    cliente_existe = self.pg_cursor.fetchone()
+
+                    if cliente_existe:
+                        # ACTUALIZAR cliente existente
+                        self.pg_cursor.execute("""
+                            UPDATE clients SET
+                                description = %s,
+                                address = %s,
+                                client_id = %s,
+                                email = %s,
+                                phone = %s,
+                                contact = %s,
+                                name_fiscal = %s,
+                                status = %s,
+                                generic_client = %s,
+                                client_type = %s,
+                                country = %s,
+                                province = %s,
+                                city = %s,
+                                town = %s,
+                                area_sales = %s,
+                                seller = %s,
+                                client_group = %s,
+                                credit_days = %s,
+                                credit_limit = %s,
+                                discount = %s,
+                                sale_price = %s,
+                                updated_at = NOW()
+                            WHERE code = %s
+                        """, (
+                            cliente.get('name'),            # description
+                            cliente.get('address'),         # address
+                            cliente.get('document_number'), # client_id
+                            cliente.get('email'),           # email
+                            cliente.get('phone'),           # phone
+                            cliente.get('contact'),         # contact
+                            name_fiscal,                    # name_fiscal
+                            status_pg,                      # status
+                            False,                          # generic_client
+                            client_type,                    # client_type
+                            '00',                           # country
+                            '00',                           # province
+                            '00',                           # city
+                            '00',                           # town
+                            '00',                           # area_sales
+                            '00',                           # seller
+                            '00',                           # client_group
+                            0,                              # credit_days
+                            0,                              # credit_limit
+                            0,                              # discount
+                            0,                              # sale_price
+                            cliente.get('codigo')           # WHERE code
+                        ))
+
+                        insertados += 1
+                        self.info(f"   🔄 Actualizado: {cliente.get('codigo')} - {cliente.get('name')}")
+
+                        # Limpiar deleted_at de sync_hashes si estaba marcado como eliminado
+                        self.pg_cursor.execute("""
+                            UPDATE sync_hashes
+                            SET deleted_at = NULL,
+                                pending_sync = TRUE,
+                                updated_at = NOW()
+                            WHERE table_name = 'customers'
+                              AND record_key = %s
+                              AND company_id = %s
+                        """, (cliente.get('codigo'), self.company_id))
+
+                    else:
+                        # INSERTAR nuevo cliente
                         self.pg_cursor.execute("""
                             INSERT INTO clients (
                                 code, description, address, client_id,
@@ -657,17 +727,6 @@ class CustomersSync(BaseSync):
 
                         insertados += 1
                         self.info(f"   ✅ Insertado: {cliente.get('codigo')} - {cliente.get('name')}")
-
-                    except Exception as insert_error:
-                        # Revertir al savepoint para deshacer solo este insert
-                        self.pg_cursor.execute("ROLLBACK TO SAVEPOINT insert_client")
-
-                        # Verificar si es error de duplicado
-                        error_str = str(insert_error)
-                        if 'duplicate key' in error_str.lower() or 'llave duplicada' in error_str.lower():
-                            self.warning(f"   ⚠️  Cliente {cliente.get('codigo')} ya existe, omitiendo...")
-                        else:
-                            self.error(f"   ❌ Error insertando {cliente.get('codigo')}: {insert_error}")
 
                 except Exception as e:
                     self.error(f"   ❌ Error procesando {cliente.get('codigo')}: {e}")
