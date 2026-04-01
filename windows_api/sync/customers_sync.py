@@ -615,47 +615,62 @@ class CustomersSync(BaseSync):
                     else:
                         client_type = '01'  # Default
 
-                    # Insertar en PostgreSQL
-                    self.pg_cursor.execute("""
-                        INSERT INTO clients (
-                            code, description, address, client_id,
-                            email, phone, contact, name_fiscal, status, generic_client,
-                            client_type,
-                            country, province, city, town, area_sales, seller, client_group,
-                            credit_days, credit_limit, discount, sale_price
-                        ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                        )
-                    """, (
-                        cliente.get('codigo'),          # code
-                        cliente.get('name'),            # description
-                        cliente.get('address'),         # address
-                        cliente.get('document_number'), # client_id
-                        cliente.get('email'),           # email
-                        cliente.get('phone'),           # phone
-                        cliente.get('contact'),         # contact (campo del API)
-                        name_fiscal,                    # name_fiscal (document_type del API)
-                        status_pg,                      # status
-                        False,                          # generic_client
-                        client_type,                    # client_type (basado en name_fiscal)
-                        '00',                           # country
-                        '00',                           # province
-                        '00',                           # city
-                        '00',                           # town
-                        '00',                           # area_sales
-                        '00',                           # seller
-                        '00',                           # client_group
-                        0,                              # credit_days
-                        0,                              # credit_limit
-                        0,                              # discount
-                        0                               # sale_price
-                    ))
+                    # Crear savepoint para poder revertir solo este insert si falla
+                    self.pg_cursor.execute("SAVEPOINT insert_client")
 
-                    insertados += 1
-                    self.info(f"   ✅ Insertado: {cliente.get('codigo')} - {cliente.get('name')}")
+                    try:
+                        # Insertar en PostgreSQL
+                        self.pg_cursor.execute("""
+                            INSERT INTO clients (
+                                code, description, address, client_id,
+                                email, phone, contact, name_fiscal, status, generic_client,
+                                client_type,
+                                country, province, city, town, area_sales, seller, client_group,
+                                credit_days, credit_limit, discount, sale_price
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            )
+                        """, (
+                            cliente.get('codigo'),          # code
+                            cliente.get('name'),            # description
+                            cliente.get('address'),         # address
+                            cliente.get('document_number'), # client_id
+                            cliente.get('email'),           # email
+                            cliente.get('phone'),           # phone
+                            cliente.get('contact'),         # contact (campo del API)
+                            name_fiscal,                    # name_fiscal (document_type del API)
+                            status_pg,                      # status
+                            False,                          # generic_client
+                            client_type,                    # client_type (basado en name_fiscal)
+                            '00',                           # country
+                            '00',                           # province
+                            '00',                           # city
+                            '00',                           # town
+                            '00',                           # area_sales
+                            '00',                           # seller
+                            '00',                           # client_group
+                            0,                              # credit_days
+                            0,                              # credit_limit
+                            0,                              # discount
+                            0                               # sale_price
+                        ))
+
+                        insertados += 1
+                        self.info(f"   ✅ Insertado: {cliente.get('codigo')} - {cliente.get('name')}")
+
+                    except Exception as insert_error:
+                        # Revertir al savepoint para deshacer solo este insert
+                        self.pg_cursor.execute("ROLLBACK TO SAVEPOINT insert_client")
+
+                        # Verificar si es error de duplicado
+                        error_str = str(insert_error)
+                        if 'duplicate key' in error_str.lower() or 'llave duplicada' in error_str.lower():
+                            self.warning(f"   ⚠️  Cliente {cliente.get('codigo')} ya existe, omitiendo...")
+                        else:
+                            self.error(f"   ❌ Error insertando {cliente.get('codigo')}: {insert_error}")
 
                 except Exception as e:
-                    self.error(f"   ❌ Error insertando {cliente.get('codigo')}: {e}")
+                    self.error(f"   ❌ Error procesando {cliente.get('codigo')}: {e}")
                     continue
 
             # Commit de todos los inserts
@@ -701,26 +716,43 @@ class CustomersSync(BaseSync):
 
                 hash_valor = self._generar_hash(pg_tuple)
 
-                # Insertar en sync_hashes como ya sincronizado
-                self.pg_cursor.execute("""
-                    INSERT INTO sync_hashes (
-                        table_name, record_key, company_id,
-                        record_hash, pending_sync, synced_at
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, NOW()
-                    )
-                    ON CONFLICT (table_name, record_key, company_id)
-                    DO UPDATE SET
-                        record_hash = EXCLUDED.record_hash,
-                        pending_sync = FALSE,
-                        synced_at = NOW()
-                """, (
-                    'customers',
-                    codigo,
-                    self.company_id,
-                    hash_valor,
-                    False  # pending_sync = FALSE porque ya viene de la API
-                ))
+                # Insertar o actualizar sync_hashes (compatible con PostgreSQL 9.0)
+                try:
+                    # Intentar insertar primero
+                    self.pg_cursor.execute("""
+                        INSERT INTO sync_hashes (
+                            table_name, record_key, company_id,
+                            record_hash, pending_sync, synced_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, NOW()
+                        )
+                    """, (
+                        'customers',
+                        codigo,
+                        self.company_id,
+                        hash_valor,
+                        False  # pending_sync = FALSE porque ya viene de la API
+                    ))
+                except Exception as e:
+                    # Si falla por duplicado, hacer update
+                    error_str = str(e).lower()
+                    if 'duplicate' in error_str or 'llave duplicada' in error_str or 'unique' in error_str:
+                        self.pg_cursor.execute("""
+                            UPDATE sync_hashes
+                            SET record_hash = %s,
+                                pending_sync = FALSE,
+                                synced_at = NOW()
+                            WHERE table_name = %s
+                              AND record_key = %s
+                              AND company_id = %s
+                        """, (
+                            hash_valor,
+                            'customers',
+                            codigo,
+                            self.company_id
+                        ))
+                    else:
+                        raise  # Re-lanzar si no es error de duplicado
 
             self.pg_conn.commit()
             self.info(f"✅ Actualizados {len(clientes)} registros en sync_hashes")
@@ -760,6 +792,7 @@ class CustomersSync(BaseSync):
     def _save_last_sync_date(self):
         """
         Guardar fecha actual en sync_config como última sincronización desde API.
+        Compatible con PostgreSQL 9.0 (sin ON CONFLICT).
         """
         try:
             from datetime import datetime
@@ -767,14 +800,23 @@ class CustomersSync(BaseSync):
             # Fecha actual en formato ISO para API
             current_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000000Z')
 
-            self.pg_cursor.execute("""
-                INSERT INTO sync_config (key, value, updated_at)
-                VALUES (%s, %s, NOW())
-                ON CONFLICT (key)
-                DO UPDATE SET
-                    value = EXCLUDED.value,
-                    updated_at = NOW()
-            """, ('customers_last_sync_from_api', current_date))
+            # Intentar insertar o actualizar (compatible con PostgreSQL 9.0)
+            try:
+                self.pg_cursor.execute("""
+                    INSERT INTO sync_config (key, value, updated_at)
+                    VALUES (%s, %s, NOW())
+                """, ('customers_last_sync_from_api', current_date))
+            except Exception as e:
+                error_str = str(e).lower()
+                if 'duplicate' in error_str or 'llave duplicada' in error_str or 'unique' in error_str:
+                    # Si ya existe, actualizar
+                    self.pg_cursor.execute("""
+                        UPDATE sync_config
+                        SET value = %s, updated_at = NOW()
+                        WHERE key = %s
+                    """, (current_date, 'customers_last_sync_from_api'))
+                else:
+                    raise  # Re-lanzar si no es error de duplicado
 
             self.pg_conn.commit()
             self.info(f"   ✅ Fecha de sincronización guardada: {current_date}")
