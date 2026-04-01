@@ -98,9 +98,7 @@ class CustomersSync(BaseSync):
 
                 if count_pending == 0:
                     self.info("No hay clientes con pending_sync")
-                    return cambios
-
-                self.info(f"Se encontraron {count_pending} clientes con pending_sync")
+                    # NO RETORNAR AQUÍ - Continuar para verificar eliminados
 
                 # Obtener códigos de clientes pendientes
                 self.pg_cursor.execute("""
@@ -114,74 +112,74 @@ class CustomersSync(BaseSync):
 
                 pending_codes = [row[0] for row in self.pg_cursor.fetchall()]
 
-            if not pending_codes:
-                return cambios
+            # Continuar solo si hay códigos pendientes para procesar
+            # Si no hay, saltar directamente a la detección de eliminados
+            if pending_codes:
+                # Construir filtro IN para query principal
+                placeholders = ','.join(['%s'] * len(pending_codes))
 
-            # Construir filtro IN para query principal
-            placeholders = ','.join(['%s'] * len(pending_codes))
+                # Query de clients (más simple que products, sin joins complejos)
+                query = f"""
+                    SELECT
+                        code,
+                        description,
+                        address,
+                        client_id,
+                        email,
+                        phone,
+                        contact,
+                        status
+                    FROM clients
+                    WHERE code IN ({placeholders})
+                      AND code IS NOT NULL AND code != ''
+                    ORDER BY code
+                """
 
-            # Query de clients (más simple que products, sin joins complejos)
-            query = f"""
-                SELECT
-                    code,
-                    description,
-                    address,
-                    client_id,
-                    email,
-                    phone,
-                    contact,
-                    status
-                FROM clients
-                WHERE code IN ({placeholders})
-                  AND code IS NOT NULL AND code != ''
-                ORDER BY code
-            """
+                self.pg_cursor.execute(query, pending_codes)
+                customers = self.pg_cursor.fetchall()
 
-            self.pg_cursor.execute(query, pending_codes)
-            customers = self.pg_cursor.fetchall()
+                self.info(f"Se recuperaron {len(customers)} clientes de PostgreSQL")
 
-            self.info(f"Se recuperaron {len(customers)} clientes de PostgreSQL")
+                # ✅ OPTIMIZACIÓN: Obtener todos los hashes de una vez
+                self.info(f"   📥 Obteniendo hashes guardados (modo optimizado)...")
+                record_keys = [customer[0] for customer in customers]
+                hashes_guardados = self._obtener_hashes_masivo(self.table_name, record_keys)
+                self.info(f"   ✅ Obtenidos {len(hashes_guardados)} hashes")
 
-            # ✅ OPTIMIZACIÓN: Obtener todos los hashes de una vez
-            self.info(f"   📥 Obteniendo hashes guardados (modo optimizado)...")
-            record_keys = [customer[0] for customer in customers]
-            hashes_guardados = self._obtener_hashes_masivo(self.table_name, record_keys)
-            self.info(f"   ✅ Obtenidos {len(hashes_guardados)} hashes")
+                # Detectar nuevos y modificados
+                hashes_para_guardar = []  # Preparar para guardado masivo
 
-            # Detectar nuevos y modificados
-            hashes_para_guardar = []  # Preparar para guardado masivo
+                for i, customer in enumerate(customers):
+                    if not self.sync_running:
+                        break
 
-            for i, customer in enumerate(customers):
-                if not self.sync_running:
-                    break
+                    # Mostrar progreso cada 5000 clientes
+                    if (i + 1) % 5000 == 0:
+                        self.info(f"   🔄 Procesando {i + 1}/{len(customers)} clientes...")
 
-                # Mostrar progreso cada 5000 clientes
-                if (i + 1) % 5000 == 0:
-                    self.info(f"   🔄 Procesando {i + 1}/{len(customers)} clientes...")
+                    code = customer[0]
 
-                code = customer[0]
+                    # Generar hash actual
+                    hash_actual = self._generar_hash(customer)
 
-                # Generar hash actual
-                hash_actual = self._generar_hash(customer)
+                    # Buscar hash guardado en diccionario (O(1))
+                    hash_guardado = hashes_guardados.get(code)
 
-                # Buscar hash guardado en diccionario (O(1))
-                hash_guardado = hashes_guardados.get(code)
+                    if hash_guardado is None:
+                        # Nuevo
+                        cambios['nuevos'].append(customer)
+                    elif hash_guardado != hash_actual:
+                        # Modificado
+                        cambios['modificados'].append(customer)
 
-                if hash_guardado is None:
-                    # Nuevo
-                    cambios['nuevos'].append(customer)
-                elif hash_guardado != hash_actual:
-                    # Modificado
-                    cambios['modificados'].append(customer)
+                    # Preparar para guardado masivo
+                    hashes_para_guardar.append((code, hash_actual))
 
-                # Preparar para guardado masivo
-                hashes_para_guardar.append((code, hash_actual))
-
-            # ✅ OPTIMIZACIÓN: Guardar todos los hashes de una vez
-            if hashes_para_guardar:
-                self.info(f"   💾 Guardando {len(hashes_para_guardar)} hashes (modo optimizado)...")
-                self._guardar_hashes_masivo(self.table_name, hashes_para_guardar)
-                self.info(f"   ✅ Hashes guardados")
+                # ✅ OPTIMIZACIÓN: Guardar todos los hashes de una vez
+                if hashes_para_guardar:
+                    self.info(f"   💾 Guardando {len(hashes_para_guardar)} hashes (modo optimizado)...")
+                    self._guardar_hashes_masivo(self.table_name, hashes_para_guardar)
+                    self.info(f"   ✅ Hashes guardados")
 
             # Detectar eliminados (usando trigger deleted_at)
             self.pg_cursor.execute("""
