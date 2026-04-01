@@ -55,6 +55,19 @@ class BaseSync(ABC):
         self.pg_cursor = pg_conn.cursor()
         self.api_client = api_client
 
+        # Logger - INICIALIZAR PRIMERO (antes de llamar a self._log())
+        if logger is None:
+            self._logger = logging.getLogger(self.__class__.__name__)
+            self._logger_func = None
+        elif callable(logger):
+            # Es una función log(message, level)
+            self._logger = None
+            self._logger_func = logger
+        else:
+            # Es un objeto logging.Logger
+            self._logger = logger
+            self._logger_func = None
+
         # LEER company_id DESDE sync_config (no usar el parámetro)
         # Esto garantiza que siempre usemos el mismo company_id que los triggers
         try:
@@ -92,19 +105,6 @@ class BaseSync(ABC):
             # Si hay error leyendo sync_config, usar el parámetro
             self.company_id = company_id
             self._log(f"⚠️  Error leyendo company_id desde sync_config: {e}, usando parámetro: {self.company_id}", "warning")
-
-        # Logger - Wrapper que funciona con logging.Logger o función simple
-        if logger is None:
-            self._logger = logging.getLogger(self.__class__.__name__)
-            self._logger_func = None
-        elif callable(logger):
-            # Es una función log(message, level)
-            self._logger = None
-            self._logger_func = logger
-        else:
-            # Es un objeto logging.Logger
-            self._logger = logger
-            self._logger_func = None
 
         # Estadísticas de esta sincronización
         self.stats = {
