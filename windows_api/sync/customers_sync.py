@@ -468,15 +468,22 @@ class CustomersSync(BaseSync):
         document_numbers = [item['code'] for item in deleted_items]
 
         try:
+            self.info(f"   Enviando a API: {document_numbers}")
+
             result = self.api_client.delete_batch(
                 company_id=self.company_id,
                 documents=document_numbers
             )
 
+            self.info(f"   Respuesta API: {result}")
+
             deleted = result.get('deleted', 0)
             self.stats['deleted'] = deleted
 
-            self.info(f"✅ Eliminados {deleted} clientes de la API")
+            if deleted == 0:
+                self.warning(f"   ⚠️  La API eliminó 0 clientes. Posible problema con el endpoint.")
+            else:
+                self.info(f"✅ Eliminados {deleted} clientes de la API")
 
             # Limpiar sync_hashes (eliminar registros con deleted_at)
             self.pg_cursor.execute("""
