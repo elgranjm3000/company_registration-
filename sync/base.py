@@ -428,9 +428,9 @@ class BaseSync(ABC):
         hashes_data: List[Tuple[str, str]]  # [(record_key, record_hash), ...]
     ) -> None:
         """
-        Guardar o actualizar múltiples hashes de una sola vez usando executemany (OPTIMIZADO).
+        Guardar o actualizar múltiples hashes de una sola vez (OPTIMIZADO).
 
-        En lugar de hacer N queries individuales, hace 1 solo executemany.
+        Compatible con PostgreSQL 9.0 (sin ON CONFLICT).
 
         Args:
             table_name: Nombre de la tabla
@@ -442,7 +442,7 @@ class BaseSync(ABC):
 
             from datetime import datetime
 
-            # Preparar datos para INSERT/UPDATE masivo
+            # Primero intentar INSERT masivo
             data_to_insert = []
             current_time = datetime.now()
 
@@ -455,18 +455,49 @@ class BaseSync(ABC):
                     current_time
                 ))
 
-            # Usar INSERT ... ON CONFLICT DO UPDATE para upsert masivo
-            self.pg_cursor.executemany("""
-                INSERT INTO sync_hashes (
-                    table_name, record_key, record_hash, company_id, updated_at
-                ) VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (table_name, record_key, company_id)
-                DO UPDATE SET
-                    record_hash = EXCLUDED.record_hash,
-                    updated_at = EXCLUDED.updated_at
-            """, data_to_insert)
+            try:
+                # Intentar INSERT masivo
+                self.pg_cursor.executemany("""
+                    INSERT INTO sync_hashes (
+                        table_name, record_key, record_hash, company_id, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s)
+                """, data_to_insert)
+                self.pg_conn.commit()
+            except Exception as insert_err:
+                # Si hay error de duplicado, hacer UPDATE uno por uno
+                error_str = str(insert_err).lower()
+                if 'duplicate' in error_str or 'llave duplicada' in error_str or 'unique' in error_str:
+                    self.pg_conn.rollback()
+                    self.info("   ⚠️  Detectados duplicados, actualizando registros existentes...")
 
-            self.pg_conn.commit()
+                    # Para cada registro, intentar UPDATE
+                    for record_key, record_hash in hashes_data:
+                        try:
+                            self.pg_cursor.execute("""
+                                UPDATE sync_hashes
+                                SET record_hash = %s,
+                                    updated_at = NOW()
+                                WHERE table_name = %s
+                                  AND record_key = %s
+                                  AND company_id = %s
+                            """, (record_hash, table_name, record_key, self.company_id))
+
+                            # Si no afectó ninguna fila, hacer INSERT
+                            if self.pg_cursor.rowcount == 0:
+                                self.pg_cursor.execute("""
+                                    INSERT INTO sync_hashes (
+                                        table_name, record_key, record_hash, company_id, updated_at
+                                    ) VALUES (%s, %s, %s, %s, NOW())
+                                """, (table_name, record_key, record_hash, self.company_id))
+
+                        except Exception as e:
+                            self.warning(f"   ⚠️  Error guardando hash para {record_key}: {e}")
+                            continue
+
+                    self.pg_conn.commit()
+                else:
+                    # Si no es error de duplicado, re-lanzar
+                    raise insert_err
 
         except Exception as e:
             self.error(f"Error guardando hashes masivo: {e}")
