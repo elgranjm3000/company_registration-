@@ -476,20 +476,24 @@ class CustomersSync(BaseSync):
             self.stats['deleted'] = deleted
 
             if deleted == 0:
-                self.warning(f"   ⚠️  La API eliminó 0 clientes. Posible problema con el endpoint.")
+                self.warning(f"   ⚠️  La API eliminó 0 clientes.")
+                self.warning(f"   ⚠️  Los clientes probablemente no existen en la API.")
+                self.warning(f"   ⚠️  NO se limpian los registros de sync_hashes.")
+                self.warning(f"   ⚠️  Se volverán a intentar eliminar en la próxima sincronización.")
+                # NO limpiar sync_hashes si no se eliminó nada
             else:
                 self.info(f"✅ Eliminados {deleted} clientes de la API")
 
-            # Limpiar sync_hashes (eliminar registros con deleted_at)
-            self.pg_cursor.execute("""
-                DELETE FROM sync_hashes
-                WHERE table_name = 'customers'
-                  AND company_id = %s
-                  AND deleted_at IS NOT NULL
-            """, (self.company_id,))
-            filas_limpias = self.pg_cursor.rowcount
-            self.pg_conn.commit()
-            self.info(f"✅ Limpiados {filas_limpias} registros de sync_hashes")
+                # Solo limpiar sync_hashes si realmente se eliminaron clientes
+                self.pg_cursor.execute("""
+                    DELETE FROM sync_hashes
+                    WHERE table_name = 'customers'
+                      AND company_id = %s
+                      AND deleted_at IS NOT NULL
+                """, (self.company_id,))
+                filas_limpias = self.pg_cursor.rowcount
+                self.pg_conn.commit()
+                self.info(f"✅ Limpiados {filas_limpias} registros de sync_hashes")
 
         except Exception as e:
             self.error(f"❌ Error eliminando clientes: {e}")
