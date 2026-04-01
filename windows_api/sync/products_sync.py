@@ -127,9 +127,7 @@ class ProductsSync(BaseSync):
 
                 if count_pending == 0:
                     self.info("No hay productos con pending_sync")
-                    return cambios
-
-                self.info(f"Se encontraron {count_pending} productos con pending_sync")
+                    # NO RETORNAR AQUÍ - Continuar para verificar eliminados
 
                 # Obtener códigos de productos pendientes
                 self.pg_cursor.execute("""
@@ -143,113 +141,113 @@ class ProductsSync(BaseSync):
 
                 pending_codes = [row[0] for row in self.pg_cursor.fetchall()]
 
-            if not pending_codes:
-                return cambios
+            # Continuar solo si hay códigos pendientes para procesar
+            # Si no hay, saltar directamente a la detección de eliminados
+            if pending_codes:
+                # Construir filtro IN para query principal
+                placeholders = ','.join(['%s'] * len(pending_codes))
 
-            # Construir filtro IN para query principal
-            placeholders = ','.join(['%s'] * len(pending_codes))
+                # Query complejo con todos los joins necesarios
+                query = f"""
+                    SELECT DISTINCT ON (a.code)
+                        a.code,
+                        b.unit,
+                        a.description,
+                        a.short_name,
+                        a.department,
+                        i.description as department_name,
+                        b.product_code,
+                        h.description as unidad,
+                        COALESCE(c.total_stock, 0) AS stock,
+                        a.product_type,
+                        a.coin,
+                        f.description AS description_coin,
+                        COALESCE(b.maximum_price, b.higher_price, 0) AS price,
+                        CASE
+                            WHEN b.offer_price IS NULL
+                            THEN 0
+                            ELSE b.offer_price
+                        END AS cost,
+                        CASE
+                            WHEN b.higher_price IS NULL
+                            THEN 0
+                            ELSE b.higher_price
+                        END AS higher_price,
+                        CASE
+                            WHEN a.minimal_stock IS NULL
+                            THEN 0
+                            ELSE a.minimal_stock
+                        END AS min_stock,
+                        CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END AS status,
+                        d.image_type,
+                        d.product_image,
+                        a.sale_tax,
+                        e.aliquot,
+                        a.buy_tax,
+                        g.aliquot AS buy_aliquot,
+                        b.unitary_cost,
+                        a.allow_decimal
+                    FROM products a
+                    LEFT JOIN (
+                        SELECT product_code, SUM(stock) as total_stock
+                        FROM products_stock
+                        GROUP BY product_code
+                    ) c ON a.code = c.product_code
+                    LEFT JOIN products_units b ON a.code = b.product_code
+                    LEFT JOIN products_image d ON d.main_code = a.code
+                    LEFT JOIN taxes e ON e.code = a.sale_tax
+                    LEFT JOIN taxes g ON g.code = a.buy_tax
+                    LEFT JOIN coin f ON f.code = a.coin
+                    LEFT JOIN units h ON h.code = b.unit
+                    LEFT JOIN department i ON a.department = i.code
+                    WHERE a.code IN ({placeholders})
+                      AND a.code IS NOT NULL
+                      AND a.code != ''
+                      AND a.product_type <> 'C'
+                      AND b.unit != ''
+                      AND b.main_unit = true
+                    ORDER BY a.code, b.maximum_price DESC
+                """
 
-            # Query complejo con todos los joins necesarios
-            query = f"""
-                SELECT DISTINCT ON (a.code)
-                    a.code,
-                    b.unit,
-                    a.description,
-                    a.short_name,
-                    a.department,
-                    i.description as department_name,
-                    b.product_code,
-                    h.description as unidad,
-                    COALESCE(c.total_stock, 0) AS stock,
-                    a.product_type,
-                    a.coin,
-                    f.description AS description_coin,
-                    COALESCE(b.maximum_price, b.higher_price, 0) AS price,
-                    CASE
-                        WHEN b.offer_price IS NULL
-                        THEN 0
-                        ELSE b.offer_price
-                    END AS cost,
-                    CASE
-                        WHEN b.higher_price IS NULL
-                        THEN 0
-                        ELSE b.higher_price
-                    END AS higher_price,
-                    CASE
-                        WHEN a.minimal_stock IS NULL
-                        THEN 0
-                        ELSE a.minimal_stock
-                    END AS min_stock,
-                    CASE WHEN a.status = '01' THEN 'active' ELSE 'inactive' END AS status,
-                    d.image_type,
-                    d.product_image,
-                    a.sale_tax,
-                    e.aliquot,
-                    a.buy_tax,
-                    g.aliquot AS buy_aliquot,
-                    b.unitary_cost,
-                    a.allow_decimal
-                FROM products a
-                LEFT JOIN (
-                    SELECT product_code, SUM(stock) as total_stock
-                    FROM products_stock
-                    GROUP BY product_code
-                ) c ON a.code = c.product_code
-                LEFT JOIN products_units b ON a.code = b.product_code
-                LEFT JOIN products_image d ON d.main_code = a.code
-                LEFT JOIN taxes e ON e.code = a.sale_tax
-                LEFT JOIN taxes g ON g.code = a.buy_tax
-                LEFT JOIN coin f ON f.code = a.coin
-                LEFT JOIN units h ON h.code = b.unit
-                LEFT JOIN department i ON a.department = i.code
-                WHERE a.code IN ({placeholders})
-                  AND a.code IS NOT NULL
-                  AND a.code != ''
-                  AND a.product_type <> 'C'
-                  AND b.unit != ''
-                  AND b.main_unit = true
-                ORDER BY a.code, b.maximum_price DESC
-            """
+                self.pg_cursor.execute(query, pending_codes)
+                productos = self.pg_cursor.fetchall()
 
-            self.pg_cursor.execute(query, pending_codes)
-            productos = self.pg_cursor.fetchall()
+                self.info(f"Se recuperaron {len(productos)} productos de PostgreSQL")
 
-            self.info(f"Se recuperaron {len(productos)} productos de PostgreSQL")
+                claves_actuales = []
 
-            claves_actuales = []
+                # Detectar nuevos y modificados
+                for producto in productos:
+                    if not self.sync_running:
+                        break
 
-            # Detectar nuevos y modificados
-            for producto in productos:
-                if not self.sync_running:
-                    break
+                    code = producto[0]
+                    claves_actuales.append(code)
 
-                code = producto[0]
-                claves_actuales.append(code)
+                    # Generar hash actual
+                    hash_actual = self._generar_hash(producto)
 
-                # Generar hash actual
-                hash_actual = self._generar_hash(producto)
+                    # Obtener hash guardado
+                    hash_guardado = self._obtener_hash_guardado(self.table_name, code)
 
-                # Obtener hash guardado
-                hash_guardado = self._obtener_hash_guardado(self.table_name, code)
+                    # Extraer coin del producto (índice 10 según el query)
+                    coin_actual = producto[10] if len(producto) > 10 else None
 
-                # Extraer coin del producto (índice 10 según el query)
-                coin_actual = producto[10] if len(producto) > 10 else None
+                    if hash_guardado is None:
+                        # Nuevo
+                        cambios['nuevos'].append(producto)
+                        self.debug(f"  ✨ NUEVO: {code}")
+                    elif hash_guardado != hash_actual:
+                        # Modificado
+                        cambios['modificados'].append(producto)
+                        self.debug(f"  🔄 MODIFICADO: {code}")
 
-                if hash_guardado is None:
-                    # Nuevo
-                    cambios['nuevos'].append(producto)
-                    self.debug(f"  ✨ NUEVO: {code}")
-                elif hash_guardado != hash_actual:
-                    # Modificado
-                    cambios['modificados'].append(producto)
-                    self.debug(f"  🔄 MODIFICADO: {code}")
-
-                # Guardar hash actual con last_sync_data (incluye coin)
-                data_sync = {
-                    'coin': coin_actual,
-                    'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
-                self._guardar_hash(self.table_name, code, hash_actual, data_sync)
+                    # Guardar hash actual con last_sync_data (incluye coin)
+                    data_sync = {
+                        'coin': coin_actual,
+                        'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    self._guardar_hash(self.table_name, code, hash_actual, data_sync)
 
             # Detectar eliminados (usando trigger deleted_at)
             self.pg_cursor.execute("""
