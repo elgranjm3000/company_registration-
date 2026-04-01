@@ -4474,9 +4474,21 @@ def run_sync_console():
         print(f"❌ Error cargando configuración: {e}")
         sys.exit(1)
 
-    # Pedir password de la API
-    import getpass
-    api_password = getpass.getpass("Password de la API: ")
+    # Intentar cargar password encriptado del config
+    api_password = None
+    if 'api_password_encrypted' in config:
+        try:
+            from config_encryption import decrypt_password
+            api_password = decrypt_password(config['api_password_encrypted'])
+            if api_password:
+                print("✅ Password de la API cargado desde configuración")
+        except Exception as e:
+            print(f"⚠️  Error cargando password encriptado: {e}")
+
+    # Si no hay password en config, pedirlo
+    if not api_password:
+        import getpass
+        api_password = getpass.getpass("Password de la API: ")
 
     # Crear logger para consola
     def console_logger(msg, level="info"):
@@ -4599,9 +4611,21 @@ def run_service_loop():
     print(f"⏱️  Intervalo de sincronización: {interval_minutes} minutos")
     print("💡 Presione Ctrl+C para detener\n")
 
-    # Pedir password UNA vez
-    import getpass
-    api_password = getpass.getpass("Password de la API: ")
+    # Intentar cargar password encriptado del config
+    api_password = None
+    if 'api_password_encrypted' in config:
+        try:
+            from config_encryption import decrypt_password
+            api_password = decrypt_password(config['api_password_encrypted'])
+            if api_password:
+                print("✅ Password de la API cargado desde configuración")
+        except Exception as e:
+            print(f"⚠️  Error cargando password encriptado: {e}")
+
+    # Si no hay password en config, pedirlo UNA vez
+    if not api_password:
+        import getpass
+        api_password = getpass.getpass("Password de la API: ")
 
     sync_count = 0
 
@@ -4845,9 +4869,21 @@ def main():
             print(f"❌ Error cargando configuración: {e}")
             sys.exit(1)
 
-        # Pedir password
-        import getpass
-        api_password = getpass.getpass("Password de la API: ")
+        # Intentar cargar password encriptado del config
+        api_password = None
+        if 'api_password_encrypted' in config:
+            try:
+                from config_encryption import decrypt_password
+                api_password = decrypt_password(config['api_password_encrypted'])
+                if api_password:
+                    print("✅ Password de la API cargado desde configuración")
+            except Exception as e:
+                print(f"⚠️  Error cargando password encriptado: {e}")
+
+        # Si no hay password en config, pedirlo
+        if not api_password:
+            import getpass
+            api_password = getpass.getpass("Password de la API: ")
 
         # Iniciar System Tray
         try:
