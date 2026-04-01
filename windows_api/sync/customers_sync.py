@@ -728,6 +728,18 @@ class CustomersSync(BaseSync):
                         insertados += 1
                         self.info(f"   ✅ Insertado: {cliente.get('codigo')} - {cliente.get('name')}")
 
+                        # Limpiar deleted_at de sync_hashes si estaba marcado como eliminado previamente
+                        self.pg_cursor.execute("""
+                            UPDATE sync_hashes
+                            SET deleted_at = NULL,
+                                pending_sync = TRUE,
+                                updated_at = NOW()
+                            WHERE table_name = 'customers'
+                              AND record_key = %s
+                              AND company_id = %s
+                              AND deleted_at IS NOT NULL
+                        """, (cliente.get('codigo'), self.company_id))
+
                 except Exception as e:
                     self.error(f"   ❌ Error procesando {cliente.get('codigo')}: {e}")
                     continue
