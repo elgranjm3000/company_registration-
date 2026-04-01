@@ -48,13 +48,50 @@ class BaseSync(ABC):
         Args:
             pg_conn: Conexión a PostgreSQL (ya establecida)
             api_client: Cliente de la API REST (CategoriesClient, ProductsClient, etc.)
-            company_id: ID de la empresa
+            company_id: ID de la empresa (se ignora, se lee desde sync_config)
             logger: Logger opcional (puede ser logging.Logger o una función log(message, level))
         """
         self.pg_conn = pg_conn
         self.pg_cursor = pg_conn.cursor()
         self.api_client = api_client
-        self.company_id = company_id
+
+        # LEER company_id DESDE sync_config (no usar el parámetro)
+        # Esto garantiza que siempre usemos el mismo company_id que los triggers
+        try:
+            self.pg_cursor.execute("""
+                SELECT value
+                FROM sync_config
+                WHERE key = 'company_id'
+            """)
+            result = self.pg_cursor.fetchone()
+
+            if result and result[0]:
+                self.company_id = int(result[0])
+                self._log(f"✅ Company ID leído desde sync_config: {self.company_id}")
+            else:
+                # Si no existe en sync_config, usar el parámetro y guardarlo
+                self.company_id = company_id
+                self._log(f"⚠️  Company_id no existe en sync_config, usando: {self.company_id}")
+
+                # Guardar en sync_config para futuros usos
+                try:
+                    self.pg_cursor.execute("""
+                        INSERT INTO sync_config (key, value, updated_at)
+                        VALUES ('company_id', %s, NOW())
+                    """, (str(company_id),))
+                    self.pg_conn.commit()
+                    self._log(f"📝 Company_id guardado en sync_config: {self.company_id}")
+                except Exception as e:
+                    self._log(f"⚠️  Error guardando company_id en sync_config: {e}", "warning")
+                    try:
+                        self.pg_conn.rollback()
+                    except:
+                        pass
+
+        except Exception as e:
+            # Si hay error leyendo sync_config, usar el parámetro
+            self.company_id = company_id
+            self._log(f"⚠️  Error leyendo company_id desde sync_config: {e}, usando parámetro: {self.company_id}", "warning")
 
         # Logger - Wrapper que funciona con logging.Logger o función simple
         if logger is None:
