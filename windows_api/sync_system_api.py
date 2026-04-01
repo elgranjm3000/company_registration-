@@ -4172,12 +4172,25 @@ class SystemTrayService:
                 if total_created > 0 or total_updated > 0 or total_deleted > 0:
                     # Hay cambios - mostrar estadísticas
                     stats = result.get('stats', {})
+
+                    # Traducciones de entidades a español
+                    nombres_es = {
+                        'categories': 'Departamentos',
+                        'products': 'Productos',
+                        'customers': 'Clientes',
+                        'sellers': 'Vendedores',
+                        'quotes': 'Cotizaciones'
+                    }
+
                     parts = []
                     for entity, entity_stats in stats.items():
                         created = entity_stats.get('created', 0)
                         updated = entity_stats.get('updated', 0)
                         deleted = entity_stats.get('deleted', 0)
                         if created > 0 or updated > 0 or deleted > 0:
+                            # Obtener nombre en español (o defecto a capitalize)
+                            nombre_es = nombres_es.get(entity, entity.capitalize())
+
                             entity_parts = []
                             if created > 0:
                                 entity_parts.append(f"{created} nuevos")
@@ -4185,7 +4198,7 @@ class SystemTrayService:
                                 entity_parts.append(f"{updated} mods")
                             if deleted > 0:
                                 entity_parts.append(f"{deleted} eliminados")
-                            parts.append(f"{entity.capitalize()}: " + ", ".join(entity_parts))
+                            parts.append(f"{nombre_es}: " + ", ".join(entity_parts))
 
                     if parts:
                         mensaje = " | ".join(parts)
