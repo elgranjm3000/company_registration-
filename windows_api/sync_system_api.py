@@ -544,19 +544,28 @@ class APIAuthManager:
             if not self.api_token:
                 return {'success': False, 'error': 'No hay token. Haga login primero.'}
 
+            payload = {
+                'rif': rif,
+                'email': email
+            }
+            url = f"{self.base_url}/sync-batch/company/validate"
+
+            self._log(f"🔍 POST {url}")
+            self._log(f"   Payload: {payload}")
+
             response = requests.post(
-                f"{self.base_url}/sync-batch/company/validate",
+                url,
                 headers={
                     'Authorization': f'Bearer {self.api_token}',
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
-                json={
-                    'rif': rif,
-                    'email': email
-                },
+                json=payload,
                 timeout=30
             )
+
+            self._log(f"   Status: {response.status_code}")
+            self._log(f"   Response: {response.text[:500]}")  # Primeros 500 caracteres
 
             if response.status_code in [200, 201]:
                 data = response.json()
