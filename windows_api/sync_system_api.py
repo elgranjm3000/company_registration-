@@ -4703,6 +4703,203 @@ def run_service_loop():
         sys.exit(0)
 
 
+def authenticate_user_tray(config):
+    """
+    Autenticar usuario en modo tray con ventana GUI.
+
+    Valida:
+    - Credenciales (email/password)
+    - Rol (admin o cajero)
+    - company_id (debe coincidir con sync_config)
+
+    Returns:
+        str: Token de API si autenticación exitosa
+        None: Si falló autenticación
+    """
+    import requests
+
+    # Obtener company_id desde sync_config de PostgreSQL
+    company_id_from_config = None
+    try:
+        import psycopg2
+        pg_conn = psycopg2.connect(
+            host=config.get('pg_host'),
+            port=config.get('pg_port', 5432),
+            database=config.get('pg_database'),
+            user=config.get('pg_user'),
+            password=config.get('pg_password')
+        )
+        pg_cursor = pg_conn.cursor()
+        pg_cursor.execute("""
+            SELECT value FROM sync_config WHERE key = 'company_id'
+        """)
+        result = pg_cursor.fetchone()
+        if result:
+            company_id_from_config = int(result[0])
+        pg_cursor.close()
+        pg_conn.close()
+    except Exception as e:
+        messagebox.showerror("❌ Error", f"Error leyendo company_id de sync_config:\n{e}")
+        return None
+
+    if not company_id_from_config:
+        messagebox.showerror("❌ Error", "No hay company_id configurado en sync_config.\nEjecute --mode config primero.")
+        return None
+
+    # Crear ventana de login
+    login_window = tk.Tk()
+    login_window.title("Sincronizador Chrystal - Login")
+    login_window.geometry("400x250")
+    login_window.resizable(False, False)
+
+    # Centrar ventana
+    login_window.update_idletasks()
+    width = login_window.winfo_width()
+    height = login_window.winfo_height()
+    x = (login_window.winfo_screenwidth() // 2) - (width // 2)
+    y = (login_window.winfo_screenheight() // 2) - (height // 2)
+    login_window.geometry(f'{width}x{height}+{x}+{y}')
+
+    # Frame principal
+    main_frame = ttk.Frame(login_window, padding="20")
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Título
+    title_label = ttk.Label(
+        main_frame,
+        text="🔐 Autenticación Requerida",
+        font=('Arial', 14, 'bold')
+    )
+    title_label.pack(pady=(0, 20))
+
+    # Email
+    ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
+    email_entry = ttk.Entry(main_frame, width=40)
+    email_entry.pack(fill=tk.X, pady=(0, 10))
+    email_entry.focus()
+
+    # Password
+    ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
+    password_entry = ttk.Entry(main_frame, width=40, show="*")
+    password_entry.pack(fill=tk.X, pady=(0, 20))
+
+    # Botones
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(fill=tk.X)
+
+    login_result = {'token': None, 'error': None}
+
+    def do_login():
+        email = email_entry.get().strip()
+        password = password_entry.get().strip()
+
+        if not email or not password:
+            messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
+            return
+
+        try:
+            # Deshabilitar botón durante login
+            login_btn.config(state='disabled')
+            login_window.update()
+
+            # Llamar a API
+            api_url = config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
+            response = requests.post(
+                f"{api_url}/auth/login",
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                json={
+                    'email': email,
+                    'password': password,
+                    'device_name': 'tray_login',
+                    'force_logout': True
+                },
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    user_data = data.get('data', {})
+                    user = user_data.get('user', {})
+                    subscription = user_data.get('subscription', {})
+                    company = subscription.get('companies', {})
+
+                    # Validar rol
+                    role = user.get('role')
+                    if role not in ['admin', 'cajero']:
+                        messagebox.showerror(
+                            "❌ Acceso Denegado",
+                            f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
+                        )
+                        login_btn.config(state='normal')
+                        return
+
+                    # Validar company_id
+                    api_company_id = company.get('id')
+                    if api_company_id != company_id_from_config:
+                        messagebox.showerror(
+                            "❌ Acceso Denegado",
+                            f"Compañía no coincide:\nAPI: {api_company_id}\nConfig: {company_id_from_config}\n\nNo tiene permiso para acceder a esta compañía."
+                        )
+                        login_btn.config(state='normal')
+                        return
+
+                    # Todo OK - guardar token
+                    token = user_data.get('token')
+                    login_result['token'] = token
+                    login_window.destroy()
+                    return
+
+            # Error de login
+            error_msg = "Error de autenticación"
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('message', error_msg)
+            except:
+                pass
+
+            messagebox.showerror("❌ Error", f"{error_msg}")
+            login_btn.config(state='normal')
+
+        except requests.exceptions.Timeout:
+            messagebox.showerror("❌ Error", "Timeout conectando a la API.\nVerifique su conexión a internet.")
+            login_btn.config(state='normal')
+        except requests.exceptions.ConnectionError:
+            messagebox.showerror("❌ Error", "Error de conexión a la API.\nVerifique su conexión a internet.")
+            login_btn.config(state='normal')
+        except Exception as e:
+            messagebox.showerror("❌ Error", f"Error inesperado:\n{str(e)}")
+            login_btn.config(state='normal')
+
+    def do_cancel():
+        login_window.destroy()
+
+    login_btn = ttk.Button(button_frame, text="Iniciar Sesión", command=do_login)
+    login_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
+
+    cancel_btn = ttk.Button(button_frame, text="Cancelar", command=do_cancel)
+    cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(5, 0))
+
+    # Info label
+    info_label = ttk.Label(
+        main_frame,
+        text="Solo administradores y cajeros autorizados",
+        font=('Arial', 8),
+        foreground='gray'
+    )
+    info_label.pack(pady=(10, 0))
+
+    # Bind Enter key
+    login_window.bind('<Return>', lambda e: do_login())
+
+    # Ejecutar ventana
+    login_window.mainloop()
+
+    return login_result.get('token')
+
 # ==============================================================================
 # MAIN
 # ==============================================================================
@@ -4871,13 +5068,19 @@ def main():
             print(f"❌ Error cargando configuración: {e}")
             sys.exit(1)
 
-        # Pedir password
-        import getpass
-        api_password = getpass.getpass("Password de la API: ")
+        # Autenticar usuario (valida rol y company_id)
+        print("🔐 Autenticando usuario...")
+        api_token = authenticate_user_tray(config)
+
+        if not api_token:
+            print("❌ Autenticación cancelada o fallida")
+            sys.exit(1)
+
+        print(f"✅ Usuario autenticado correctamente")
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_password)
+            tray = SystemTrayService(config, api_token)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
