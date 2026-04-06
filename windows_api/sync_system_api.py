@@ -4300,23 +4300,29 @@ class SystemTrayService:
                 logger=tray_logger
             )
 
-            # Login
-            login_result = auth_manager.login(self.config['api_email'], self.api_password)
-            if not login_result.get('success'):
-                error_msg = login_result.get('error', 'Error de autenticación')
-                tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
+            # Usar el token obtenido en la autenticación (no volver a hacer login)
+            auth_manager.api_token = self.api_token
+            auth_manager.api_email = self.user_email or self.config.get('api_email')
+
+            # Validar company para obtener company_id
+            tray_logger("🔐 Validando compañía...")
+            validate_result = auth_manager.validate_company(self.config['company_rif'], auth_manager.api_email)
+            if not validate_result.get('success'):
+                error_msg = validate_result.get('error', 'Error validando compañía')
+                tray_logger(f"❌ Error validando compañía: {error_msg}", "error")
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.last_sync_status = "❌ Credenciales incorrectas"
+                self.last_sync_status = "❌ Error validando compañía"
 
                 # Mostrar mensaje visual al usuario
                 mostrar_banner(
-                    "❌ Error de Autenticación",
+                    "❌ Error de Validación",
                     f"{error_msg}\n\nContacta al administrador del sistema.",
                     duracion=15
                 )
                 return
 
-            auth_manager.validate_company(self.config['company_rif'], self.config['company_email'])
+            auth_manager.company_id = validate_result.get('company_id')
+            tray_logger(f"✅ Company ID: {auth_manager.company_id}")
 
             sync_manager = APISyncManager(
                 postgres_config={
