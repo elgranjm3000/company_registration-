@@ -574,8 +574,20 @@ class APIAuthManager:
                         'company': self.company_data
                     }
 
-            error_msg = response.json().get('message', 'Error desconocido') if response.text else 'Error desconocido'
-            self._log(f"❌ Validación falló: {error_msg}", "error")
+            # Manejar errores de API
+            error_msg = 'Error desconocido'
+            if response.text:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('message', error_data.get('error', error_msg))
+                except:
+                    # Si no es JSON válido, usar el texto del response
+                    if len(response.text) < 200:
+                        error_msg = response.text
+                    else:
+                        error_msg = f"Error HTTP {response.status_code}"
+
+            self._log(f"❌ Validación falló (HTTP {response.status_code}): {error_msg}", "error")
             return {'success': False, 'error': error_msg}
 
         except Exception as e:
@@ -4636,7 +4648,6 @@ class SystemTrayService:
                 pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
                 pystray.MenuItem('📊 Ver Logs', self.ver_logs),
                 pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
-                pystray.MenuItem('⚙️ Configuración', self.abrir_config),
                 pystray.MenuItem('❌ Salir', self.salir)
             )
             log_debug("[DEBUG] Menú creado")
