@@ -4010,10 +4010,11 @@ class SystemTrayService:
     Ejecuta sincronizaciones automáticamente sin ventana visible.
     """
 
-    def __init__(self, config, api_token, api_password=None):
+    def __init__(self, config, api_token, api_password=None, company_id=None):
         self.config = config
         self.api_token = api_token  # Token de autenticación
         self.api_password = api_password  # Password desencriptado (para re-auth)
+        self.company_id = company_id  # Company ID validado al inicio
         self.user_email = None  # Email del usuario autenticado
         self.sync_running = True
         self.is_syncing = False
@@ -4322,42 +4323,10 @@ class SystemTrayService:
                 logger=tray_logger
             )
 
-            # Hacer login FRESH para obtener token válido (como en mode service)
-            tray_logger("🔐 Autenticando con API...")
-            login_result = auth_manager.login(self.config.get('api_email'), self.api_password)
-
-            if not login_result.get('success'):
-                error_msg = login_result.get('message', 'Error de autenticación')
-                tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
-                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.last_sync_status = "❌ Error de autenticación"
-
-                mostrar_banner(
-                    "❌ Error de Autenticación",
-                    f"{error_msg}",
-                    duracion=15
-                )
-                return
-
-            # Validar company para obtener company_id
-            tray_logger("🏢 Validando empresa...")
-            validate_result = auth_manager.validate_company(self.config['company_rif'], self.config.get('company_email'))
-            if not validate_result.get('success'):
-                error_msg = validate_result.get('error', 'Error validando compañía')
-                tray_logger(f"❌ Error validando compañía: {error_msg}", "error")
-                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.last_sync_status = "❌ Error validando compañía"
-
-                # Mostrar mensaje visual al usuario
-                mostrar_banner(
-                    "❌ Error de Validación",
-                    f"{error_msg}\n\nContacta al administrador del sistema.",
-                    duracion=15
-                )
-                return
-
-            auth_manager.company_id = validate_result.get('company_id')
-            tray_logger(f"✅ Company ID: {auth_manager.company_id}")
+            # Usar el token obtenido al inicio (reutilizar, no hacer login nuevo)
+            auth_manager.api_token = self.api_token
+            auth_manager.company_id = self.company_id  # Usar company_id validado al inicio
+            tray_logger(f"✅ Usando token existente, Company ID: {auth_manager.company_id}")
 
             sync_manager = APISyncManager(
                 postgres_config={
@@ -5428,9 +5397,26 @@ def main():
             user_email = auth_result.get('email')
             print(f"✅ Usuario autenticado correctamente")
 
+        # Validar empresa UNA vez al inicio (obtener company_id)
+        print("🏢 Validando empresa al inicio...")
+        auth_manager = APIAuthManager(
+            base_url=config.get('api_url', 'https://chrystal.com.ve/mobile/public/api'),
+            logger=None
+        )
+        auth_manager.api_token = api_token
+
+        validate_result = auth_manager.validate_company(config['company_rif'], config['company_email'])
+        if not validate_result.get('success'):
+            error_msg = validate_result.get('error', 'Error validando empresa')
+            print(f"❌ Error: {error_msg}")
+            sys.exit(1)
+
+        company_id = validate_result.get('company_id')
+        print(f"✅ Company ID validado: {company_id}")
+
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token, api_password)
+            tray = SystemTrayService(config, api_token, api_password, company_id)
             tray.user_email = user_email  # Guardar email
             tray.iniciar()
         except Exception as e:
