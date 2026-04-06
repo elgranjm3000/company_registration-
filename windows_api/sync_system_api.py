@@ -4327,7 +4327,7 @@ class SystemTrayService:
 
             # Validar company para obtener company_id
             tray_logger("🔐 Validando compañía...")
-            validate_result = auth_manager.validate_company(self.config['company_rif'], auth_manager.api_email)
+            validate_result = auth_manager.validate_company(self.config['company_rif'], self.config.get('company_email'))
             if not validate_result.get('success'):
                 error_msg = validate_result.get('error', 'Error validando compañía')
                 tray_logger(f"❌ Error validando compañía: {error_msg}", "error")
