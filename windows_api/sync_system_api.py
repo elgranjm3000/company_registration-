@@ -5296,33 +5296,43 @@ def main():
         api_token = None
         user_email = None
 
+        # Verificar si existe api_password_encrypted en config
         if 'api_password_encrypted' in config:
+            print(f"✅ api_password_encrypted encontrado en config")
             try:
                 from config_encryption import decrypt_password
 
                 # Desencriptar password
+                print(f"🔐 Desencriptando password...")
                 api_password = decrypt_password(config['api_password_encrypted'])
 
                 if api_password:
+                    print(f"✅ Password desencriptado correctamente (longitud: {len(api_password)})")
                     # Hacer login con el password desencriptado
+                    print(f"🔐 Haciendo login a API como {config.get('api_email')}...")
                     auth_manager = APIAuthManager(
                         base_url=config.get('api_url', 'https://chrystal.com.ve/mobile/public/api'),
                         logger=None
                     )
 
                     login_result = auth_manager.login(config.get('api_email'), api_password)
+                    print(f"📊 Login result: success={login_result.get('success')}, has_token={bool(auth_manager.api_token)}")
+
                     if login_result.get('success'):
                         # Validar rol y company_id
                         user_data = login_result.get('user', {})
                         role = user_data.get('role')
+                        print(f"✅ Login exitoso, rol: {role}")
 
                         if role not in ['admin', 'cajero']:
                             print(f"❌ Rol no autorizado: {role}")
                             print("   Solo administradores y cajeros pueden usar el modo tray")
                             sys.exit(1)
+                        print(f"✅ Rol validado correctamente")
 
                         # Validar company_id con sync_config de PostgreSQL
                         try:
+                            print(f"🔐 Validando company_id con sync_config de PostgreSQL...")
                             import psycopg2
                             pg_conn = psycopg2.connect(
                                 host=config.get('pg_host'),
@@ -5344,26 +5354,45 @@ def main():
                                 print("❌ No hay company_id en sync_config")
                                 sys.exit(1)
 
+                            print(f"✅ company_id de sync_config: {company_id_from_config}")
+
                             # Obtener company_id desde la respuesta del login
                             company_id_api = login_result.get('company_id')
+                            print(f"🔐 company_id de API: {company_id_api}")
 
                             if company_id_api != company_id_from_config:
                                 print(f"❌ Compañía no coincide: API={company_id_api}, Config={company_id_from_config}")
                                 sys.exit(1)
 
+                            print(f"✅ company_id validado correctamente")
+
                         except Exception as e:
                             print(f"❌ Error validando company_id: {e}")
+                            import traceback
+                            traceback.print_exc()
                             sys.exit(1)
 
                         api_token = auth_manager.api_token
                         user_email = config.get('api_email')
                         print("✅ Usuario autenticado correctamente")
+                    else:
+                        print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
+
+                else:
+                    print(f"❌ Password desencriptado es None o vacío")
 
             except Exception as e:
                 print(f"❌ Error cargando password encriptado: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"⚠️  No hay 'api_password_encrypted' en config")
+            print(f"   Claves disponibles: {list(config.keys())}")
 
         # Si no hay password encriptado o falló autenticación, pedir con ventana
         if not api_token:
+            print(f"⚠️  No se pudo obtener api_token automáticamente")
+            print(f"🔐 Mostrando ventana de autenticación GUI...")
             auth_result = authenticate_user_tray(config)
             if not auth_result:
                 print("❌ Autenticación cancelada o fallida")
