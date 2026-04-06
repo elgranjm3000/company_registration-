@@ -4010,9 +4010,10 @@ class SystemTrayService:
     Ejecuta sincronizaciones automáticamente sin ventana visible.
     """
 
-    def __init__(self, config, api_token):
+    def __init__(self, config, api_token, api_password=None):
         self.config = config
         self.api_token = api_token  # Token de autenticación
+        self.api_password = api_password  # Password desencriptado (para re-auth)
         self.user_email = None  # Email del usuario autenticado
         self.sync_running = True
         self.is_syncing = False
@@ -4321,12 +4322,25 @@ class SystemTrayService:
                 logger=tray_logger
             )
 
-            # Usar el token obtenido en la autenticación (no volver a hacer login)
-            auth_manager.api_token = self.api_token
-            auth_manager.api_email = self.user_email or self.config.get('api_email')
+            # Hacer login FRESH para obtener token válido (como en mode service)
+            tray_logger("🔐 Autenticando con API...")
+            login_result = auth_manager.login(self.config.get('api_email'), self.api_password)
+
+            if not login_result.get('success'):
+                error_msg = login_result.get('message', 'Error de autenticación')
+                tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "❌ Error de autenticación"
+
+                mostrar_banner(
+                    "❌ Error de Autenticación",
+                    f"{error_msg}",
+                    duracion=15
+                )
+                return
 
             # Validar company para obtener company_id
-            tray_logger("🔐 Validando compañía...")
+            tray_logger("🏢 Validando empresa...")
             validate_result = auth_manager.validate_company(self.config['company_rif'], self.config.get('company_email'))
             if not validate_result.get('success'):
                 error_msg = validate_result.get('error', 'Error validando compañía')
@@ -5013,7 +5027,7 @@ def authenticate_user_tray(config):
     button_frame = ttk.Frame(main_frame)
     button_frame.pack(fill=tk.X)
 
-    login_result = {'token': None, 'error': None}
+    login_result = {'token': None, 'error': None, 'email': None, 'password': None}
 
     def do_login():
         email = email_entry.get().strip()
@@ -5073,11 +5087,12 @@ def authenticate_user_tray(config):
                         login_btn.config(state='normal')
                         return
 
-                    # Todo OK - guardar token y email
+                    # Todo OK - guardar token, email y password
                     token = user_data.get('token')
                     user_email = user.get('email')
                     login_result['token'] = token
                     login_result['email'] = user_email
+                    login_result['password'] = password
                     login_window.destroy()
                     return
 
@@ -5126,10 +5141,11 @@ def authenticate_user_tray(config):
     # Ejecutar ventana
     login_window.mainloop()
 
-    # Retornar diccionario con token y email
+    # Retornar diccionario con token, email y password
     return {
         'token': login_result.get('token'),
-        'email': login_result.get('email')
+        'email': login_result.get('email'),
+        'password': login_result.get('password')
     } if login_result.get('token') else None
 
 # ==============================================================================
@@ -5303,6 +5319,7 @@ def main():
         # Cargar password encriptado y autenticar
         print("🔐 Autenticando usuario...")
         api_token = None
+        api_password = None  # Inicializar variable para password desencriptado
         user_email = None
 
         # Verificar si existe api_password_encrypted en config
@@ -5407,12 +5424,13 @@ def main():
                 print("❌ Autenticación cancelada o fallida")
                 sys.exit(1)
             api_token = auth_result['token']
+            api_password = auth_result.get('password')  # Guardar password de la GUI
             user_email = auth_result.get('email')
             print(f"✅ Usuario autenticado correctamente")
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token)
+            tray = SystemTrayService(config, api_token, api_password)
             tray.user_email = user_email  # Guardar email
             tray.iniciar()
         except Exception as e:
