@@ -5280,20 +5280,91 @@ def main():
             print(f"❌ Error cargando configuración: {e}")
             sys.exit(1)
 
-        # Autenticar usuario (valida rol y company_id)
+        # Cargar password encriptado y autenticar
         print("🔐 Autenticando usuario...")
-        auth_result = authenticate_user_tray(config)
+        api_token = None
+        user_email = None
 
-        if not auth_result:
-            print("❌ Autenticación cancelada o fallida")
-            sys.exit(1)
+        if 'api_password_encrypted' in config:
+            try:
+                from config_encryption import decrypt_password
 
-        print(f"✅ Usuario autenticado correctamente")
+                # Desencriptar password
+                api_password = decrypt_password(config['api_password_encrypted'])
+
+                if api_password:
+                    # Hacer login con el password desencriptado
+                    auth_manager = APIAuthManager(
+                        base_url=config.get('api_url', 'https://chrystal.com.ve/mobile/public/api'),
+                        logger=None
+                    )
+
+                    login_result = auth_manager.login(config.get('api_email'), api_password)
+                    if login_result.get('success'):
+                        # Validar rol y company_id
+                        user_data = login_result.get('user', {})
+                        role = user_data.get('role')
+
+                        if role not in ['admin', 'cajero']:
+                            print(f"❌ Rol no autorizado: {role}")
+                            print("   Solo administradores y cajeros pueden usar el modo tray")
+                            sys.exit(1)
+
+                        # Validar company_id con sync_config de PostgreSQL
+                        try:
+                            import psycopg2
+                            pg_conn = psycopg2.connect(
+                                host=config.get('pg_host'),
+                                port=config.get('pg_port', 5432),
+                                database=config.get('pg_database'),
+                                user=config.get('pg_user'),
+                                password=config.get('pg_password')
+                            )
+                            pg_cursor = pg_conn.cursor()
+                            pg_cursor.execute("""
+                                SELECT value FROM sync_config WHERE key = 'company_id'
+                            """)
+                            result = pg_cursor.fetchone()
+                            company_id_from_config = int(result[0]) if result else None
+                            pg_cursor.close()
+                            pg_conn.close()
+
+                            if not company_id_from_config:
+                                print("❌ No hay company_id en sync_config")
+                                sys.exit(1)
+
+                            # Obtener company_id desde la respuesta del login
+                            company_id_api = login_result.get('company_id')
+
+                            if company_id_api != company_id_from_config:
+                                print(f"❌ Compañía no coincide: API={company_id_api}, Config={company_id_from_config}")
+                                sys.exit(1)
+
+                        except Exception as e:
+                            print(f"❌ Error validando company_id: {e}")
+                            sys.exit(1)
+
+                        api_token = auth_manager.api_token
+                        user_email = config.get('api_email')
+                        print("✅ Usuario autenticado correctamente")
+
+            except Exception as e:
+                print(f"❌ Error cargando password encriptado: {e}")
+
+        # Si no hay password encriptado o falló autenticación, pedir con ventana
+        if not api_token:
+            auth_result = authenticate_user_tray(config)
+            if not auth_result:
+                print("❌ Autenticación cancelada o fallida")
+                sys.exit(1)
+            api_token = auth_result['token']
+            user_email = auth_result.get('email')
+            print(f"✅ Usuario autenticado correctamente")
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, auth_result['token'])
-            tray.user_email = auth_result.get('email')  # Guardar email
+            tray = SystemTrayService(config, api_token)
+            tray.user_email = user_email  # Guardar email
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
