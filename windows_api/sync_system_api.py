@@ -3989,9 +3989,10 @@ class SystemTrayService:
     Ejecuta sincronizaciones automáticamente sin ventana visible.
     """
 
-    def __init__(self, config, api_password):
+    def __init__(self, config, api_token):
         self.config = config
-        self.api_password = api_password
+        self.api_token = api_token  # Token de autenticación
+        self.user_email = None  # Email del usuario autenticado
         self.sync_running = True
         self.is_syncing = False
         self.last_sync_time = None
@@ -4023,6 +4024,190 @@ class SystemTrayService:
         except Exception as e:
             print(f"Error creando icono: {e}")
             return None
+
+    def reautenticar_usuario(self):
+        """
+        Pide autenticación nuevamente antes de ejecutar acciones sensibles.
+        Valida rol y company_id como en authenticate_user_tray().
+
+        Returns:
+            bool: True si autenticación exitosa, False si falló
+        """
+        import requests
+
+        # Obtener company_id desde sync_config de PostgreSQL
+        company_id_from_config = None
+        try:
+            import psycopg2
+            pg_conn = psycopg2.connect(
+                host=self.config.get('pg_host'),
+                port=self.config.get('pg_port', 5432),
+                database=self.config.get('pg_database'),
+                user=self.config.get('pg_user'),
+                password=self.config.get('pg_password')
+            )
+            pg_cursor = pg_conn.cursor()
+            pg_cursor.execute("""
+                SELECT value FROM sync_config WHERE key = 'company_id'
+            """)
+            result = pg_cursor.fetchone()
+            if result:
+                company_id_from_config = int(result[0])
+            pg_cursor.close()
+            pg_conn.close()
+        except Exception as e:
+            messagebox.showerror("❌ Error", f"Error leyendo company_id:\n{e}")
+            return False
+
+        # Crear ventana de reautenticación
+        auth_window = tk.Tk()
+        auth_window.title("Sincronizador - Verificar Identidad")
+        auth_window.geometry("400x220")
+        auth_window.resizable(False, False)
+
+        # Centrar ventana
+        auth_window.update_idletasks()
+        width = auth_window.winfo_width()
+        height = auth_window.winfo_height()
+        x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (auth_window.winfo_screenheight() // 2) - (height // 2)
+        auth_window.geometry(f'{width}x{height}+{x}+{y}')
+
+        # Frame principal
+        main_frame = ttk.Frame(auth_window, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Título
+        ttk.Label(
+            main_frame,
+            text="🔐 Verificación Requerida",
+            font=('Arial', 12, 'bold')
+        ).pack(pady=(0, 15))
+
+        # Instrucción
+        ttk.Label(
+            main_frame,
+            text="Para continuar, ingrese sus credenciales:",
+            font=('Arial', 9)
+        ).pack(pady=(0, 10))
+
+        # Email
+        ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
+        email_entry = ttk.Entry(main_frame, width=40)
+        email_entry.pack(fill=tk.X, pady=(0, 10))
+
+        # Pre-llenar email si ya está guardado
+        if self.user_email:
+            email_entry.insert(0, self.user_email)
+
+        # Password
+        ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
+        password_entry = ttk.Entry(main_frame, width=40, show="*")
+        password_entry.pack(fill=tk.X, pady=(0, 15))
+        password_entry.focus()
+
+        auth_result = {'success': False}
+
+        def do_auth():
+            email = email_entry.get().strip()
+            password = password_entry.get().strip()
+
+            if not email or not password:
+                messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
+                return
+
+            try:
+                # Deshabilitar botón
+                auth_btn.config(state='disabled')
+                auth_window.update()
+
+                # Llamar a API
+                api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
+                response = requests.post(
+                    f"{api_url}/auth/login",
+                    headers={
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
+                    json={
+                        'email': email,
+                        'password': password,
+                        'device_name': 'tray_auth',
+                        'force_logout': True
+                    },
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('success'):
+                        user_data = data.get('data', {})
+                        user = user_data.get('user', {})
+                        subscription = user_data.get('subscription', {})
+                        company = subscription.get('companies', {})
+
+                        # Validar rol
+                        role = user.get('role')
+                        if role not in ['admin', 'cajero']:
+                            messagebox.showerror(
+                                "❌ Acceso Denegado",
+                                f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
+                            )
+                            auth_btn.config(state='normal')
+                            return
+
+                        # Validar company_id
+                        api_company_id = company.get('id')
+                        if api_company_id != company_id_from_config:
+                            messagebox.showerror(
+                                "❌ Acceso Denegado",
+                                f"Compañía no coincide:\nAPI: {api_company_id}\nConfig: {company_id_from_config}"
+                            )
+                            auth_btn.config(state='normal')
+                            return
+
+                        # Todo OK - guardar token y email
+                        self.api_token = user_data.get('token')
+                        self.user_email = email
+                        auth_result['success'] = True
+                        auth_window.destroy()
+                        return
+
+                # Error de autenticación
+                error_msg = "Credenciales inválidas"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('message', error_msg)
+                except:
+                    pass
+
+                messagebox.showerror("❌ Error", f"{error_msg}")
+                auth_btn.config(state='normal')
+
+            except Exception as e:
+                messagebox.showerror("❌ Error", f"Error de conexión:\n{str(e)}")
+                auth_btn.config(state='normal')
+
+        def do_cancel():
+            auth_window.destroy()
+
+        # Botones
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X)
+
+        auth_btn = ttk.Button(button_frame, text="Verificar", command=do_auth)
+        auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
+
+        cancel_btn = ttk.Button(button_frame, text="Cancelar", command=do_cancel)
+        cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(5, 0))
+
+        # Bind Enter
+        auth_window.bind('<Return>', lambda e: do_auth())
+
+        # Ejecutar ventana
+        auth_window.mainloop()
+
+        return auth_result['success']
 
     def configurar_auto_inicio(self):
         """
@@ -4269,6 +4454,11 @@ class SystemTrayService:
 
     def abrir_manager(self):
         """Abre la ventana del manager"""
+        # Reautenticar antes de abrir manager
+        if not self.reautenticar_usuario():
+            print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
+            return
+
         import threading
         threading.Thread(target=self._abrir_manager_thread, daemon=True).start()
 
@@ -4284,6 +4474,11 @@ class SystemTrayService:
 
     def ver_logs(self):
         """Abre ventana de logs"""
+        # Reautenticar antes de ver logs
+        if not self.reautenticar_usuario():
+            print("❌ Acceso a logs denegado: autenticación fallida o cancelada")
+            return
+
         import threading
         threading.Thread(target=self._ver_logs_thread, daemon=True).start()
 
@@ -4351,6 +4546,11 @@ class SystemTrayService:
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú"""
+        # Reautenticar antes de sincronizar
+        if not self.reautenticar_usuario():
+            print("❌ Sincronización cancelada: autenticación fallida o cancelada")
+            return
+
         print("\n" + "="*70)
         print("🔄 Sincronización manual solicitada desde el menú")
         print("="*70)
@@ -4847,9 +5047,11 @@ def authenticate_user_tray(config):
                         login_btn.config(state='normal')
                         return
 
-                    # Todo OK - guardar token
+                    # Todo OK - guardar token y email
                     token = user_data.get('token')
+                    user_email = user.get('email')
                     login_result['token'] = token
+                    login_result['email'] = user_email
                     login_window.destroy()
                     return
 
@@ -4898,7 +5100,11 @@ def authenticate_user_tray(config):
     # Ejecutar ventana
     login_window.mainloop()
 
-    return login_result.get('token')
+    # Retornar diccionario con token y email
+    return {
+        'token': login_result.get('token'),
+        'email': login_result.get('email')
+    } if login_result.get('token') else None
 
 # ==============================================================================
 # MAIN
@@ -5070,9 +5276,9 @@ def main():
 
         # Autenticar usuario (valida rol y company_id)
         print("🔐 Autenticando usuario...")
-        api_token = authenticate_user_tray(config)
+        auth_result = authenticate_user_tray(config)
 
-        if not api_token:
+        if not auth_result:
             print("❌ Autenticación cancelada o fallida")
             sys.exit(1)
 
@@ -5080,7 +5286,8 @@ def main():
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token)
+            tray = SystemTrayService(config, auth_result['token'])
+            tray.user_email = auth_result.get('email')  # Guardar email
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
