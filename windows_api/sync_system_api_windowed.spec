@@ -4,6 +4,9 @@
 
 from PyInstaller.utils.hooks import collect_all
 
+# Collect all plyer data (notificaciones)
+plyer_datas, plyer_binaries, plyer_hiddenimports = collect_all('plyer')
+
 # Collect all win10toast data (incluye metadatos .egg-info/.dist-info)
 win10toast_datas, win10toast_binaries, win10toast_hiddenimports = collect_all('win10toast')
 
@@ -16,7 +19,7 @@ datas_list = [
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-] + win10toast_datas + pywin32_datas
+] + plyer_datas + win10toast_datas + pywin32_datas
 
 # Agregar icono solo si existe
 if os.path.exists('icon.ico'):
@@ -25,7 +28,7 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=win10toast_binaries + pywin32_binaries,
+    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries,
     datas=datas_list,
     hiddenimports=[
         # Módulos principales de la aplicación
@@ -95,7 +98,14 @@ a = Analysis(
         'hashlib',
         'base64',
         'winreg',  # Windows Registry para auto-inicio
-        # Notificaciones Windows
+        # Notificaciones Windows (plyer - más estable)
+        'plyer',
+        'plyer.platform',
+        'plyer.platforms',
+        'plyer.platforms.win.notification',
+        'plyer.platforms.win.libs',
+        'plyer.platforms.win.libs.win10toast',
+        # Notificaciones Windows (win10toast - backup, mantener compatibilidad)
         'win10toast',
         'win10toast.toast',
         'pkg_resources',
@@ -113,7 +123,7 @@ a = Analysis(
         'pywin32.win32service',
         'pythoncom',
         'pywintypes',
-    ] + win10toast_hiddenimports + pywin32_hiddenimports,
+    ] + plyer_hiddenimports + win10toast_hiddenimports + pywin32_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

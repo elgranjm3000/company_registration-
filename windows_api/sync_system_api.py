@@ -141,9 +141,40 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     def _mostrar_notificacion_thread():
         try:
             if sistema == "Windows":
-                # Windows: win10toast tiene problemas de compatibilidad, desactivado
-                # El icono de tray ya proporciona feedback visual suficiente
-                pass
+                # Windows: usar plyer (más estable que win10toast)
+                try:
+                    from plyer import notification
+
+                    # Configurar icono si existe
+                    icon_path = None
+                    if icono and os.path.exists(icono):
+                        icon_path = icono
+                    else:
+                        try:
+                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            possible_icons = [
+                                os.path.join(script_dir, "icon.ico"),
+                                os.path.join(script_dir, "icon.png"),
+                                os.path.join(script_dir, "app.ico"),
+                            ]
+                            for path in possible_icons:
+                                if os.path.exists(path):
+                                    icon_path = path
+                                    break
+                        except:
+                            pass
+
+                    # Mostrar notificación con plyer
+                    notification.notify(
+                        title=titulo,
+                        message=mensaje,
+                        app_name="Sincronizador Chrystal",
+                        app_icon=icon_path,
+                        timeout=duracion,
+                    )
+                except Exception as e:
+                    # Silenciar errores de notificación (no crítico)
+                    pass
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
