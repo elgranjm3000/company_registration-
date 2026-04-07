@@ -2882,29 +2882,50 @@ class ConfigWindow:
 
                 # Crear ventana de progreso para primera sincronización
                 log_debug("[DEBUG] Creando ventana de sincronización...")
-                sync_window = tk.Toplevel(self.root)
+                sync_window = tk.Tk()  # Crear como ventana independiente, no Toplevel
                 sync_window.title("🔄 Primera Sincronización")
                 sync_window.geometry("600x300")
-                sync_window.transient(self.root)
-                sync_window.grab_set()
+                sync_window.resizable(False, False)
 
                 # Centrar ventana
                 sync_window.update_idletasks()
-                x = (sync_window.winfo_screenwidth() // 2) - (sync_window.winfo_width() // 2)
-                y = (sync_window.winfo_screenheight() // 2) - (sync_window.winfo_height() // 2)
-                sync_window.geometry(f"+{x}+{y}")
+                width = sync_window.winfo_width()
+                height = sync_window.winfo_height()
+                x = (sync_window.winfo_screenwidth() // 2) - (width // 2)
+                y = (sync_window.winfo_screenheight() // 2) - (height // 2)
+                sync_window.geometry(f"{width}x{height}+{x}+{y}")
+
+                # Mantener ventana al frente (topmost)
+                sync_window.attributes('-topmost', True)
+                sync_window.lift()
+                sync_window.focus_force()
 
                 # Widgets
-                tk.Label(sync_window, text="🔄 Ejecutando Primera Sincronización",
-                        font=("Arial", 14, "bold")).pack(pady=20)
+                # Frame principal con borde
+                main_frame = tk.Frame(sync_window, bg="#f0f0f0", padx=30, pady=30)
+                main_frame.pack(fill=tk.BOTH, expand=True)
 
-                sync_label = tk.Label(sync_window, text="Iniciando...",
-                                     font=("Arial", 11), wraplength=500)
+                tk.Label(main_frame, text="🔄 Ejecutando Primera Sincronización",
+                        font=("Arial", 16, "bold"), bg="#f0f0f0", fg="#2c3e50").pack(pady=(0, 10))
+
+                tk.Label(main_frame, text="Por favor espere, esto puede tardar varios minutos...",
+                        font=("Arial", 10), bg="#f0f0f0", fg="#7f8c8d").pack(pady=(0, 20))
+
+                sync_label = tk.Label(main_frame, text="⏳ Iniciando...",
+                                     font=("Arial", 11), bg="#f0f0f0", fg="#34495e",
+                                     wraplength=500, justify="center")
                 sync_label.pack(pady=10)
 
-                progress_bar = ttk.Progressbar(sync_window, mode='indeterminate')
-                progress_bar.pack(fill='x', padx=50, pady=20)
+                progress_bar = ttk.Progressbar(main_frame, mode='indeterminate', length=500)
+                progress_bar.pack(pady=20)
                 progress_bar.start(10)
+
+                # Información adicional
+                info_label = tk.Label(main_frame,
+                                     text="ℹ️ No cierre esta ventana\nLa sincronización se ejecuta en segundo plano",
+                                     font=("Arial", 9), bg="#f0f0f0", fg="#95a5a6",
+                                     justify="center")
+                info_label.pack(pady=(10, 0))
 
                 # Cola para comunicación thread → main thread
                 sync_queue = queue.Queue()
@@ -3038,7 +3059,15 @@ class ConfigWindow:
                         pass
 
                     if sync_result['exito']:
-                        sync_label.config(text=sync_result['mensaje'], foreground="green")
+                        # Quitar topmost para que no quede pegada al frente
+                        try:
+                            sync_window.attributes('-topmost', False)
+                        except:
+                            pass
+
+                        # Mostrar resultado exitoso
+                        sync_label.config(text=sync_result['mensaje'], foreground="#27ae60", bg="#f0f0f0")
+                        info_label.config(text="✅ Sincronización completada correctamente\nIniciando System Tray...", fg="#27ae60", bg="#f0f0f0")
                         log_debug("[DEBUG] Sync exitoso, cerrando ventana en 3 seg...")
 
                         # Cerrar ventana de sincronización después de 3 segundos
@@ -3049,10 +3078,19 @@ class ConfigWindow:
                         log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
                         sync_window.after(3500, lambda: iniciar_system_tray(config, sync_result.get('api_password')))
                     else:
+                        # Quitar topmost en caso de error también
+                        try:
+                            sync_window.attributes('-topmost', False)
+                        except:
+                            pass
+
                         log_debug(f"[DEBUG] Sync falló: {sync_result['mensaje']}")
-                        sync_label.config(text=sync_result['mensaje'], foreground="red")
-                        tk.Button(sync_window, text="⚠️ Cerrar",
-                                 command=sync_window.destroy).pack(pady=10)
+                        sync_label.config(text=sync_result['mensaje'], foreground="#c0392b", bg="#f0f0f0")
+                        info_label.config(text="⚠️ La sincronización falló\nRevise el log para más detalles", fg="#c0392b", bg="#f0f0f0")
+                        tk.Button(main_frame, text="⚠️ Cerrar",
+                                 command=sync_window.destroy,
+                                 bg="#c0392b", fg="white", font=("Arial", 10, "bold"),
+                                 padx=20, pady=5, cursor="hand2").pack(pady=10)
 
                 # Iniciar thread de sincronización
                 log_debug("[DEBUG] Iniciando thread de sincronización...")
