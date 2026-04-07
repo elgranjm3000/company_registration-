@@ -4138,16 +4138,12 @@ class SystemTrayService:
         ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
         email_entry = ttk.Entry(main_frame, width=40)
         email_entry.pack(fill=tk.X, pady=(0, 10))
-
-        # Pre-llenar email si ya está guardado
-        if self.user_email:
-            email_entry.insert(0, self.user_email)
+        email_entry.focus()  # Focus en email, campos limpios
 
         # Password
         ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
         password_entry = ttk.Entry(main_frame, width=40, show="*")
         password_entry.pack(fill=tk.X, pady=(0, 15))
-        password_entry.focus()
 
         auth_result = {'success': False}
 
