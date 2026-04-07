@@ -3063,7 +3063,7 @@ class ConfigWindow:
                 log_debug("="*70)
 
                 log_debug("[DEBUG] Creando instancia de SystemTrayService...")
-                tray_service = SystemTrayService(config, api_password)
+                tray_service = SystemTrayService(config, None, config.get('api_email'), api_password)
                 log_debug("[DEBUG] SystemTrayService creada")
 
                 log_debug("[DEBUG] Llamando a tray_service.iniciar()...")
@@ -3323,7 +3323,7 @@ class LauncherWindow:
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_password)
+            tray = SystemTrayService(config, None, config.get('api_email'), api_password)
             tray.iniciar()
         except Exception as e:
             messagebox.showerror("Error", f"Error iniciando System Tray: {e}\n\nAsegúrese de tener instaladas las dependencias:\npip install pystray Pillow")
@@ -3994,9 +3994,10 @@ class SystemTrayService:
     Ejecuta sincronizaciones automáticamente sin ventana visible.
     """
 
-    def __init__(self, config, api_token, api_password=None, company_id=None):
+    def __init__(self, config, api_token, api_email=None, api_password=None, company_id=None):
         self.config = config
         self.api_token = api_token  # Token de autenticación
+        self.api_email = api_email  # Email para re-auth
         self.api_password = api_password  # Password desencriptado (para re-auth)
         self.company_id = company_id  # Company ID validado al inicio
         self.user_email = None  # Email del usuario autenticado
@@ -4331,8 +4332,9 @@ class SystemTrayService:
                 logger=tray_logger
             )
 
-            # Login
-            login_result = auth_manager.login(self.config['api_email'], self.api_password)
+            # Login (usar self.api_email si está disponible, sino leer de config)
+            api_email = self.api_email or self.config.get('api_email')
+            login_result = auth_manager.login(api_email, self.api_password)
             if not login_result.get('success'):
                 error_msg = login_result.get('error', 'Error de autenticación')
                 tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
@@ -5029,7 +5031,7 @@ def main():
         print("="*70 + "\n")
 
         try:
-            tray = SystemTrayService(config, api_password)
+            tray = SystemTrayService(config, None, config.get('api_email'), api_password)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
@@ -5146,7 +5148,7 @@ def main():
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token, api_password, company_id)
+            tray = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
