@@ -4105,7 +4105,7 @@ class SystemTrayService:
         # Crear ventana de reautenticación
         auth_window = tk.Tk()
         auth_window.title("Sincronizador - Verificar Identidad")
-        auth_window.geometry("400x220")
+        auth_window.geometry("400x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
         auth_window.resizable(False, False)
 
         # Centrar ventana

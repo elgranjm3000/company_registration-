@@ -4140,7 +4140,7 @@ class SystemTrayService:
         # Crear ventana de reautenticación
         auth_window = tk.Tk()
         auth_window.title("Sincronizador - Verificar Identidad")
-        auth_window.geometry("400x220")
+        auth_window.geometry("400x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
         auth_window.resizable(False, False)
 
         # Centrar ventana
@@ -5041,7 +5041,7 @@ def authenticate_user_tray(config):
     # Crear ventana de login
     login_window = tk.Tk()
     login_window.title("Sincronizador Chrystal - Login")
-    login_window.geometry("400x250")
+    login_window.geometry("400x310")  # Aumentado de 250 a 310 para mejor visibilidad de botones
     login_window.resizable(False, False)
 
     # Centrar ventana
