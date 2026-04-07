@@ -4234,14 +4234,38 @@ class SystemTrayService:
         def do_cancel():
             auth_window.destroy()
 
-        # Botones
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X)
+        # Botones - usar tk.Button en lugar de ttk.Button para mejor visibilidad
+        button_frame = tk.Frame(main_frame, bg='#f0f0f0')
+        button_frame.pack(fill=tk.X, pady=(10, 0))
 
-        auth_btn = ttk.Button(button_frame, text="Verificar", command=do_auth)
+        auth_btn = tk.Button(
+            button_frame,
+            text="✅ Verificar",
+            command=do_auth,
+            bg='#4CAF50',
+            fg='white',
+            font=('Arial', 11, 'bold'),
+            relief=tk.RAISED,
+            bd=2,
+            padx=20,
+            pady=8,
+            cursor='hand2'
+        )
         auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
 
-        cancel_btn = ttk.Button(button_frame, text="Cancelar", command=do_cancel)
+        cancel_btn = tk.Button(
+            button_frame,
+            text="❌ Cancelar",
+            command=do_cancel,
+            bg='#f44336',
+            fg='white',
+            font=('Arial', 11, 'bold'),
+            relief=tk.RAISED,
+            bd=2,
+            padx=20,
+            pady=8,
+            cursor='hand2'
+        )
         cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(5, 0))
 
         # Bind Enter
