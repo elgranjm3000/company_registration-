@@ -141,7 +141,7 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     def _mostrar_notificacion_thread():
         try:
             if sistema == "Windows":
-                # Windows: intentar usar win10toast, pero silenciar errores de pkg_resources
+                # Windows: intentar usar win10toast, silenciar completamente cualquier error
                 try:
                     from win10toast import ToastNotifier
 
@@ -151,70 +151,19 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     if not hasattr(toast, 'classAtom'):
                         toast.classAtom = None
 
-                    # Intentar usar icono personalizado solo si existe
-                    icon_path = None
-                    if icono and os.path.exists(icono):
-                        icon_path = icono
-                    else:
-                        try:
-                            script_dir = os.path.dirname(os.path.abspath(__file__))
-                            possible_icons = [
-                                os.path.join(script_dir, "icon.ico"),
-                                os.path.join(script_dir, "icon.png"),
-                                os.path.join(script_dir, "app.ico"),
-                            ]
-                            for path in possible_icons:
-                                if os.path.exists(path):
-                                    icon_path = path
-                                    break
-                        except:
-                            pass
-
-                    # Intentar mostrar notificación con diferentes configuraciones
+                    # Intentar mostrar notificación (sin imprimir errores)
                     try:
-                        # Primer intento: sin icono, threaded=True (más compatible)
                         toast.show_toast(
                             titulo,
                             mensaje,
                             duration=duracion,
-                            icon_path=None,  # Sin icono para evitar errores
-                            threaded=True,  # Threaded es más estable
+                            icon_path=None,
+                            threaded=True,
                         )
-                        print(f"[DEBUG] Notificación mostrada: {titulo}")
-                    except Exception as e1:
-                        print(f"[DEBUG] Primer intento fallido: {e1}")
-                        # Segundo intento: sin icono, threaded=False
-                        try:
-                            toast.show_toast(
-                                titulo,
-                                mensaje,
-                                duration=duracion,
-                                icon_path=None,
-                                threaded=False,
-                            )
-                            print(f"[DEBUG] Notificación mostrada (2do intento): {titulo}")
-                        except Exception as e2:
-                            print(f"[DEBUG] Segundo intento fallido: {e2}")
-                            # Tercer intento: con icono si existe
-                            if icon_path:
-                                try:
-                                    toast.show_toast(
-                                        titulo,
-                                        mensaje,
-                                        duration=duracion,
-                                        icon_path=icon_path,
-                                        threaded=True,
-                                    )
-                                    print(f"[DEBUG] Notificación mostrada con icono: {titulo}")
-                                except Exception as e3:
-                                    print(f"[DEBUG] Tercer intento fallido: {e3}")
-                                    raise e3
-                            else:
-                                raise e2
-
-                except Exception as e:
-                    # Si falla win10toast, mostrar el error para debug
-                    print(f"[DEBUG] Error en notificación: {e}")
+                    except:
+                        pass  # Silenciar error de notificación
+                except:
+                    pass  # Silenciar completamente errores de win10toast
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
