@@ -141,29 +141,9 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     def _mostrar_notificacion_thread():
         try:
             if sistema == "Windows":
-                # Windows: intentar usar win10toast, silenciar completamente cualquier error
-                try:
-                    from win10toast import ToastNotifier
-
-                    toast = ToastNotifier()
-
-                    # Forzar la creación de classAtom si no existe
-                    if not hasattr(toast, 'classAtom'):
-                        toast.classAtom = None
-
-                    # Intentar mostrar notificación (sin imprimir errores)
-                    try:
-                        toast.show_toast(
-                            titulo,
-                            mensaje,
-                            duration=duracion,
-                            icon_path=None,
-                            threaded=True,
-                        )
-                    except:
-                        pass  # Silenciar error de notificación
-                except:
-                    pass  # Silenciar completamente errores de win10toast
+                # Windows: win10toast tiene problemas de compatibilidad, desactivado
+                # El icono de tray ya proporciona feedback visual suficiente
+                pass
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
