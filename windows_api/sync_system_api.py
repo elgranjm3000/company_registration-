@@ -3134,7 +3134,7 @@ class ConfigWindow:
                 log_debug(f"✅ Company ID: {company_id}")
 
                 log_debug("[DEBUG] Creando instancia de SystemTrayService...")
-                tray_service = SystemTrayService(config, api_token, api_password, company_id)
+                tray_service = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
                 log_debug("[DEBUG] SystemTrayService creada")
 
                 log_debug("[DEBUG] Llamando a tray_service.iniciar()...")
@@ -3400,7 +3400,7 @@ class LauncherWindow:
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token, api_password, company_id)
+            tray = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
             tray.iniciar()
         except Exception as e:
             messagebox.showerror("Error", f"Error iniciando System Tray: {e}\n\nAsegúrese de tener instaladas las dependencias:\npip install pystray Pillow")
@@ -4087,9 +4087,10 @@ class SystemTrayService:
     Ejecuta sincronizaciones automáticamente sin ventana visible.
     """
 
-    def __init__(self, config, api_token, api_password=None, company_id=None):
+    def __init__(self, config, api_token, api_email=None, api_password=None, company_id=None):
         self.config = config
         self.api_token = api_token  # Token de autenticación
+        self.api_email = api_email  # Email para re-auth
         self.api_password = api_password  # Password desencriptado (para re-auth)
         self.company_id = company_id  # Company ID validado al inicio
         self.user_email = None  # Email del usuario autenticado
@@ -4424,8 +4425,10 @@ class SystemTrayService:
                 logger=tray_logger
             )
 
-            # Usar el token obtenido al inicio (reutilizar, no hacer login nuevo)
+            # Usar el token y credenciales obtenidos al inicio (reutilizar, no hacer login nuevo)
             auth_manager.api_token = self.api_token
+            auth_manager.api_email = self.api_email  # Importante: para refresh de token
+            auth_manager.api_password = self.api_password  # Importante: para refresh de token
             auth_manager.company_id = self.company_id  # Usar company_id validado al inicio
             tray_logger(f"✅ Usando token existente, Company ID: {auth_manager.company_id}")
 
@@ -5384,7 +5387,7 @@ def main():
         print(f"✅ Company ID: {company_id}\n")
 
         try:
-            tray = SystemTrayService(config, api_token, api_password, company_id)
+            tray = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
@@ -5587,7 +5590,7 @@ def main():
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token, api_password, company_id)
+            tray = SystemTrayService(config, api_token, user_email, api_password, company_id)
             tray.user_email = user_email  # Guardar email
             tray.iniciar()
         except Exception as e:
