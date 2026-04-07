@@ -143,8 +143,6 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
             if sistema == "Windows":
                 # Windows: intentar usar win10toast, pero silenciar errores de pkg_resources
                 try:
-                    import win32con
-                    import win32gui
                     from win10toast import ToastNotifier
 
                     toast = ToastNotifier()
@@ -153,45 +151,11 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     if not hasattr(toast, 'classAtom'):
                         toast.classAtom = None
 
-                    # SIEMPRE crear ventana oculta para notificaciones (modo --windowed)
-                    try:
-                        hInstance = win32gui.GetModuleHandle(None)
-                        className = "PythonHiddenWindow"
-
-                        # Callback para procesar mensajes de ventana
-                        def wnd_proc(hwnd, msg, wparam, lparam):
-                            return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
-
-                        # Registrar clase de ventana
-                        wc = win32gui.WNDCLASS()
-                        wc.hInstance = hInstance
-                        wc.lpszClassName = className
-                        wc.lpfnWndProc = wnd_proc
-                        wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
-                        wc.hbrBackground = win32con.COLOR_WINDOW + 1
-
-                        # Intentar registrar la clase
-                        try:
-                            win32gui.RegisterClass(wc)
-                        except:
-                            pass  # Clase ya registrada
-
-                        # Crear ventana oculta
-                        style = win32con.WS_OVERLAPPEDWINDOW | win32con.WS_SYSMENU
-                        hwnd = win32gui.CreateWindowEx(
-                            0, className, "HiddenWindow", style,
-                            0, 0, 100, 100, 0, 0, hInstance, None
-                        )
-                        win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
-
-                        # Forzar que toast use esta ventana
-                        toast._hwnd = hwnd
-                    except:
-                        pass  # Si falla la creación de ventana, continuar sin ella
-
-                    # Intentar usar icono personalizado
-                    icon_path = icono
-                    if not icon_path:
+                    # Intentar usar icono personalizado solo si existe
+                    icon_path = None
+                    if icono and os.path.exists(icono):
+                        icon_path = icono
+                    else:
                         try:
                             script_dir = os.path.dirname(os.path.abspath(__file__))
                             possible_icons = [
@@ -206,15 +170,47 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                         except:
                             pass
 
-                    # Intentar mostrar notificación
-                    toast.show_toast(
-                        titulo,
-                        mensaje,
-                        duration=duracion,
-                        icon_path=icon_path,
-                        threaded=False,
-                    )
-                    print(f"[DEBUG] Notificación mostrada: {titulo}")
+                    # Intentar mostrar notificación con diferentes configuraciones
+                    try:
+                        # Primer intento: sin icono, threaded=True (más compatible)
+                        toast.show_toast(
+                            titulo,
+                            mensaje,
+                            duration=duracion,
+                            icon_path=None,  # Sin icono para evitar errores
+                            threaded=True,  # Threaded es más estable
+                        )
+                        print(f"[DEBUG] Notificación mostrada: {titulo}")
+                    except Exception as e1:
+                        print(f"[DEBUG] Primer intento fallido: {e1}")
+                        # Segundo intento: sin icono, threaded=False
+                        try:
+                            toast.show_toast(
+                                titulo,
+                                mensaje,
+                                duration=duracion,
+                                icon_path=None,
+                                threaded=False,
+                            )
+                            print(f"[DEBUG] Notificación mostrada (2do intento): {titulo}")
+                        except Exception as e2:
+                            print(f"[DEBUG] Segundo intento fallido: {e2}")
+                            # Tercer intento: con icono si existe
+                            if icon_path:
+                                try:
+                                    toast.show_toast(
+                                        titulo,
+                                        mensaje,
+                                        duration=duracion,
+                                        icon_path=icon_path,
+                                        threaded=True,
+                                    )
+                                    print(f"[DEBUG] Notificación mostrada con icono: {titulo}")
+                                except Exception as e3:
+                                    print(f"[DEBUG] Tercer intento fallido: {e3}")
+                                    raise e3
+                            else:
+                                raise e2
 
                 except Exception as e:
                     # Si falla win10toast, mostrar el error para debug
