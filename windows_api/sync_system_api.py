@@ -3495,6 +3495,22 @@ class ManagerWindow:
 
     def ask_password(self):
         """Pedir password de la API."""
+        # Primero intentar cargar password encriptado
+        if self.config and 'api_password_encrypted' in self.config:
+            try:
+                from config_encryption import decrypt_password
+                api_password = decrypt_password(self.config['api_password_encrypted'])
+                if api_password:
+                    # Password desencriptado correctamente - hacer login directamente
+                    self.log("✅ Password cargado desde configuración encriptada")
+                    self.do_login(api_password, None)
+                    return
+                else:
+                    self.log("⚠️  Password desencriptado está vacío")
+            except Exception as e:
+                self.log(f"⚠️  Error desencriptando password: {e}")
+
+        # Si no hay password encriptado o falló, mostrar ventana para pedirlo
         dialog = tk.Toplevel(self.root)
         dialog.title("🔐 Login API")
         dialog.geometry("450x220")
@@ -3579,10 +3595,11 @@ class ManagerWindow:
 
             if not result.get('success'):
                 messagebox.showerror("Error", f"Login falló:\n{result.get('error')}")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3598,10 +3615,11 @@ class ManagerWindow:
 
             if not result.get('success'):
                 messagebox.showerror("Error", f"Validación falló:\n{result.get('error')}")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3622,10 +3640,11 @@ class ManagerWindow:
             # Conectar PostgreSQL
             if not self.sync_manager.connect_postgresql():
                 messagebox.showerror("Error", "No se pudo conectar a PostgreSQL")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3678,10 +3697,11 @@ class ManagerWindow:
             # Inicializar clientes API
             if not self.sync_manager.initialize_api_clients():
                 messagebox.showerror("Error", "No se pudieron inicializar los clientes API")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3689,20 +3709,22 @@ class ManagerWindow:
                 return
 
             # Cerrar diálogo y mostrar ventana principal
-            try:
-                dialog.destroy()
-            except:
-                pass
+            if dialog:
+                try:
+                    dialog.destroy()
+                except:
+                    pass
             self.log("✅ Sistema listo para sincronizar")
 
         except Exception as e:
             messagebox.showerror("Error", f"Error durante login:\n{e}")
             import traceback
             self.log(traceback.format_exc(), "error")
-            try:
-                dialog.destroy()
-            except:
-                pass
+            if dialog:
+                try:
+                    dialog.destroy()
+                except:
+                    pass
             try:
                 self.root.destroy()
             except:

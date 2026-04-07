@@ -3502,10 +3502,11 @@ class ManagerWindow:
 
             if not result.get('success'):
                 messagebox.showerror("Error", f"Login falló:\n{result.get('error')}")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3521,10 +3522,11 @@ class ManagerWindow:
 
             if not result.get('success'):
                 messagebox.showerror("Error", f"Validación falló:\n{result.get('error')}")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3545,10 +3547,11 @@ class ManagerWindow:
             # Conectar PostgreSQL
             if not self.sync_manager.connect_postgresql():
                 messagebox.showerror("Error", "No se pudo conectar a PostgreSQL")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3601,10 +3604,11 @@ class ManagerWindow:
             # Inicializar clientes API
             if not self.sync_manager.initialize_api_clients():
                 messagebox.showerror("Error", "No se pudieron inicializar los clientes API")
-                try:
-                    dialog.destroy()
-                except:
-                    pass
+                if dialog:
+                    try:
+                        dialog.destroy()
+                    except:
+                        pass
                 try:
                     self.root.destroy()
                 except:
@@ -3612,20 +3616,22 @@ class ManagerWindow:
                 return
 
             # Cerrar diálogo y mostrar ventana principal
-            try:
-                dialog.destroy()
-            except:
-                pass
+            if dialog:
+                try:
+                    dialog.destroy()
+                except:
+                    pass
             self.log("✅ Sistema listo para sincronizar")
 
         except Exception as e:
             messagebox.showerror("Error", f"Error durante login:\n{e}")
             import traceback
             self.log(traceback.format_exc(), "error")
-            try:
-                dialog.destroy()
-            except:
-                pass
+            if dialog:
+                try:
+                    dialog.destroy()
+                except:
+                    pass
             try:
                 self.root.destroy()
             except:
