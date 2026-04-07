@@ -4234,39 +4234,43 @@ class SystemTrayService:
         def do_cancel():
             auth_window.destroy()
 
-        # Botones - usar tk.Button en lugar de ttk.Button para mejor visibilidad
-        button_frame = tk.Frame(main_frame, bg='#f0f0f0')
-        button_frame.pack(fill=tk.X, pady=(10, 0))
+        # Botones - colores oscuros para mejor contraste
+        button_frame = tk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(15, 0))
 
         auth_btn = tk.Button(
             button_frame,
             text="✅ Verificar",
             command=do_auth,
-            bg='#4CAF50',
+            bg='#2E7D32',  # Verde oscuro
             fg='white',
-            font=('Arial', 11, 'bold'),
+            font=('Arial', 12, 'bold'),
             relief=tk.RAISED,
-            bd=2,
-            padx=20,
-            pady=8,
-            cursor='hand2'
+            bd=3,
+            padx=30,
+            pady=12,
+            cursor='hand2',
+            activebackground='#1B5E20',  # Verde más oscuro al hacer clic
+            activeforeground='white'
         )
-        auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
+        auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
 
         cancel_btn = tk.Button(
             button_frame,
             text="❌ Cancelar",
             command=do_cancel,
-            bg='#f44336',
+            bg='#C62828',  # Rojo oscuro
             fg='white',
-            font=('Arial', 11, 'bold'),
+            font=('Arial', 12, 'bold'),
             relief=tk.RAISED,
-            bd=2,
-            padx=20,
-            pady=8,
-            cursor='hand2'
+            bd=3,
+            padx=30,
+            pady=12,
+            cursor='hand2',
+            activebackground='#B71C1C',  # Rojo más oscuro al hacer clic
+            activeforeground='white'
         )
-        cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(5, 0))
+        cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
 
         # Bind Enter
         auth_window.bind('<Return>', lambda e: do_auth())
