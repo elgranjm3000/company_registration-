@@ -3104,8 +3104,37 @@ class ConfigWindow:
                 log_debug("🔄 Iniciando modo System Tray...")
                 log_debug("="*70)
 
+                # Autenticar y validar empresa antes de iniciar tray
+                log_debug("🔐 Autenticando con API...")
+                from sync.APIAuthManager import APIAuthManager
+                auth_manager_tray = APIAuthManager(
+                    base_url=config['api_url'],
+                    logger=None
+                )
+
+                # Login
+                login_result = auth_manager_tray.login(config.get('api_email'), api_password)
+                if not login_result.get('success'):
+                    log_debug(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
+                    messagebox.showerror("Error", "Error de autenticación al iniciar System Tray")
+                    return
+
+                api_token = auth_manager_tray.api_token
+                log_debug("✅ Login exitoso")
+
+                # Validar empresa para obtener company_id
+                log_debug("🏢 Validando empresa...")
+                validate_result = auth_manager_tray.validate_company(config['company_rif'], config['company_email'])
+                if not validate_result.get('success'):
+                    log_debug(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
+                    messagebox.showerror("Error", "Error validando empresa al iniciar System Tray")
+                    return
+
+                company_id = validate_result.get('company_id')
+                log_debug(f"✅ Company ID: {company_id}")
+
                 log_debug("[DEBUG] Creando instancia de SystemTrayService...")
-                tray_service = SystemTrayService(config, api_password)
+                tray_service = SystemTrayService(config, api_token, api_password, company_id)
                 log_debug("[DEBUG] SystemTrayService creada")
 
                 log_debug("[DEBUG] Llamando a tray_service.iniciar()...")
@@ -3343,9 +3372,35 @@ class LauncherWindow:
                 if not api_password:
                     return
 
+        # Autenticar y validar empresa antes de iniciar tray
+        print("🔐 Autenticando con API...")
+        auth_manager_tray = APIAuthManager(
+            base_url=config['api_url'],
+            logger=None
+        )
+
+        # Login
+        login_result = auth_manager_tray.login(config.get('api_email'), api_password)
+        if not login_result.get('success'):
+            print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
+            return
+
+        api_token = auth_manager_tray.api_token
+        print("✅ Login exitoso")
+
+        # Validar empresa para obtener company_id
+        print("🏢 Validando empresa...")
+        validate_result = auth_manager_tray.validate_company(config['company_rif'], config['company_email'])
+        if not validate_result.get('success'):
+            print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
+            return
+
+        company_id = validate_result.get('company_id')
+        print(f"✅ Company ID: {company_id}\n")
+
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_password)
+            tray = SystemTrayService(config, api_token, api_password, company_id)
             tray.iniciar()
         except Exception as e:
             messagebox.showerror("Error", f"Error iniciando System Tray: {e}\n\nAsegúrese de tener instaladas las dependencias:\npip install pystray Pillow")
@@ -5212,8 +5267,34 @@ def main():
         print("Se sincronizará automáticamente cada", config.get('sync_interval_minutes', '30'), "minutos")
         print("="*70 + "\n")
 
+        # Autenticar y validar empresa antes de iniciar tray
+        print("🔐 Autenticando con API...")
+        auth_manager_tray = APIAuthManager(
+            base_url=config['api_url'],
+            logger=None
+        )
+
+        # Login
+        login_result = auth_manager_tray.login(config.get('api_email'), api_password)
+        if not login_result.get('success'):
+            print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
+            return
+
+        api_token = auth_manager_tray.api_token
+        print("✅ Login exitoso")
+
+        # Validar empresa para obtener company_id
+        print("🏢 Validando empresa...")
+        validate_result = auth_manager_tray.validate_company(config['company_rif'], config['company_email'])
+        if not validate_result.get('success'):
+            print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
+            return
+
+        company_id = validate_result.get('company_id')
+        print(f"✅ Company ID: {company_id}\n")
+
         try:
-            tray = SystemTrayService(config, api_password)
+            tray = SystemTrayService(config, api_token, api_password, company_id)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
