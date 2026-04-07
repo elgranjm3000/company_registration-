@@ -5259,15 +5259,30 @@ def main():
             print(f"❌ Error cargando configuración: {e}")
             return
 
-        # Pedir password con ventana GUI
-        import tkinter.simpledialog as simpledialog
-        pass_root = tk.Tk()
-        pass_root.withdraw()
-        api_password = simpledialog.askstring("🔐 Password de la API", "Ingrese su password:", show='*')
-        pass_root.destroy()
+        # Intentar cargar password encriptado primero
+        api_password = None
+        if 'api_password_encrypted' in config:
+            try:
+                from config_encryption import decrypt_password
+                api_password = decrypt_password(config['api_password_encrypted'])
+                if api_password:
+                    print("✅ Password de la API cargado desde configuración encriptada")
+                else:
+                    print("⚠️  Password desencriptado está vacío")
+            except Exception as e:
+                print(f"⚠️  Error desencriptando password: {e}")
 
+        # Si no hay password encriptado, pedirlo manualmente
         if not api_password:
-            return
+            print("🔐 Se requiere password de la API...")
+            import tkinter.simpledialog as simpledialog
+            pass_root = tk.Tk()
+            pass_root.withdraw()
+            api_password = simpledialog.askstring("🔐 Password de la API", "Ingrese su password:", show='*')
+            pass_root.destroy()
+
+            if not api_password:
+                return
 
         # Ejecutar sincronización
         print("\n" + "="*70)
