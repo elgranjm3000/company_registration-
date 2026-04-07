@@ -4239,7 +4239,7 @@ class SystemTrayService:
                         if api_company_id != company_id_from_config:
                             messagebox.showerror(
                                 "❌ Acceso Denegado",
-                                f"Compañía no coincide:\nAPI: {api_company_id}\nConfig: {company_id_from_config}"
+                                "La compañía no coincide"
                             )
                             auth_btn.config(state='normal')
                             return
@@ -5134,7 +5134,7 @@ def authenticate_user_tray(config):
                     if api_company_id != company_id_from_config:
                         messagebox.showerror(
                             "❌ Acceso Denegado",
-                            f"Compañía no coincide:\nAPI: {api_company_id}\nConfig: {company_id_from_config}\n\nNo tiene permiso para acceder a esta compañía."
+                            "La compañía no coincide"
                         )
                         login_btn.config(state='normal')
                         return
