@@ -4083,11 +4083,11 @@ class SystemTrayService:
         try:
             import psycopg2
             pg_conn = psycopg2.connect(
-                host=self.config.get('pg_host'),
-                port=self.config.get('pg_port', 5432),
-                database=self.config.get('pg_database'),
-                user=self.config.get('pg_user'),
-                password=self.config.get('pg_password')
+                host=self.config.get('postgres_host'),
+                port=self.config.get('postgres_port', 5432),
+                database=self.config.get('postgres_database'),
+                user=self.config.get('postgres_user'),
+                password=self.config.get('postgres_password')
             )
             pg_cursor = pg_conn.cursor()
             pg_cursor.execute("""
