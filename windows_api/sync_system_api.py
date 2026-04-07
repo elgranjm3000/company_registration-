@@ -141,40 +141,84 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     def _mostrar_notificacion_thread():
         try:
             if sistema == "Windows":
-                # Windows: usar plyer (más estable que win10toast)
-                try:
-                    from plyer import notification
+                # Windows: intentar múltiples métodos para notificaciones
+                notificacion_mostrada = False
 
-                    # Configurar icono si existe
-                    icon_path = None
-                    if icono and os.path.exists(icono):
-                        icon_path = icono
-                    else:
+                # MÉTODO 1: Intentar con win10toast (corregido)
+                if not notificacion_mostrada:
+                    try:
+                        from win10toast import ToastNotifier
+                        import win32gui
+                        import win32con
+
+                        toast = ToastNotifier()
+
+                        # Forzar la creación de classAtom si no existe
+                        if not hasattr(toast, 'classAtom'):
+                            toast.classAtom = None
+
+                        # Crear ventana oculta para evitar errores
                         try:
-                            script_dir = os.path.dirname(os.path.abspath(__file__))
-                            possible_icons = [
-                                os.path.join(script_dir, "icon.ico"),
-                                os.path.join(script_dir, "icon.png"),
-                                os.path.join(script_dir, "app.ico"),
-                            ]
-                            for path in possible_icons:
-                                if os.path.exists(path):
-                                    icon_path = path
-                                    break
+                            hInstance = win32gui.GetModuleHandle(None)
+                            className = "PythonToastNotifier"
+
+                            def wnd_proc(hwnd, msg, wparam, lparam):
+                                return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
+
+                            wc = win32gui.WNDCLASS()
+                            wc.hInstance = hInstance
+                            wc.lpszClassName = className
+                            wc.lpfnWndProc = wnd_proc
+                            wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
+                            wc.hbrBackground = win32con.COLOR_WINDOW + 1
+
+                            try:
+                                win32gui.RegisterClass(wc)
+                            except:
+                                pass
+
+                            hwnd = win32gui.CreateWindowEx(
+                                0, className, "ToastNotifier", 0,
+                                0, 0, 0, 0, 0, 0, hInstance, None
+                            )
+                            win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+                            toast._hwnd = hwnd
                         except:
                             pass
 
-                    # Mostrar notificación con plyer
-                    notification.notify(
-                        title=titulo,
-                        message=mensaje,
-                        app_name="Sincronizador Chrystal",
-                        app_icon=icon_path,
-                        timeout=duracion,
-                    )
-                except Exception as e:
-                    # Silenciar errores de notificación (no crítico)
-                    pass
+                        # Mostrar notificación sin icono para evitar errores
+                        toast.show_toast(
+                            titulo,
+                            mensaje,
+                            duration=duracion,
+                            icon_path=None,
+                            threaded=False,
+                        )
+                        notificacion_mostrada = True
+                        print(f"[DEBUG] Notificación mostrada con win10toast")
+                    except Exception as e:
+                        print(f"[DEBUG] Error win10toast: {e}")
+
+                # MÉTODO 2: Intentar con plyer
+                if not notificacion_mostrada:
+                    try:
+                        from plyer import notification
+
+                        notification.notify(
+                            title=titulo,
+                            message=mensaje,
+                            app_name="Sincronizador Chrystal",
+                            app_icon=None,
+                            timeout=duracion,
+                        )
+                        notificacion_mostrada = True
+                        print(f"[DEBUG] Notificación mostrada con plyer")
+                    except Exception as e:
+                        print(f"[DEBUG] Error plyer: {e}")
+
+                # Si ningún método funcionó, al menos loggearlo
+                if not notificacion_mostrada:
+                    print(f"[DEBUG] No se pudo mostrar notificación: {titulo}")
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
