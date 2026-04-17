@@ -1,0 +1,17 @@
+{
+  "postgresql": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "tu_base_de_datos",
+    "user": "tu_usuario",
+    "password": "tu_password"
+  },
+  "n8n": {
+    "webhook_url": "https://tu-n8n-server.com/webhook/postgres-changes",
+    "timeout": 10
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "bridge_n8n.log"
+  }
+}

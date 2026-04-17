@@ -1,0 +1,510 @@
+{
+  "name": "PostgreSQL → Sincronización con API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "postgres-changes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook PostgreSQL",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "postgres-changes"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "log-message",
+              "name": "message",
+              "value": "={{ $json.table_name }} - {{ $json.operation }} - ID: {{ $json.record_id }}",
+              "type": "string"
+            },
+            {
+              "id": "log-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-log-data",
+      "name": "Preparar Log",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {},
+      "id": "log-notification",
+      "name": "📝 Log Notificación",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.table_name }}",
+        "rules": {
+          "values": [
+            {
+              "value1": "products",
+              "output": 0
+            },
+            {
+              "value1": "clients",
+              "output": 1
+            },
+            {
+              "value1": "sellers",
+              "output": 2
+            },
+            {
+              "value1": "sales_operations",
+              "output": 3
+            }
+          ]
+        }
+      },
+      "id": "switch-by-table",
+      "name": "🔀 Routing por Tabla",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "entity-type",
+              "name": "entity",
+              "value": "Producto",
+              "type": "string"
+            },
+            {
+              "id": "operation-text",
+              "name": "operation_text",
+              "value": "={{ $json.operation === 'INSERT' ? 'Creado' : $json.operation === 'UPDATE' ? 'Actualizado' : 'Eliminado' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-products-data",
+      "name": "Preparar Productos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1140, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://tu-api.com/products/{{ $json.record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.record_data }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "process-products",
+      "name": "🏭 Procesar Producto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "API Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "entity-type",
+              "name": "entity",
+              "value": "Cliente",
+              "type": "string"
+            },
+            {
+              "id": "operation-text",
+              "name": "operation_text",
+              "value": "={{ $json.operation === 'INSERT' ? 'Creado' : $json.operation === 'UPDATE' ? 'Actualizado' : 'Eliminado' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-customers-data",
+      "name": "Preparar Clientes",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1140, 320]
+    },
+    {
+      "parameters": {
+        "url": "https://tu-api.com/customers/{{ $json.record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.record_data }}",
+        "options": {}
+      },
+      "id": "process-customers",
+      "name": "👥 Procesar Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 320],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "API Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "entity-type",
+              "name": "entity",
+              "value": "Vendedor",
+              "type": "string"
+            },
+            {
+              "id": "operation-text",
+              "name": "operation_text",
+              "value": "={{ $json.operation === 'INSERT' ? 'Creado' : $json.operation === 'UPDATE' ? 'Actualizado' : 'Eliminado' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-sellers-data",
+      "name": "Preparar Vendedores",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1140, 440]
+    },
+    {
+      "parameters": {
+        "url": "https://tu-api.com/sellers/{{ $json.record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.record_data }}",
+        "options": {}
+      },
+      "id": "process-sellers",
+      "name": "👤 Procesar Vendedor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 440],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "API Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "entity-type",
+              "name": "entity",
+              "value": "Venta",
+              "type": "string"
+            },
+            {
+              "id": "operation-text",
+              "name": "operation_text",
+              "value": "={{ $json.operation === 'INSERT' ? 'Creada' : $json.operation === 'UPDATE' ? 'Actualizada' : 'Eliminada' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-sales-data",
+      "name": "Preparar Ventas",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1140, 560]
+    },
+    {
+      "parameters": {
+        "url": "https://tu-api.com/sales/{{ $json.record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.record_data }}",
+        "options": {}
+      },
+      "id": "process-sales",
+      "name": "💰 Procesar Venta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 560],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "API Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Procesado correctamente\", \"table\": $json.table_name, \"operation\": $json.operation, \"record_id\": $json.record_id } }}"
+      },
+      "id": "webhook-response",
+      "name": "✅ Respuesta Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1620, 380]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error-message",
+              "name": "error",
+              "value": "Tabla no reconocida: {{ $json.table_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-error-data",
+      "name": "⚠️ Error: Tabla Desconocida",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1140, 680]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": \"Tabla desconocida\", \"table\": $json.table_name } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "error-response",
+      "name": "❌ Respuesta Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1380, 680]
+    }
+  ],
+  "connections": {
+    "Webhook PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Preparar Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Log": {
+      "main": [
+        [
+          {
+            "node": "📝 Log Notificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Log Notificación": {
+      "main": [
+        [
+          {
+            "node": "🔀 Routing por Tabla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Routing por Tabla": {
+      "main": [
+        [
+          {
+            "node": "Preparar Productos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Clientes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Vendedores",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Ventas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "⚠️ Error: Tabla Desconocida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Productos": {
+      "main": [
+        [
+          {
+            "node": "🏭 Procesar Producto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Clientes": {
+      "main": [
+        [
+          {
+            "node": "👥 Procesar Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Vendedores": {
+      "main": [
+        [
+          {
+            "node": "👤 Procesar Vendedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Ventas": {
+      "main": [
+        [
+          {
+            "node": "💰 Procesar Venta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🏭 Procesar Producto": {
+      "main": [
+        [
+          {
+            "node": "✅ Respuesta Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👥 Procesar Cliente": {
+      "main": [
+        [
+          {
+            "node": "✅ Respuesta Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👤 Procesar Vendedor": {
+      "main": [
+        [
+          {
+            "node": "✅ Respuesta Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💰 Procesar Venta": {
+      "main": [
+        [
+          {
+            "node": "✅ Respuesta Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚠️ Error: Tabla Desconocida": {
+      "main": [
+        [
+          {
+            "node": "❌ Respuesta Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-17T00:00:00.000Z",
+  "versionId": "1"
+}
