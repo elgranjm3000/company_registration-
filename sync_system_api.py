@@ -5060,21 +5060,28 @@ def main():
 
         # Cargar configuración
         try:
+            from config_encryption import decrypt_config
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
+            # Desencriptar todos los campos sensibles
+            config = decrypt_config(config)
         except Exception as e:
             print(f"❌ Error cargando configuración: {e}")
             return
 
-        # Pedir password con ventana GUI
-        import tkinter.simpledialog as simpledialog
-        pass_root = tk.Tk()
-        pass_root.withdraw()
-        api_password = simpledialog.askstring("🔐 Password de la API", "Ingrese su password:", show='*')
-        pass_root.destroy()
+        # Obtener password de la API (ya desencriptado)
+        api_password = config.get('api_password')
 
+        # Si no hay password en config, pedirlo con ventana GUI
         if not api_password:
-            return
+            import tkinter.simpledialog as simpledialog
+            pass_root = tk.Tk()
+            pass_root.withdraw()
+            api_password = simpledialog.askstring("🔐 Password de la API", "Ingrese su password:", show='*')
+            pass_root.destroy()
+
+            if not api_password:
+                return
 
         # Ejecutar sincronización
         print("\n" + "="*70)

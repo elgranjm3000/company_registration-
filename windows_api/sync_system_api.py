@@ -5383,26 +5383,19 @@ def main():
 
         # Cargar configuración
         try:
+            from config_encryption import decrypt_config
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
+            # Desencriptar todos los campos sensibles
+            config = decrypt_config(config)
         except Exception as e:
             print(f"❌ Error cargando configuración: {e}")
             return
 
-        # Intentar cargar password encriptado primero
-        api_password = None
-        if 'api_password_encrypted' in config:
-            try:
-                from config_encryption import decrypt_password
-                api_password = decrypt_password(config['api_password_encrypted'])
-                if api_password:
-                    print("✅ Password de la API cargado desde configuración encriptada")
-                else:
-                    print("⚠️  Password desencriptado está vacío")
-            except Exception as e:
-                print(f"⚠️  Error desencriptando password: {e}")
+        # Obtener password de la API (ya desencriptado)
+        api_password = config.get('api_password')
 
-        # Si no hay password encriptado, pedirlo manualmente
+        # Si no hay password en config, pedirlo con ventana GUI
         if not api_password:
             print("🔐 Se requiere password de la API...")
             import tkinter.simpledialog as simpledialog
@@ -5413,6 +5406,10 @@ def main():
 
             if not api_password:
                 return
+            else:
+                print("✅ Password ingresado")
+        else:
+            print("✅ Password de la API cargado desde configuración")
 
         # Ejecutar sincronización
         print("\n" + "="*70)
