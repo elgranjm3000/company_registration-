@@ -107,8 +107,13 @@ def encrypt_config(config: dict) -> dict:
     """
     encrypted_config = config.copy()
 
-    # Campos sensibles a encriptar - TODOS los datos de conexión y empresa
+    # Campos sensibles a encriptar - TODOS los datos del archivo de configuración
     sensitive_fields = [
+        # API - TODOS los campos de la API
+        'api_url',
+        'api_email',
+        'api_password',
+        'api_password_encrypted',
         # PostgreSQL - TODOS los campos de conexión
         'postgres_host',
         'postgres_port',
@@ -154,8 +159,13 @@ def decrypt_config(config: dict) -> dict:
     """
     decrypted_config = config.copy()
 
-    # Campos sensibles a desencriptar - TODOS los datos de conexión y empresa
+    # Campos sensibles a desencriptar - TODOS los datos del archivo de configuración
     sensitive_fields = [
+        # API - TODOS los campos de la API
+        'api_url',
+        'api_email',
+        'api_password',
+        'api_password_encrypted',
         # PostgreSQL - TODOS los campos de conexión
         'postgres_host',
         'postgres_port',

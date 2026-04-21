@@ -2104,8 +2104,11 @@ class ConfigWindow:
         """Cargar configuración existente si hay."""
         try:
             if os.path.exists(CONFIG_FILE):
+                from config_encryption import decrypt_config
                 with open(CONFIG_FILE, 'r') as f:
-                    return json.load(f)
+                    config = json.load(f)
+                # Desencriptar todos los campos sensibles
+                return decrypt_config(config)
         except Exception:
             pass
         return {}
@@ -2533,20 +2536,16 @@ class ConfigWindow:
 
         try:
             # Importar módulo de encriptación
-            from config_encryption import encrypt_password
+            from config_encryption import encrypt_config
 
             # Convertir RIF a mayúsculas
             company_rif = self.company_rif_var.get().strip().upper()
 
-            # Encriptar password de la API antes de guardarlo
-            api_password_plain = self.api_password_var.get()
-            api_password_encrypted = encrypt_password(api_password_plain)
-
-            # Crear configuración
+            # Crear configuración con datos en texto plano
             config = {
                 'api_url': self.api_url_var.get(),
                 'api_email': self.api_email_var.get(),
-                'api_password_encrypted': api_password_encrypted,  # Password encriptado
+                'api_password': self.api_password_var.get(),  # Se encriptará con encrypt_config
                 'postgres_host': self.pg_host_var.get(),
                 'postgres_port': self.pg_port_var.get(),
                 'postgres_database': self.pg_database_var.get(),
@@ -2560,7 +2559,10 @@ class ConfigWindow:
                 'first_run': False
             }
 
-            # Guardar configuración
+            # Encriptar TODOS los campos sensibles
+            config = encrypt_config(config)
+
+            # Guardar configuración encriptada
             with open(CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=2)
 
@@ -2874,8 +2876,11 @@ class ConfigWindow:
                     log_file.close()
                     return
 
+                from config_encryption import decrypt_config
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
+                # Desencriptar todos los campos sensibles
+                config = decrypt_config(config)
 
                 log_debug(f"[DEBUG] Config cargada: {config.get('company_email')}")
                 log_debug(f"[DEBUG] api_password recibido: {'Sí' if api_password else 'No'}")
@@ -3383,27 +3388,19 @@ class LauncherWindow:
             return
 
         try:
+            from config_encryption import decrypt_config
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
+            # Desencriptar todos los campos sensibles
+            config = decrypt_config(config)
         except Exception as e:
             messagebox.showerror("Error", f"Error cargando configuración: {e}")
             return
 
-        # Intentar obtener password de la API desde la configuración encriptada
-        api_password = None
+        # Obtener password de la API (ya viene desencriptado)
+        api_password = config.get('api_password')
 
-        if 'api_password_encrypted' in config:
-            try:
-                from config_encryption import decrypt_password
-                api_password = decrypt_password(config['api_password_encrypted'])
-                if api_password:
-                    print("✅ Password de la API cargado desde configuración encriptada")
-                else:
-                    print("⚠️  Password desencriptado está vacío")
-            except Exception as e:
-                print(f"⚠️  Error desencriptando password: {e}")
-
-        # Si no hay password en config o falló desencriptación, pedirlo manualmente
+        # Si no hay password en config, pedirlo manualmente
         if not api_password:
             print("🔐 Se requiere password de la API...")
             import getpass
@@ -3534,30 +3531,29 @@ class ManagerWindow:
         """Cargar configuración desde archivo."""
         try:
             if os.path.exists(CONFIG_FILE):
+                from config_encryption import decrypt_config
                 with open(CONFIG_FILE, 'r') as f:
-                    return json.load(f)
+                    config = json.load(f)
+                # Desencriptar todos los campos sensibles
+                return decrypt_config(config)
         except Exception as e:
             messagebox.showerror("Error", f"Error cargando configuración:\n{e}")
         return None
 
     def ask_password(self):
         """Pedir password de la API."""
-        # Primero intentar cargar password encriptado
-        if self.config and 'api_password_encrypted' in self.config:
-            try:
-                from config_encryption import decrypt_password
-                api_password = decrypt_password(self.config['api_password_encrypted'])
-                if api_password:
-                    # Password desencriptado correctamente - hacer login directamente
-                    self.log("✅ Password cargado desde configuración encriptada")
-                    self.do_login(api_password, None)
-                    return
-                else:
-                    self.log("⚠️  Password desencriptado está vacío")
-            except Exception as e:
-                self.log(f"⚠️  Error desencriptando password: {e}")
+        # Primero intentar cargar password ya desencriptado del config
+        if self.config and 'api_password' in self.config:
+            api_password = self.config.get('api_password')
+            if api_password:
+                # Password cargado correctamente - hacer login directamente
+                self.log("✅ Password cargado desde configuración")
+                self.do_login(api_password, None)
+                return
+            else:
+                self.log("⚠️  Password en configuración está vacío")
 
-        # Si no hay password encriptado o falló, mostrar ventana para pedirlo
+        # Si no hay password o está vacío, mostrar ventana para pedirlo
         dialog = tk.Toplevel(self.root)
         dialog.title("🔐 Login API")
         dialog.geometry("450x220")
@@ -4213,6 +4209,11 @@ class SystemTrayService:
         auth_window.geometry("400x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
         auth_window.resizable(False, False)
 
+        # IMPORTANTE: Forzar ventana al frente en Windows
+        auth_window.attributes('-topmost', True)  # Traer al frente
+        auth_window.lift()  # Elevar ventana
+        auth_window.focus_force()  # Forzar focus
+
         # Centrar ventana
         auth_window.update_idletasks()
         width = auth_window.winfo_width()
@@ -4220,6 +4221,9 @@ class SystemTrayService:
         x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
         y = (auth_window.winfo_screenheight() // 2) - (height // 2)
         auth_window.geometry(f'{width}x{height}+{x}+{y}')
+
+        # Programar para quitar topmost después de 100ms (para que aparezca arriba pero luego pueda ir atrás)
+        auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
 
         # Frame principal
         main_frame = ttk.Frame(auth_window, padding="20")
@@ -4287,8 +4291,7 @@ class SystemTrayService:
                     if data.get('success'):
                         user_data = data.get('data', {})
                         user = user_data.get('user', {})
-                        subscription = user_data.get('subscription', {})
-                        company = subscription.get('companies', {})
+                        subscriptions = user_data.get('subscription', [])
 
                         # Validar rol
                         role = user.get('role')
@@ -4300,12 +4303,32 @@ class SystemTrayService:
                             auth_btn.config(state='normal')
                             return
 
-                        # Validar company_id
-                        api_company_id = company.get('id')
-                        if api_company_id != company_id_from_config:
+                        # Validar company_id - buscar en todas las suscripciones
+                        company_found = False
+                        company_name = None
+
+                        for subscription_item in subscriptions:
+                            company = subscription_item.get('companies', {})
+                            api_company_id = company.get('id')
+
+                            if api_company_id == company_id_from_config:
+                                company_found = True
+                                company_name = company.get('name', 'N/A')
+                                break
+
+                        if not company_found:
+                            # Mostrar IDs disponibles para debugging
+                            available_companies = [
+                                f"  - ID: {s.get('companies', {}).get('id')} | {s.get('companies', {}).get('name', 'N/A')}"
+                                for s in subscriptions
+                            ]
+                            companies_list = "\n".join(available_companies) if available_companies else "  (No hay compañías)"
+
                             messagebox.showerror(
                                 "❌ Acceso Denegado",
-                                "La compañía no coincide"
+                                f"La compañía no coincide\n\n"
+                                f"Configuración local: Company ID {company_id_from_config}\n\n"
+                                f"Compañías disponibles del usuario:\n{companies_list}"
                             )
                             auth_btn.config(state='normal')
                             return
@@ -4854,15 +4877,24 @@ def run_sync_console():
 
     # Cargar configuración
     try:
+        from config_encryption import decrypt_config
         with open(CONFIG_FILE, 'r') as f:
             config = json.load(f)
+        # Desencriptar todos los campos sensibles
+        config = decrypt_config(config)
     except Exception as e:
         print(f"❌ Error cargando configuración: {e}")
         sys.exit(1)
 
-    # Pedir password de la API
-    import getpass
-    api_password = getpass.getpass("Password de la API: ")
+    # Obtener password de la API (ya desencriptado)
+    api_password = config.get('api_password')
+    if api_password:
+        print("✅ Password de la API cargado desde configuración")
+
+    # Si no hay password en config, pedirlo
+    if not api_password:
+        import getpass
+        api_password = getpass.getpass("Password de la API: ")
 
     # Crear logger para consola
     def console_logger(msg, level="info"):
@@ -4975,8 +5007,11 @@ def run_service_loop():
 
     # Cargar configuración
     try:
+        from config_encryption import decrypt_config
         with open(CONFIG_FILE, 'r') as f:
             config = json.load(f)
+        # Desencriptar todos los campos sensibles
+        config = decrypt_config(config)
     except Exception as e:
         print(f"❌ Error cargando configuración: {e}")
         sys.exit(1)
@@ -4985,9 +5020,15 @@ def run_service_loop():
     print(f"⏱️  Intervalo de sincronización: {interval_minutes} minutos")
     print("💡 Presione Ctrl+C para detener\n")
 
-    # Pedir password UNA vez
-    import getpass
-    api_password = getpass.getpass("Password de la API: ")
+    # Obtener password de la API (ya desencriptado)
+    api_password = config.get('api_password')
+    if api_password:
+        print("✅ Password de la API cargado desde configuración")
+
+    # Si no hay password en config, pedirlo UNA vez
+    if not api_password:
+        import getpass
+        api_password = getpass.getpass("Password de la API: ")
 
     sync_count = 0
 
@@ -5017,6 +5058,8 @@ def run_service_loop():
                 # Recargar configuración (por si cambió)
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
+                # Desencriptar todos los campos sensibles
+                config = decrypt_config(config)
 
                 # Crear gestores
                 auth_manager = APIAuthManager(
