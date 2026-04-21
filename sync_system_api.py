@@ -2505,20 +2505,23 @@ class ConfigWindow:
                 'first_run': False
             }
 
+            # Guardar una copia SIN encriptar para la verificación
+            config_plain = config.copy()
+
             # Encriptar TODOS los campos sensibles
-            config = encrypt_config(config)
+            config_encrypted = encrypt_config(config)
 
             # Guardar configuración encriptada
             with open(CONFIG_FILE, 'w') as f:
-                json.dump(config, f, indent=2)
+                json.dump(config_encrypted, f, indent=2)
 
             # Si hay un callback (desde Manager), llamarlo y cerrar
             if self.callback:
-                self.callback(config)
+                self.callback(config_plain)
                 self.root.destroy()
             else:
-                # Mostrar ventana de progreso (comportamiento normal)
-                self._mostrar_ventana_progreso(config)
+                # Mostrar ventana de progreso con config SIN encriptar
+                self._mostrar_ventana_progreso(config_plain)
 
         except Exception as e:
             messagebox.showerror("Error", f"Error guardando configuración:\n{e}")
@@ -2715,7 +2718,7 @@ class ConfigWindow:
                         auth_manager = APIAuthManager(config['api_url'])
                         login_result = auth_manager.login(
                             config['api_email'],
-                            self.api_password_var.get()  # Usar password del formulario
+                            config['api_password']  # Usar password del config (ya está desencriptado)
                         )
 
                         if login_result.get('success'):
@@ -2750,7 +2753,7 @@ class ConfigWindow:
 
                     # Todo exitoso
                     resultado['exito'] = True
-                    resultado['api_password'] = self.api_password_var.get()
+                    resultado['api_password'] = config['api_password']  # Usar password del config
                     resultado['mensaje'] = "✅ Configuración guardada correctamente\n\n✅ Conexión a PostgreSQL verificada\n✅ Autenticación API validada\n✅ Empresa validada\n\nEl sistema está listo para sincronizar."
 
                 except Exception as e:
