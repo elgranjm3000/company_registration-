@@ -159,13 +159,27 @@ def decrypt_config(config: dict) -> dict:
     """
     decrypted_config = config.copy()
 
+    # Primero: Migración de formato antiguo a nuevo
+    # Si existe api_password_encrypted (formato antiguo), migrarlo a api_password
+    if 'api_password_encrypted' in decrypted_config and 'api_password' not in decrypted_config:
+        encrypted_old = decrypted_config['api_password_encrypted']
+        if encrypted_old and not encrypted_old.startswith('enc:'):
+            # Formato antiguo: desencriptar y convertir a formato nuevo
+            try:
+                decrypted_value = decrypt_password(encrypted_old)
+                decrypted_config['api_password'] = decrypted_value
+                # Eliminar campo antiguo después de migrar
+                del decrypted_config['api_password_encrypted']
+            except Exception as e:
+                print(f"Advertencia: No se pudo desencriptar api_password_encrypted: {e}")
+
     # Campos sensibles a desencriptar - TODOS los datos del archivo de configuración
     sensitive_fields = [
         # API - TODOS los campos de la API
         'api_url',
         'api_email',
         'api_password',
-        'api_password_encrypted',
+        'api_password_encrypted',  # Por si acaso quedó alguno antiguo
         # PostgreSQL - TODOS los campos de conexión
         'postgres_host',
         'postgres_port',
@@ -193,7 +207,7 @@ def decrypt_config(config: dict) -> dict:
         if field in decrypted_config and decrypted_config[field]:
             encrypted_value = decrypted_config[field]
             if isinstance(encrypted_value, str) and encrypted_value.startswith('enc:'):
-                # Extraer y desencriptar
+                # Formato nuevo: Extraer y desencriptar
                 encrypted_password = encrypted_value[4:]  # Quitar 'enc:'
                 decrypted_config[field] = decrypt_password(encrypted_password)
 

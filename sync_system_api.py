@@ -3421,7 +3421,7 @@ class LauncherWindow:
 class ManagerWindow:
     """Ventana principal de administración."""
 
-    def __init__(self, root):
+    def __init__(self, root, api_password=None):
         self.root = root
         self.root.title("Sincronizador API REST - Manager")
         self.root.geometry("800x600")
@@ -3431,6 +3431,9 @@ class ManagerWindow:
 
         # Sync Manager
         self.sync_manager = None
+
+        # Password de la API (puede venir de reautenticar_usuario)
+        self.api_password = api_password
 
         # Cargar configuración (puede ser None si no existe)
         self.config = self.load_config()
@@ -3450,8 +3453,15 @@ class ManagerWindow:
             self.log("⚠️ No hay configuración. Use el botón 'Configurar' para establecerla.")
             self.log("ℹ️ Configure el sistema para comenzar")
         else:
-            # Si hay configuración, pedir password al inicio
-            self.root.after(100, self.ask_password)
+            # Si hay configuración Y no se pasó password, pedirlo al inicio
+            # Si se pasó password (desde reautenticar_usuario), usarlo directamente
+            if self.api_password:
+                # Password ya proporcionado - hacer login directamente
+                self.log("✅ Password proporcionado desde autenticación previa")
+                self.do_login(self.api_password, None)
+            else:
+                # Pedir password al usuario
+                self.root.after(100, self.ask_password)
 
     def load_config(self):
         """Cargar configuración desde archivo."""
@@ -4301,9 +4311,10 @@ class SystemTrayService:
                             auth_btn.config(state='normal')
                             return
 
-                        # Todo OK - guardar token y email
+                        # Todo OK - guardar token, email y password
                         self.api_token = user_data.get('token')
                         self.user_email = email
+                        self.api_password = password  # Guardar password para usar en Manager
                         auth_result['success'] = True
                         auth_window.destroy()
                         return
@@ -4564,7 +4575,8 @@ class SystemTrayService:
         try:
             import tkinter as tk
             root = tk.Tk()
-            app = ManagerWindow(root)
+            # Pasar password si está disponible (desde reautenticar_usuario)
+            app = ManagerWindow(root, api_password=getattr(self, 'api_password', None))
             root.mainloop()
         except Exception as e:
             print(f"Error abriendo manager: {e}")
