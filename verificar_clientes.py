@@ -56,11 +56,6 @@ def main():
     # 2. Obtener clientes desde la API REST
     # Necesitamos obtener el token primero
     print("🔐 Obteniendo token de API...")
-    print("📝 Email:", config['api_email'])
-
-    # Pedir password
-    import getpass
-    password = getpass.getpass("Password de la API: ")
 
     # Login para obtener token
     import requests

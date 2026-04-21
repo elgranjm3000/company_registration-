@@ -10,5 +10,6 @@
   "company_email": "muentes2@hotmail.com",
   "sync_interval_minutes": "30",
   "configured": true,
-  "first_run": false
+  "first_run": false,
+  "api_password_encrypted": "Z0FBQUFBQnB6TndHSExjd3JXaHZvcWo4cXBDTnJZekVOTkdDM3VEdFRzV0RGTUdvUkx0MHJkbElNbm1fbHRMRHh2aENPTHJiRlJjbHhQck9tOFFnekU5VVR5aF93S0FZV1E9PQ=="
 }
