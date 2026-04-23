@@ -776,6 +776,12 @@ class CustomersSync(BaseSync):
             clientes: Lista de clientes insertados
         """
         try:
+            # Asegurarse de que no haya una transacción abortada pendiente
+            try:
+                self.pg_conn.rollback()
+            except:
+                pass
+
             for cliente in clientes:
                 codigo = cliente.get('codigo')
 

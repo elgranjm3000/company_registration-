@@ -6,6 +6,7 @@ from typing import Dict, List, Any
 from datetime import datetime
 import hashlib
 import json
+import traceback
 
 
 class QuotesSync:
@@ -67,7 +68,8 @@ class QuotesSync:
                     RETURNING code
                 """, (station_mac, station_mac, '00'))
                 self.pg_conn.commit()
-                new_code = self.pg_cursor.fetchone()[0]
+                result = self.pg_cursor.fetchone()
+                new_code = result[0] if result and len(result) > 0 else station_mac
                 self._log(f"     ➕ Estación insertada: {station_mac} → code={new_code}", "info")
                 return new_code
         except Exception as e:
@@ -147,6 +149,7 @@ class QuotesSync:
 
         for quote in nuevos_quotes:
             try:
+                self._log(f"  📝 Iniciando inserción de cotización #{quote.get('id')}", "debug")
                 self._insertar_quote_completo(quote)
                 self.stats['created'] += 1
 
@@ -166,7 +169,12 @@ class QuotesSync:
                 self._log(f"  ✅ Cotización #{quote_id} sincronizada completamente", "info")
 
             except Exception as e:
+                import traceback
                 self._log(f"  ❌ Error sincronizando cotización #{quote.get('id')}: {e}", "error")
+                self._log(f"  📋 Traceback:", "error")
+                tb_lines = traceback.format_exc().split('\n')
+                for line in tb_lines[-10:]:  # Mostrar últimas 10 líneas
+                    self._log(f"     {line}", "error")
                 self.stats['errors'] += 1
 
         return self.stats['errors'] == 0
@@ -223,8 +231,13 @@ class QuotesSync:
                 """, (search_value,))
                 result = self.pg_cursor.fetchone()
                 if result:
-                    client_code = result[0]
-                    client_name_fiscal = result[1] if result[1] is not None else 0
+                    # Manejo seguro de índices
+                    if len(result) > 0:
+                        client_code = result[0]
+                    if len(result) > 1:
+                        client_name_fiscal = result[1] if result[1] is not None else 0
+                    else:
+                        client_name_fiscal = 0
                     client_found = True
                     self._log(f"     ✅ Cliente encontrado: {search_value} → Code {client_code}, name_fiscal={client_name_fiscal}", "info")
                 else:
@@ -240,6 +253,8 @@ class QuotesSync:
         # Vendedor - Usar seller.code directamente, o '00' si no existe
         seller_code = seller.get('code') if seller.get('code') else '00'
         seller_name = seller.get('name') or ''  # Solo para mostrar, no se usa en FK
+
+        self._log(f"     Vendedor: code={seller_code}, name={seller_name}", "debug")
 
         # Totales
         total_amount = 0.0  # Suma de cantidades de items
@@ -360,7 +375,10 @@ class QuotesSync:
             ''   # phone_send (vacío)
         ))
 
-        correlative = self.pg_cursor.fetchone()[0]
+        result = self.pg_cursor.fetchone()
+        if not result or len(result) == 0:
+            raise Exception("No se pudo obtener el correlative del sales_operation insertado")
+        correlative = result[0]
         self._log(f"     Insertada venta #{correlative}", "debug")
 
         # Insertar monedas de la operación (sales_operation_coins)
@@ -398,11 +416,20 @@ class QuotesSync:
                 """, (code_product,))
                 result = self.pg_cursor.fetchone()
                 if result:
-                    unit = result[0]
-                    if result[1]:
+                    # Manejo seguro de índices
+                    if len(result) > 0:
+                        unit = result[0]
+                    if len(result) > 1 and result[1] is not None:
                         conversion_factor = float(result[1])
+                    else:
+                        conversion_factor = 1.0  # Valor por defecto
+                        self._log(f"     ⚠️ Producto {code_product} sin conversion_factor, usando 1.0", "warning")
+                else:
+                    self._log(f"     ⚠️ Producto {code_product} no encontrado en products_units", "warning")
             except Exception as e:
                 self._log(f"     ⚠️ Error buscando datos en products_units: {e}", "warning")
+                unit = None
+                conversion_factor = 1.0  # Valor por defecto en caso de error
 
         # Obtener datos del producto
         unitary_cost = round(float(product.get('unitary_cost', 0)) if product else 0.0, 4)  # 4 decimales
@@ -493,9 +520,15 @@ class QuotesSync:
         ))
 
         # Obtener el line del detalle insertado
-        line = self.pg_cursor.fetchone()[0]
+        result = self.pg_cursor.fetchone()
+        if not result or len(result) == 0:
+            self._log(f"     ⚠️ No se pudo obtener el line del detalle insertado", "warning")
+            line = None
+        else:
+            line = result[0]
 
-        self._log(f"     Insertado ítem: {item.get('name')}", "debug")
+        if line:
+            self._log(f"     Insertado ítem: {item.get('name')}", "debug")
 
         # Insertar en sales_operation_details_coins
         self._insertar_detail_coins(main_correlative, line, unitary_cost, unit_price,
@@ -654,7 +687,13 @@ class QuotesSync:
                 SELECT code, line FROM taxes WHERE code IN ({placeholders})
             """, tax_codes_list)
 
-            tax_types_dict = {row[0]: row[1] for row in self.pg_cursor.fetchall()}
+            # Manejo seguro para crear diccionario
+            tax_types_dict = {}
+            for row in self.pg_cursor.fetchall():
+                if len(row) >= 2:
+                    tax_types_dict[row[0]] = row[1]
+                else:
+                    self._log(f"     ⚠️ Fila con menos de 2 columnas en taxes: {row}", "warning")
         else:
             tax_types_dict = {}
 
@@ -693,7 +732,12 @@ class QuotesSync:
                 tax_type
             ))
 
-            tax_line = self.pg_cursor.fetchone()[0]
+            result = self.pg_cursor.fetchone()
+            if not result or len(result) == 0:
+                self._log(f"     ⚠️ No se pudo obtener el tax_line del impuesto insertado", "warning")
+                continue  # Saltar al siguiente impuesto
+
+            tax_line = result[0]
 
             # Insertar en USD ('02')
             self.pg_cursor.execute(sql_tax_coins, (
@@ -757,7 +801,7 @@ class QuotesSync:
             """, ('02',))
             result_coin = self.pg_cursor.fetchone()
 
-            if result_coin:
+            if result_coin and len(result_coin) >= 3:
                 buy_aliquot_usd = result_coin[0]
                 sales_aliquot_usd = result_coin[1]
                 factor_type_usd = result_coin[2]
@@ -817,7 +861,7 @@ class QuotesSync:
             """, ('02',))  # Buscar sales_aliquot de USD para convertir
             result_coin_usd = self.pg_cursor.fetchone()
 
-            if result_coin_bs:
+            if result_coin_bs and len(result_coin_bs) >= 3:
                 buy_aliquot_bs = result_coin_bs[0]      # buy_aliquot de Bs
                 sales_aliquot_bs = result_coin_bs[1]    # sales_aliquot de Bs
                 factor_type_bs = result_coin_bs[2]      # factor_type de Bs
@@ -828,7 +872,7 @@ class QuotesSync:
                 factor_type_bs = 0
 
             # Obtener tasa de conversión de USD
-            sales_aliquot_usd = result_coin_usd[0] if result_coin_usd else 1.0
+            sales_aliquot_usd = result_coin_usd[0] if result_coin_usd and len(result_coin_usd) > 0 else 1.0
 
             # Calcular montos en Bolívares usando sales_aliquot de USD
             total_net_details_bs = round(total_net_details * sales_aliquot_usd, 2)

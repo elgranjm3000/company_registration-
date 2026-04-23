@@ -239,10 +239,10 @@ class CustomersSync(BaseSync):
         """
         # Extraer campos del tuple
         (
-            code,            # 0 - Usar como document_number
+            code,            # 0 - código de cliente -> campo 'codigo'
             description,     # 1 - Usar como name
             address,         # 2
-            client_id,       # 3 - No usado (interno de PG)
+            client_id,       # 3 - ID interno -> campo 'document_number'
             email,           # 4
             phone,           # 5
             contact,         # 6
@@ -264,9 +264,7 @@ class CustomersSync(BaseSync):
         # VALIDACIÓN: code no debe estar vacío
         codigo_final = code
         if not code or code.strip() == '':
-            self.warning(
-                f"⚠️  Cliente con code VACÍO (usando client_id '{client_id}' como codigo)"
-            )
+            print(f"⚠️  WARNING: Cliente con code VACÍO (usando client_id '{client_id}')")
             codigo_final = client_id if client_id else f"TEMP-{hash(client_id)}"
 
         # Limpiar espacios en blanco de todos los campos
@@ -312,18 +310,6 @@ class CustomersSync(BaseSync):
             for cust in todos_los_customers
         ]
 
-        # DEBUG: Mostrar payload que se va a enviar
-        self.info(f"\n{'='*70}")
-        self.info(f"📤 ENVIANDO CLIENTES A LA API")
-        self.info(f"{'='*70}")
-        self.info(f"Company ID: {self.company_id}")
-        self.info(f"Total clientes: {len(customers_api)}")
-        if len(customers_api) > 0:
-            self.info(f"\n📋 Primer cliente (ejemplo):")
-            import json
-            self.info(json.dumps(customers_api[0], indent=2, ensure_ascii=False))
-        self.info(f"{'='*70}\n")
-
         # Reintentos si falla todo el lote
         max_retries = 3
         for attempt in range(max_retries):
@@ -337,12 +323,16 @@ class CustomersSync(BaseSync):
                     import time
                     time.sleep(wait_time)
 
-                # DEBUG: Validar campos antes de enviar
+                # DEBUG: Mostrar detalles ANTES de enviar
                 self.info(f"\n{'='*70}")
-                self.info(f"📤 VALIDANDO CLIENTES ANTES DE ENVIAR")
+                self.info(f"📤 ENVIANDO CLIENTES AL API")
                 self.info(f"{'='*70}")
+                self.info(f"Company ID: {self.company_id}")
                 self.info(f"Total clientes a enviar: {len(customers_api)}")
+                self.info(f"Intento: {attempt + 1}/{max_retries}")
 
+                # Validar que todos los clientes tengan los campos requeridos
+                self.info(f"\n✅ Validando campos requeridos...")
                 sin_name = []
                 sin_doc_number = []
                 for i, cust in enumerate(customers_api):
@@ -355,8 +345,15 @@ class CustomersSync(BaseSync):
                     self.warning(f"   ⚠️  {len(sin_name)} clientes sin name (índices: {sin_name[:10]}...)")
                 if sin_doc_number:
                     self.warning(f"   ⚠️  {len(sin_doc_number)} clientes sin document_number (índices: {sin_doc_number[:10]}...)")
-                else:
-                    self.info(f"   ✅ Todos los clientes tienen los campos requeridos")
+
+                # Mostrar primeros 5 clientes para ver qué se envía
+                self.info(f"\nPrimeros 5 clientes que se enviarán:")
+                for i, cust in enumerate(customers_api[:5], 1):
+                    self.info(f"  {i}. codigo={cust.get('codigo')}, document_number={cust.get('document_number')}, name={cust.get('name')}")
+
+                if len(customers_api) > 5:
+                    self.info(f"  ... y {len(customers_api) - 5} clientes más")
+
                 self.info(f"{'='*70}\n")
 
                 # Enviar a API en lotes
@@ -605,6 +602,7 @@ class CustomersSync(BaseSync):
         try:
             cantidad = len(nuevos_clientes)
             self.info("\nInsertando {} nuevos clientes a PostgreSQL...".format(cantidad))
+            self.info("\nInsertando {} nuevos clientes a PostgreSQL...".format(cantidad))
 
             insertados = 0
 
@@ -778,6 +776,12 @@ class CustomersSync(BaseSync):
             clientes: Lista de clientes insertados
         """
         try:
+            # Asegurarse de que no haya una transacción abortada pendiente
+            try:
+                self.pg_conn.rollback()
+            except:
+                pass
+
             for cliente in clientes:
                 codigo = cliente.get('codigo')
 
