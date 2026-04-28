@@ -1999,53 +1999,55 @@ def autenticar_para_config():
     """
     Pide autenticación antes de abrir configuración.
     Retorna True si autenticación exitosa, False si falló.
-    Si no hay configuración previa, retorna True directamente (primera vez).
+    SIEMPRE pide autenticación (incluso primera vez).
     """
     import requests
     import json
     from config_encryption import decrypt_config
 
     # Verificar si existe configuración
-    if not os.path.exists(CONFIG_FILE):
-        # No hay config - primera vez, permitir acceso directo
-        return True
+    config_exists = os.path.exists(CONFIG_FILE)
 
-    try:
-        # Cargar configuración
-        with open(CONFIG_FILE, 'r') as f:
-            config_encriptado = json.load(f)
-        config = decrypt_config(config_encriptado)
-    except Exception as e:
-        # Error cargando config - permitir acceso para reconfigurar
-        print(f"⚠️ Error cargando configuración: {e}")
-        return True
-
-    # Obtener company_id desde sync_config de PostgreSQL
+    # Obtener company_id desde sync_config de PostgreSQL (solo si existe config)
     company_id_from_config = None
-    try:
-        import psycopg2
-        pg_conn = psycopg2.connect(
-            host=config.get('postgres_host'),
-            port=config.get('postgres_port', 5432),
-            database=config.get('postgres_database'),
-            user=config.get('postgres_user'),
-            password=config.get('postgres_password')
-        )
-        pg_cursor = pg_conn.cursor()
-        pg_cursor.execute("""
-            SELECT value FROM sync_config WHERE key = 'company_id'
-        """)
-        result = pg_cursor.fetchone()
-        if result:
-            company_id_from_config = int(result[0])
-        pg_cursor.close()
-        pg_conn.close()
-    except Exception as e:
-        # Error conectando a PostgreSQL - permitir acceso
-        print(f"⚠️ Error conectando a PostgreSQL: {e}")
-        return True
+    api_url = 'https://chrystal.com.ve/mobile/public/api'  # Default
 
-    # Crear ventana de reautenticación
+    if config_exists:
+        try:
+            # Cargar configuración
+            with open(CONFIG_FILE, 'r') as f:
+                config_encriptado = json.load(f)
+            config = decrypt_config(config_encriptado)
+
+            # Usar URL de la config
+            api_url = config.get('api_url', api_url)
+
+            # Obtener company_id desde PostgreSQL
+            try:
+                import psycopg2
+                pg_conn = psycopg2.connect(
+                    host=config.get('postgres_host'),
+                    port=config.get('postgres_port', 5432),
+                    database=config.get('postgres_database'),
+                    user=config.get('postgres_user'),
+                    password=config.get('postgres_password')
+                )
+                pg_cursor = pg_conn.cursor()
+                pg_cursor.execute("""
+                    SELECT value FROM sync_config WHERE key = 'company_id'
+                """)
+                result = pg_cursor.fetchone()
+                if result:
+                    company_id_from_config = int(result[0])
+                pg_cursor.close()
+                pg_conn.close()
+            except Exception as e:
+                print(f"⚠️ Error obteniendo company_id: {e}")
+                company_id_from_config = None
+        except Exception as e:
+            print(f"⚠️ Error cargando configuración: {e}")
+
+    # Crear ventana de autenticación
     import tkinter as tk
     from tkinter import ttk, messagebox
 
@@ -2080,9 +2082,14 @@ def autenticar_para_config():
     ).pack(pady=(0, 15))
 
     # Instrucción
+    if config_exists:
+        instrucción = "Para acceder a la configuración, ingrese sus credenciales:"
+    else:
+        instrucción = "Para configurar el sistema, ingrese sus credenciales:"
+
     ttk.Label(
         main_frame,
-        text="Para acceder a la configuración, ingrese sus credenciales:",
+        text=instrucción,
         font=('Arial', 9)
     ).pack(pady=(0, 10))
 
@@ -2097,7 +2104,7 @@ def autenticar_para_config():
     password_entry = ttk.Entry(main_frame, width=40, show="*")
     password_entry.pack(fill=tk.X, pady=(0, 15))
 
-    auth_result = {'success': False}
+    auth_result = {'success': False, 'email': None, 'password': None}
 
     def do_auth():
         email = email_entry.get().strip()
@@ -2113,7 +2120,6 @@ def autenticar_para_config():
             auth_window.update()
 
             # Llamar a API
-            api_url = config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
             response = requests.post(
                 f"{api_url}/auth/login",
                 headers={
@@ -2146,26 +2152,29 @@ def autenticar_para_config():
                         auth_btn.config(state='normal')
                         return
 
-                    # Validar company_id
-                    company_found = False
-                    for subscription_item in subscriptions:
-                        company = subscription_item.get('companies', {})
-                        api_company_id = company.get('id')
+                    # Si hay config, validar company_id
+                    if company_id_from_config is not None:
+                        company_found = False
+                        for subscription_item in subscriptions:
+                            company = subscription_item.get('companies', {})
+                            api_company_id = company.get('id')
 
-                        if api_company_id == company_id_from_config:
-                            company_found = True
-                            break
+                            if api_company_id == company_id_from_config:
+                                company_found = True
+                                break
 
-                    if not company_found:
-                        messagebox.showerror(
-                            "❌ Acceso Denegado",
-                            f"La compañía no coincide con la configuración local"
-                        )
-                        auth_btn.config(state='normal')
-                        return
+                        if not company_found:
+                            messagebox.showerror(
+                                "❌ Acceso Denegado",
+                                f"La compañía no coincide con la configuración local"
+                            )
+                            auth_btn.config(state='normal')
+                            return
 
-                    # Todo OK
+                    # Todo OK - guardar credenciales y retornar
                     auth_result['success'] = True
+                    auth_result['email'] = email
+                    auth_result['password'] = password
                     auth_window.destroy()
                     return
 
@@ -2196,7 +2205,7 @@ def autenticar_para_config():
 
     auth_window.mainloop()
 
-    return auth_result['success']
+    return auth_result
 
 
 # ==============================================================================
@@ -3391,36 +3400,19 @@ class ConfigWindow:
                 estado_label.config(text="✅ Verificación completada", foreground="green")
                 estado_paso_label.config(text="✅ Configuración verificada con éxito", foreground="green")
 
-                # Pedir autenticación ANTES de iniciar System Tray
-                progreso.after(1000, lambda: pedir_auth_e_iniciar_tray(resultado['api_password']))
+                # Iniciar System Tray directamente (la autenticación ya se pidió antes)
+                progreso.after(1000, lambda: iniciar_tray_despues_de_config(resultado['api_password']))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
                 estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
                 messagebox.showinfo("Resultado", resultado['mensaje'])
 
-        def pedir_auth_e_iniciar_tray(api_password):
+        def iniciar_tray_despues_de_config(api_password):
             """
-            Pedir autenticación antes de iniciar el System Tray
+            Iniciar System Tray después de guardar configuración
+            (La autenticación ya se pidió ANTES de abrir ConfigWindow)
             """
-            # Cerrar ventana de progreso primero
-            try:
-                if progreso.winfo_exists():
-                    progreso.destroy()
-            except:
-                pass
-
-            # Pedir autenticación usando la misma función
-            if not autenticar_para_config():
-                messagebox.showwarning("⚠️ Acceso Denegado",
-                    "No se pudo verificar su identidad.\n\n"
-                    "El sistema se cerrará. Puede iniciarlo nuevamente cuando desee.")
-                # Cerrar ventana principal
-                if self.root.winfo_exists():
-                    self.root.destroy()
-                return
-
-            # Si autenticación exitosa, iniciar System Tray
             try:
                 # Cargar configuración guardada
                 if os.path.exists(CONFIG_FILE):
@@ -3432,7 +3424,20 @@ class ConfigWindow:
                         resultado['mensaje'] +
                         "\n\n🔄 Iniciando System Tray...\nEl sistema se sincronizará automáticamente según la configuración.")
 
-                    # Iniciar System Tray con autenticación exitosa
+                    # Cerrar ventanas
+                    try:
+                        if progreso.winfo_exists():
+                            progreso.destroy()
+                    except:
+                        pass
+
+                    try:
+                        if self.root.winfo_exists():
+                            self.root.destroy()
+                    except:
+                        pass
+
+                    # Iniciar System Tray
                     iniciar_system_tray(config, api_password)
                 else:
                     messagebox.showerror("Error", "No se encontró configuración guardada")
@@ -5353,15 +5358,16 @@ def main():
         # 2. Si hay config → sync → tray
 
         if not os.path.exists(CONFIG_FILE):
-            # No hay configuración - abrir modo config (sin autenticación, primera vez)
-            root = tk.Tk()
-            app = ConfigWindow(root)
-            root.mainloop()
-            # Después de configurar, pedir autenticación ANTES de continuar
+            # No hay configuración - abrir modo config con autenticación PRIMERO
+            # Pedir autenticación ANTES de configurar
             if not autenticar_para_config():
                 print("❌ Acceso denegado: autenticación fallida o cancelada")
                 return
-            # Continuar con sync y tray
+
+            root = tk.Tk()
+            app = ConfigWindow(root)
+            root.mainloop()
+            # Después de configurar, continuar con sync y tray
         # Continuar con sincronización y tray (hay config o se acaba de crear)
 
         # Cargar configuración
