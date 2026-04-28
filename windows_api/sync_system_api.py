@@ -141,84 +141,51 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     def _mostrar_notificacion_thread():
         try:
             if sistema == "Windows":
-                # Windows: intentar múltiples métodos para notificaciones
-                notificacion_mostrada = False
+                # Windows: usar win10toast
+                # Verificar que pywin32 esté disponible
+                try:
+                    import win32con
+                except ImportError:
+                    return  # pywin32 no instalado, salir silenciosamente
 
-                # MÉTODO 1: Intentar con win10toast (corregido)
-                if not notificacion_mostrada:
+                from win10toast import ToastNotifier
+
+                toast = ToastNotifier()
+
+                # Forzar la creación de classAtom si no existe
+                if not hasattr(toast, 'classAtom'):
                     try:
-                        from win10toast import ToastNotifier
                         import win32gui
-                        import win32con
+                        toast.classAtom = None
+                    except:
+                        pass
 
-                        toast = ToastNotifier()
-
-                        # Forzar la creación de classAtom si no existe
-                        if not hasattr(toast, 'classAtom'):
-                            toast.classAtom = None
-
-                        # Crear ventana oculta para evitar errores
-                        try:
-                            hInstance = win32gui.GetModuleHandle(None)
-                            className = "PythonToastNotifier"
-
-                            def wnd_proc(hwnd, msg, wparam, lparam):
-                                return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
-
-                            wc = win32gui.WNDCLASS()
-                            wc.hInstance = hInstance
-                            wc.lpszClassName = className
-                            wc.lpfnWndProc = wnd_proc
-                            wc.hCursor = win32gui.LoadCursor(0, win32con.IDC_ARROW)
-                            wc.hbrBackground = win32con.COLOR_WINDOW + 1
-
-                            try:
-                                win32gui.RegisterClass(wc)
-                            except:
-                                pass
-
-                            hwnd = win32gui.CreateWindowEx(
-                                0, className, "ToastNotifier", 0,
-                                0, 0, 0, 0, 0, 0, hInstance, None
-                            )
-                            win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
-                            toast._hwnd = hwnd
-                        except:
-                            pass
-
-                        # Mostrar notificación sin icono para evitar errores
-                        toast.show_toast(
-                            titulo,
-                            mensaje,
-                            duration=duracion,
-                            icon_path=None,
-                            threaded=False,
-                        )
-                        notificacion_mostrada = True
-                        print(f"[DEBUG] Notificación mostrada con win10toast")
-                    except Exception as e:
-                        print(f"[DEBUG] Error win10toast: {e}")
-
-                # MÉTODO 2: Intentar con plyer
-                if not notificacion_mostrada:
+                # Intentar usar icono personalizado
+                icon_path = icono
+                if not icon_path:
                     try:
-                        from plyer import notification
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        possible_icons = [
+                            os.path.join(script_dir, "icon.ico"),
+                            os.path.join(script_dir, "icon.png"),
+                            os.path.join(script_dir, "app.ico"),
+                        ]
+                        for path in possible_icons:
+                            if os.path.exists(path):
+                                icon_path = path
+                                break
+                    except:
+                        pass
 
-                        notification.notify(
-                            title=titulo,
-                            message=mensaje,
-                            app_name="Sincronizador Chrystal",
-                            app_icon=None,
-                            timeout=duracion,
-                        )
-                        notificacion_mostrada = True
-                        print(f"[DEBUG] Notificación mostrada con plyer")
-                    except Exception as e:
-                        print(f"[DEBUG] Error plyer: {e}")
-
-                # Si ningún método funcionó, al menos loggearlo
-                if not notificacion_mostrada:
-                    print(f"[DEBUG] No se pudo mostrar notificación: {titulo}")
+                # Usar threaded=False para ejecutar sincrónicamente en nuestro thread
+                # y poder capturar errores
+                toast.show_toast(
+                    titulo,
+                    mensaje,
+                    duration=duracion,
+                    icon_path=icon_path,
+                    threaded=False,  # Cambiado a False para capturar errores
+                )
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
@@ -544,28 +511,19 @@ class APIAuthManager:
             if not self.api_token:
                 return {'success': False, 'error': 'No hay token. Haga login primero.'}
 
-            payload = {
-                'rif': rif,
-                'email': email
-            }
-            url = f"{self.base_url}/sync-batch/company/validate"
-
-            self._log(f"🔍 POST {url}")
-            self._log(f"   Payload: {payload}")
-
             response = requests.post(
-                url,
+                f"{self.base_url}/sync-batch/company/validate",
                 headers={
                     'Authorization': f'Bearer {self.api_token}',
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
-                json=payload,
+                json={
+                    'rif': rif,
+                    'email': email
+                },
                 timeout=30
             )
-
-            self._log(f"   Status: {response.status_code}")
-            self._log(f"   Response: {response.text[:500]}")  # Primeros 500 caracteres
 
             if response.status_code in [200, 201]:
                 data = response.json()
@@ -583,20 +541,8 @@ class APIAuthManager:
                         'company': self.company_data
                     }
 
-            # Manejar errores de API
-            error_msg = 'Error desconocido'
-            if response.text:
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('message', error_data.get('error', error_msg))
-                except:
-                    # Si no es JSON válido, usar el texto del response
-                    if len(response.text) < 200:
-                        error_msg = response.text
-                    else:
-                        error_msg = f"Error HTTP {response.status_code}"
-
-            self._log(f"❌ Validación falló (HTTP {response.status_code}): {error_msg}", "error")
+            error_msg = response.json().get('message', 'Error desconocido') if response.text else 'Error desconocido'
+            self._log(f"❌ Validación falló: {error_msg}", "error")
             return {'success': False, 'error': error_msg}
 
         except Exception as e:
@@ -1524,7 +1470,7 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
                         self.pg_cursor.execute(statement)
                     except Exception as stmt_error:
                         print(f"[DEBUG] Error en statement {i}: {str(stmt_error)[:200]}")
-                        # Hacer rollback y re-crear la conexión para limpiar el estado
+                        # Hacer rollback para limpiar el estado
                         self.pg_conn.rollback()
                         # Continuar con el siguiente statement
                         continue
@@ -2046,6 +1992,214 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
 
 
 # ==============================================================================
+# FUNCIONES HELPER PARA AUTENTICACIÓN DE CONFIG
+# ==============================================================================
+
+def autenticar_para_config():
+    """
+    Pide autenticación antes de abrir configuración.
+    Retorna True si autenticación exitosa, False si falló.
+    Si no hay configuración previa, retorna True directamente (primera vez).
+    """
+    import requests
+    import json
+    from config_encryption import decrypt_config
+
+    # Verificar si existe configuración
+    if not os.path.exists(CONFIG_FILE):
+        # No hay config - primera vez, permitir acceso directo
+        return True
+
+    try:
+        # Cargar configuración
+        with open(CONFIG_FILE, 'r') as f:
+            config_encriptado = json.load(f)
+        config = decrypt_config(config_encriptado)
+    except Exception as e:
+        # Error cargando config - permitir acceso para reconfigurar
+        print(f"⚠️ Error cargando configuración: {e}")
+        return True
+
+    # Obtener company_id desde sync_config de PostgreSQL
+    company_id_from_config = None
+    try:
+        import psycopg2
+        pg_conn = psycopg2.connect(
+            host=config.get('postgres_host'),
+            port=config.get('postgres_port', 5432),
+            database=config.get('postgres_database'),
+            user=config.get('postgres_user'),
+            password=config.get('postgres_password')
+        )
+        pg_cursor = pg_conn.cursor()
+        pg_cursor.execute("""
+            SELECT value FROM sync_config WHERE key = 'company_id'
+        """)
+        result = pg_cursor.fetchone()
+        if result:
+            company_id_from_config = int(result[0])
+        pg_cursor.close()
+        pg_conn.close()
+    except Exception as e:
+        # Error conectando a PostgreSQL - permitir acceso
+        print(f"⚠️ Error conectando a PostgreSQL: {e}")
+        return True
+
+    # Crear ventana de reautenticación
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+
+    auth_window = tk.Tk()
+    auth_window.title("Sincronizador - Verificar Identidad")
+    auth_window.geometry("400x280")
+    auth_window.resizable(False, False)
+
+    # Forzar ventana al frente
+    auth_window.attributes('-topmost', True)
+    auth_window.lift()
+    auth_window.focus_force()
+
+    # Centrar ventana
+    auth_window.update_idletasks()
+    width = auth_window.winfo_width()
+    height = auth_window.winfo_height()
+    x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
+    y = (auth_window.winfo_screenheight() // 2) - (height // 2)
+    auth_window.geometry(f'{width}x{height}+{x}+{y}')
+    auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
+
+    # Frame principal
+    main_frame = ttk.Frame(auth_window, padding="20")
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Título
+    ttk.Label(
+        main_frame,
+        text="🔐 Verificación Requerida",
+        font=('Arial', 12, 'bold')
+    ).pack(pady=(0, 15))
+
+    # Instrucción
+    ttk.Label(
+        main_frame,
+        text="Para acceder a la configuración, ingrese sus credenciales:",
+        font=('Arial', 9)
+    ).pack(pady=(0, 10))
+
+    # Email
+    ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
+    email_entry = ttk.Entry(main_frame, width=40)
+    email_entry.pack(fill=tk.X, pady=(0, 10))
+    email_entry.focus()
+
+    # Password
+    ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
+    password_entry = ttk.Entry(main_frame, width=40, show="*")
+    password_entry.pack(fill=tk.X, pady=(0, 15))
+
+    auth_result = {'success': False}
+
+    def do_auth():
+        email = email_entry.get().strip()
+        password = password_entry.get().strip()
+
+        if not email or not password:
+            messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
+            return
+
+        try:
+            # Deshabilitar botón
+            auth_btn.config(state='disabled')
+            auth_window.update()
+
+            # Llamar a API
+            api_url = config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
+            response = requests.post(
+                f"{api_url}/auth/login",
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                json={
+                    'email': email,
+                    'password': password,
+                    'device_name': 'config_auth',
+                    'force_logout': True
+                },
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    user_data = data.get('data', {})
+                    user = user_data.get('user', {})
+                    subscriptions = user_data.get('subscription', [])
+
+                    # Validar rol
+                    role = user.get('role')
+                    if role not in ['admin', 'cajero']:
+                        messagebox.showerror(
+                            "❌ Acceso Denegado",
+                            f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
+                        )
+                        auth_btn.config(state='normal')
+                        return
+
+                    # Validar company_id
+                    company_found = False
+                    for subscription_item in subscriptions:
+                        company = subscription_item.get('companies', {})
+                        api_company_id = company.get('id')
+
+                        if api_company_id == company_id_from_config:
+                            company_found = True
+                            break
+
+                    if not company_found:
+                        messagebox.showerror(
+                            "❌ Acceso Denegado",
+                            f"La compañía no coincide con la configuración local"
+                        )
+                        auth_btn.config(state='normal')
+                        return
+
+                    # Todo OK
+                    auth_result['success'] = True
+                    auth_window.destroy()
+                    return
+
+            # Error de autenticación
+            error_msg = "Credenciales inválidas"
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('message', error_msg)
+            except:
+                pass
+
+            messagebox.showerror("❌ Error de Autenticación", f"{error_msg}")
+            auth_btn.config(state='normal')
+
+        except Exception as e:
+            messagebox.showerror("❌ Error", f"Error de conexión:\n{e}")
+            auth_btn.config(state='normal')
+
+    # Botón de autenticación
+    auth_btn = ttk.Button(main_frame, text="Verificar", command=do_auth)
+    auth_btn.pack(fill=tk.X, pady=(0, 10))
+
+    # Enter en password envía el formulario
+    password_entry.bind('<Return>', lambda e: do_auth())
+
+    # Botón cancelar
+    ttk.Button(main_frame, text="Cancelar", command=auth_window.destroy).pack()
+
+    auth_window.mainloop()
+
+    return auth_result['success']
+
+
+# ==============================================================================
 # GUI - CONFIG WINDOW
 # ==============================================================================
 
@@ -2253,7 +2407,7 @@ class ConfigWindow:
                         "✅ Conexión Exitosa",
                         f"Conexión a la API establecida correctamente.\n\n"
                         f"Usuario: {user.get('email', 'N/A')}\n"
-                        f"Nombre: {user.get('name', 'N/A')}\n"                       
+                        f"Nombre: {user.get('name', 'N/A')}\n"                        
                     )
                     self.log("✅ API: Conexión exitosa")
                 else:
@@ -2856,9 +3010,13 @@ class ConfigWindow:
 
             keep_gui_alive()
 
-        def ejecutar_primera_sync_y_tray(api_password):
+        def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
             """
             Ejecuta la primera sincronización y luego inicia el System Tray
+
+            Args:
+                api_password: Password de la API
+                cerrar_ventana_callback: Función para cerrar la ventana de progreso después de la sync
             """
             # Archivo de log para diagnóstico
             log_file = open("primera_sync_log.txt", "w", encoding="utf-8")
@@ -3090,6 +3248,10 @@ class ConfigWindow:
                         # Cerrar ventana de sincronización después de 3 segundos
                         sync_window.after(3000, lambda: sync_window.destroy() if sync_window.winfo_exists() else None)
 
+                        # Cerrar ventana de progreso (config) después de 3 segundos
+                        if cerrar_ventana_callback:
+                            sync_window.after(3000, cerrar_ventana_callback)
+
                         # Iniciar System Tray después de cerrar
                         log_debug("[DEBUG] Programando inicio de System Tray en 3.5 seg...")
                         log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
@@ -3108,6 +3270,10 @@ class ConfigWindow:
                                  command=sync_window.destroy,
                                  bg="#c0392b", fg="white", font=("Arial", 10, "bold"),
                                  padx=20, pady=5, cursor="hand2").pack(pady=10)
+
+                        # Cerrar ventana de progreso también si falló
+                        if cerrar_ventana_callback:
+                            sync_window.after(3000, cerrar_ventana_callback)
 
                 # Iniciar thread de sincronización
                 log_debug("[DEBUG] Iniciando thread de sincronización...")
@@ -3159,37 +3325,8 @@ class ConfigWindow:
                 log_debug("🔄 Iniciando modo System Tray...")
                 log_debug("="*70)
 
-                # Autenticar y validar empresa antes de iniciar tray
-                log_debug("🔐 Autenticando con API...")
-                from sync.APIAuthManager import APIAuthManager
-                auth_manager_tray = APIAuthManager(
-                    base_url=config['api_url'],
-                    logger=None
-                )
-
-                # Login
-                login_result = auth_manager_tray.login(config.get('api_email'), api_password)
-                if not login_result.get('success'):
-                    log_debug(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
-                    messagebox.showerror("Error", "Error de autenticación al iniciar System Tray")
-                    return
-
-                api_token = auth_manager_tray.api_token
-                log_debug("✅ Login exitoso")
-
-                # Validar empresa para obtener company_id
-                log_debug("🏢 Validando empresa...")
-                validate_result = auth_manager_tray.validate_company(config['company_rif'], config['company_email'])
-                if not validate_result.get('success'):
-                    log_debug(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
-                    messagebox.showerror("Error", "Error validando empresa al iniciar System Tray")
-                    return
-
-                company_id = validate_result.get('company_id')
-                log_debug(f"✅ Company ID: {company_id}")
-
                 log_debug("[DEBUG] Creando instancia de SystemTrayService...")
-                tray_service = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
+                tray_service = SystemTrayService(config, None, config.get('api_email'), api_password)
                 log_debug("[DEBUG] SystemTrayService creada")
 
                 log_debug("[DEBUG] Llamando a tray_service.iniciar()...")
@@ -3220,6 +3357,29 @@ class ConfigWindow:
             except:
                 pass
 
+        def cerrar_ventana_y_iniciar_tray(api_password):
+            """Cerrar ventana de progreso y directamente iniciar System Tray"""
+            try:
+                # Cerrar ventana de progreso
+                if progreso.winfo_exists():
+                    progreso.destroy()
+
+                # Cerrar ventana principal de config
+                if self.root.winfo_exists():
+                    self.root.destroy()
+
+                # Cargar configuración guardada
+                if os.path.exists(CONFIG_FILE):
+                    with open(CONFIG_FILE, 'r') as f:
+                        config = json.load(f)
+
+                    # Iniciar System Tray directamente (sin primera sincronización)
+                    iniciar_system_tray(config, api_password)
+                else:
+                    messagebox.showerror("Error", "No se encontró configuración guardada")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
+
         # Manejar evento de finalización
         def on_verification_complete(event):
             if not progreso.winfo_exists():
@@ -3231,21 +3391,53 @@ class ConfigWindow:
                 estado_label.config(text="✅ Verificación completada", foreground="green")
                 estado_paso_label.config(text="✅ Configuración verificada con éxito", foreground="green")
 
-                # Mostrar mensaje y AUTOMÁTICAMENTE ejecutar sincronización
-                messagebox.showinfo("✅ Configuración Guardada",
-                    resultado['mensaje'] +
-                    "\n\n🔄 Se ejecutará la primera sincronización automáticamente...")
-
-                # Ejecutar primera sincronización automáticamente
-                progreso.after(500, lambda: ejecutar_primera_sync_y_tray(resultado['api_password']))
-
-                # Cerrar ventana de config después de iniciar sync
-                progreso.after(1000, lambda: cerrar_ventana())
+                # Pedir autenticación ANTES de iniciar System Tray
+                progreso.after(1000, lambda: pedir_auth_e_iniciar_tray(resultado['api_password']))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
                 estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
                 messagebox.showinfo("Resultado", resultado['mensaje'])
+
+        def pedir_auth_e_iniciar_tray(api_password):
+            """
+            Pedir autenticación antes de iniciar el System Tray
+            """
+            # Cerrar ventana de progreso primero
+            try:
+                if progreso.winfo_exists():
+                    progreso.destroy()
+            except:
+                pass
+
+            # Pedir autenticación usando la misma función
+            if not autenticar_para_config():
+                messagebox.showwarning("⚠️ Acceso Denegado",
+                    "No se pudo verificar su identidad.\n\n"
+                    "El sistema se cerrará. Puede iniciarlo nuevamente cuando desee.")
+                # Cerrar ventana principal
+                if self.root.winfo_exists():
+                    self.root.destroy()
+                return
+
+            # Si autenticación exitosa, iniciar System Tray
+            try:
+                # Cargar configuración guardada
+                if os.path.exists(CONFIG_FILE):
+                    with open(CONFIG_FILE, 'r') as f:
+                        config = json.load(f)
+
+                    # Mostrar mensaje de éxito
+                    messagebox.showinfo("✅ Configuración Guardada",
+                        resultado['mensaje'] +
+                        "\n\n🔄 Iniciando System Tray...\nEl sistema se sincronizará automáticamente según la configuración.")
+
+                    # Iniciar System Tray con autenticación exitosa
+                    iniciar_system_tray(config, api_password)
+                else:
+                    messagebox.showerror("Error", "No se encontró configuración guardada")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
 
         progreso.bind('<<VerificationComplete>>', on_verification_complete)
 
@@ -3368,7 +3560,12 @@ class LauncherWindow:
         version_label.pack()
 
     def launch_config(self):
-        """Lanzar modo configuración"""
+        """Lanzar modo configuración con autenticación"""
+        # Verificar autenticación antes de abrir config
+        if not autenticar_para_config():
+            print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
+            return
+
         self.root.destroy()
         root = tk.Tk()
         app = ConfigWindow(root)
@@ -3419,35 +3616,9 @@ class LauncherWindow:
                 if not api_password:
                     return
 
-        # Autenticar y validar empresa antes de iniciar tray
-        print("🔐 Autenticando con API...")
-        auth_manager_tray = APIAuthManager(
-            base_url=config['api_url'],
-            logger=None
-        )
-
-        # Login
-        login_result = auth_manager_tray.login(config.get('api_email'), api_password)
-        if not login_result.get('success'):
-            print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
-            return
-
-        api_token = auth_manager_tray.api_token
-        print("✅ Login exitoso")
-
-        # Validar empresa para obtener company_id
-        print("🏢 Validando empresa...")
-        validate_result = auth_manager_tray.validate_company(config['company_rif'], config['company_email'])
-        if not validate_result.get('success'):
-            print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
-            return
-
-        company_id = validate_result.get('company_id')
-        print(f"✅ Company ID: {company_id}\n")
-
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
+            tray = SystemTrayService(config, None, config.get('api_email'), api_password)
             tray.iniciar()
         except Exception as e:
             messagebox.showerror("Error", f"Error iniciando System Tray: {e}\n\nAsegúrese de tener instaladas las dependencias:\npip install pystray Pillow")
@@ -4182,6 +4353,48 @@ class SystemTrayService:
             print(f"Error creando icono: {e}")
             return None
 
+    def configurar_auto_inicio(self):
+        """
+        Configura el sistema para que inicie automáticamente al encender el equipo
+        Verifica que el archivo exista antes de crear el registro
+        """
+        try:
+            import winreg
+
+            # Ruta del ejecutable o script actual
+            if getattr(sys, 'frozen', False):
+                # Si está empaquetado como exe
+                app_path = sys.executable
+            else:
+                # Si es script Python
+                script_path = os.path.abspath(__file__)
+                app_path = f'"{sys.executable}" "{script_path}" --mode tray'
+
+            # Verificar que el archivo exista
+            if not os.path.exists(sys.executable):
+                print(f"⚠️ El archivo no existe: {sys.executable}")
+                print("   Limpiando registro de auto-inicio...")
+                self.limpiar_auto_inicio()
+                return
+
+            # Registry key para auto-inicio
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key_name = "SyncAPISystemTray"
+
+            # Abrir registry key
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+
+            # Establecer el valor
+            winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, app_path)
+            winreg.CloseKey(key)
+
+            print("✅ Auto-inicio configurado correctamente")
+            print(f"   Ruta: {app_path}")
+        except ImportError:
+            print("⚠️ winreg no disponible (solo Windows)")
+        except Exception as e:
+            print(f"⚠️ No se pudo configurar auto-inicio: {e}")
+
     def reautenticar_usuario(self):
         """
         Pide autenticación nuevamente antes de ejecutar acciones sensibles.
@@ -4418,48 +4631,6 @@ class SystemTrayService:
 
         return auth_result['success']
 
-    def configurar_auto_inicio(self):
-        """
-        Configura el sistema para que inicie automáticamente al encender el equipo
-        Verifica que el archivo exista antes de crear el registro
-        """
-        try:
-            import winreg
-
-            # Ruta del ejecutable o script actual
-            if getattr(sys, 'frozen', False):
-                # Si está empaquetado como exe
-                app_path = sys.executable
-            else:
-                # Si es script Python
-                script_path = os.path.abspath(__file__)
-                app_path = f'"{sys.executable}" "{script_path}" --mode tray'
-
-            # Verificar que el archivo exista
-            if not os.path.exists(sys.executable):
-                print(f"⚠️ El archivo no existe: {sys.executable}")
-                print("   Limpiando registro de auto-inicio...")
-                self.limpiar_auto_inicio()
-                return
-
-            # Registry key para auto-inicio
-            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-            key_name = "SyncAPISystemTray"
-
-            # Abrir registry key
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
-
-            # Establecer el valor
-            winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, app_path)
-            winreg.CloseKey(key)
-
-            print("✅ Auto-inicio configurado correctamente")
-            print(f"   Ruta: {app_path}")
-        except ImportError:
-            print("⚠️ winreg no disponible (solo Windows)")
-        except Exception as e:
-            print(f"⚠️ No se pudo configurar auto-inicio: {e}")
-
     def limpiar_auto_inicio(self):
         """
         Limpia el registro de auto-inicio
@@ -4509,12 +4680,24 @@ class SystemTrayService:
                 logger=tray_logger
             )
 
-            # Usar el token y credenciales obtenidos al inicio (reutilizar, no hacer login nuevo)
-            auth_manager.api_token = self.api_token
-            auth_manager.api_email = self.api_email  # Importante: para refresh de token
-            auth_manager.api_password = self.api_password  # Importante: para refresh de token
-            auth_manager.company_id = self.company_id  # Usar company_id validado al inicio
-            tray_logger(f"✅ Usando token existente, Company ID: {auth_manager.company_id}")
+            # Login (usar self.api_email si está disponible, sino leer de config)
+            api_email = self.api_email or self.config.get('api_email')
+            login_result = auth_manager.login(api_email, self.api_password)
+            if not login_result.get('success'):
+                error_msg = login_result.get('error', 'Error de autenticación')
+                tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
+                self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.last_sync_status = "❌ Credenciales incorrectas"
+
+                # Mostrar mensaje visual al usuario
+                mostrar_banner(
+                    "❌ Error de Autenticación",
+                    f"{error_msg}\n\nContacta al administrador del sistema.",
+                    duracion=15
+                )
+                return
+
+            auth_manager.validate_company(self.config['company_rif'], self.config['company_email'])
 
             sync_manager = APISyncManager(
                 postgres_config={
@@ -4548,40 +4731,15 @@ class SystemTrayService:
                 sync_manager.close()
 
                 # 📢 Notificación Windows de sincronización exitosa
-                total_created = total.get('created', 0)
-                total_updated = total.get('updated', 0)
-                total_deleted = total.get('deleted', 0)
-
-                if total_created > 0 or total_updated > 0 or total_deleted > 0:
+                if total.get('created', 0) > 0 or total.get('updated', 0) > 0:
                     # Hay cambios - mostrar estadísticas
                     stats = result.get('stats', {})
-
-                    # Traducciones de entidades a español
-                    nombres_es = {
-                        'categories': 'Departamentos',
-                        'products': 'Productos',
-                        'customers': 'Clientes',
-                        'sellers': 'Vendedores',
-                        'quotes': 'Cotizaciones'
-                    }
-
                     parts = []
                     for entity, entity_stats in stats.items():
                         created = entity_stats.get('created', 0)
                         updated = entity_stats.get('updated', 0)
-                        deleted = entity_stats.get('deleted', 0)
-                        if created > 0 or updated > 0 or deleted > 0:
-                            # Obtener nombre en español (o defecto a capitalize)
-                            nombre_es = nombres_es.get(entity, entity.capitalize())
-
-                            entity_parts = []
-                            if created > 0:
-                                entity_parts.append(f"{created} nuevos")
-                            if updated > 0:
-                                entity_parts.append(f"{updated} mods")
-                            if deleted > 0:
-                                entity_parts.append(f"{deleted} eliminados")
-                            parts.append(f"{nombre_es}: " + ", ".join(entity_parts))
+                        if created > 0 or updated > 0:
+                            parts.append(f"{entity.capitalize()}: {created} nuevos, {updated} mods")
 
                     if parts:
                         mensaje = " | ".join(parts)
@@ -4771,12 +4929,17 @@ class SystemTrayService:
         print("[DEBUG] Thread iniciado (daemon=False)")
 
     def abrir_config(self):
-        """Abre ventana de configuración"""
+        """Abre ventana de configuración con autenticación"""
         import threading
         threading.Thread(target=self._abrir_config_thread, daemon=True).start()
 
     def _abrir_config_thread(self):
-        """Abre config en thread separado"""
+        """Abre config en thread separado con autenticación"""
+        # Verificar autenticación antes de abrir config
+        if not autenticar_para_config():
+            print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
+            return
+
         try:
             import tkinter as tk
             root = tk.Tk()
@@ -4786,11 +4949,60 @@ class SystemTrayService:
             print(f"Error abriendo config: {e}")
 
     def salir(self):
-        """Sale del sistema tray"""
-        print("\n👋 Deteniendo servicio...")
-        self.sync_running = False
-        if self.icon:
-            self.icon.stop()
+        """Sale del sistema tray con autenticación"""
+        # Reautenticar antes de salir
+        if not self.reautenticar_usuario():
+            print("❌ Salida cancelada: autenticación fallida o cancelada")
+            return
+
+        # Si autenticación exitosa, mostrar confirmación y salir
+        import threading
+        threading.Thread(target=self._salir_thread, daemon=True).start()
+
+    def _salir_thread(self):
+        """Muestra diálogo de confirmación y sale"""
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+
+            # Crear ventana oculta para el diálogo
+            root = tk.Tk()
+            root.withdraw()  # Ocultar ventana principal
+
+            # Centrar el diálogo en la pantalla
+            root.update_idletasks()
+            width = 400
+            height = 150
+            x = (root.winfo_screenwidth() // 2) - (width // 2)
+            y = (root.winfo_screenheight() // 2) - (height // 2)
+            root.geometry(f'{width}x{height}+{x}+{y}')
+
+            # Mostrar confirmación
+            respuesta = messagebox.askyesno(
+                "Confirmar Salida",
+                "¿Estás seguro que deseas salir del Sistema de Sincronización?\n\n"
+                "Esto detendrá la sincronización automática.",
+                icon=messagebox.WARNING,
+                default=messagebox.NO
+            )
+
+            root.destroy()
+
+            if respuesta:
+                print("\n👋 Deteniendo servicio...")
+                self.sync_running = False
+                if self.icon:
+                    self.icon.stop()
+            else:
+                print("❌ Salida cancelada")
+
+        except Exception as e:
+            print(f"Error en diálogo de salida: {e}")
+            # En caso de error, salir de todos modos
+            print("\n👋 Deteniendo servicio...")
+            self.sync_running = False
+            if self.icon:
+                self.icon.stop()
 
     def iniciar(self):
         """Inicia el servicio system tray"""
@@ -4829,6 +5041,7 @@ class SystemTrayService:
                 pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
                 pystray.MenuItem('📊 Ver Logs', self.ver_logs),
                 pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
+                pystray.MenuItem('⚙️ Configuración', self.abrir_config),
                 pystray.MenuItem('❌ Salir', self.salir)
             )
             log_debug("[DEBUG] Menú creado")
@@ -5121,240 +5334,6 @@ def run_service_loop():
         sys.exit(0)
 
 
-def authenticate_user_tray(config):
-    """
-    Autenticar usuario en modo tray con ventana GUI.
-
-    Valida:
-    - Credenciales (email/password)
-    - Rol (admin o cajero)
-    - company_id (debe coincidir con sync_config)
-
-    Returns:
-        str: Token de API si autenticación exitosa
-        None: Si falló autenticación
-    """
-    import requests
-
-    # Obtener company_id desde sync_config de PostgreSQL
-    company_id_from_config = None
-    try:
-        import psycopg2
-        pg_conn = psycopg2.connect(
-            host=config.get('postgres_host'),
-            port=config.get('postgres_port', 5432),
-            database=config.get('postgres_database'),
-            user=config.get('postgres_user'),
-            password=config.get('postgres_password')
-        )
-        pg_cursor = pg_conn.cursor()
-        pg_cursor.execute("""
-            SELECT value FROM sync_config WHERE key = 'company_id'
-        """)
-        result = pg_cursor.fetchone()
-        if result:
-            company_id_from_config = int(result[0])
-        pg_cursor.close()
-        pg_conn.close()
-    except Exception as e:
-        messagebox.showerror("❌ Error", f"Error leyendo company_id de sync_config:\n{e}")
-        return None
-
-    if not company_id_from_config:
-        messagebox.showerror("❌ Error", "No hay company_id configurado en sync_config.\nEjecute --mode config primero.")
-        return None
-
-    # Crear ventana de login
-    login_window = tk.Tk()
-    login_window.title("Sincronizador Chrystal - Login")
-    login_window.geometry("400x310")  # Aumentado de 250 a 310 para mejor visibilidad de botones
-    login_window.resizable(False, False)
-
-    # Centrar ventana
-    login_window.update_idletasks()
-    width = login_window.winfo_width()
-    height = login_window.winfo_height()
-    x = (login_window.winfo_screenwidth() // 2) - (width // 2)
-    y = (login_window.winfo_screenheight() // 2) - (height // 2)
-    login_window.geometry(f'{width}x{height}+{x}+{y}')
-
-    # Frame principal
-    main_frame = ttk.Frame(login_window, padding="20")
-    main_frame.pack(fill=tk.BOTH, expand=True)
-
-    # Título
-    title_label = ttk.Label(
-        main_frame,
-        text="🔐 Autenticación Requerida",
-        font=('Arial', 14, 'bold')
-    )
-    title_label.pack(pady=(0, 20))
-
-    # Email
-    ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
-    email_entry = ttk.Entry(main_frame, width=40)
-    email_entry.pack(fill=tk.X, pady=(0, 10))
-    email_entry.focus()
-
-    # Password
-    ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
-    password_entry = ttk.Entry(main_frame, width=40, show="*")
-    password_entry.pack(fill=tk.X, pady=(0, 20))
-
-    # Botones
-    button_frame = ttk.Frame(main_frame)
-    button_frame.pack(fill=tk.X)
-
-    login_result = {'token': None, 'error': None, 'email': None, 'password': None}
-
-    def do_login():
-        email = email_entry.get().strip()
-        password = password_entry.get().strip()
-
-        if not email or not password:
-            messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
-            return
-
-        try:
-            # Deshabilitar botón durante login
-            login_btn.config(state='disabled')
-            login_window.update()
-
-            # Llamar a API
-            api_url = config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
-            response = requests.post(
-                f"{api_url}/auth/login",
-                headers={
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                json={
-                    'email': email,
-                    'password': password,
-                    'device_name': 'tray_login',
-                    'force_logout': True
-                },
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('success'):
-                    user_data = data.get('data', {})
-                    user = user_data.get('user', {})
-                    subscription = user_data.get('subscription', {})
-                    company = subscription.get('companies', {})
-
-                    # Validar rol
-                    role = user.get('role')
-                    if role not in ['admin', 'cajero']:
-                        messagebox.showerror(
-                            "❌ Acceso Denegado",
-                            f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
-                        )
-                        login_btn.config(state='normal')
-                        return
-
-                    # Validar company_id
-                    api_company_id = company.get('id')
-                    if api_company_id != company_id_from_config:
-                        messagebox.showerror(
-                            "❌ Acceso Denegado",
-                            "La compañía no coincide"
-                        )
-                        login_btn.config(state='normal')
-                        return
-
-                    # Todo OK - guardar token, email y password
-                    token = user_data.get('token')
-                    user_email = user.get('email')
-                    login_result['token'] = token
-                    login_result['email'] = user_email
-                    login_result['password'] = password
-                    login_window.destroy()
-                    return
-
-            # Error de login
-            error_msg = "Error de autenticación"
-            try:
-                error_data = response.json()
-                error_msg = error_data.get('message', error_msg)
-            except:
-                pass
-
-            messagebox.showerror("❌ Error", f"{error_msg}")
-            login_btn.config(state='normal')
-
-        except requests.exceptions.Timeout:
-            messagebox.showerror("❌ Error", "Timeout conectando a la API.\nVerifique su conexión a internet.")
-            login_btn.config(state='normal')
-        except requests.exceptions.ConnectionError:
-            messagebox.showerror("❌ Error", "Error de conexión a la API.\nVerifique su conexión a internet.")
-            login_btn.config(state='normal')
-        except Exception as e:
-            messagebox.showerror("❌ Error", f"Error inesperado:\n{str(e)}")
-            login_btn.config(state='normal')
-
-    def do_cancel():
-        login_window.destroy()
-
-    # Botones - colores oscuros para mejor contraste
-    login_btn = tk.Button(
-        button_frame,
-        text="✅ Iniciar Sesión",
-        command=do_login,
-        bg='#2E7D32',  # Verde oscuro
-        fg='white',
-        font=('Arial', 12, 'bold'),
-        relief=tk.RAISED,
-        bd=3,
-        padx=30,
-        pady=12,
-        cursor='hand2',
-        activebackground='#1B5E20',  # Verde más oscuro al hacer clic
-        activeforeground='white'
-    )
-    login_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
-
-    cancel_btn = tk.Button(
-        button_frame,
-        text="❌ Cancelar",
-        command=do_cancel,
-        bg='#C62828',  # Rojo oscuro
-        fg='white',
-        font=('Arial', 12, 'bold'),
-        relief=tk.RAISED,
-        bd=3,
-        padx=30,
-        pady=12,
-        cursor='hand2',
-        activebackground='#B71C1C',  # Rojo más oscuro al hacer clic
-        activeforeground='white'
-    )
-    cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
-
-    # Info label
-    info_label = ttk.Label(
-        main_frame,
-        text="Solo administradores y cajeros autorizados",
-        font=('Arial', 8),
-        foreground='gray'
-    )
-    info_label.pack(pady=(10, 0))
-
-    # Bind Enter key
-    login_window.bind('<Return>', lambda e: do_login())
-
-    # Ejecutar ventana
-    login_window.mainloop()
-
-    # Retornar diccionario con token, email y password
-    return {
-        'token': login_result.get('token'),
-        'email': login_result.get('email'),
-        'password': login_result.get('password')
-    } if login_result.get('token') else None
-
 # ==============================================================================
 # MAIN
 # ==============================================================================
@@ -5374,11 +5353,15 @@ def main():
         # 2. Si hay config → sync → tray
 
         if not os.path.exists(CONFIG_FILE):
-            # No hay configuración - abrir modo config
+            # No hay configuración - abrir modo config (sin autenticación, primera vez)
             root = tk.Tk()
             app = ConfigWindow(root)
             root.mainloop()
-            # Después de configurar, continuar con sync y tray
+            # Después de configurar, pedir autenticación ANTES de continuar
+            if not autenticar_para_config():
+                print("❌ Acceso denegado: autenticación fallida o cancelada")
+                return
+            # Continuar con sync y tray
         # Continuar con sincronización y tray (hay config o se acaba de crear)
 
         # Cargar configuración
@@ -5397,7 +5380,6 @@ def main():
 
         # Si no hay password en config, pedirlo con ventana GUI
         if not api_password:
-            print("🔐 Se requiere password de la API...")
             import tkinter.simpledialog as simpledialog
             pass_root = tk.Tk()
             pass_root.withdraw()
@@ -5406,10 +5388,6 @@ def main():
 
             if not api_password:
                 return
-            else:
-                print("✅ Password ingresado")
-        else:
-            print("✅ Password de la API cargado desde configuración")
 
         # Ejecutar sincronización
         print("\n" + "="*70)
@@ -5462,34 +5440,8 @@ def main():
         print("Se sincronizará automáticamente cada", config.get('sync_interval_minutes', '30'), "minutos")
         print("="*70 + "\n")
 
-        # Autenticar y validar empresa antes de iniciar tray
-        print("🔐 Autenticando con API...")
-        auth_manager_tray = APIAuthManager(
-            base_url=config['api_url'],
-            logger=None
-        )
-
-        # Login
-        login_result = auth_manager_tray.login(config.get('api_email'), api_password)
-        if not login_result.get('success'):
-            print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
-            return
-
-        api_token = auth_manager_tray.api_token
-        print("✅ Login exitoso")
-
-        # Validar empresa para obtener company_id
-        print("🏢 Validando empresa...")
-        validate_result = auth_manager_tray.validate_company(config['company_rif'], config['company_email'])
-        if not validate_result.get('success'):
-            print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
-            return
-
-        company_id = validate_result.get('company_id')
-        print(f"✅ Company ID: {company_id}\n")
-
         try:
-            tray = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
+            tray = SystemTrayService(config, None, config.get('api_email'), api_password)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
@@ -5519,9 +5471,14 @@ def main():
 
     # Ejecutar según modo
     if args.mode == "config":
-        root = tk.Tk()
-        app = ConfigWindow(root)
-        root.mainloop()
+        # Verificar autenticación antes de abrir config
+        if autenticar_para_config():
+            root = tk.Tk()
+            app = ConfigWindow(root)
+            root.mainloop()
+        else:
+            print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
+            sys.exit(1)
 
     elif args.mode == "manager":
         # Manager siempre abre, con o sin configuración
@@ -5561,139 +5518,52 @@ def main():
             print(f"❌ Error cargando configuración: {e}")
             sys.exit(1)
 
-        # Cargar password encriptado y autenticar
-        print("🔐 Autenticando usuario...")
-        api_token = None
-        api_password = None  # Inicializar variable para password desencriptado
-        user_email = None
-
-        # Verificar si existe api_password_encrypted en config
+        # Intentar cargar password encriptado del config
+        api_password = None
         if 'api_password_encrypted' in config:
-            print(f"✅ api_password_encrypted encontrado en config")
             try:
                 from config_encryption import decrypt_password
-
-                # Desencriptar password
-                print(f"🔐 Desencriptando password...")
                 api_password = decrypt_password(config['api_password_encrypted'])
-
                 if api_password:
-                    print(f"✅ Password desencriptado correctamente (longitud: {len(api_password)})")
-                    # Hacer login con el password desencriptado
-                    print(f"🔐 Haciendo login a API como {config.get('api_email')}...")
-                    auth_manager = APIAuthManager(
-                        base_url=config.get('api_url', 'https://chrystal.com.ve/mobile/public/api'),
-                        logger=None
-                    )
-
-                    login_result = auth_manager.login(config.get('api_email'), api_password)
-                    print(f"📊 Login result: success={login_result.get('success')}, has_token={bool(auth_manager.api_token)}")
-
-                    if login_result.get('success'):
-                        # Validar rol y company_id
-                        user_data = login_result.get('user', {})
-                        role = user_data.get('role')
-                        print(f"✅ Login exitoso, rol: {role}")
-
-                        if role not in ['admin', 'cajero']:
-                            print(f"❌ Rol no autorizado: {role}")
-                            print("   Solo administradores y cajeros pueden usar el modo tray")
-                            sys.exit(1)
-                        print(f"✅ Rol validado correctamente")
-
-                        # Validar company_id con sync_config de PostgreSQL
-                        try:
-                            print(f"🔐 Validando company_id con sync_config de PostgreSQL...")
-                            import psycopg2
-                            pg_conn = psycopg2.connect(
-                                host=config.get('pg_host'),
-                                port=config.get('pg_port', 5432),
-                                database=config.get('pg_database'),
-                                user=config.get('pg_user'),
-                                password=config.get('pg_password')
-                            )
-                            pg_cursor = pg_conn.cursor()
-                            pg_cursor.execute("""
-                                SELECT value FROM sync_config WHERE key = 'company_id'
-                            """)
-                            result = pg_cursor.fetchone()
-                            company_id_from_config = int(result[0]) if result else None
-                            pg_cursor.close()
-                            pg_conn.close()
-
-                            if not company_id_from_config:
-                                print("❌ No hay company_id en sync_config")
-                                sys.exit(1)
-
-                            print(f"✅ company_id de sync_config: {company_id_from_config}")
-
-                            # Obtener company_id desde la respuesta del login
-                            company_id_api = login_result.get('company_id')
-                            print(f"🔐 company_id de API: {company_id_api}")
-
-                            if company_id_api != company_id_from_config:
-                                print(f"❌ Compañía no coincide: API={company_id_api}, Config={company_id_from_config}")
-                                sys.exit(1)
-
-                            print(f"✅ company_id validado correctamente")
-
-                        except Exception as e:
-                            print(f"❌ Error validando company_id: {e}")
-                            import traceback
-                            traceback.print_exc()
-                            sys.exit(1)
-
-                        api_token = auth_manager.api_token
-                        user_email = config.get('api_email')
-                        print("✅ Usuario autenticado correctamente")
-                    else:
-                        print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
-
-                else:
-                    print(f"❌ Password desencriptado es None o vacío")
-
+                    print("✅ Password de la API cargado desde configuración")
             except Exception as e:
-                print(f"❌ Error cargando password encriptado: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            print(f"⚠️  No hay 'api_password_encrypted' en config")
-            print(f"   Claves disponibles: {list(config.keys())}")
+                print(f"⚠️  Error cargando password encriptado: {e}")
 
-        # Si no hay password encriptado o falló autenticación, pedir con ventana
-        if not api_token:
-            print(f"⚠️  No se pudo obtener api_token automáticamente")
-            print(f"🔐 Mostrando ventana de autenticación GUI...")
-            auth_result = authenticate_user_tray(config)
-            if not auth_result:
-                print("❌ Autenticación cancelada o fallida")
-                sys.exit(1)
-            api_token = auth_result['token']
-            api_password = auth_result.get('password')  # Guardar password de la GUI
-            user_email = auth_result.get('email')
-            print(f"✅ Usuario autenticado correctamente")
+        # Si no hay password en config, pedirlo
+        if not api_password:
+            import getpass
+            api_password = getpass.getpass("Password de la API: ")
 
-        # Validar empresa UNA vez al inicio (obtener company_id)
-        print("🏢 Validando empresa al inicio...")
+        # Autenticar y validar empresa
+        print("🔐 Autenticando con API...")
+        from APIAuthManager import APIAuthManager
         auth_manager = APIAuthManager(
             base_url=config.get('api_url', 'https://chrystal.com.ve/mobile/public/api'),
             logger=None
         )
-        auth_manager.api_token = api_token
 
+        # Login
+        login_result = auth_manager.login(config.get('api_email'), api_password)
+        if not login_result.get('success'):
+            print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
+            sys.exit(1)
+
+        api_token = auth_manager.api_token
+        print("✅ Login exitoso")
+
+        # Validar empresa para obtener company_id
+        print("🏢 Validando empresa...")
         validate_result = auth_manager.validate_company(config['company_rif'], config['company_email'])
         if not validate_result.get('success'):
-            error_msg = validate_result.get('error', 'Error validando empresa')
-            print(f"❌ Error: {error_msg}")
+            print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
             sys.exit(1)
 
         company_id = validate_result.get('company_id')
-        print(f"✅ Company ID validado: {company_id}")
+        print(f"✅ Company ID: {company_id}")
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token, user_email, api_password, company_id)
-            tray.user_email = user_email  # Guardar email
+            tray = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")

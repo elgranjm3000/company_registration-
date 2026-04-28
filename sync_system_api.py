@@ -1992,6 +1992,214 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
 
 
 # ==============================================================================
+# FUNCIONES HELPER PARA AUTENTICACIÓN DE CONFIG
+# ==============================================================================
+
+def autenticar_para_config():
+    """
+    Pide autenticación antes de abrir configuración.
+    Retorna True si autenticación exitosa, False si falló.
+    Si no hay configuración previa, retorna True directamente (primera vez).
+    """
+    import requests
+    import json
+    from config_encryption import decrypt_config
+
+    # Verificar si existe configuración
+    if not os.path.exists(CONFIG_FILE):
+        # No hay config - primera vez, permitir acceso directo
+        return True
+
+    try:
+        # Cargar configuración
+        with open(CONFIG_FILE, 'r') as f:
+            config_encriptado = json.load(f)
+        config = decrypt_config(config_encriptado)
+    except Exception as e:
+        # Error cargando config - permitir acceso para reconfigurar
+        print(f"⚠️ Error cargando configuración: {e}")
+        return True
+
+    # Obtener company_id desde sync_config de PostgreSQL
+    company_id_from_config = None
+    try:
+        import psycopg2
+        pg_conn = psycopg2.connect(
+            host=config.get('postgres_host'),
+            port=config.get('postgres_port', 5432),
+            database=config.get('postgres_database'),
+            user=config.get('postgres_user'),
+            password=config.get('postgres_password')
+        )
+        pg_cursor = pg_conn.cursor()
+        pg_cursor.execute("""
+            SELECT value FROM sync_config WHERE key = 'company_id'
+        """)
+        result = pg_cursor.fetchone()
+        if result:
+            company_id_from_config = int(result[0])
+        pg_cursor.close()
+        pg_conn.close()
+    except Exception as e:
+        # Error conectando a PostgreSQL - permitir acceso
+        print(f"⚠️ Error conectando a PostgreSQL: {e}")
+        return True
+
+    # Crear ventana de reautenticación
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+
+    auth_window = tk.Tk()
+    auth_window.title("Sincronizador - Verificar Identidad")
+    auth_window.geometry("400x280")
+    auth_window.resizable(False, False)
+
+    # Forzar ventana al frente
+    auth_window.attributes('-topmost', True)
+    auth_window.lift()
+    auth_window.focus_force()
+
+    # Centrar ventana
+    auth_window.update_idletasks()
+    width = auth_window.winfo_width()
+    height = auth_window.winfo_height()
+    x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
+    y = (auth_window.winfo_screenheight() // 2) - (height // 2)
+    auth_window.geometry(f'{width}x{height}+{x}+{y}')
+    auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
+
+    # Frame principal
+    main_frame = ttk.Frame(auth_window, padding="20")
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Título
+    ttk.Label(
+        main_frame,
+        text="🔐 Verificación Requerida",
+        font=('Arial', 12, 'bold')
+    ).pack(pady=(0, 15))
+
+    # Instrucción
+    ttk.Label(
+        main_frame,
+        text="Para acceder a la configuración, ingrese sus credenciales:",
+        font=('Arial', 9)
+    ).pack(pady=(0, 10))
+
+    # Email
+    ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
+    email_entry = ttk.Entry(main_frame, width=40)
+    email_entry.pack(fill=tk.X, pady=(0, 10))
+    email_entry.focus()
+
+    # Password
+    ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
+    password_entry = ttk.Entry(main_frame, width=40, show="*")
+    password_entry.pack(fill=tk.X, pady=(0, 15))
+
+    auth_result = {'success': False}
+
+    def do_auth():
+        email = email_entry.get().strip()
+        password = password_entry.get().strip()
+
+        if not email or not password:
+            messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
+            return
+
+        try:
+            # Deshabilitar botón
+            auth_btn.config(state='disabled')
+            auth_window.update()
+
+            # Llamar a API
+            api_url = config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
+            response = requests.post(
+                f"{api_url}/auth/login",
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                json={
+                    'email': email,
+                    'password': password,
+                    'device_name': 'config_auth',
+                    'force_logout': True
+                },
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    user_data = data.get('data', {})
+                    user = user_data.get('user', {})
+                    subscriptions = user_data.get('subscription', [])
+
+                    # Validar rol
+                    role = user.get('role')
+                    if role not in ['admin', 'cajero']:
+                        messagebox.showerror(
+                            "❌ Acceso Denegado",
+                            f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
+                        )
+                        auth_btn.config(state='normal')
+                        return
+
+                    # Validar company_id
+                    company_found = False
+                    for subscription_item in subscriptions:
+                        company = subscription_item.get('companies', {})
+                        api_company_id = company.get('id')
+
+                        if api_company_id == company_id_from_config:
+                            company_found = True
+                            break
+
+                    if not company_found:
+                        messagebox.showerror(
+                            "❌ Acceso Denegado",
+                            f"La compañía no coincide con la configuración local"
+                        )
+                        auth_btn.config(state='normal')
+                        return
+
+                    # Todo OK
+                    auth_result['success'] = True
+                    auth_window.destroy()
+                    return
+
+            # Error de autenticación
+            error_msg = "Credenciales inválidas"
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('message', error_msg)
+            except:
+                pass
+
+            messagebox.showerror("❌ Error de Autenticación", f"{error_msg}")
+            auth_btn.config(state='normal')
+
+        except Exception as e:
+            messagebox.showerror("❌ Error", f"Error de conexión:\n{e}")
+            auth_btn.config(state='normal')
+
+    # Botón de autenticación
+    auth_btn = ttk.Button(main_frame, text="Verificar", command=do_auth)
+    auth_btn.pack(fill=tk.X, pady=(0, 10))
+
+    # Enter en password envía el formulario
+    password_entry.bind('<Return>', lambda e: do_auth())
+
+    # Botón cancelar
+    ttk.Button(main_frame, text="Cancelar", command=auth_window.destroy).pack()
+
+    auth_window.mainloop()
+
+    return auth_result['success']
+
+
+# ==============================================================================
 # GUI - CONFIG WINDOW
 # ==============================================================================
 
@@ -3183,18 +3391,53 @@ class ConfigWindow:
                 estado_label.config(text="✅ Verificación completada", foreground="green")
                 estado_paso_label.config(text="✅ Configuración verificada con éxito", foreground="green")
 
-                # Mostrar mensaje y directamente iniciar System Tray (sin primera sincronización)
-                messagebox.showinfo("✅ Configuración Guardada",
-                    resultado['mensaje'] +
-                    "\n\n🔄 Iniciando System Tray...\nEl sistema se sincronizará automáticamente según la configuración.")
-
-                # Cerrar ventana de config y directamente iniciar System Tray
-                progreso.after(1000, lambda: cerrar_ventana_y_iniciar_tray(resultado['api_password']))
+                # Pedir autenticación ANTES de iniciar System Tray
+                progreso.after(1000, lambda: pedir_auth_e_iniciar_tray(resultado['api_password']))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
                 estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
                 messagebox.showinfo("Resultado", resultado['mensaje'])
+
+        def pedir_auth_e_iniciar_tray(api_password):
+            """
+            Pedir autenticación antes de iniciar el System Tray
+            """
+            # Cerrar ventana de progreso primero
+            try:
+                if progreso.winfo_exists():
+                    progreso.destroy()
+            except:
+                pass
+
+            # Pedir autenticación usando la misma función
+            if not autenticar_para_config():
+                messagebox.showwarning("⚠️ Acceso Denegado",
+                    "No se pudo verificar su identidad.\n\n"
+                    "El sistema se cerrará. Puede iniciarlo nuevamente cuando desee.")
+                # Cerrar ventana principal
+                if self.root.winfo_exists():
+                    self.root.destroy()
+                return
+
+            # Si autenticación exitosa, iniciar System Tray
+            try:
+                # Cargar configuración guardada
+                if os.path.exists(CONFIG_FILE):
+                    with open(CONFIG_FILE, 'r') as f:
+                        config = json.load(f)
+
+                    # Mostrar mensaje de éxito
+                    messagebox.showinfo("✅ Configuración Guardada",
+                        resultado['mensaje'] +
+                        "\n\n🔄 Iniciando System Tray...\nEl sistema se sincronizará automáticamente según la configuración.")
+
+                    # Iniciar System Tray con autenticación exitosa
+                    iniciar_system_tray(config, api_password)
+                else:
+                    messagebox.showerror("Error", "No se encontró configuración guardada")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
 
         progreso.bind('<<VerificationComplete>>', on_verification_complete)
 
@@ -3317,7 +3560,12 @@ class LauncherWindow:
         version_label.pack()
 
     def launch_config(self):
-        """Lanzar modo configuración"""
+        """Lanzar modo configuración con autenticación"""
+        # Verificar autenticación antes de abrir config
+        if not autenticar_para_config():
+            print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
+            return
+
         self.root.destroy()
         root = tk.Tk()
         app = ConfigWindow(root)
@@ -4681,12 +4929,17 @@ class SystemTrayService:
         print("[DEBUG] Thread iniciado (daemon=False)")
 
     def abrir_config(self):
-        """Abre ventana de configuración"""
+        """Abre ventana de configuración con autenticación"""
         import threading
         threading.Thread(target=self._abrir_config_thread, daemon=True).start()
 
     def _abrir_config_thread(self):
-        """Abre config en thread separado"""
+        """Abre config en thread separado con autenticación"""
+        # Verificar autenticación antes de abrir config
+        if not autenticar_para_config():
+            print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
+            return
+
         try:
             import tkinter as tk
             root = tk.Tk()
@@ -4696,11 +4949,60 @@ class SystemTrayService:
             print(f"Error abriendo config: {e}")
 
     def salir(self):
-        """Sale del sistema tray"""
-        print("\n👋 Deteniendo servicio...")
-        self.sync_running = False
-        if self.icon:
-            self.icon.stop()
+        """Sale del sistema tray con autenticación"""
+        # Reautenticar antes de salir
+        if not self.reautenticar_usuario():
+            print("❌ Salida cancelada: autenticación fallida o cancelada")
+            return
+
+        # Si autenticación exitosa, mostrar confirmación y salir
+        import threading
+        threading.Thread(target=self._salir_thread, daemon=True).start()
+
+    def _salir_thread(self):
+        """Muestra diálogo de confirmación y sale"""
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+
+            # Crear ventana oculta para el diálogo
+            root = tk.Tk()
+            root.withdraw()  # Ocultar ventana principal
+
+            # Centrar el diálogo en la pantalla
+            root.update_idletasks()
+            width = 400
+            height = 150
+            x = (root.winfo_screenwidth() // 2) - (width // 2)
+            y = (root.winfo_screenheight() // 2) - (height // 2)
+            root.geometry(f'{width}x{height}+{x}+{y}')
+
+            # Mostrar confirmación
+            respuesta = messagebox.askyesno(
+                "Confirmar Salida",
+                "¿Estás seguro que deseas salir del Sistema de Sincronización?\n\n"
+                "Esto detendrá la sincronización automática.",
+                icon=messagebox.WARNING,
+                default=messagebox.NO
+            )
+
+            root.destroy()
+
+            if respuesta:
+                print("\n👋 Deteniendo servicio...")
+                self.sync_running = False
+                if self.icon:
+                    self.icon.stop()
+            else:
+                print("❌ Salida cancelada")
+
+        except Exception as e:
+            print(f"Error en diálogo de salida: {e}")
+            # En caso de error, salir de todos modos
+            print("\n👋 Deteniendo servicio...")
+            self.sync_running = False
+            if self.icon:
+                self.icon.stop()
 
     def iniciar(self):
         """Inicia el servicio system tray"""
@@ -5051,11 +5353,15 @@ def main():
         # 2. Si hay config → sync → tray
 
         if not os.path.exists(CONFIG_FILE):
-            # No hay configuración - abrir modo config
+            # No hay configuración - abrir modo config (sin autenticación, primera vez)
             root = tk.Tk()
             app = ConfigWindow(root)
             root.mainloop()
-            # Después de configurar, continuar con sync y tray
+            # Después de configurar, pedir autenticación ANTES de continuar
+            if not autenticar_para_config():
+                print("❌ Acceso denegado: autenticación fallida o cancelada")
+                return
+            # Continuar con sync y tray
         # Continuar con sincronización y tray (hay config o se acaba de crear)
 
         # Cargar configuración
@@ -5165,9 +5471,14 @@ def main():
 
     # Ejecutar según modo
     if args.mode == "config":
-        root = tk.Tk()
-        app = ConfigWindow(root)
-        root.mainloop()
+        # Verificar autenticación antes de abrir config
+        if autenticar_para_config():
+            root = tk.Tk()
+            app = ConfigWindow(root)
+            root.mainloop()
+        else:
+            print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
+            sys.exit(1)
 
     elif args.mode == "manager":
         # Manager siempre abre, con o sin configuración
