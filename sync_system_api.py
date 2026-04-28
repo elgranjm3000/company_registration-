@@ -3567,7 +3567,8 @@ class LauncherWindow:
     def launch_config(self):
         """Lanzar modo configuración con autenticación"""
         # Verificar autenticación antes de abrir config
-        if not autenticar_para_config():
+        auth_result = autenticar_para_config()
+        if not auth_result or not auth_result.get('success', False):
             print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
             return
 
@@ -4941,7 +4942,8 @@ class SystemTrayService:
     def _abrir_config_thread(self):
         """Abre config en thread separado con autenticación"""
         # Verificar autenticación antes de abrir config
-        if not autenticar_para_config():
+        auth_result = autenticar_para_config()
+        if not auth_result or not auth_result.get('success', False):
             print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
             return
 
@@ -5360,7 +5362,8 @@ def main():
         if not os.path.exists(CONFIG_FILE):
             # No hay configuración - abrir modo config con autenticación PRIMERO
             # Pedir autenticación ANTES de configurar
-            if not autenticar_para_config():
+            auth_result = autenticar_para_config()
+            if not auth_result or not auth_result.get('success', False):
                 print("❌ Acceso denegado: autenticación fallida o cancelada")
                 return
 
@@ -5478,7 +5481,8 @@ def main():
     # Ejecutar según modo
     if args.mode == "config":
         # Verificar autenticación antes de abrir config
-        if autenticar_para_config():
+        auth_result = autenticar_para_config()
+        if auth_result and auth_result.get('success', False):
             root = tk.Tk()
             app = ConfigWindow(root)
             root.mainloop()
