@@ -3271,12 +3271,16 @@ class ConfigWindow:
                 log_debug(f"[DEBUG] Config tiene {len(config)} keys")
 
                 # Destruir root principal si existe
-                if hasattr(self, 'root') and self.root.winfo_exists():
-                    log_debug("[DEBUG] Destruyendo root principal...")
-                    self.root.destroy()
-                    log_debug("[DEBUG] Root destruido")
-                else:
-                    log_debug("[DEBUG] No hay root principal o ya fue destruido")
+                try:
+                    if hasattr(self, 'root') and self.root.winfo_exists():
+                        log_debug("[DEBUG] Destruyendo root principal...")
+                        self.root.destroy()
+                        log_debug("[DEBUG] Root destruido")
+                    else:
+                        log_debug("[DEBUG] No hay root principal o ya fue destruido")
+                except Exception as e:
+                    log_debug(f"[DEBUG] Error al verificar/destruir root: {e}")
+                    log_debug("[DEBUG] Continuar (root ya estaba destruido)")
 
                 # Crear e iniciar servicio System Tray
                 log_debug("\n" + "="*70)
