@@ -3769,13 +3769,13 @@ class ManagerWindow:
         try:
             self.log("🔐 Conectando a la API...")
 
-            # Crear auth manager
-            base_url = self.config.get('api_url')
+            # Crear auth manager - usar valores desencriptados de las variables
+            base_url = self.api_url_var.get()
             self.auth_manager = APIAuthManager(base_url, self.log)
 
-            # Login
+            # Login - usar valores desencriptados de las variables
             result = self.auth_manager.login(
-                self.config.get('api_email'),
+                self.api_email_var.get(),
                 password
             )
 
