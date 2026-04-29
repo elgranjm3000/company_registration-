@@ -3335,6 +3335,10 @@ class ConfigWindow:
                     with open(CONFIG_FILE, 'r') as f:
                         config = json.load(f)
 
+                    # Desencriptar configuración antes de usarla
+                    from config_encryption import decrypt_config
+                    config = decrypt_config(config)
+
                     # Iniciar System Tray directamente (sin primera sincronización)
                     iniciar_system_tray(config, api_password)
                 else:
@@ -3371,6 +3375,10 @@ class ConfigWindow:
                 if os.path.exists(CONFIG_FILE):
                     with open(CONFIG_FILE, 'r') as f:
                         config = json.load(f)
+
+                    # Desencriptar configuración antes de usarla
+                    from config_encryption import decrypt_config
+                    config = decrypt_config(config)
 
                     # Mostrar mensaje de éxito
                     messagebox.showinfo("✅ Configuración Guardada",
