@@ -1997,9 +1997,10 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
 
 def autenticar_para_config():
     """
-    Pide autenticación antes de abrir configuración.
-    Retorna True si autenticación exitosa, False si falló.
-    SIEMPRE pide autenticación (incluso primera vez).
+    Pide autenticación antes de abrir configuración SOLO la primera vez.
+    Si ya existe configuración, permite acceso directo (reconfiguración).
+
+    Retorna dict con {'success': bool, 'email': str, 'password': str}
     """
     import requests
     import json
@@ -2008,44 +2009,12 @@ def autenticar_para_config():
     # Verificar si existe configuración
     config_exists = os.path.exists(CONFIG_FILE)
 
-    # Obtener company_id desde sync_config de PostgreSQL (solo si existe config)
-    company_id_from_config = None
-    api_url = 'https://chrystal.com.ve/mobile/public/api'  # Default
-
+    # Si ya existe config, permitir acceso directo (reconfiguración)
     if config_exists:
-        try:
-            # Cargar configuración
-            with open(CONFIG_FILE, 'r') as f:
-                config_encriptado = json.load(f)
-            config = decrypt_config(config_encriptado)
+        return {'success': True, 'email': None, 'password': None}
 
-            # Usar URL de la config
-            api_url = config.get('api_url', api_url)
-
-            # Obtener company_id desde PostgreSQL
-            try:
-                import psycopg2
-                pg_conn = psycopg2.connect(
-                    host=config.get('postgres_host'),
-                    port=config.get('postgres_port', 5432),
-                    database=config.get('postgres_database'),
-                    user=config.get('postgres_user'),
-                    password=config.get('postgres_password')
-                )
-                pg_cursor = pg_conn.cursor()
-                pg_cursor.execute("""
-                    SELECT value FROM sync_config WHERE key = 'company_id'
-                """)
-                result = pg_cursor.fetchone()
-                if result:
-                    company_id_from_config = int(result[0])
-                pg_cursor.close()
-                pg_conn.close()
-            except Exception as e:
-                print(f"⚠️ Error obteniendo company_id: {e}")
-                company_id_from_config = None
-        except Exception as e:
-            print(f"⚠️ Error cargando configuración: {e}")
+    # No hay config - es primera instalación, pedir autenticación
+    api_url = 'https://chrystal.com.ve/mobile/public/api'  # Default
 
     # Crear ventana de autenticación
     import tkinter as tk
@@ -2082,10 +2051,8 @@ def autenticar_para_config():
     ).pack(pady=(0, 15))
 
     # Instrucción
-    if config_exists:
-        instrucción = "Para acceder a la configuración, ingrese sus credenciales:"
-    else:
-        instrucción = "Para configurar el sistema, ingrese sus credenciales:"
+    # Nota: config_exists siempre es False aquí porque retornamos temprano si es True
+    instrucción = "Para configurar el sistema por primera vez, ingrese sus credenciales:"
 
     ttk.Label(
         main_frame,
@@ -2152,26 +2119,8 @@ def autenticar_para_config():
                         auth_btn.config(state='normal')
                         return
 
-                    # Si hay config, validar company_id
-                    if company_id_from_config is not None:
-                        company_found = False
-                        for subscription_item in subscriptions:
-                            company = subscription_item.get('companies', {})
-                            api_company_id = company.get('id')
-
-                            if api_company_id == company_id_from_config:
-                                company_found = True
-                                break
-
-                        if not company_found:
-                            messagebox.showerror(
-                                "❌ Acceso Denegado",
-                                f"La compañía no coincide con la configuración local"
-                            )
-                            auth_btn.config(state='normal')
-                            return
-
                     # Todo OK - guardar credenciales y retornar
+                    # (No validamos company_id porque es la primera instalación)
                     auth_result['success'] = True
                     auth_result['email'] = email
                     auth_result['password'] = password
