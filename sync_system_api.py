@@ -5015,7 +5015,6 @@ class SystemTrayService:
                 pystray.MenuItem('🖥️ Abrir Manager', self.abrir_manager),
                 pystray.MenuItem('📊 Ver Logs', self.ver_logs),
                 pystray.MenuItem('🔄 Sincronizar Ahora', self.sincronizar_ahora),
-                pystray.MenuItem('⚙️ Configuración', self.abrir_config),
                 pystray.MenuItem('❌ Salir', self.salir)
             )
             log_debug("[DEBUG] Menú creado")
