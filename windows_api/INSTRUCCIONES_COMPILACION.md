@@ -5,7 +5,7 @@
 Es **OBLIGATORIO** instalar todas las dependencias de Python ANTES de compilar el .exe:
 
 ```bash
-pip install psycopg2-binary requests urllib3 certifi pystray pywin32 bcrypt cryptography pillow plyer win10toast
+pip install psycopg2-binary requests urllib3 certifi pystray pywin32 bcrypt cryptography cffi pillow plyer win10toast
 ```
 
 O instalar desde requirements.txt:
@@ -20,6 +20,7 @@ pip install -r requirements.txt
 python -c "import psycopg2; print('✅ psycopg2 OK')"
 python -c "import requests; print('✅ requests OK')"
 python -c "import cryptography; print('✅ cryptography OK')"
+python -c "import cffi; print('✅ cffi OK')"
 python -c "import pystray; print('✅ pystray OK')"
 ```
 
@@ -30,14 +31,26 @@ pip install psycopg2-binary requests
 
 ## 🔧 COMPILAR EL .EXE
 
-### Opción 1: Usar el script .bat (Recomendado)
+### Opción 1: Usar el script CON VERIFICACIÓN (MÁS SEGURO)
+
+```bash
+cd windows_api
+COMPILAR_CON_VERIFICACION.bat
+```
+
+Este script:
+1. ✅ Verifica que TODAS las dependencias estén instaladas
+2. ❌ Si falta alguna, la instala automáticamente
+3. 🔧 Luego compila el .exe
+
+### Opción 2: Usar el script normal
 
 ```bash
 cd windows_api
 CREAR_EXE_CONSOLA.bat
 ```
 
-### Opción 2: Compilar manualmente
+### Opción 3: Compilar manualmente
 
 ```bash
 cd windows_api

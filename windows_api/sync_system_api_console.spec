@@ -29,13 +29,16 @@ psycopg2_datas, psycopg2_binaries, psycopg2_hiddenimports = collect_all('psycopg
 # Collect all cryptography data (encriptación)
 cryptography_datas, cryptography_binaries, cryptography_hiddenimports = collect_all('cryptography')
 
+# Collect all cffi data (dependencia de cryptography)
+cffi_datas, cffi_binaries, cffi_hiddenimports = collect_all('cffi')
+
 # Construir lista de datas
 datas_list = [
     # Agregar módulos del sistema
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas + cryptography_datas
+] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas + cryptography_datas + cffi_datas
 
 # Agregar icono solo si existe
 if os.path.exists('icon.ico'):
@@ -44,7 +47,7 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries + cryptography_binaries,
+    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries + cryptography_binaries + cffi_binaries,
     datas=datas_list,
     hiddenimports=[
         # Hidden imports de collect_all
@@ -56,6 +59,7 @@ a = Analysis(
         *certifi_hiddenimports,
         *psycopg2_hiddenimports,
         *cryptography_hiddenimports,
+        *cffi_hiddenimports,
         # Módulos principales de la aplicación
         'api_client',
         'api_client.base',
@@ -90,6 +94,17 @@ a = Analysis(
         'PIL.Image',
         'PIL.ImageDraw',
         'PIL.ImageFont',
+        # Cryptography (encriptación) - hiddenimports manuales adicionales
+        'cryptography',
+        'cryptography.fernet',
+        'cryptography.hazmat',
+        'cryptography.hazmat.primitives',
+        'cryptography.hazmat.primitives.ciphers',
+        'cryptography.hazmat.primitives.hashes',
+        'cryptography.hazmat.primitives.kdf',
+        'cryptography.hazmat.backends',
+        'cryptography.hazmat.backends.default_backend',
+        'cffi',  # Dependencia de cryptography
         # Tkinter
         'tkinter',
         'tkinter.ttk',
