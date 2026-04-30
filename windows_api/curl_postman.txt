@@ -1,0 +1,104 @@
+# ==============================================================================
+# CURL PARA POSTMAN - Sincronizar Productos
+# ==============================================================================
+# Generado automáticamente
+# Fecha: 2026-04-21
+# Company ID: 112
+# API URL: https://chrystal.com.ve/mobile/public/api
+# ==============================================================================
+
+curl -X POST \
+  'https://chrystal.com.ve/mobile/public/api/sync-batch/products' \
+  -H 'Authorization: Bearer 21282|6oOhntjpyJIBXfW9c0zD9IGPpvOJQNaLMvQqeyxGbbfb1639' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "company_id": 112,
+  "products": [
+    {
+      "code": "TEST_POSTMAN_001",
+      "name": "Producto de Test Postman",
+      "description": "Producto de prueba desde Postman",
+      "price": 150.00,
+      "cost": 100.00,
+      "higher_price": 180.00,
+      "coin": "USD",
+      "description_coin": "Dólares americanos",
+      "stock": 50,
+      "min_stock": 5,
+      "category_id": 1,
+      "status": "active",
+      "weight": 1.0,
+      "unitary_cost": 100.00,
+      "buy_tax": "0",
+      "buy_aliquot": 0.0,
+      "sale_tax": "16",
+      "aliquot": 16.0
+    }
+  ]
+}'
+
+# ==============================================================================
+# INSTRUCCIONES PARA POSTMAN
+# ==============================================================================
+#
+# 1. Abre Postman
+# 2. Crea una nueva request (POST)
+# 3. URL: https://chrystal.com.ve/mobile/public/api/sync-batch/products
+# 4. Pestaña Headers:
+#    - Authorization: Bearer 21282|6oOhntjpyJIBXfW9c0zD9IGPpvOJQNaLMvQqeyxGbbfb1639
+#    - Content-Type: application/json
+# 5. Pestaña Body:
+#    - Selecciona "raw"
+#    - Selecciona "JSON" en el dropdown
+#    - Pega el JSON de abajo
+#
+# ==============================================================================
+# JSON PARA BODY (POSTMAN)
+# ==============================================================================
+{
+  "company_id": 112,
+  "products": [
+    {
+      "code": "TEST_POSTMAN_001",
+      "name": "Producto de Test Postman",
+      "description": "Producto de prueba desde Postman",
+      "price": 150.00,
+      "cost": 100.00,
+      "higher_price": 180.00,
+      "coin": "USD",
+      "description_coin": "Dólares americanos",
+      "stock": 50,
+      "min_stock": 5,
+      "category_id": 1,
+      "status": "active",
+      "weight": 1.0,
+      "unitary_cost": 100.00,
+      "buy_tax": "0",
+      "buy_aliquot": 0.0,
+      "sale_tax": "16",
+      "aliquot": 16.0
+    }
+  ]
+}
+
+# ==============================================================================
+# NOTAS IMPORTANTES
+# ==============================================================================
+#
+# 1. El token expira, si obtienes 401, genera un nuevo token ejecutando:
+#    python3 -c "from sync_system_api import APIAuthManager; from config_encryption import decrypt_config; import json; config = decrypt_config(json.load(open('/root/.chrystal_sync_config.json'))); am = APIAuthManager(base_url=config['api_url'], logger=None); am.login(config['api_email'], config.get('api_password')); print('Token:', am.api_token)"
+#
+# 2. Si obtienes 403 Forbidden:
+#    - El usuario no tiene permisos para sync_products
+#    - Verifica que el plan incluya "sync_products": true
+#    - Contacta al administrador de la API
+#
+# 3. Si obtienes 422 Validation Error:
+#    - Verifica que category_id exista en la API
+#    - Verifica que todos los campos requeridos estén presentes
+#
+# 4. Si obtienes 500 Internal Server Error:
+#    - Los datos del producto son inválidos para la API
+#    - Revisa el response body para ver el error específico
+#
+# ==============================================================================

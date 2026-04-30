@@ -14,11 +14,13 @@ O instalar desde requirements.txt:
 pip install -r requirements.txt
 ```
 
-### Verificar que psycopg2 esté instalado:
+### Verificar que los módulos estén instalados:
 
 ```bash
 python -c "import psycopg2; print('✅ psycopg2 OK')"
 python -c "import requests; print('✅ requests OK')"
+python -c "import cryptography; print('✅ cryptography OK')"
+python -c "import pystray; print('✅ pystray OK')"
 ```
 
 Si alguno muestra error, instalarlo:
@@ -62,6 +64,13 @@ pyinstaller --clean sync_system_api_console.spec
 **Solución:**
 ```bash
 pip install psycopg2-binary
+pyinstaller --clean sync_system_api_console.spec
+```
+
+### Error: "No module named 'cryptography'"
+**Solución:**
+```bash
+pip install cryptography
 pyinstaller --clean sync_system_api_console.spec
 ```
 

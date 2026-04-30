@@ -26,13 +26,16 @@ certifi_datas, certifi_binaries, certifi_hiddenimports = collect_all('certifi')
 # Nota: Usar 'psycopg2' no 'psycopg2-binary' porque collect_all busca el módulo importado
 psycopg2_datas, psycopg2_binaries, psycopg2_hiddenimports = collect_all('psycopg2')
 
+# Collect all cryptography data (encriptación)
+cryptography_datas, cryptography_binaries, cryptography_hiddenimports = collect_all('cryptography')
+
 # Construir lista de datas
 datas_list = [
     # Agregar módulos del sistema
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas
+] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas + cryptography_datas
 
 # Agregar icono solo si existe
 if os.path.exists('icon.ico'):
@@ -41,7 +44,7 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries,
+    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries + cryptography_binaries,
     datas=datas_list,
     hiddenimports=[
         # Hidden imports de collect_all
@@ -52,6 +55,7 @@ a = Analysis(
         *urllib3_hiddenimports,
         *certifi_hiddenimports,
         *psycopg2_hiddenimports,
+        *cryptography_hiddenimports,
         # Módulos principales de la aplicación
         'api_client',
         'api_client.base',
@@ -86,45 +90,6 @@ a = Analysis(
         'PIL.Image',
         'PIL.ImageDraw',
         'PIL.ImageFont',
-        # Requests (HTTP Client)
-        'requests',
-        'requests.adapters',
-        'requests.api',
-        'requests.auth',
-        'requests.certs',
-        'requests.compat',
-        'requests.cookies',
-        'requests.exceptions',
-        'requests.models',
-        'requests.sessions',
-        'requests.status_codes',
-        'requests.structures',
-        'requests.utils',
-        # urllib3 (dependencia de requests)
-        'urllib3',
-        'urllib3._collections',
-        'urllib3._version',
-        'urllib3.connection',
-        'urllib3.connectionpool',
-        'urllib3.exceptions',
-        'urllib3.fields',
-        'urllib3.filepost',
-        'urllib3.poolmanager',
-        'urllib3.response',
-        'urllib3.util',
-        'urllib3.util.retry',
-        'urllib3.util.ssl_',
-        'urllib3.util.timeout',
-        'urllib3.util.url',
-        'certifi',
-        'charset_normalizer',
-        'idna',
-        # Cryptography (encriptación)
-        'cryptography',
-        'cryptography.fernet',
-        'cryptography.hazmat',
-        'cryptography.hazmat.primitives',
-        'cryptography.hazmat.backends',
         # Tkinter
         'tkinter',
         'tkinter.ttk',
