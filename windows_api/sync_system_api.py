@@ -3779,13 +3779,13 @@ class ManagerWindow:
         try:
             self.log("🔐 Conectando a la API...")
 
-            # Crear auth manager - usar valores desencriptados de las variables
-            base_url = self.api_url_var.get()
+            # Crear auth manager - usar valores desde config desencriptado
+            base_url = self.config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
             self.auth_manager = APIAuthManager(base_url, self.log)
 
-            # Login - usar valores desencriptados de las variables
+            # Login - usar valores desde config desencriptado
             result = self.auth_manager.login(
-                self.api_email_var.get(),
+                self.config.get('api_email'),
                 password
             )
 
