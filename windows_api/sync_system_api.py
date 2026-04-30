@@ -3201,7 +3201,17 @@ class ConfigWindow:
                         log_debug("[DEBUG] Sync exitoso, cerrando ventana en 3 seg...")
 
                         # Cerrar ventana de sincronización después de 3 segundos
-                        sync_window.after(3000, lambda: sync_window.destroy() if sync_window.winfo_exists() else None)
+                        def cerrar_sync_window():
+                            """Cerrar la ventana de sincronización y el mainloop"""
+                            try:
+                                if sync_window.winfo_exists():
+                                    log_debug("[DEBUG] Cerrando sync_window...")
+                                    sync_window.destroy()
+                                    log_debug("[DEBUG] sync_window destruida")
+                            except Exception as e:
+                                log_debug(f"[DEBUG] Error cerrando sync_window: {e}")
+
+                        sync_window.after(3000, cerrar_sync_window)
 
                         # Cerrar ventana de progreso (config) después de 3 segundos
                         if cerrar_ventana_callback:
@@ -3234,6 +3244,12 @@ class ConfigWindow:
                 log_debug("[DEBUG] Iniciando thread de sincronización...")
                 sync_thread = threading.Thread(target=ejecutar_sync_worker, daemon=False)
                 sync_thread.start()
+
+                # Iniciar mainloop de la ventana para procesar eventos
+                # Esto permite que funcione el after() para cerrar la ventana
+                log_debug("[DEBUG] Iniciando mainloop de sync_window...")
+                sync_window.mainloop()
+                log_debug("[DEBUG] Mainloop terminado, ventana cerrada")
 
             except Exception as e:
                 log_debug(f"[DEBUG] ERROR en ejecutar_primera_sync_y_tray: {e}")
