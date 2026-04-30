@@ -13,13 +13,22 @@ win10toast_datas, win10toast_binaries, win10toast_hiddenimports = collect_all('w
 # Collect all pywin32 data
 pywin32_datas, pywin32_binaries, pywin32_hiddenimports = collect_all('pywin32')
 
+# Collect all requests data (HTTP client)
+requests_datas, requests_binaries, requests_hiddenimports = collect_all('requests')
+
+# Collect all urllib3 data (dependencia de requests)
+urllib3_datas, urllib3_binaries, urllib3_hiddenimports = collect_all('urllib3')
+
+# Collect all certifi data (certificados SSL para requests)
+certifi_datas, certifi_binaries, certifi_hiddenimports = collect_all('certifi')
+
 # Construir lista de datas
 datas_list = [
     # Agregar módulos del sistema
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-] + plyer_datas + win10toast_datas + pywin32_datas
+] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas
 
 # Agregar icono solo si existe
 if os.path.exists('icon.ico'):
@@ -28,9 +37,17 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries,
+    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries,
     datas=datas_list,
     hiddenimports=[
+        # Hidden imports de collect_all
+        *plyer_hiddenimports,
+        *win10toast_hiddenimports,
+        *pywin32_hiddenimports,
+        *requests_hiddenimports,
+        *urllib3_hiddenimports,
+        *certifi_hiddenimports,
+        # Módulos principales de la aplicación
         # Módulos principales de la aplicación
         'api_client',
         'api_client.base',
