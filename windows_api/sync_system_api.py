@@ -3008,16 +3008,11 @@ class ConfigWindow:
 
                 # Crear ventana de progreso para primera sincronización
                 log_debug("[DEBUG] Creando ventana de sincronización...")
-                # Usar Toplevel pero prevenir que se cierre al cerrar la ventana principal
-                sync_window = tk.Toplevel(self.root)
+                # Crear nueva ventana Tk independiente (self.root ya fue destruido)
+                sync_window = tk.Tk()
                 sync_window.title("🔄 Primera Sincronización")
                 sync_window.geometry("600x300")
                 sync_window.resizable(False, False)
-
-                # IMPORTANTE: Hacer la ventana de sincronización independiente
-                # Esto evita que se cierre cuando la ventana principal se cierre
-                sync_window.transient(None)  # No es hija de ninguna ventana
-                sync_window.grab_set()  # Modal: capturar todos los eventos
 
                 # Prevenir que el usuario cierre la ventana manualmente
                 sync_window.protocol("WM_DELETE_WINDOW", lambda: None)  # Deshabilitar botón X
