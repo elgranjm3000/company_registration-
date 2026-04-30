@@ -4700,15 +4700,16 @@ class SystemTrayService:
                 sync_manager.close()
 
                 # 📢 Notificación Windows de sincronización exitosa
-                if total.get('created', 0) > 0 or total.get('updated', 0) > 0:
+                if total.get('created', 0) > 0 or total.get('updated', 0) > 0 or total.get('deleted', 0) > 0:
                     # Hay cambios - mostrar estadísticas
                     stats = result.get('stats', {})
                     parts = []
                     for entity, entity_stats in stats.items():
                         created = entity_stats.get('created', 0)
                         updated = entity_stats.get('updated', 0)
-                        if created > 0 or updated > 0:
-                            parts.append(f"{entity.capitalize()}: {created} nuevos, {updated} mods")
+                        deleted = entity_stats.get('deleted', 0)
+                        if created > 0 or updated > 0 or deleted > 0:
+                            parts.append(f"{entity.capitalize()}: {created} nuevos, {updated} mods, {deleted} eliminados")
 
                     if parts:
                         mensaje = " | ".join(parts)
