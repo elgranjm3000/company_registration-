@@ -22,13 +22,16 @@ urllib3_datas, urllib3_binaries, urllib3_hiddenimports = collect_all('urllib3')
 # Collect all certifi data (certificados SSL para requests)
 certifi_datas, certifi_binaries, certifi_hiddenimports = collect_all('certifi')
 
+# Collect all psycopg2 data (PostgreSQL)
+psycopg2_datas, psycopg2_binaries, psycopg2_hiddenimports = collect_all('psycopg2-binary')
+
 # Construir lista de datas
 datas_list = [
     # Agregar módulos del sistema
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas
+] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas
 
 # Agregar icono solo si existe
 if os.path.exists('icon.ico'):
@@ -37,7 +40,7 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries,
+    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries,
     datas=datas_list,
     hiddenimports=[
         # Hidden imports de collect_all
@@ -47,7 +50,7 @@ a = Analysis(
         *requests_hiddenimports,
         *urllib3_hiddenimports,
         *certifi_hiddenimports,
-        # Módulos principales de la aplicación
+        *psycopg2_hiddenimports,
         # Módulos principales de la aplicación
         'api_client',
         'api_client.base',
@@ -65,11 +68,6 @@ a = Analysis(
         'sync.quotes_sync',
         'sync.sellers_sync',
         'config_encryption',
-        # PostgreSQL
-        'psycopg2',
-        'psycopg2.extensions',
-        'psycopg2.extras',
-        'psycopg2.pool',
         # System Tray (pystray)
         'pystray',
         'pystray._appindicator',
