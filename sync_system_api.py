@@ -3369,43 +3369,29 @@ class ConfigWindow:
 
         def iniciar_tray_despues_de_config(api_password):
             """
-            Iniciar System Tray después de guardar configuración
+            Ejecutar primera sincronización con ventana de progreso y luego iniciar System Tray
             (La autenticación ya se pidió ANTES de abrir ConfigWindow)
             """
             try:
-                # Cargar configuración guardada
-                if os.path.exists(CONFIG_FILE):
-                    with open(CONFIG_FILE, 'r') as f:
-                        config = json.load(f)
+                # Cerrar ventana de progreso de verificación
+                try:
+                    if progreso.winfo_exists():
+                        progreso.destroy()
+                except:
+                    pass
 
-                    # Desencriptar configuración antes de usarla
-                    from config_encryption import decrypt_config
-                    config = decrypt_config(config)
+                # Cerrar ventana principal de config
+                try:
+                    if self.root.winfo_exists():
+                        self.root.destroy()
+                except:
+                    pass
 
-                    # Mostrar mensaje de éxito
-                    messagebox.showinfo("✅ Configuración Guardada",
-                        resultado['mensaje'] +
-                        "\n\n🔄 Iniciando System Tray...\nEl sistema se sincronizará automáticamente según la configuración.")
-
-                    # Cerrar ventanas
-                    try:
-                        if progreso.winfo_exists():
-                            progreso.destroy()
-                    except:
-                        pass
-
-                    try:
-                        if self.root.winfo_exists():
-                            self.root.destroy()
-                    except:
-                        pass
-
-                    # Iniciar System Tray
-                    iniciar_system_tray(config, api_password)
-                else:
-                    messagebox.showerror("Error", "No se encontró configuración guardada")
+                # Ejecutar primera sincronización con ventana de progreso
+                # Esto mostrará una ventana con el progreso de la sincronización
+                ejecutar_primera_sync_y_tray(api_password)
             except Exception as e:
-                messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
+                messagebox.showerror("Error", f"Error iniciando sincronización:\n{e}")
 
         progreso.bind('<<VerificationComplete>>', on_verification_complete)
 
