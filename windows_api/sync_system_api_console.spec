@@ -23,7 +23,8 @@ urllib3_datas, urllib3_binaries, urllib3_hiddenimports = collect_all('urllib3')
 certifi_datas, certifi_binaries, certifi_hiddenimports = collect_all('certifi')
 
 # Collect all psycopg2 data (PostgreSQL)
-psycopg2_datas, psycopg2_binaries, psycopg2_hiddenimports = collect_all('psycopg2-binary')
+# Nota: Usar 'psycopg2' no 'psycopg2-binary' porque collect_all busca el módulo importado
+psycopg2_datas, psycopg2_binaries, psycopg2_hiddenimports = collect_all('psycopg2')
 
 # Construir lista de datas
 datas_list = [
@@ -68,6 +69,12 @@ a = Analysis(
         'sync.quotes_sync',
         'sync.sellers_sync',
         'config_encryption',
+        # PostgreSQL (psycopg2)
+        'psycopg2',
+        'psycopg2.extensions',
+        'psycopg2.extras',
+        'psycopg2.pool',
+        'psycopg2._psycopg',
         # System Tray (pystray)
         'pystray',
         'pystray._appindicator',
