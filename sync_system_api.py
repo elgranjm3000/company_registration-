@@ -1995,10 +1995,12 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
 # FUNCIONES HELPER PARA AUTENTICACIÓN DE CONFIG
 # ==============================================================================
 
-def autenticar_para_config():
+def autenticar_para_config(permitir_reconfiguracion=False):
     """
-    Pide autenticación antes de abrir configuración SOLO la primera vez.
-    Si ya existe configuración, permite acceso directo (reconfiguración).
+    Pide autenticación antes de abrir configuración o ejecutar acciones sensibles.
+    - Si permitir_reconfiguracion=False y ya existe config, retorna error (requiere auth)
+    - Si permitir_reconfiguracion=True y ya existe config, permite acceso directo
+    - Solo acepta usuarios con rol 'cajero'
 
     Retorna dict con {'success': bool, 'email': str, 'password': str}
     """
@@ -2009,11 +2011,11 @@ def autenticar_para_config():
     # Verificar si existe configuración
     config_exists = os.path.exists(CONFIG_FILE)
 
-    # Si ya existe config, permitir acceso directo (reconfiguración)
-    if config_exists:
+    # Si ya existe config y se permite reconfiguración, acceso directo
+    if config_exists and permitir_reconfiguracion:
         return {'success': True, 'email': None, 'password': None}
 
-    # No hay config - es primera instalación, pedir autenticación
+    # No hay config O no se permite reconfiguración - pedir autenticación
     api_url = 'https://chrystal.com.ve/mobile/public/api'  # Default
 
     # Crear ventana de autenticación
@@ -2109,12 +2111,12 @@ def autenticar_para_config():
                     user = user_data.get('user', {})
                     subscriptions = user_data.get('subscription', [])
 
-                    # Validar rol
+                    # Validar rol - SOLO cajeros
                     role = user.get('role')
-                    if role not in ['admin', 'cajero']:
+                    if role != 'cajero':
                         messagebox.showerror(
                             "❌ Acceso Denegado",
-                            f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
+                            f"Rol no autorizado: {role}\n\nSolo pueden acceder usuarios con rol 'cajero'"
                         )
                         auth_btn.config(state='normal')
                         return
@@ -4777,8 +4779,9 @@ class SystemTrayService:
 
     def abrir_manager(self):
         """Abre la ventana del manager"""
-        # Reautenticar antes de abrir manager
-        if not self.reautenticar_usuario():
+        # Autenticar antes de abrir manager (solo cajeros)
+        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
+        if not auth_result or not auth_result.get('success', False):
             print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
             return
 
@@ -4798,8 +4801,9 @@ class SystemTrayService:
 
     def ver_logs(self):
         """Abre ventana de logs"""
-        # Reautenticar antes de ver logs
-        if not self.reautenticar_usuario():
+        # Autenticar antes de ver logs (solo cajeros)
+        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
+        if not auth_result or not auth_result.get('success', False):
             print("❌ Acceso a logs denegado: autenticación fallida o cancelada")
             return
 
@@ -4870,8 +4874,9 @@ class SystemTrayService:
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú"""
-        # Reautenticar antes de sincronizar
-        if not self.reautenticar_usuario():
+        # Autenticar antes de sincronizar (solo cajeros)
+        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
+        if not auth_result or not auth_result.get('success', False):
             print("❌ Sincronización cancelada: autenticación fallida o cancelada")
             return
 
@@ -4918,8 +4923,9 @@ class SystemTrayService:
 
     def salir(self):
         """Sale del sistema tray con autenticación"""
-        # Reautenticar antes de salir
-        if not self.reautenticar_usuario():
+        # Autenticar antes de salir (solo cajeros)
+        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
+        if not auth_result or not auth_result.get('success', False):
             print("❌ Salida cancelada: autenticación fallida o cancelada")
             return
 
