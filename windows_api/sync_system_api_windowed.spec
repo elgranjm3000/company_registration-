@@ -13,13 +13,32 @@ win10toast_datas, win10toast_binaries, win10toast_hiddenimports = collect_all('w
 # Collect all pywin32 data
 pywin32_datas, pywin32_binaries, pywin32_hiddenimports = collect_all('pywin32')
 
+# Collect all requests data (HTTP client)
+requests_datas, requests_binaries, requests_hiddenimports = collect_all('requests')
+
+# Collect all urllib3 data (dependencia de requests)
+urllib3_datas, urllib3_binaries, urllib3_hiddenimports = collect_all('urllib3')
+
+# Collect all certifi data (certificados SSL para requests)
+certifi_datas, certifi_binaries, certifi_hiddenimports = collect_all('certifi')
+
+# Collect all psycopg2 data (PostgreSQL)
+# Nota: Usar 'psycopg2' no 'psycopg2-binary' porque collect_all busca el módulo importado
+psycopg2_datas, psycopg2_binaries, psycopg2_hiddenimports = collect_all('psycopg2')
+
+# Collect all cryptography data (encriptación)
+cryptography_datas, cryptography_binaries, cryptography_hiddenimports = collect_all('cryptography')
+
+# Collect all cffi data (dependencia de cryptography)
+cffi_datas, cffi_binaries, cffi_hiddenimports = collect_all('cffi')
+
 # Construir lista de datas
 datas_list = [
     # Agregar módulos del sistema
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-] + plyer_datas + win10toast_datas + pywin32_datas
+] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas + cryptography_datas + cffi_datas
 
 # Agregar icono solo si existe
 if os.path.exists('icon.ico'):
@@ -28,9 +47,19 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries,
+    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries + cryptography_binaries + cffi_binaries,
     datas=datas_list,
     hiddenimports=[
+        # Hidden imports de collect_all
+        *plyer_hiddenimports,
+        *win10toast_hiddenimports,
+        *pywin32_hiddenimports,
+        *requests_hiddenimports,
+        *urllib3_hiddenimports,
+        *certifi_hiddenimports,
+        *psycopg2_hiddenimports,
+        *cryptography_hiddenimports,
+        *cffi_hiddenimports,
         # Módulos principales de la aplicación
         'api_client',
         'api_client.base',
@@ -48,11 +77,14 @@ a = Analysis(
         'sync.quotes_sync',
         'sync.sellers_sync',
         'config_encryption',
-        # PostgreSQL
+        # PostgreSQL (psycopg2)
         'psycopg2',
         'psycopg2.extensions',
         'psycopg2.extras',
         'psycopg2.pool',
+        'psycopg2._psycopg',
+        # cffi (dependencia de cryptography)
+        'cffi',
         # System Tray (pystray)
         'pystray',
         'pystray._appindicator',
@@ -102,7 +134,12 @@ a = Analysis(
         'cryptography.fernet',
         'cryptography.hazmat',
         'cryptography.hazmat.primitives',
+        'cryptography.hazmat.primitives.ciphers',
+        'cryptography.hazmat.primitives.hashes',
+        'cryptography.hazmat.primitives.kdf',
         'cryptography.hazmat.backends',
+        'cryptography.hazmat.backends.default_backend',
+        'cffi',  # Dependencia de cryptography
         # Tkinter
         'tkinter',
         'tkinter.ttk',
