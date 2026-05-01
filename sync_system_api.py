@@ -3062,9 +3062,16 @@ class ConfigWindow:
 
                 def procesar_mensajes_queue():
                     """Procesa mensajes de la cola desde el main thread"""
+                    nonlocal sync_completada
+
                     try:
                         # Verificar si la ventana aún existe
                         if not sync_window.winfo_exists():
+                            return
+
+                        # Si la sync ya se completó, dejar de procesar mensajes
+                        if sync_completada:
+                            log_debug("[DEBUG] Sync completada, deteniendo procesar_mensajes_queue()")
                             return
 
                         while not sync_queue.empty():
@@ -3084,9 +3091,9 @@ class ConfigWindow:
                         if "winfo exists" in str(e) or "application has been destroyed" in str(e):
                             return
                         pass
-                    # Programar próxima actualización solo si la ventana existe
+                    # Programar próxima actualización solo si la ventana existe y sync no completada
                     try:
-                        if sync_window.winfo_exists():
+                        if sync_window.winfo_exists() and not sync_completada:
                             sync_window.after(100, procesar_mensajes_queue)
                     except:
                         pass
@@ -3177,8 +3184,14 @@ class ConfigWindow:
                     # Poner señal de completado en la cola (thread-safe)
                     sync_queue.put("__SYNC_COMPLETE__")
 
+                # Bandera para detener el procesamiento de mensajes
+                sync_completada = False
+
                 def on_sync_complete():
                     """Manejador de completion de sincronización"""
+                    nonlocal sync_completada
+                    sync_completada = True  # Marcar como completada para detener procesar_mensajes_queue()
+
                     log_debug(f"[DEBUG] on_sync_complete llamado: exito={sync_result.get('exito')}")
                     if not sync_window.winfo_exists():
                         return
