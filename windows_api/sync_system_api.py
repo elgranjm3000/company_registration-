@@ -3064,6 +3064,9 @@ class ConfigWindow:
                 # DEBE definirse ANTES de procesar_mensajes_queue() que la referencia con nonlocal
                 sync_completada = False
 
+                # Variable para compartir resultado entre ejecutar_sync_worker() y on_sync_complete()
+                sync_result = None
+
                 def procesar_mensajes_queue():
                     """Procesa mensajes de la cola desde el main thread"""
                     nonlocal sync_completada
@@ -3119,6 +3122,7 @@ class ConfigWindow:
 
                 def ejecutar_sync_worker():
                     """Worker de sincronización en thread"""
+                    nonlocal sync_result
                     log_debug("[DEBUG] Iniciando ejecutar_sync_worker()")
                     try:
                         # Crear logger que usa cola (thread-safe)
@@ -3204,7 +3208,7 @@ class ConfigWindow:
 
                 def on_sync_complete():
                     """Manejador de completion de sincronización"""
-                    nonlocal sync_completada
+                    nonlocal sync_completada, sync_result
                     sync_completada = True  # Marcar como completada para detener procesar_mensajes_queue()
 
                     log_debug(f"[DEBUG] on_sync_complete llamado: exito={sync_result.get('exito')}")
