@@ -3232,6 +3232,13 @@ class ConfigWindow:
                         info_label.config(text="✅ Sincronización completada correctamente\nIniciando System Tray...", fg="#27ae60", bg="#f0f0f0")
                         log_debug("[DEBUG] Sync exitoso, cerrando ventana en 3 seg...")
 
+                        # 📢 Notificación Windows de sincronización exitosa
+                        mostrar_banner(
+                            "✅ Primera Sincronización Exitosa",
+                            sync_result['mensaje'],
+                            duracion=5
+                        )
+
                         # Cerrar ventana de sincronización después de 3 segundos
                         def cerrar_sync_window():
                             """Cerrar la ventana de sincronización y el mainloop"""
@@ -3267,6 +3274,13 @@ class ConfigWindow:
                                  command=sync_window.destroy,
                                  bg="#c0392b", fg="white", font=("Arial", 10, "bold"),
                                  padx=20, pady=5, cursor="hand2").pack(pady=10)
+
+                        # 📢 Notificación Windows de error
+                        mostrar_banner(
+                            "⚠️ Error en Primera Sincronización",
+                            sync_result['mensaje'],
+                            duracion=10
+                        )
 
                         # Cerrar ventana de progreso también si falló
                         if cerrar_ventana_callback:
