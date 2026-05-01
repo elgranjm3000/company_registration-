@@ -3331,12 +3331,19 @@ class ConfigWindow:
 
                 # Destruir root principal si existe
                 try:
-                    if hasattr(self, 'root') and self.root.winfo_exists():
-                        log_debug("[DEBUG] Destruyendo root principal...")
-                        self.root.destroy()
-                        log_debug("[DEBUG] Root destruido")
+                    if hasattr(self, 'root'):
+                        try:
+                            if self.root.winfo_exists():
+                                log_debug("[DEBUG] Destruyendo root principal...")
+                                self.root.destroy()
+                                log_debug("[DEBUG] Root destruido")
+                            else:
+                                log_debug("[DEBUG] Root principal ya no existe")
+                        except Exception as e:
+                            # Si winfo_exists() falla, significa que la app fue destruida
+                            log_debug(f"[DEBUG] Root ya fue destruido (winfo_exists falló): {e}")
                     else:
-                        log_debug("[DEBUG] No hay root principal o ya fue destruido")
+                        log_debug("[DEBUG] No hay atributo root en self")
                 except Exception as e:
                     log_debug(f"[DEBUG] Error al verificar/destruir root: {e}")
                     log_debug("[DEBUG] Continuar (root ya estaba destruido)")
