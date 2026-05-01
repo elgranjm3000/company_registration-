@@ -1219,6 +1219,53 @@ CREATE TRIGGER tr_products_mark_updated_sync_hashes
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_product_updated_sync_hashes();
 
+-- Función para DELETE en products
+CREATE OR REPLACE FUNCTION trigger_mark_product_deleted_sync_hashes()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+    v_exists INTEGER;
+BEGIN
+    -- Obtener el company_id desde sync_config
+    SELECT value INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    -- Si no existe, usar 1 como fallback
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    -- Verificar si ya existe el registro en sync_hashes
+    SELECT COUNT(*) INTO v_exists
+    FROM sync_hashes
+    WHERE table_name = 'products'
+    AND record_key = OLD.code
+    AND company_id = v_company_id;
+
+    -- Si existe, actualizar deleted_at
+    IF v_exists > 0 THEN
+        UPDATE sync_hashes
+        SET deleted_at = NOW()
+        WHERE table_name = 'products'
+        AND record_key = OLD.code
+        AND company_id = v_company_id;
+    ELSE
+        -- Si no existe, insertar nuevo registro con deleted_at
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+        VALUES ('products', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_products_mark_deleted_sync_hashes ON products;
+CREATE TRIGGER tr_products_mark_deleted_sync_hashes
+    AFTER DELETE ON products
+    FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_product_deleted_sync_hashes();
+
 -- ===========================================================================
 -- CLIENTS
 -- ===========================================================================
@@ -1426,6 +1473,57 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
     AFTER DELETE ON sellers
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_seller_deleted_sync_hashes();
+
+-- ===========================================================================
+-- DEPARTMENTS (CATEGORIES)
+-- ===========================================================================
+
+-- Función para DELETE en department
+CREATE OR REPLACE FUNCTION trigger_mark_department_deleted_sync_hashes()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+    v_exists INTEGER;
+BEGIN
+    -- Obtener el company_id desde sync_config
+    SELECT value INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    -- Si no existe, usar 1 como fallback
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    -- Verificar si ya existe el registro en sync_hashes
+    SELECT COUNT(*) INTO v_exists
+    FROM sync_hashes
+    WHERE table_name = 'categories'
+    AND record_key = OLD.code
+    AND company_id = v_company_id;
+
+    -- Si existe, actualizar deleted_at
+    IF v_exists > 0 THEN
+        UPDATE sync_hashes
+        SET deleted_at = NOW()
+        WHERE table_name = 'categories'
+        AND record_key = OLD.code
+        AND company_id = v_company_id;
+    ELSE
+        -- Si no existe, insertar nuevo registro con deleted_at
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+        VALUES ('categories', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_department_mark_deleted_sync_hashes ON department;
+CREATE TRIGGER tr_department_mark_deleted_sync_hashes
+    AFTER DELETE ON department
+    FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_department_deleted_sync_hashes();
 """
 
         try:
@@ -3248,11 +3346,13 @@ class ConfigWindow:
                         log_debug("[DEBUG] Sync exitoso, cerrando ventana en 3 seg...")
 
                         # 📢 Notificación Windows de sincronización exitosa
+                        log_debug("[DEBUG] Llamando a mostrar_banner()...")
                         mostrar_banner(
                             "✅ Primera Sincronización Exitosa",
                             sync_result['mensaje'],
                             duracion=5
                         )
+                        log_debug("[DEBUG] mostrar_banner() llamó, thread iniciado")
 
                         # Cerrar ventana de sincronización después de 3 segundos
                         def cerrar_sync_window():
@@ -3260,13 +3360,24 @@ class ConfigWindow:
                             try:
                                 if sync_window.winfo_exists():
                                     log_debug("[DEBUG] Cerrando sync_window...")
-                                    # Iniciar System Tray ANTES de destruir la ventana
-                                    log_debug("[DEBUG] Iniciando System Tray antes de cerrar ventana...")
-                                    log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
-                                    iniciar_system_tray(config, sync_result.get('api_password'))
-                                    log_debug("[DEBUG] System Tray iniciado, ahora cerrando ventana...")
+                                    # CERRAR LA VENTANA PRIMERO, antes de iniciar System Tray
+                                    log_debug("[DEBUG] Destruyendo ventana ANTES de iniciar System Tray...")
                                     sync_window.destroy()
                                     log_debug("[DEBUG] sync_window destruida")
+
+                                    # Ahora iniciar System Tray en un thread separado
+                                    # para que no bloquee
+                                    log_debug("[DEBUG] Iniciando System Tray en thread separado...")
+                                    log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
+
+                                    import threading
+                                    tray_thread = threading.Thread(
+                                        target=iniciar_system_tray,
+                                        args=(config, sync_result.get('api_password')),
+                                        daemon=False  # System Tray debe seguir vivo
+                                    )
+                                    tray_thread.start()
+                                    log_debug("[DEBUG] Thread de System Tray iniciado")
                             except Exception as e:
                                 log_debug(f"[DEBUG] Error cerrando sync_window: {e}")
 
