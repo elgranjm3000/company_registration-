@@ -187,15 +187,15 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     except Exception as e:
                         print(f"[NOTIFICACION] WARNING buscando icono: {e}")
 
-                # Usar threaded=False para ejecutar sincrónicamente en nuestro thread
-                # y poder capturar errores
+                # Usar threaded=True para evitar errores de WPARAM
+                # cuando se ejecuta desde un thread separado
                 print(f"[NOTIFICACION] Llamando toast.show_toast (duration={duracion})...")
                 toast.show_toast(
                     titulo,
                     mensaje,
                     duration=duracion,
                     icon_path=icon_path,
-                    threaded=False,  # Cambiado a False para capturar errores
+                    threaded=True,  # Threaded para evitar errores de Windows callbacks
                 )
                 print("[NOTIFICACION] toast.show_toast completado exitosamente")
 
