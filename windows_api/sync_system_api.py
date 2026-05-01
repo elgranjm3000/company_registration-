@@ -3248,11 +3248,13 @@ class ConfigWindow:
                         log_debug("[DEBUG] Sync exitoso, cerrando ventana en 3 seg...")
 
                         # 📢 Notificación Windows de sincronización exitosa
+                        log_debug("[DEBUG] Llamando a mostrar_banner()...")
                         mostrar_banner(
                             "✅ Primera Sincronización Exitosa",
                             sync_result['mensaje'],
                             duracion=5
                         )
+                        log_debug("[DEBUG] mostrar_banner() llamó, thread iniciado")
 
                         # Cerrar ventana de sincronización después de 3 segundos
                         def cerrar_sync_window():
@@ -3260,13 +3262,24 @@ class ConfigWindow:
                             try:
                                 if sync_window.winfo_exists():
                                     log_debug("[DEBUG] Cerrando sync_window...")
-                                    # Iniciar System Tray ANTES de destruir la ventana
-                                    log_debug("[DEBUG] Iniciando System Tray antes de cerrar ventana...")
-                                    log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
-                                    iniciar_system_tray(config, sync_result.get('api_password'))
-                                    log_debug("[DEBUG] System Tray iniciado, ahora cerrando ventana...")
+                                    # CERRAR LA VENTANA PRIMERO, antes de iniciar System Tray
+                                    log_debug("[DEBUG] Destruyendo ventana ANTES de iniciar System Tray...")
                                     sync_window.destroy()
                                     log_debug("[DEBUG] sync_window destruida")
+
+                                    # Ahora iniciar System Tray en un thread separado
+                                    # para que no bloquee
+                                    log_debug("[DEBUG] Iniciando System Tray en thread separado...")
+                                    log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
+
+                                    import threading
+                                    tray_thread = threading.Thread(
+                                        target=iniciar_system_tray,
+                                        args=(config, sync_result.get('api_password')),
+                                        daemon=False  # System Tray debe seguir vivo
+                                    )
+                                    tray_thread.start()
+                                    log_debug("[DEBUG] Thread de System Tray iniciado")
                             except Exception as e:
                                 log_debug(f"[DEBUG] Error cerrando sync_window: {e}")
 
