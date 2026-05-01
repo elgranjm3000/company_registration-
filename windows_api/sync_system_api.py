@@ -3245,6 +3245,11 @@ class ConfigWindow:
                             try:
                                 if sync_window.winfo_exists():
                                     log_debug("[DEBUG] Cerrando sync_window...")
+                                    # Iniciar System Tray ANTES de destruir la ventana
+                                    log_debug("[DEBUG] Iniciando System Tray antes de cerrar ventana...")
+                                    log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
+                                    iniciar_system_tray(config, sync_result.get('api_password'))
+                                    log_debug("[DEBUG] System Tray iniciado, ahora cerrando ventana...")
                                     sync_window.destroy()
                                     log_debug("[DEBUG] sync_window destruida")
                             except Exception as e:
@@ -3255,11 +3260,6 @@ class ConfigWindow:
                         # Cerrar ventana de progreso (config) después de 3 segundos
                         if cerrar_ventana_callback:
                             sync_window.after(3000, cerrar_ventana_callback)
-
-                        # Iniciar System Tray después de cerrar
-                        log_debug("[DEBUG] Programando inicio de System Tray en 3.5 seg...")
-                        log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
-                        sync_window.after(3500, lambda: iniciar_system_tray(config, sync_result.get('api_password')))
                     else:
                         # Quitar topmost en caso de error también
                         try:
