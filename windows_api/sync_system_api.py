@@ -3060,6 +3060,10 @@ class ConfigWindow:
                 # Cola para comunicación thread → main thread
                 sync_queue = queue.Queue()
 
+                # Bandera para detener el procesamiento de mensajes
+                # DEBE definirse ANTES de procesar_mensajes_queue() que la referencia con nonlocal
+                sync_completada = False
+
                 def procesar_mensajes_queue():
                     """Procesa mensajes de la cola desde el main thread"""
                     nonlocal sync_completada
@@ -3197,9 +3201,6 @@ class ConfigWindow:
                     log_debug("[DEBUG] Poniendo __SYNC_COMPLETE__ en la cola...")
                     sync_queue.put("__SYNC_COMPLETE__")
                     log_debug("[DEBUG] __SYNC_COMPLETE__ puesto en la cola")
-
-                # Bandera para detener el procesamiento de mensajes
-                sync_completada = False
 
                 def on_sync_complete():
                     """Manejador de completion de sincronización"""
