@@ -140,25 +140,34 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     # Función que ejecuta la notificación en un thread separado para capturar errores
     def _mostrar_notificacion_thread():
         try:
+            print(f"[NOTIFICACION] Mostrando notificación: {titulo}")
+            print(f"[NOTIFICACION] Mensaje: {mensaje}")
+            print(f"[NOTIFICACION] Sistema: {sistema}")
+
             if sistema == "Windows":
                 # Windows: usar win10toast
                 # Verificar que pywin32 esté disponible
                 try:
                     import win32con
-                except ImportError:
+                    print("[NOTIFICACION] win32con importado correctamente")
+                except ImportError as e:
+                    print(f"[NOTIFICACION] ERROR: win32con no disponible: {e}")
                     return  # pywin32 no instalado, salir silenciosamente
 
                 from win10toast import ToastNotifier
+                print("[NOTIFICACION] ToastNotifier importado correctamente")
 
                 toast = ToastNotifier()
+                print("[NOTIFICACION] ToastNotifier creado")
 
                 # Forzar la creación de classAtom si no existe
                 if not hasattr(toast, 'classAtom'):
                     try:
                         import win32gui
                         toast.classAtom = None
-                    except:
-                        pass
+                        print("[NOTIFICACION] classAtom forzado a None")
+                    except Exception as e:
+                        print(f"[NOTIFICACION] WARNING: No se pudo forzar classAtom: {e}")
 
                 # Intentar usar icono personalizado
                 icon_path = icono
@@ -174,11 +183,13 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                             if os.path.exists(path):
                                 icon_path = path
                                 break
-                    except:
-                        pass
+                        print(f"[NOTIFICACION] Icono encontrado: {icon_path}")
+                    except Exception as e:
+                        print(f"[NOTIFICACION] WARNING buscando icono: {e}")
 
                 # Usar threaded=False para ejecutar sincrónicamente en nuestro thread
                 # y poder capturar errores
+                print(f"[NOTIFICACION] Llamando toast.show_toast (duration={duracion})...")
                 toast.show_toast(
                     titulo,
                     mensaje,
@@ -186,6 +197,7 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     icon_path=icon_path,
                     threaded=False,  # Cambiado a False para capturar errores
                 )
+                print("[NOTIFICACION] toast.show_toast completado exitosamente")
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
@@ -242,13 +254,16 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     # terminal-notifier no instalado
                     pass
 
-        except Exception:
-            # Silencioso - cualquier error se ignora para no interrumpir el programa
-            pass
+        except Exception as e:
+            # Loguear error pero no interrumpir el programa
+            print(f"[NOTIFICACION] ERROR mostrando notificación: {e}")
+            import traceback
+            print(f"[NOTIFICACION] Traceback: {traceback.format_exc()}")
 
     # Ejecutar en un thread daemon para no bloquear
     thread = threading.Thread(target=_mostrar_notificacion_thread, daemon=True)
     thread.start()
+    print(f"[NOTIFICACION] Thread de notificación iniciado (daemon={thread.daemon})")
 
 
 def mostrar_notificacion_windows(titulo: str, mensaje: str, duracion=5, logger=None):
