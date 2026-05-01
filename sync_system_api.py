@@ -3067,6 +3067,7 @@ class ConfigWindow:
                     try:
                         # Verificar si la ventana aún existe
                         if not sync_window.winfo_exists():
+                            log_debug("[DEBUG] procesar_mensajes_queue(): Ventana no existe, saliendo")
                             return
 
                         # Si la sync ya se completó, dejar de procesar mensajes
@@ -3074,11 +3075,21 @@ class ConfigWindow:
                             log_debug("[DEBUG] Sync completada, deteniendo procesar_mensajes_queue()")
                             return
 
+                        # Verificar si hay mensajes en la cola
+                        if sync_queue.empty():
+                            # No hay mensajes, programar próxima verificación
+                            sync_window.after(100, procesar_mensajes_queue)
+                            return
+
+                        log_debug(f"[DEBUG] procesar_mensajes_queue(): Hay {sync_queue.qsize()} mensajes en la cola")
+
                         while not sync_queue.empty():
                             msg = sync_queue.get_nowait()
+                            log_debug(f"[DEBUG] Mensaje recibido: {msg}")
 
                             # Detectar señal de completado
                             if msg == "__SYNC_COMPLETE__":
+                                log_debug("[DEBUG] Detectado __SYNC_COMPLETE__, llamando a on_sync_complete()")
                                 on_sync_complete()
                                 return  # Dejar de procesar más mensajes
 
@@ -3087,6 +3098,7 @@ class ConfigWindow:
                                 sync_label.config(text=msg)
                             log_debug(f"[SYNC GUI] {msg}")
                     except Exception as e:
+                        log_debug(f"[DEBUG] Error en procesar_mensajes_queue(): {e}")
                         # Si la ventana fue destruida, dejar de procesar
                         if "winfo exists" in str(e) or "application has been destroyed" in str(e):
                             return
@@ -3182,7 +3194,9 @@ class ConfigWindow:
 
                     log_debug("[DEBUG] Notificando completion...")
                     # Poner señal de completado en la cola (thread-safe)
+                    log_debug("[DEBUG] Poniendo __SYNC_COMPLETE__ en la cola...")
                     sync_queue.put("__SYNC_COMPLETE__")
+                    log_debug("[DEBUG] __SYNC_COMPLETE__ puesto en la cola")
 
                 # Bandera para detener el procesamiento de mensajes
                 sync_completada = False
