@@ -89,6 +89,36 @@ if %errorlevel% neq 0 (
 )
 
 echo.
+echo Verificando plyer (notificaciones)...
+python -c "import plyer" 2>nul
+if %errorlevel% neq 0 (
+    echo   ❌ plyer NO instalado - Instalando...
+    pip install plyer
+) else (
+    echo   ✅ plyer OK
+)
+
+echo.
+echo Verificando win10toast (notificaciones Windows)...
+python -c "import win10toast" 2>nul
+if %errorlevel% neq 0 (
+    echo   ❌ win10toast NO instalado - Instalando...
+    pip install win10toast
+) else (
+    echo   ✅ win10toast OK
+)
+
+echo.
+echo Verificando pillow (pystray dependency)...
+python -c "import PIL" 2>nul
+if %errorlevel% neq 0 (
+    echo   ❌ pillow NO instalado - Instalando...
+    pip install pillow
+) else (
+    echo   ✅ pillow OK
+)
+
+echo.
 echo ========================================
 echo   TODAS LAS DEPENDENCIAS VERIFICADAS
 echo ========================================
