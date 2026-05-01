@@ -158,6 +158,7 @@ class QuotesSync:
                 quote_number = quote.get('quote_number')
 
                 # Marcar como 'approved' en la API
+                self._log(f"  📡 Actualizando status en API: Quote #{quote_id} ({quote_number}) → 'approved'", "info")
                 if self.quotes_client.update_quote_status(quote_id, self.company_id, 'approved'):
                     self._log(f"  ✅ Estado actualizado en API: Cotización #{quote_id} ({quote_number}) → approved", "info")
                 else:

@@ -89,7 +89,7 @@ class QuotesClient(BaseAPIClient):
             status: Nuevo status ('approved', 'synced', etc.)
 
         Returns:
-            True si exitoso
+            True si exitoso, False si hubo error
         """
         try:
             response = self.put(
@@ -99,9 +99,20 @@ class QuotesClient(BaseAPIClient):
                     'status': status
                 }
             )
+            # Verificar que la respuesta sea exitosa
+            if response and isinstance(response, dict):
+                # Si tiene 'success' o 'status' en la respuesta
+                if response.get('success') or response.get('status') == status:
+                    return True
+                else:
+                    print(f"Error actualizando status del quote #{quote_id}: Respuesta indica fallo")
+                    print(f"Response: {response}")
+                    return False
             return True
 
         except Exception as e:
-            print(f"Error actualizando status del quote: {e}")
+            print(f"Error actualizando status del quote #{quote_id}: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return False
 
