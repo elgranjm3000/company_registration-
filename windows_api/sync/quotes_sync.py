@@ -342,7 +342,7 @@ class QuotesSync:
             seller_code,  # seller (code del vendedor o '00')
             0,  # credit_days
             False,  # wait
-            True,  # begin_used
+            False,  # begin_used (False para quotes nuevos desde API)
             station,  # station (MAC address)
             '00',  # store
             '00',  # locations
