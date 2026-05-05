@@ -2840,22 +2840,18 @@ class ConfigWindow:
             return
 
         try:
-            # Importar módulo de encriptación
-            from config_encryption import encrypt_config
-
             # Convertir RIF a mayúsculas
             company_rif = self.company_rif_var.get().strip().upper()
 
-            # Crear configuración con datos en texto plano
+            # Crear configuración con datos en texto plano (AÚN NO SE GUARDA EN ARCHIVO)
             config = {
                 'api_url': self.api_url_var.get(),
                 'api_email': self.api_email_var.get(),
-                'api_password': self.api_password_var.get(),  # Se encriptará con encrypt_config
+                'api_password': self.api_password_var.get(),  # Se encriptará después si todo es exitoso
                 'postgres_host': self.pg_host_var.get(),
                 'postgres_port': self.pg_port_var.get(),
                 'postgres_database': self.pg_database_var.get(),
                 'postgres_user': self.pg_user_var.get(),
-                # Password PostgreSQL SÍ se guarda (es local)
                 'postgres_password': self.pg_password_var.get(),
                 'company_rif': company_rif,
                 'company_email': self.company_email_var.get(),
@@ -2864,15 +2860,14 @@ class ConfigWindow:
                 'first_run': False
             }
 
-            # Guardar una copia SIN encriptar para la verificación
+            # Copia SIN encriptar para la verificación
             config_plain = config.copy()
 
-            # Encriptar TODOS los campos sensibles
-            config_encrypted = encrypt_config(config)
-
-            # Guardar configuración encriptada
-            with open(CONFIG_FILE, 'w') as f:
-                json.dump(config_encrypted, f, indent=2)
+            # ❌ NO GUARDAR AQUÍ - Solo guardar si todas las verificaciones pasan
+            # from config_encryption import encrypt_config
+            # config_encrypted = encrypt_config(config)
+            # with open(CONFIG_FILE, 'w') as f:
+            #     json.dump(config_encrypted, f, indent=2)
 
             # Si hay un callback (desde Manager), llamarlo y cerrar
             if self.callback:
@@ -3627,8 +3622,39 @@ class ConfigWindow:
                 estado_label.config(text="✅ Verificación completada", foreground="green")
                 estado_paso_label.config(text="✅ Configuración verificada con éxito", foreground="green")
 
+                # Guardar el archivo de configuración SOLO si todas las verificaciones pasaron
+                try:
+                    from config_encryption import encrypt_config
+
+                    # Obtener config desde las variables (todavía están disponibles)
+                    config = {
+                        'api_url': self.api_url_var.get(),
+                        'api_email': self.api_email_var.get(),
+                        'api_password': self.api_password_var.get(),
+                        'postgres_host': self.pg_host_var.get(),
+                        'postgres_port': self.pg_port_var.get(),
+                        'postgres_database': self.pg_database_var.get(),
+                        'postgres_user': self.pg_user_var.get(),
+                        'postgres_password': self.pg_password_var.get(),
+                        'company_rif': self.company_rif_var.get().strip().upper(),
+                        'company_email': self.company_email_var.get(),
+                        'sync_interval_minutes': self.sync_interval_var.get().strip(),
+                        'configured': True,
+                        'first_run': False
+                    }
+
+                    # Encriptar y guardar
+                    config_encrypted = encrypt_config(config)
+                    with open(CONFIG_FILE, 'w') as f:
+                        json.dump(config_encrypted, f, indent=2)
+
+                    self.log("✅ Configuración guardada en archivo", "info")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Error guardando configuración:\n{e}")
+                    return
+
                 # Iniciar System Tray directamente (la autenticación ya se pidió antes)
-                progreso.after(1000, lambda: iniciar_tray_despues_de_config(resultado['api_password']))
+                progreso.after(1000, lambda: cerrar_ventana_y_iniciar_tray(resultado['api_password']))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
