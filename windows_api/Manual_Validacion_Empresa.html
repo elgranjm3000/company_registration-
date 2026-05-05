@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Validación de Empresa - Sincronizador</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #3498db;
+        }
+
+        h2 {
+            color: #34495e;
+            font-size: 20px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-left: 10px;
+            border-left: 4px solid #3498db;
+        }
+
+        h3 {
+            color: #2c3e50;
+            font-size: 16px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        .highlight-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .info-box {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .warning {
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 18px;
+            margin-right: 10px;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff;
+            border-left: 4px solid #3498db;
+            border-radius: 5px;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .sql-code {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+
+        .arrow {
+            text-align: center;
+            font-size: 24px;
+            color: #3498db;
+            margin: 10px 0;
+        }
+
+        .final-tip {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .final-tip h3 {
+            color: white;
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .check-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .check-list li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .check-list li:before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📖 Manual de Validación de Empresa<br><small style="font-size: 16px; color: #7f8c8d;">Sincronizador API REST</small></h1>
+
+        <div class="highlight-box">
+            <p><strong>¿Qué sucede cuando ingresas el RIF y Email de tu empresa en el sincronizador?</strong></p>
+            <p>El sistema verifica tu empresa en un proceso de 2 pasos para autorizar el acceso y crear/configurar tu cuenta.</p>
+        </div>
+
+        <h2>🔄 ¿Qué sucede internamente?</h2>
+        <p>El sistema realiza una verificación en dos etapas para garantizar la seguridad y la integridad de los datos.</p>
+
+        <h2>PASO 1: Verificar autorización de acceso</h2>
+        <div class="info-box">
+            <p>Primero, el sistema busca tus credenciales en la tabla de <strong>acceso</strong>:</p>
+            <div class="sql-code">
+                SELECT * FROM acceso<br>
+                WHERE codigo = "J-123456789"<br>
+                &nbsp;&nbsp;AND correo_electronico = "empresa@ejemplo.com"
+            </div>
+        </div>
+
+        <h3>Resultados posibles:</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Resultado</th>
+                    <th>Mensaje que verás</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="error">❌ No encontrado</span></td>
+                    <td>"El RIF o correo electrónico no están autorizados en el sistema de acceso"</td>
+                </tr>
+                <tr>
+                    <td><span class="success">✅ Encontrado</span></td>
+                    <td>Continúa al Paso 2</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>PASO 2: Buscar o crear empresa</h2>
+
+        <div class="step">
+            <span class="step-number">A</span>
+            <div class="step-content">
+                <h3>Si la empresa YA existe en el sistema:</h3>
+                <div class="sql-code">
+                    SELECT * FROM companies<br>
+                    WHERE rif = "J-123456789"<br>
+                    &nbsp;&nbsp;AND email = "empresa@ejemplo.com"
+                </div>
+                <p><strong>Si se encuentra:</strong></p>
+                <ul class="check-list">
+                    <li>Se obtiene el <strong>company_id</strong> de tu empresa</li>
+                    <li>Se verifica si tienes suscripción activa</li>
+                    <li>Listo para sincronizar</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="step">
+            <span class="step-number">B</span>
+            <div class="step-content">
+                <h3>Si la empresa NO existe:</h3>
+                <p><strong>El sistema la crea automáticamente:</strong></p>
+                <div class="sql-code">
+                    Company::create([<br>
+                    &nbsp;&nbsp;'rif' => 'J-123456789',<br>
+                    &nbsp;&nbsp;'email' => 'empresa@ejemplo.com',<br>
+                    &nbsp;&nbsp;'name' => 'Nombre del acceso',<br>
+                    &nbsp;&nbsp;'address' => 'Dirección del acceso',<br>
+                    &nbsp;&nbsp;'phone' => 'Teléfono del acceso',<br>
+                    &nbsp;&nbsp;'status' => 'active',<br>
+                    &nbsp;&nbsp;'key_system_items_id' => 1<br>
+                    ])
+                </div>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3>Y además crea una suscripción TRIAL automática:</h3>
+            <ul class="check-list">
+                <li><strong>Plan:</strong> Trial (gratuito)</li>
+                <li><strong>Duración:</strong> X días de prueba</li>
+                <li><strong>Estado:</strong> Activo</li>
+                <li><strong>Features:</strong> Funcionalidades básicas</li>
+            </ul>
+        </div>
+
+        <h2>📋 Guía para el Usuario</h2>
+
+        <h3>✅ ¿Qué necesito para configurar?</h3>
+        <p><strong>Solo 2 datos:</strong></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Dato</th>
+                    <th>Descripción</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>RIF de la empresa</strong></td>
+                    <td>El mismo que está en tu sistema de acceso</td>
+                </tr>
+                <tr>
+                    <td><strong>Email de la empresa</strong></td>
+                    <td>El mismo correo que registraste</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>✅ ¿Qué pasa si pongo mal el RIF o Email?</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Error</th>
+                    <th>Mensaje</th>
+                    <th>Solución</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>RIF mal escrito</td>
+                    <td>"El RIF o correo electrónico no están autorizados"</td>
+                    <td>Verifica el RIF en tu sistema de acceso</td>
+                </tr>
+                <tr>
+                    <td>Email mal escrito</td>
+                    <td>"El RIF o correo electrónico no están autorizados"</td>
+                    <td>Verifica el email en tu sistema de acceso</td>
+                </tr>
+                <tr>
+                    <td>RIF no registrado</td>
+                    <td>"El RIF o correo electrónico no están autorizados"</td>
+                    <td>Contacta al administrador para dar de alta tu empresa</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>✅ ¿Cuándo se crea una empresa nueva?</h3>
+        <div class="info-box">
+            <p>Automáticamente cuando:</p>
+            <ul class="check-list">
+                <li>Tienes un registro en <strong>acceso</strong> con ese RIF y Email</li>
+                <li>Pero NO existe aún en <strong>companies</strong> con ese RIF y Email</li>
+            </ul>
+        </div>
+
+        <h3>✅ ¿Qué obtengo si es la primera vez?</h3>
+        <ul class="check-list">
+            <li>Empresa creada automáticamente</li>
+            <li>Suscripción TRIAL gratis</li>
+            <li>Funcionalidad completa por X días</li>
+            <li>Luego de X días: Debes comprar un plan pagado</li>
+        </ul>
+
+        <h3>✅ ¿Qué obtengo si ya existía?</h3>
+        <ul class="check-list">
+            <li>Acceso inmediato</li>
+            <li>Misma empresa sin cambios</li>
+            <li>Tu suscripción actual (si la tienes)</li>
+        </ul>
+
+        <h2>🎯 Diagrama del Proceso</h2>
+
+        <table style="text-align: center;">
+            <tr>
+                <td style="width: 30%;"><strong>Ingresa RIF y Email</strong><br><small>en el Sincronizador</small></td>
+                <td style="width: 5%;">➡️</td>
+                <td style="width: 65%;">
+                    <strong>PASO 1:</strong> Verificar en "acceso"<br>
+                    <small>• RIF existe?<br>• Email coincide?</small>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3">
+                    <div class="arrow">⬇️</div>
+                </td>
+            </tr>
+            <tr>
+                <td><span class="error">❌ NO</span></td>
+                <td>➡️</td>
+                <td><strong>Error:</strong> "No autorizado"</td>
+            </tr>
+            <tr>
+                <td><span class="success">✅ SÍ</span></td>
+                <td>➡️</td>
+                <td><strong>PASO 2:</strong> Buscar en "companies"</td>
+            </tr>
+            <tr>
+                <td colspan="3">
+                    <div class="arrow">⬇️</div>
+                </td>
+            </tr>
+            <tr>
+                <td><span class="error">❌ NO existe</span></td>
+                <td>➡️</td>
+                <td><span class="success">✅ Existe</span></td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="info-box" style="margin: 0;">
+                        <strong>CREAR empresa</strong><br>
+                        + suscripción TRIAL
+                    </div>
+                </td>
+                <td>➡️</td>
+                <td>
+                    <div class="info-box" style="margin: 0;">
+                        <strong>Usar empresa</strong><br>
+                        existente
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <div class="final-tip">
+            <h3>💡 Mensaje para el Usuario Final</h3>
+            <p style="font-size: 16px; line-height: 1.8; margin-top: 20px;">
+                <strong>"Para configurar el sincronizador, simplemente ingresa:</strong>
+            </p>
+            <p style="font-size: 16px; line-height: 1.8;">
+                1️⃣ <strong>El RIF</strong> que registraste en el sistema<br>
+                2️⃣ <strong>El Email</strong> que registraste en el sistema
+            </p>
+            <p style="font-size: 16px; line-height: 1.8; margin-top: 15px;">
+                <strong>Si es tu primera vez:</strong><br>
+                El sistema creará automáticamente tu empresa y te dará una suscripción de prueba (TRIAL) gratuita.
+            </p>
+            <p style="font-size: 16px; line-height: 1.8; margin-top: 15px;">
+                <strong>Si ya configuraste:</strong><br>
+                Se usará la empresa que ya existe con tus mismos datos.
+            </p>
+            <p style="font-size: 16px; line-height: 1.8; margin-top: 15px;">
+                <strong>¿Tienes problemas?</strong><br>
+                Verifica que el RIF y Email sean EXACTAMENTE los mismos que registraste.<br>
+                Si el problema persiste, contacta al administrador del sistema.
+            </p>
+        </div>
+
+        <p style="text-align: center; margin-top: 40px; color: #7f8c8d; font-size: 12px;">
+            Manual de Validación de Empresa - Sincronizador API REST<br>
+            Documento generado para usuario final
+        </p>
+    </div>
+</body>
+</html>

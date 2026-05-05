@@ -2405,7 +2405,8 @@ class ConfigWindow:
         rif_entry.bind('<FocusOut>', lambda e: self.company_rif_var.set(self.company_rif_var.get().upper()))
 
         ttk.Label(company_frame, text="Email de la empresa:").pack(anchor="w", padx=10, pady=(10,0))
-        ttk.Entry(company_frame, textvariable=self.company_email_var, width=60).pack(padx=10, pady=5)
+        self.email_entry = ttk.Entry(company_frame, textvariable=self.company_email_var, width=60)
+        self.email_entry.pack(padx=10, pady=5)
 
         # Pestaña Configuración
         config_frame = ttk.Frame(notebook)
@@ -2732,6 +2733,78 @@ class ConfigWindow:
             )
             self.log(f"❌ PostgreSQL: {str(e)}")
 
+    def _validar_email_en_postgres(self, company_email: str) -> bool:
+        """
+        Validar que el email de la empresa exista en la tabla company de PostgreSQL.
+
+        Args:
+            company_email: Email de la empresa a validar
+
+        Returns:
+            True si el email existe, False si no existe
+        """
+        try:
+            import psycopg2
+
+            # Conectar a PostgreSQL usando los datos del formulario
+            pg_conn = psycopg2.connect(
+                host=self.pg_host_var.get(),
+                port=self.pg_port_var.get(),
+                database=self.pg_database_var.get(),
+                user=self.pg_user_var.get(),
+                password=self.pg_password_var.get() or '',  # Puede estar vacío
+                connect_timeout=10
+            )
+
+            cursor = pg_conn.cursor()
+
+            # Buscar el email en la tabla company (case-insensitive)
+            cursor.execute("""
+                SELECT email, name
+                FROM company
+                WHERE LOWER(email) = LOWER(%s)
+                LIMIT 1
+            """, (company_email,))
+
+            result = cursor.fetchone()
+            cursor.close()
+            pg_conn.close()
+
+            if result:
+                company_name = result[1]
+                self.log(f"✅ Email encontrado en PostgreSQL: {company_email} → {company_name}")
+                return True
+            else:
+                # Email NO encontrado - mostrar error y poner focus
+                messagebox.showerror(
+                    "❌ Email no encontrado",
+                    f"El email '{company_email}' NO existe en la base de datos local.\n\n"
+                    f"Por favor verifica:\n"
+                    f"• El email esté escrito correctamente\n"
+                    f"• La empresa esté registrada en el sistema\n\n"
+                    f"Luego intenta guardar nuevamente."
+                )
+
+                # Poner focus en el campo de email y seleccionar todo el texto
+                self.email_entry.focus_set()
+                self.email_entry.select_range(0, tk.END)
+
+                return False
+
+        except psycopg2.OperationalError as e:
+            messagebox.showerror(
+                "❌ Error de conexión",
+                f"No se pudo conectar a PostgreSQL para validar el email:\n\n{e}\n\n"
+                f"Verifica los datos de conexión PostgreSQL."
+            )
+            return False
+        except Exception as e:
+            messagebox.showerror(
+                "❌ Error",
+                f"Error validando email en PostgreSQL:\n\n{e}"
+            )
+            return False
+
     def save_config(self):
         """Guardar configuración y verificar conexión con ventana de progreso."""
         # Validar campos requeridos
@@ -2759,6 +2832,11 @@ class ConfigWindow:
         interval_minutes = int(interval)
         if interval_minutes < 1:
             messagebox.showerror("Error", "El intervalo de sincronización debe ser al menos 1 minuto")
+            return
+
+        # Validar que el email de la empresa exista en la tabla company de PostgreSQL
+        company_email = self.company_email_var.get().strip().lower()
+        if not self._validar_email_en_postgres(company_email):
             return
 
         try:
