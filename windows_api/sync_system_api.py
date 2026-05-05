@@ -3120,15 +3120,15 @@ class ConfigWindow:
                     if "Error autenticando API:" in error_msg:
                         # El error ya viene del login con mensaje amigable
                         error_amigable = error_msg.split("Login falló: ")[-1] if "Login falló: " in error_msg else error_msg
-                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error de autenticación:\n\n{error_amigable}\n\nContacta al administrador del sistema para verificar tus credenciales de acceso."
+                        resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error de autenticación:\n\n{error_amigable}\n\nContacta al administrador del sistema para verificar tus credenciales de acceso.\n\nLa configuración NO se guardó."
                     elif "Error validando empresa:" in error_msg:
                         # Error validando empresa
                         error_amigable = error_msg.split("Validación falló: ")[-1] if "Validación falló: " in error_msg else error_msg
-                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error validando empresa:\n\n{error_amigable}\n\nVerifica:\n• RIF de la empresa\n• Email de la empresa"
+                        resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error validando empresa:\n\n{error_amigable}\n\nVerifica:\n• RIF de la empresa\n• Email de la empresa\n\nLa configuración NO se guardó."
                     elif "Error conectando a PostgreSQL:" in error_msg:
-                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error de base de datos:\n\n{error_msg}\n\nVerifica:\n• Host de PostgreSQL\n• Puerto de conexión\n• Nombre de la base de datos\n• Usuario y contraseña"
+                        resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error de base de datos:\n\n{error_msg}\n\nVerifica:\n• Host de PostgreSQL\n• Puerto de conexión\n• Nombre de la base de datos\n• Usuario y contraseña\n\nLa configuración NO se guardó."
                     else:
-                        resultado['mensaje'] = f"⚠️ Configuración guardada\n\n❌ Error durante verificación:\n\n{error_msg}\n\nLa configuración se guardó pero hay\nproblemas de conexión. Verifica los datos."
+                        resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error durante verificación:\n\n{error_msg}\n\nLa configuración NO se guardó."
 
                 finally:
                     # Cerrar conexiones
