@@ -3611,6 +3611,24 @@ class ConfigWindow:
             except Exception as e:
                 messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}")
 
+        def cerrar_ventana_progreso():
+            """Cerrar ventana de progreso y volver a configuración principal"""
+            try:
+                # Cerrar ventana de progreso
+                if progreso.winfo_exists():
+                    progreso.destroy()
+
+                # NO cerrar la ventana de configuración principal
+                # Solo enfocarla para que el usuario pueda corregir
+                if self.root.winfo_exists():
+                    self.root.lift()  # Traer ventana al frente
+                    self.root.focus_force()  # Poner foco en la ventana
+
+                    # Enfocar campo de email para corregir
+                    self.email_entry.focus_set()
+            except:
+                pass
+
         # Manejar evento de finalización
         def on_verification_complete(event):
             if not progreso.winfo_exists():
@@ -3656,7 +3674,7 @@ class ConfigWindow:
                 # Iniciar System Tray directamente (la autenticación ya se pidió antes)
                 progreso.after(1000, lambda: cerrar_ventana_y_iniciar_tray(resultado['api_password']))
             else:
-                btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana, state="normal")
+                btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana_progreso, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
                 estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
                 messagebox.showinfo("Resultado", resultado['mensaje'])

@@ -748,3 +748,32 @@ Traceback (most recent call last):
     raise Exception(error_msg)
 Exception: Falta dependencia: No module named 'pystray'
 
+
+[DEBUG] ===== INICIAR SYSTEM TRAY =====
+[DEBUG] Company: muentes2@hotmail.com
+[DEBUG] API Password: ***
+[DEBUG] Config tiene 13 keys
+[DEBUG] Root ya fue destruido (winfo_exists falló): can't invoke "winfo" command: application has been destroyed
+
+======================================================================
+🔄 Iniciando modo System Tray...
+======================================================================
+[DEBUG] Creando instancia de SystemTrayService...
+[DEBUG] SystemTrayService creada
+[DEBUG] Llamando a tray_service.iniciar()...
+[DEBUG] Esto iniciará el icono en la barra de tareas
+[DEBUG] ERROR en iniciar_system_tray: Falta dependencia: No module named 'pystray'
+Traceback (most recent call last):
+  File "/home/muentes/devs/sincronizadorchrystal/sync_system_api.py", line 5278, in iniciar
+    import pystray
+ModuleNotFoundError: No module named 'pystray'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/muentes/devs/sincronizadorchrystal/sync_system_api.py", line 3561, in iniciar_system_tray
+    tray_service.iniciar()
+  File "/home/muentes/devs/sincronizadorchrystal/sync_system_api.py", line 5334, in iniciar
+    raise Exception(error_msg)
+Exception: Falta dependencia: No module named 'pystray'
+
