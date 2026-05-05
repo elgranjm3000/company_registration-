@@ -2760,7 +2760,7 @@ class ConfigWindow:
 
             # Buscar el email en la tabla company (case-insensitive)
             cursor.execute("""
-                SELECT email, name
+                SELECT email, description
                 FROM company
                 WHERE LOWER(email) = LOWER(%s)
                 LIMIT 1
@@ -2771,8 +2771,8 @@ class ConfigWindow:
             pg_conn.close()
 
             if result:
-                company_name = result[1]
-                self.log(f"✅ Email encontrado en PostgreSQL: {company_email} → {company_name}")
+                company_description = result[1]
+                self.log(f"✅ Email encontrado en PostgreSQL: {company_email} → {company_description}")
                 return True
             else:
                 # Email NO encontrado - mostrar error y poner focus
