@@ -432,6 +432,22 @@ class QuotesSync:
                 unit = None
                 conversion_factor = 1.0  # Valor por defecto en caso de error
 
+        # Obtener buy_tax de la tabla products de PostgreSQL
+        buy_tax = '01'  # Valor por defecto
+        if code_product:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT buy_tax FROM products WHERE code = %s LIMIT 1
+                """, (code_product,))
+                result = self.pg_cursor.fetchone()
+                if result and result[0]:
+                    buy_tax = result[0]
+                    self._log(f"     ✅ buy_tax obtenido de products: {code_product} = {buy_tax}", "debug")
+                else:
+                    self._log(f"     ⚠️ Producto {code_product} sin buy_tax en products, usando '01'", "warning")
+            except Exception as e:
+                self._log(f"     ⚠️ Error obteniendo buy_tax de products: {e}", "warning")
+
         # Obtener datos del producto
         unitary_cost = round(float(product.get('unitary_cost', 0)) if product else 0.0, 4)  # 4 decimales
         sale_tax = product.get('sale_tax', '01') if product else '01'  # Ya viene como '01', '02', etc.
@@ -455,9 +471,6 @@ class QuotesSync:
 
         # Calcular pending_amount (igual a amount)
         pending_amount = quantity
-
-        # buy_tax: código de tipo de impuesto
-        buy_tax = '01'  # IVA General por defecto
 
         # Calcular costos según fórmula de smart_sync_complete.py
         total_net_cost = round(unitary_cost * quantity, 2)  # unitary_cost * cantidad
