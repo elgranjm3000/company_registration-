@@ -5723,22 +5723,28 @@ def main():
             app = ConfigWindow(root)
             root.mainloop()
 
-            # Después de completar la configuración, verificar si se debe iniciar System Tray
+            # Después de completar la configuración, ejecutar primera sincronización con ventana de progreso
             if os.path.exists(CONFIG_FILE):
                 print("✅ Configuración completada exitosamente")
-                print("🔄 Iniciando System Tray...")
+                print("🔄 Ejecutando primera sincronización...")
+
+                # Ejecutar primera sincronización con ventana de progreso
+                # Esta función mostrará el loading de la primera sincronización
+                # y luego iniciará el System Tray automáticamente
                 try:
                     from config_encryption import decrypt_config
                     with open(CONFIG_FILE, 'r') as f:
                         config = json.load(f)
                     config = decrypt_config(config)
 
-                    # Crear e iniciar System Tray
+                    # Obtener password de autenticación para usar en la primera sync
                     api_password = auth_result.get('password')
-                    tray_service = SystemTrayService(config, None, config.get('api_email'), api_password)
-                    tray_service.iniciar()
+
+                    # Ejecutar primera sincronización con ventana de progreso
+                    # Esta función iniciará el System Tray después de completar la sync
+                    app.ejecutar_primera_sync_y_tray(api_password)
                 except Exception as e:
-                    print(f"❌ Error iniciando System Tray: {e}")
+                    print(f"❌ Error ejecutando primera sincronización: {e}")
                     print("💡 Ejecute manualmente: python3 sync_system_api.py --mode tray")
             else:
                 print("❌ Configuración no completada o fallida")
