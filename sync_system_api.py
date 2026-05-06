@@ -3683,6 +3683,296 @@ class ConfigWindow:
 
 
 # ==============================================================================
+# PRIMERA SINCRONIZACIÓN Y SYSTEM TRAY
+# ==============================================================================
+
+def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
+    """
+    Ejecuta la primera sincronización y luego inicia el System Tray
+
+    Args:
+        api_password: Password de la API
+        cerrar_ventana_callback: Función para cerrar la ventana de progreso después de la sync
+    """
+    # Archivo de log para diagnóstico
+    log_file = open("primera_sync_log.txt", "w", encoding="utf-8")
+
+    def log_debug(msg):
+        """Escribe a consola y archivo"""
+        print(msg)
+        log_file.write(msg + "\n")
+        log_file.flush()
+
+    try:
+        log_debug("\n[DEBUG] Iniciando ejecutar_primera_sync_y_tray()")
+
+        # Cargar configuración guardada
+        if not os.path.exists(CONFIG_FILE):
+            log_debug("[DEBUG] ERROR: No existe CONFIG_FILE")
+            messagebox.showerror("Error", "No se encontró configuración guardada")
+            log_file.close()
+            return
+
+        from config_encryption import decrypt_config
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+        # Desencriptar todos los campos sensibles
+        config = decrypt_config(config)
+
+        log_debug(f"[DEBUG] Config cargada: {config.get('company_email')}")
+        log_debug(f"[DEBUG] api_password recibido: {'Sí' if api_password else 'No'}")
+
+        # Crear ventana de progreso para primera sincronización
+        log_debug("[DEBUG] Creando ventana de sincronización...")
+        # Crear nueva ventana Tk independiente
+        sync_window = tk.Tk()
+        sync_window.title("🔄 Primera Sincronización")
+        sync_window.geometry("600x300")
+        sync_window.resizable(False, False)
+
+        # Prevenir que el usuario cierre la ventana manualmente
+        sync_window.protocol("WM_DELETE_WINDOW", lambda: None)  # Deshabilitar botón X
+
+        # Centrar ventana
+        sync_window.update_idletasks()
+        width = sync_window.winfo_width()
+        height = sync_window.winfo_height()
+        x = (sync_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (sync_window.winfo_screenheight() // 2) - (height // 2)
+        sync_window.geometry(f"{width}x{height}+{x}+{y}")
+
+        # Mantener ventana al frente (topmost)
+        sync_window.attributes('-topmost', True)
+        sync_window.lift()
+        sync_window.focus_force()
+
+        # Widgets
+        # Frame principal con borde
+        main_frame = tk.Frame(sync_window, bg="#f0f0f0", padx=30, pady=30)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(main_frame, text="🔄 Ejecutando Primera Sincronización",
+                font=("Arial", 16, "bold"), bg="#f0f0f0", fg="#2c3e50").pack(pady=(0, 10))
+
+        tk.Label(main_frame, text="Por favor espere, esto puede tardar varios minutos...",
+                font=("Arial", 10), bg="#f0f0f0", fg="#7f8c8d").pack(pady=(0, 20))
+
+        sync_label = tk.Label(main_frame, text="⏳ Iniciando...",
+                             font=("Arial", 11), bg="#f0f0f0", fg="#34495e",
+                             wraplength=500, justify="center")
+        sync_label.pack(pady=10)
+
+        progress_bar = ttk.Progressbar(main_frame, mode='indeterminate', length=500)
+        progress_bar.pack(pady=20)
+        progress_bar.start(10)
+
+        # Información adicional
+        info_label = tk.Label(main_frame,
+                             text="ℹ️ No cierre esta ventana\nLa sincronización se ejecuta en segundo plano",
+                             font=("Arial", 9), bg="#f0f0f0", fg="#95a5a6",
+                             justify="center")
+        info_label.pack(pady=(10, 0))
+
+        # Cola para comunicación thread → main thread
+        sync_queue = queue.Queue()
+
+        # Bandera para detener el procesamiento de mensajes
+        # DEBE definirse ANTES de procesar_mensajes_queue() que la referencia con nonlocal
+        sync_completada = False
+
+        # Variable para compartir resultado entre ejecutar_sync_worker() y on_sync_complete()
+        sync_result = None
+
+        def procesar_mensajes_queue():
+            """Procesa mensajes de la cola desde el main thread"""
+            nonlocal sync_completada
+
+            try:
+                # Verificar si la ventana aún existe
+                if not sync_window.winfo_exists():
+                    log_debug("[DEBUG] procesar_mensajes_queue(): Ventana no existe, saliendo")
+                    return
+
+                # Si la sync ya se completó, dejar de procesar mensajes
+                if sync_completada:
+                    log_debug("[DEBUG] Sync completada, deteniendo procesar_mensajes_queue()")
+                    return
+
+                try:
+                    # Leer mensajes de la cola sin bloquear
+                    while not sync_queue.empty():
+                        msg = sync_queue.get_nowait()
+
+                        if msg['type'] == 'progress':
+                            # Actualizar etiqueta de progreso
+                            sync_label.config(text=f"⏳ {msg['message']}")
+                        elif msg['type'] == 'error':
+                            # Error en sincronización
+                            log_debug(f"[DEBUG] Error en sync: {msg['message']}")
+                            sync_label.config(text=f"❌ Error: {msg['message']}", foreground="#c0392b")
+                            info_label.config(text="⚠️ La sincronización falló\nRevise el log para más detalles", fg="#c0392b", bg="#f0f0f0")
+                        elif msg['type'] == 'complete':
+                            # Sincronización completada exitosamente
+                            log_debug("[DEBUG] Sincronización completada exitosamente")
+                            sync_label.config(text="✅ Sincronización completada", foreground="#27ae60", bg="#f0f0f0")
+                            info_label.config(text="✅ Primera sincronización completada exitosamente", fg="#27ae60", bg="#f0f0f0")
+                            progress_bar.stop()
+
+                            # Actualizar estado
+                            sync_completada = True
+                            sync_result = msg.get('data', {})
+                            log_debug(f"[DEBUG] Sync result: {sync_result}")
+
+                            # Cerrar ventana de sincronización después de 3 segundos
+                            def cerrar_sync_window():
+                                """Cerrar la ventana de sincronización y el mainloop"""
+                                try:
+                                    if sync_window.winfo_exists():
+                                        log_debug("[DEBUG] Cerrando sync_window...")
+                                        # CERRAR LA VENTANA PRIMERO, antes de iniciar System Tray
+                                        log_debug("[DEBUG] Destruyendo ventana ANTES de iniciar System Tray...")
+                                        sync_window.destroy()
+                                        log_debug("[DEBUG] sync_window destruida")
+
+                                        # Ahora iniciar System Tray en un thread separado
+                                        # para que no bloquee
+                                        log_debug("[DEBUG] Iniciando System Tray en thread separado...")
+                                        log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
+
+                                        import threading
+                                        tray_thread = threading.Thread(
+                                            target=iniciar_system_tray,
+                                            args=(config, sync_result.get('api_password')),
+                                            daemon=False  # System Tray debe seguir vivo
+                                        )
+                                        tray_thread.start()
+                                        log_debug("[DEBUG] Thread de System Tray iniciado")
+                                except Exception as e:
+                                    log_debug(f"[DEBUG] Error cerrando sync_window: {e}")
+
+                            sync_window.after(3000, cerrar_sync_window)
+
+                            # Cerrar ventana de progreso (config) después de 3 segundos
+                            if cerrar_ventana_callback:
+                                sync_window.after(3000, cerrar_ventana_callback)
+                        elif msg['type'] == 'log':
+                            # Mensaje de log
+                            log_debug(f"[SYNC LOG] {msg['message']}")
+                except queue.Empty:
+                    # No hay mensajes, continuar esperando
+                    pass
+                except Exception as e:
+                    log_debug(f"[DEBUG] Error procesando mensaje: {e}")
+
+                # Volver a verificar después de 50ms
+                sync_window.after(50, procesar_mensajes_queue)
+
+            except Exception as e:
+                log_debug(f"[DEBUG] Error en procesar_mensajes_queue: {e}")
+                import traceback
+                log_debug(traceback.format_exc())
+
+        def ejecutar_sync_worker():
+            """Ejecuta la sincronización en un thread separado"""
+            nonlocal sync_result
+
+            try:
+                log_debug("[DEBUG] Creando APISyncManager...")
+                api_manager = APISyncManager(postgres_config, auth_manager, log_debug)
+
+                log_debug("[DEBUG] Ejecutando primera sincronización...")
+                result = api_manager.sincronizar_todo()
+
+                log_debug(f"[DEBUG] Sincronización completada. Resultado: {result}")
+
+                if result.get('success'):
+                    sync_queue.put({
+                        'type': 'complete',
+                        'data': {
+                            'api_password': api_password
+                        }
+                    })
+                else:
+                    sync_queue.put({
+                        'type': 'error',
+                        'message': result.get('error', 'Error desconocido')
+                    })
+            except Exception as e:
+                log_debug(f"[DEBUG] Exception en ejecutar_sync_worker: {e}")
+                import traceback
+                log_debug(traceback.format_exc())
+                sync_queue.put({
+                    'type': 'error',
+                    'message': str(e)
+                })
+
+        # Iniciar thread de sincronización
+        log_debug("[DEBUG] Iniciando thread de sincronización...")
+        sync_thread = threading.Thread(target=ejecutar_sync_worker, daemon=False)
+        sync_thread.start()
+
+        # Iniciar mainloop de la ventana para procesar eventos
+        # Esto permite que funcione el after() para cerrar la ventana
+        log_debug("[DEBUG] Iniciando mainloop de sync_window...")
+        sync_window.mainloop()
+        log_debug("[DEBUG] Mainloop terminado, ventana cerrada")
+
+    except Exception as e:
+        log_debug(f"[DEBUG] ERROR en ejecutar_primera_sync_y_tray: {e}")
+        import traceback
+        log_debug(traceback.format_exc())
+        log_file.close()
+        messagebox.showerror("Error", f"Error preparando sincronización:\n{e}")
+
+
+def iniciar_system_tray(config, api_password):
+    """Inicia el servicio System Tray"""
+    # Continuar usando el mismo archivo de log
+    log_file = open("primera_sync_log.txt", "a", encoding="utf-8")
+
+    def log_debug(msg):
+        """Escribe a consola y archivo"""
+        print(msg)
+        log_file.write(msg + "\n")
+        log_file.flush()
+
+    try:
+        log_debug("\n[DEBUG] ===== INICIAR SYSTEM TRAY =====")
+        log_debug(f"[DEBUG] Company: {config.get('company_email')}")
+        log_debug(f"[DEBUG] API Password: {'***' if api_password else 'None'}")
+
+        # Verificar que hay configuración válida
+        if not config:
+            log_debug("[DEBUG] ERROR: Config es None o vacío")
+            messagebox.showerror("Error", "No hay configuración válida")
+            log_file.close()
+            return
+
+        log_debug(f"[DEBUG] Config tiene {len(config)} keys")
+
+        # Crear e iniciar servicio System Tray
+        log_debug("\n" + "="*70)
+        log_debug("🔄 Iniciando modo System Tray...")
+        log_debug("="*70)
+
+        log_debug("[DEBUG] Creando instancia de SystemTrayService...")
+        tray_service = SystemTrayService(config, None, config.get('api_email'), api_password)
+        log_debug("[DEBUG] SystemTrayService creada")
+
+        log_debug("[DEBUG] Llamando a tray_service.iniciar()...")
+        log_debug("[DEBUG] Esto iniciará el icono en la barra de tareas")
+        tray_service.iniciar()
+        log_debug("[DEBUG] tray_service.iniciar() retornó (no debería llegar aquí nunca)")
+
+    except Exception as e:
+        log_debug(f"[DEBUG] ERROR en iniciar_system_tray: {e}")
+        import traceback
+        log_debug(traceback.format_exc())
+        log_file.close()
+        messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}\n\nRevisa el archivo primera_sync_log.txt para detalles.")
+
+
+# ==============================================================================
 # GUI - LAUNCHER WINDOW (Menú Principal)
 # ==============================================================================
 
@@ -5732,17 +6022,12 @@ def main():
                 # Esta función mostrará el loading de la primera sincronización
                 # y luego iniciará el System Tray automáticamente
                 try:
-                    from config_encryption import decrypt_config
-                    with open(CONFIG_FILE, 'r') as f:
-                        config = json.load(f)
-                    config = decrypt_config(config)
-
                     # Obtener password de autenticación para usar en la primera sync
                     api_password = auth_result.get('password')
 
                     # Ejecutar primera sincronización con ventana de progreso
                     # Esta función iniciará el System Tray después de completar la sync
-                    app.ejecutar_primera_sync_y_tray(api_password)
+                    ejecutar_primera_sync_y_tray(api_password)
                 except Exception as e:
                     print(f"❌ Error ejecutando primera sincronización: {e}")
                     print("💡 Ejecute manualmente: python3 sync_system_api.py --mode tray")
