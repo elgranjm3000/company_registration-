@@ -5722,6 +5722,27 @@ def main():
             root = tk.Tk()
             app = ConfigWindow(root)
             root.mainloop()
+
+            # Después de completar la configuración, verificar si se debe iniciar System Tray
+            if os.path.exists(CONFIG_FILE):
+                print("✅ Configuración completada exitosamente")
+                print("🔄 Iniciando System Tray...")
+                try:
+                    from config_encryption import decrypt_config
+                    with open(CONFIG_FILE, 'r') as f:
+                        config = json.load(f)
+                    config = decrypt_config(config)
+
+                    # Crear e iniciar System Tray
+                    api_password = auth_result.get('password')
+                    tray_service = SystemTrayService(config, None, config.get('api_email'), api_password)
+                    tray_service.iniciar()
+                except Exception as e:
+                    print(f"❌ Error iniciando System Tray: {e}")
+                    print("💡 Ejecute manualmente: python3 sync_system_api.py --mode tray")
+            else:
+                print("❌ Configuración no completada o fallida")
+                sys.exit(1)
         else:
             print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
             sys.exit(1)
