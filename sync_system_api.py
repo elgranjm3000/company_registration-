@@ -2631,6 +2631,32 @@ class ConfigWindow:
         except psycopg2.OperationalError as e:
             error_msg = str(e).lower()
             self.log(f"❌ PostgreSQL: {str(e)}")
+            messagebox.showerror(
+                "❌ Error de Conexión PostgreSQL",
+                f"No se pudo conectar a la base de datos.\n\n"
+                f"Error: {str(e)}\n\n"
+                f"Por favor verifica:\n"
+                f"• Host: {host}\n"
+                f"• Puerto: {port}\n"
+                f"• Database: {database}\n"
+                f"• Usuario: {user}\n"
+                f"• Que el servidor PostgreSQL esté ejecutándose"
+            )
+        except ValueError as e:
+            self.log(f"❌ PostgreSQL: Error en puerto: {str(e)}")
+            messagebox.showerror(
+                "❌ Puerto Inválido",
+                f"El puerto debe ser un número.\n\n"
+                f"Error: {str(e)}\n\n"
+                f"Puerto por defecto de PostgreSQL: 5432"
+            )
+        except Exception as e:
+            self.log(f"❌ PostgreSQL: {str(e)}")
+            messagebox.showerror(
+                "❌ Error Inesperado",
+                f"Ocurrió un error al probar la conexión:\n\n"
+                f"Error: {str(e)}"
+            )
 
     def on_window_close(self):
         """Manejador de cierre de ventana de configuración.
