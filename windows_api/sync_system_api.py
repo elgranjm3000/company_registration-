@@ -3789,32 +3789,15 @@ def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
         sync_label.pack(pady=10)
 
         progress_bar = ttk.Progressbar(main_frame, mode='indeterminate', length=520)
-        progress_bar.pack(pady=15)
+        progress_bar.pack(pady=20)
         progress_bar.start(10)
-
-        # Detalles del proceso
-        details_frame = tk.Frame(main_frame, bg="#f0f0f0")
-        details_frame.pack(pady=(15, 0))
-
-        tk.Label(details_frame,
-                text="✓ Conectando a servidor",
-                font=("Arial", 9), bg="#f0f0f0", fg="#95a5a6").pack(anchor="w")
-        tk.Label(details_frame,
-                text="✓ Sincronizando datos",
-                font=("Arial", 9), bg="#f0f0f0", fg="#95a5a6").pack(anchor="w")
-        tk.Label(details_frame,
-                text="✓ Procesando información",
-                font=("Arial", 9), bg="#f0f0f0", fg="#95a5a6").pack(anchor="w")
-        tk.Label(details_frame,
-                text="✓ Guardando cambios",
-                font=("Arial", 9), bg="#f0f0f0", fg="#95a5a6").pack(anchor="w")
 
         # Información adicional
         info_label = tk.Label(main_frame,
                              text="ℹ️ No cierre esta ventana\nLa sincronización se ejecuta en segundo plano",
                              font=("Arial", 9), bg="#f0f0f0", fg="#7f8c8d",
                              justify="center")
-        info_label.pack(pady=(20, 0))
+        info_label.pack(pady=(25, 0))
 
         # Cola para comunicación thread → main thread
         sync_queue = queue.Queue()
@@ -3829,7 +3812,6 @@ def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
         def procesar_mensajes_queue():
             """Procesa mensajes de la cola desde el main thread"""
             nonlocal sync_completada
-            nonlocal details_frame
 
             try:
                 # Verificar si la ventana aún existe
@@ -3861,10 +3843,6 @@ def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
                             sync_label.config(text="✅ Sincronización completada exitosamente", foreground="#27ae60", bg="#f0f0f0", font=("Arial", 12, "bold"))
                             info_label.config(text="✅ Primera sincronización completada exitosamente\nIniciando System Tray en segundo plano...", fg="#27ae60", bg="#f0f0f0", font=("Arial", 10, "bold"))
                             progress_bar.stop()
-
-                            # Marcar detalles como completados
-                            for widget in details_frame.winfo_children():
-                                widget.config(fg="#27ae60")
 
                             # Actualizar estado
                             sync_completada = True
