@@ -209,13 +209,42 @@
 
         <div class="highlight-box">
             <p><strong>¿Qué sucede cuando ingresas el RIF y Email de tu empresa en el sincronizador?</strong></p>
-            <p>El sistema verifica tu empresa en un proceso de 2 pasos para autorizar el acceso y crear/configurar tu cuenta.</p>
+            <p>El sistema verifica tu empresa en un proceso de 3 pasos para autorizar el acceso y crear/configurar tu cuenta.</p>
         </div>
 
         <h2>🔄 ¿Qué sucede internamente?</h2>
-        <p>El sistema realiza una verificación en dos etapas para garantizar la seguridad y la integridad de los datos.</p>
+        <p>El sistema realiza una verificación en tres etapas para garantizar la seguridad y la integridad de los datos.</p>
 
-        <h2>PASO 1: Verificar autorización de acceso</h2>
+        <h2>PASO 1: Validar email en base de datos local</h2>
+        <div class="info-box">
+            <p>Antes de contactar la API, el sistema verifica localmente que el email ingresado exista en la tabla <strong>company</strong> de tu PostgreSQL:</p>
+            <div class="sql-code">
+                SELECT * FROM company<br>
+                WHERE LOWER(email) = LOWER("empresa@ejemplo.com")
+            </div>
+        </div>
+
+        <h3>Resultados posibles:</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Resultado</th>
+                    <th>Mensaje que verás</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="error">❌ No encontrado</span></td>
+                    <td>"No se encontró el correo en la tabla local de company. Verifique que la empresa exista en su base de datos local."</td>
+                </tr>
+                <tr>
+                    <td><span class="success">✅ Encontrado</span></td>
+                    <td>Continúa al Paso 2</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>PASO 2: Verificar autorización de acceso</h2>
         <div class="info-box">
             <p>Primero, el sistema busca tus credenciales en la tabla de <strong>acceso</strong>:</p>
             <div class="sql-code">
@@ -245,7 +274,7 @@
             </tbody>
         </table>
 
-        <h2>PASO 2: Buscar o crear empresa</h2>
+        <h2>PASO 3: Buscar o crear empresa</h2>
 
         <div class="step">
             <span class="step-number">A</span>
@@ -288,7 +317,7 @@
             <h3>Y además crea una suscripción TRIAL automática:</h3>
             <ul class="check-list">
                 <li><strong>Plan:</strong> Trial (gratuito)</li>
-                <li><strong>Duración:</strong> X días de prueba</li>
+                <li><strong>Duración:</strong> 7 días de prueba</li>
                 <li><strong>Estado:</strong> Activo</li>
                 <li><strong>Features:</strong> Funcionalidades básicas</li>
             </ul>
@@ -358,8 +387,8 @@
         <ul class="check-list">
             <li>Empresa creada automáticamente</li>
             <li>Suscripción TRIAL gratis</li>
-            <li>Funcionalidad completa por X días</li>
-            <li>Luego de X días: Debes comprar un plan pagado</li>
+            <li>Funcionalidad completa por 7 días</li>
+            <li>Luego de 7 días: Debes comprar un plan pagado</li>
         </ul>
 
         <h3>✅ ¿Qué obtengo si ya existía?</h3>
@@ -373,11 +402,11 @@
 
         <table style="text-align: center;">
             <tr>
-                <td style="width: 30%;"><strong>Ingresa RIF y Email</strong><br><small>en el Sincronizador</small></td>
+                <td style="width: 25%;"><strong>Ingresa RIF y Email</strong><br><small>en el Sincronizador</small></td>
                 <td style="width: 5%;">➡️</td>
-                <td style="width: 65%;">
-                    <strong>PASO 1:</strong> Verificar en "acceso"<br>
-                    <small>• RIF existe?<br>• Email coincide?</small>
+                <td style="width: 70%;">
+                    <strong>PASO 1:</strong> Validar email en tabla local "company"<br>
+                    <small>• El email existe en PostgreSQL?</small>
                 </td>
             </tr>
             <tr>
@@ -388,12 +417,27 @@
             <tr>
                 <td><span class="error">❌ NO</span></td>
                 <td>➡️</td>
-                <td><strong>Error:</strong> "No autorizado"</td>
+                <td><strong>Error:</strong> "No se encontró el correo en la tabla local"</td>
             </tr>
             <tr>
                 <td><span class="success">✅ SÍ</span></td>
                 <td>➡️</td>
-                <td><strong>PASO 2:</strong> Buscar en "companies"</td>
+                <td><strong>PASO 2:</strong> Verificar en "acceso" (API)</td>
+            </tr>
+            <tr>
+                <td colspan="3">
+                    <div class="arrow">⬇️</div>
+                </td>
+            </tr>
+            <tr>
+                <td><span class="error">❌ NO autorizado</span></td>
+                <td>➡️</td>
+                <td><strong>Error:</strong> "No autorizado"</td>
+            </tr>
+            <tr>
+                <td><span class="success">✅ Autorizado</span></td>
+                <td>➡️</td>
+                <td><strong>PASO 3:</strong> Buscar en "companies"</td>
             </tr>
             <tr>
                 <td colspan="3">

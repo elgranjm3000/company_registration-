@@ -3668,8 +3668,8 @@ class ConfigWindow:
                     messagebox.showerror("Error", f"Error guardando configuración:\n{e}")
                     return
 
-                # Iniciar System Tray directamente (la autenticación ya se pidió antes)
-                progreso.after(1000, lambda: cerrar_ventana_y_iniciar_tray(resultado['api_password']))
+                # Mostrar ventana de primera sincronización con progreso detallado
+                progreso.after(1000, lambda: self._mostrar_ventana_carga_api(resultado['api_password']))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana_progreso, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
@@ -3706,6 +3706,317 @@ class ConfigWindow:
 
         # Iniciar verificación
         ejecutar_verificacion_thread()
+
+
+    def _mostrar_ventana_carga_api(self, api_password):
+        """Mostrar ventana de primera sincronización con progreso detallado."""
+        # Cerrar ventana de progreso de verificación
+        try:
+            for widget in list(self.root.winfo_children()):
+                if isinstance(widget, tk.Toplevel):
+                    try:
+                        widget.destroy()
+                    except:
+                        pass
+        except:
+            pass
+
+        # Cerrar ventana principal de configuración
+        try:
+            if self.root.winfo_exists():
+                self.root.destroy()
+        except:
+            pass
+
+        # Cargar configuración guardada
+        if not os.path.exists(CONFIG_FILE):
+            messagebox.showerror("Error", "No se encontró configuración guardada")
+            return
+
+        from config_encryption import decrypt_config
+        with open(CONFIG_FILE, 'r') as f:
+            config_encrypted = json.load(f)
+        config = decrypt_config(config_encrypted)
+
+        # Crear ventana de primera sincronización
+        sync_window = tk.Tk()
+        sync_window.title("Primera Sincronización")
+        sync_window.geometry("650x580")
+        sync_window.resizable(False, False)
+        sync_window.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        sync_window.update_idletasks()
+        x = (sync_window.winfo_screenwidth() // 2) - (650 // 2)
+        y = (sync_window.winfo_screenheight() // 2) - (580 // 2)
+        sync_window.geometry(f"+{x}+{y}")
+
+        sync_window.attributes('-topmost', True)
+        sync_window.lift()
+        sync_window.focus_force()
+
+        # Frame principal
+        main_frame = tk.Frame(sync_window, bg="#f0f0f0", padx=30, pady=25)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Título
+        tk.Label(main_frame, text="PRIMERA SINCRONIZACIÓN",
+                 font=("Arial", 18, "bold"), bg="#f0f0f0", fg="#2c3e50").pack(pady=(0, 5))
+        tk.Label(main_frame, text="Por favor espere mientras se realiza la primera sincronización",
+                 font=("Arial", 10), bg="#f0f0f0", fg="#7f8c8d").pack(pady=(0, 15))
+
+        # Spinner animado
+        spinner_label = tk.Label(main_frame, text="⟳", font=("Arial", 60),
+                                 bg="#f0f0f0", fg="#3498db")
+        spinner_label.pack(pady=(0, 10))
+
+        # Estado general
+        estado_general = tk.Label(main_frame, text="Iniciando...",
+                                  font=("Arial", 11, "bold"),
+                                  bg="#f0f0f0", fg="#2c3e50")
+        estado_general.pack(pady=(0, 15))
+
+        # Frame de pasos con checkboxes
+        pasos_frame = tk.LabelFrame(main_frame, text="  Progreso  ",
+                                    font=("Arial", 10, "bold"),
+                                    bg="#f0f0f0", fg="#2c3e50",
+                                    padx=15, pady=12)
+        pasos_frame.pack(fill="x", padx=5)
+
+        pasos = [
+            "Cargando configuración",
+            "Conectando a la base de datos",
+            "Sincronizando productos",
+            "Sincronizando categorías",
+            "Sincronizando clientes",
+            "Sincronizando vendedores",
+            "Finalizando"
+        ]
+
+        paso_vars = []
+        for i, paso_text in enumerate(pasos, 1):
+            paso_frame = tk.Frame(pasos_frame, bg="#f0f0f0")
+            paso_frame.pack(fill="x", pady=1)
+            var = tk.IntVar(value=0)
+            cb = tk.Checkbutton(paso_frame, text=f"  {i}. {paso_text}",
+                               variable=var, font=("Arial", 10),
+                               bg="#f0f0f0", fg="#555555",
+                               selectcolor="white", state="disabled",
+                               disabledforeground="#555555", anchor="w")
+            cb.pack(fill="x")
+            paso_vars.append(var)
+
+        # Barra de progreso con porcentaje
+        barra_frame = tk.Frame(main_frame, bg="#f0f0f0")
+        barra_frame.pack(fill="x", pady=(20, 5), padx=5)
+
+        progress_bar = ttk.Progressbar(barra_frame, mode='determinate', length=500)
+        progress_bar.pack(side="left")
+
+        pct_label = tk.Label(barra_frame, text="0%", font=("Arial", 11, "bold"),
+                             bg="#f0f0f0", fg="#0066cc")
+        pct_label.pack(side="right", padx=(10, 0))
+
+        # Cola para comunicación thread-safe
+        sync_queue = queue.Queue()
+
+        # Variables compartidas
+        sync_completada = [False]
+        sync_error = [None]
+
+        # Animación del spinner (ciclo de 4 cuadrantes)
+        spinner_frames = ["◐", "◓", "◑", "◒"]
+        current_frame = [0]
+
+        def animar_spinner():
+            if sync_completada[0]:
+                return
+            try:
+                if sync_window.winfo_exists():
+                    current_frame[0] = (current_frame[0] + 1) % len(spinner_frames)
+                    spinner_label.config(text=spinner_frames[current_frame[0]])
+                    sync_window.after(200, animar_spinner)
+            except:
+                pass
+
+        animar_spinner()
+
+        def procesar_mensajes():
+            """Procesar mensajes de la cola desde el main thread."""
+            if sync_completada[0] or not sync_window.winfo_exists():
+                return
+
+            try:
+                while not sync_queue.empty():
+                    msg = sync_queue.get_nowait()
+
+                    if isinstance(msg, dict):
+                        msg_type = msg.get('type', '')
+
+                        if msg_type == 'paso':
+                            paso_idx = msg.get('paso', 1) - 1
+                            if 0 <= paso_idx < len(paso_vars):
+                                paso_vars[paso_idx].set(1)
+
+                        elif msg_type == 'progress':
+                            progress_bar['value'] = msg.get('porcentaje', 0)
+                            pct_label.config(text=f"{int(msg.get('porcentaje', 0))}%")
+                            if 'text' in msg:
+                                estado_general.config(text=msg['text'])
+
+                        elif msg_type == 'complete':
+                            sync_completada[0] = True
+                            try:
+                                spinner_label.config(text="✅")
+                                estado_general.config(text="Sincronización completada exitosamente",
+                                                      fg="#27ae60")
+                                progress_bar['value'] = 100
+                                pct_label.config(text="100%")
+                            except:
+                                pass
+
+                            def iniciar_tray():
+                                try:
+                                    if sync_window.winfo_exists():
+                                        sync_window.destroy()
+                                except:
+                                    pass
+                                import threading
+                                t = threading.Thread(target=iniciar_system_tray,
+                                                    args=(config, api_password),
+                                                    daemon=False)
+                                t.start()
+
+                            sync_window.after(2000, iniciar_tray)
+
+                        elif msg_type == 'error':
+                            sync_completada[0] = True
+                            sync_error[0] = msg.get('text', 'Error desconocido')
+                            try:
+                                spinner_label.config(text="❌")
+                                estado_general.config(text=f"Error: {sync_error[0]}",
+                                                      fg="#c0392b")
+                                progress_bar['value'] = 0
+                                pct_label.config(text="Error")
+                            except:
+                                pass
+
+            except queue.Empty:
+                pass
+            except Exception:
+                pass
+
+            if not sync_completada[0]:
+                try:
+                    sync_window.after(100, procesar_mensajes)
+                except:
+                    pass
+
+        def ejecutar_sync():
+            """Ejecutar sincronización en thread separado."""
+            try:
+                # Paso 1: Cargando configuración
+                sync_queue.put({'type': 'paso', 'paso': 1})
+                sync_queue.put({'type': 'progress', 'porcentaje': 5,
+                               'text': 'Cargando configuración...'})
+
+                auth_manager = APIAuthManager(config['api_url'])
+                login_result = auth_manager.login(config['api_email'], api_password)
+                if not login_result.get('success'):
+                    sync_queue.put({
+                        'type': 'error',
+                        'text': f"Error autenticación: {login_result.get('error', 'Error desconocido')}"
+                    })
+                    return
+
+                auth_manager.validate_company(config['company_rif'], config['company_email'])
+                time.sleep(0.3)
+                sync_queue.put({'type': 'progress', 'porcentaje': 10,
+                               'text': 'Configuración cargada correctamente'})
+
+                # Paso 2: Conectando a la base de datos
+                sync_queue.put({'type': 'paso', 'paso': 2})
+                sync_queue.put({'type': 'progress', 'porcentaje': 15,
+                               'text': 'Conectando a la base de datos...'})
+
+                postgres_config = {
+                    'host': config['postgres_host'],
+                    'port': config['postgres_port'],
+                    'database': config['postgres_database'],
+                    'user': config['postgres_user'],
+                    'password': config['postgres_password']
+                }
+
+                # Logger que captura mensajes de sync_all para actualizar pasos
+                paso_map = {
+                    'CATEGORIES': (4, 40, 'Sincronizando categorías...'),
+                    'PRODUCTS': (3, 55, 'Sincronizando productos...'),
+                    'CUSTOMERS': (5, 70, 'Sincronizando clientes...'),
+                    'SELLERS': (6, 85, 'Sincronizando vendedores...'),
+                    'RESUMEN': (7, 95, 'Finalizando sincronización...'),
+                }
+
+                def sync_logger(msg, level="info"):
+                    try:
+                        msg_str = str(msg)
+                        sync_queue.put({'type': 'log', 'text': msg_str})
+                        for key, (paso_num, pct, text) in paso_map.items():
+                            if key in msg_str:
+                                sync_queue.put({'type': 'paso', 'paso': paso_num})
+                                sync_queue.put({'type': 'progress',
+                                               'porcentaje': pct, 'text': text})
+                                break
+                    except:
+                        pass
+
+                sync_manager = APISyncManager(
+                    postgres_config, auth_manager, logger=sync_logger
+                )
+
+                if not sync_manager.connect_postgresql():
+                    sync_queue.put({
+                        'type': 'error',
+                        'text': 'Error conectando a PostgreSQL. Verifique la conexión.'
+                    })
+                    return
+
+                if not sync_manager.initialize_api_clients():
+                    sync_queue.put({
+                        'type': 'error',
+                        'text': 'Error inicializando clientes API.'
+                    })
+                    return
+
+                time.sleep(0.3)
+                sync_queue.put({'type': 'progress', 'porcentaje': 25,
+                               'text': 'Conectado a la base de datos'})
+
+                # Ejecutar sincronización completa
+                result = sync_manager.sync_all()
+
+                if result.get('success'):
+                    # Marcar todos los pasos como completados
+                    for i in range(len(paso_vars)):
+                        paso_vars[i].set(1)
+                    sync_queue.put({'type': 'complete'})
+                else:
+                    sync_queue.put({
+                        'type': 'error',
+                        'text': result.get('error', 'Error durante la sincronización')
+                    })
+
+            except Exception as e:
+                sync_queue.put({'type': 'error', 'text': str(e)})
+
+        # Iniciar loop de procesamiento de mensajes
+        sync_window.after(100, procesar_mensajes)
+
+        # Iniciar thread de sincronización
+        threading.Thread(target=ejecutar_sync, daemon=True).start()
+
+        # Iniciar mainloop
+        sync_window.mainloop()
+
+
 
 
 # ==============================================================================
