@@ -13,9 +13,9 @@ class CategoriesClient(BaseAPIClient):
     Cliente para el endpoint de categories con batch inteligente.
 
     Endpoints implementados:
-    - GET /api/sync-batch/categories
-    - POST /api/sync-batch/categories
-    - DELETE /api/sync-batch/categories
+    - GET /api/sync-client/batch/categories
+    - POST /api/sync-client/batch/categories
+    - DELETE /api/sync-client/batch/categories
 
     Uso:
         client = CategoriesClient(
@@ -100,7 +100,7 @@ class CategoriesClient(BaseAPIClient):
                 params['from_date'] = from_date
 
             try:
-                response = self.get('/sync-batch/categories', params)
+                response = self.get('/sync-client/batch/categories', params)
             except Exception as e:
                 self.logger.error(f"Error fetching categories page {page}: {e}")
                 break
@@ -219,7 +219,7 @@ class CategoriesClient(BaseAPIClient):
             )
 
             try:
-                result = self.post('/sync-batch/categories', {
+                result = self.post('/sync-client/batch/categories', {
                     'company_id': company_id,
                     'categories': batch
                 })
@@ -293,7 +293,7 @@ class CategoriesClient(BaseAPIClient):
         self.logger.info(f"Deleting {len(names)} categories from company {company_id}")
 
         try:
-            result = self.delete('/sync-batch/categories', {
+            result = self.delete('/sync-client/batch/categories', {
                 'company_id': company_id,
                 'names': names
             })

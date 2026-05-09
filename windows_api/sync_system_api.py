@@ -387,10 +387,10 @@ def add_gui_handler(logger_func, gui_log_func):
 
 class APIAuthManager:
     """
-    Gestor de autenticación API REST.
+    Gestor de autenticación API Key.
 
-    Maneja el token en memoria (nunca se guarda en disco).
-    Implementa refresh automático cuando el token expira.
+    Valida API Key mediante endpoint ping.
+    No requiere login ni refresh de token.
     """
 
     def __init__(self, base_url: str, logger=None):
@@ -403,109 +403,79 @@ class APIAuthManager:
         self.logger = logger
 
         # Datos en memoria (NO se guardan en disco)
-        self.api_token = None
-        self.token_expires_at = None
+        self.api_key = None
         self.company_id = None
         self.company_data = None
-
-        # Credenciales (solo para refresh)
-        self.api_email = None
-        self.api_password = None
-        self.device_name = "sync-system"
-
-    def login(self, email: str, password: str) -> dict:
+    def ping_api_key(self, api_key: str) -> dict:
         """
-        Hacer login y obtener token.
+        Validar API Key mediante endpoint ping y obtener info de la empresa.
 
         Args:
-            email: Email del usuario
-            password: Password del usuario
+            api_key: API Key del sistema Chrystal
 
         Returns:
-            Dict con success, company_id, user_data, etc.
+            Dict con success, company_id, company_data, rif, email
         """
         try:
             import requests
 
-            self._log(f"🔐 Haciendo login a la API...")
+            self._log("🔑 Validando API Key...")
 
-            response = requests.post(
-                f"{self.base_url}/auth/login",
+            response = requests.get(
+                f"{self.base_url}/sync-client/ping",
                 headers={
+                    'Authorization': f'Bearer {api_key}',
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
-                json={
-                    'email': email,
-                    'password': password,
-                    'device_name': self.device_name,
-                    'force_logout': True
                 },
                 timeout=30
             )
 
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 if data.get('success'):
-                    user_data = data.get('data', {})
+                    response_data = data.get('data', {})
+                    self.api_key = api_key
+                    self.company_id = response_data.get('id')
+                    self.company_data = {
+                        'name': response_data.get('empresa'),
+                        'rif': response_data.get('rif'),
+                        'email': response_data.get('email')
+                    }
+                    self.company_rif = response_data.get('rif')
+                    self.company_email = response_data.get('email')
 
-                    # Guardar token en memoria
-                    self.api_token = user_data.get('token')
-                    self.token_expires_at = user_data.get('token_expires_at')
-                    self.api_email = email
-                    self.api_password = password
-
-                    self._log(f"✅ Login exitoso")
-                    self._log(f"   Token: {self.api_token[:20]}...")
-                    self._log(f"   Expira: {self.token_expires_at}")
+                    self._log("✅ API Key válida")
+                    self._log(f"   Empresa: {response_data.get('empresa')}")
+                    self._log(f"   RIF: {response_data.get('rif')}")
 
                     return {
                         'success': True,
-                        'user': user_data.get('user'),
-                        'subscription': user_data.get('subscription')
+                        'company_id': self.company_id,
+                        'company': self.company_data
                     }
 
-            self._log(f"❌ Login falló: {response.status_code}", "error")
-
-            # Intentar obtener el mensaje del JSON de respuesta
+            error_msg = 'API Key inválida'
             try:
-                response_data = response.json()
-                # Si viene un 'message' en el JSON, usar ese
-                if 'message' in response_data:
-                    api_message = response_data['message']
-                    self._log(f"   Mensaje API: {api_message}", "error")
-                    return {'success': False, 'error': api_message}
-                # Si viene un 'error' en el JSON
-                elif 'error' in response_data:
-                    api_error = response_data['error']
-                    self._log(f"   Error API: {api_error}", "error")
-                    return {'success': False, 'error': api_error}
+                error_data = response.json()
+                error_msg = error_data.get('message') or error_data.get('error', 'API Key inválida')
             except:
-                pass  # Si no puedo parsear el JSON, usar mensajes por defecto
+                pass
 
-            # Mensajes amigables según código de error (si no hay mensaje específico)
-            if response.status_code == 401:
-                return {'success': False, 'error': 'Credenciales inválidas. Contacta al administrador del sistema.'}
-            elif response.status_code == 404:
-                return {'success': False, 'error': 'URL de la API no encontrada. Verifica la dirección configurada.'}
-            elif response.status_code == 500:
-                return {'success': False, 'error': 'Error interno del servidor. Intente más tarde o contacte soporte.'}
-            elif response.status_code == 503:
-                return {'success': False, 'error': 'Servicio no disponible. Intente más tarde.'}
-            else:
-                return {'success': False, 'error': f'Error de conexión ({response.status_code}). Verifique su conexión a internet.'}
+            self._log(f"❌ API Key inválida: {response.status_code}", "error")
+            return {'success': False, 'error': error_msg}
 
         except Exception as e:
             error_str = str(e).lower()
-            self._log(f"❌ Error en login: {e}", "error")
-
-            # Mensajes amigables para excepciones comunes
+            self._log(f"❌ Error validando API Key: {e}", "error")
             if 'connection' in error_str or 'timed out' in error_str:
                 return {'success': False, 'error': 'No se pudo conectar a la API. Verifique su conexión a internet y la URL configurada.'}
             elif 'timeout' in error_str:
-                return {'success': False, 'error': 'Tiempo de espera agotado. La API está tardando demasiado en responder.'}
+                return {'success': False, 'error': 'Tiempo de espera agotado.'}
             else:
-                return {'success': False, 'error': 'Error de conexión. Verifique la URL de la API y sus credenciales.'}
+                return {'success': False, 'error': f'Error validando API Key: {e}'}
+
+
 
     def validate_company(self, rif: str, email: str) -> dict:
         """
@@ -523,13 +493,13 @@ class APIAuthManager:
 
             self._log(f"🏢 Validando empresa: {rif}")
 
-            if not self.api_token:
-                return {'success': False, 'error': 'No hay token. Haga login primero.'}
+            if not self.api_key:
+                return {'success': False, 'error': 'No hay API Key configurada.'}
 
             response = requests.post(
-                f"{self.base_url}/sync-batch/company/validate",
+                f"{self.base_url}/sync-client/company/validate",
                 headers={
-                    'Authorization': f'Bearer {self.api_token}',
+                    'Authorization': f'Bearer {self.api_key}',
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
@@ -565,63 +535,13 @@ class APIAuthManager:
             return {'success': False, 'error': str(e)}
 
     def get_auth_headers(self) -> dict:
-        """Retornar headers con token de autenticación."""
-        if not self.api_token:
-            raise Exception("No hay token. Haga login primero.")
+        """Retornar headers con API Key."""
+        if not self.api_key:
+            raise Exception("No hay API Key configurada.")
 
         return {
-            'Authorization': f'Bearer {self.api_token}',
+            'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
-        }
-
-    def is_token_expired(self) -> bool:
-        """Verificar si el token expiró."""
-        if not self.token_expires_at:
-            return True
-
-        try:
-            from datetime import datetime
-            expires_at = datetime.fromisoformat(self.token_expires_at.replace('Z', '+00:00'))
-            now = datetime.now(expires_at.tzinfo)
-
-            # Considerar expirado si falta menos de 5 minutos
-            return (expires_at - now).total_seconds() < 300
-        except:
-            return True
-
-    def refresh_token_if_needed(self) -> dict:
-        """
-        Refrescar token si está por expirar.
-
-        Returns:
-            Dict con:
-                - 'success': True si el refresh fue exitoso o no fue necesario
-                - 'token': El token actual (nuevo si se refrescó, existente si no)
-                - 'refreshed': True si se refrescó, False si no fue necesario
-        """
-        if not self.is_token_expired():
-            return {
-                'success': True,
-                'token': self.api_token,
-                'refreshed': False
-            }
-
-        self._log("🔄 Token por expirar, refrescando...")
-
-        if not self.api_email or not self.api_password:
-            self._log("❌ No hay credenciales para refresh", "error")
-            return {
-                'success': False,
-                'token': None,
-                'refreshed': False
-            }
-
-        result = self.login(self.api_email, self.api_password)
-
-        return {
-            'success': result.get('success', False),
-            'token': self.api_token,
-            'refreshed': result.get('success', False)
         }
 
     def _log(self, message: str, level: str = "info"):
@@ -1672,10 +1592,10 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
         try:
             import logging
             base_url = self.auth_manager.base_url
-            api_token = self.auth_manager.api_token
+            api_key = self.auth_manager.api_key
 
-            if not api_token:
-                self._log("❌ No hay token API", "error")
+            if not api_key:
+                self._log("❌ No hay API Key", "error")
                 return False
 
             # Obtener logger compartido para todos los clientes
@@ -1684,31 +1604,31 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
             # Crear clientes
             self.categories_client = CategoriesClient(
                 base_url=base_url,
-                api_key=api_token,
+                api_key=api_key,
                 logger=api_logger
             )
 
             self.products_client = ProductsClient(
                 base_url=base_url,
-                api_key=api_token,
+                api_key=api_key,
                 logger=api_logger
             )
 
             self.customers_client = CustomersClient(
                 base_url=base_url,
-                api_key=api_token,
+                api_key=api_key,
                 logger=api_logger
             )
 
             self.sellers_client = SellersClient(
                 base_url=base_url,
-                api_key=api_token,
+                api_key=api_key,
                 logger=api_logger
             )
 
             self.quotes_client = QuotesClient(
                 base_url=base_url,
-                api_key=api_token,
+                api_key=api_key,
                 logger=api_logger
             )
 
@@ -1717,41 +1637,6 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
 
         except Exception as e:
             self._log(f"❌ Error inicializando clientes API: {e}", "error")
-            return False
-
-    def _update_client_tokens(self, new_token: str) -> bool:
-        """
-        Actualizar el token en todos los clientes API después de un refresh.
-
-        Args:
-            new_token: Nuevo token de autenticación
-
-        Returns:
-            True si se actualizaron todos los clientes correctamente
-        """
-        try:
-            # Actualizar el token en todos los clientes
-            clients_to_update = [
-                ('categories_client', self.categories_client),
-                ('products_client', self.products_client),
-                ('customers_client', self.customers_client),
-                ('sellers_client', self.sellers_client),
-                ('quotes_client', self.quotes_client)
-            ]
-
-            for client_name, client in clients_to_update:
-                if client is not None:
-                    client.api_key = new_token
-                    # Actualizar también el header de la sesión
-                    client.session.headers.update({
-                        'Authorization': f'Bearer {new_token}'
-                    })
-                    self._log(f"✅ Token actualizado en {client_name}", "debug")
-
-            return True
-
-        except Exception as e:
-            self._log(f"❌ Error actualizando tokens en clientes: {e}", "error")
             return False
 
     def sync_all(self) -> dict:
@@ -1767,17 +1652,10 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
         self._log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA")
         self._log("="*70)
 
-        # Refrescar token si es necesario y actualizar clientes
-        refresh_result = self.auth_manager.refresh_token_if_needed()
-        if not refresh_result['success']:
-            self._log("❌ No se pudo refrescar el token", "error")
-            return {'success': False, 'error': 'Token expired'}
-
-        # Si se refrescó el token, actualizar todos los clientes
-        if refresh_result.get('refreshed'):
-            self._log("🔄 Token refrescado, actualizando clientes API...")
-            if not self._update_client_tokens(refresh_result['token']):
-                self._log("⚠️ Warning: No se pudieron actualizar los tokens en todos los clientes", "warning")
+        # Verificar que tengamos API Key
+        if not self.auth_manager.api_key:
+            self._log("❌ No hay API Key configurada", "error")
+            return {'success': False, 'error': 'No API key configured'}
 
         company_id = self.auth_manager.company_id
 
@@ -2110,42 +1988,36 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
 
 def autenticar_para_config(permitir_reconfiguracion=False):
     """
-    Pide autenticación antes de abrir configuración o ejecutar acciones sensibles.
-    - Si permitir_reconfiguracion=False y ya existe config, retorna error (requiere auth)
+    Verifica acceso antes de abrir configuración.
     - Si permitir_reconfiguracion=True y ya existe config, permite acceso directo
-    - Solo acepta usuarios con rol 'cajero'
+    - Si permitir_reconfiguracion=False y ya existe config, pide API Key
 
-    Retorna dict con {'success': bool, 'email': str, 'password': str}
+    Retorna dict con {'success': bool, 'api_key': str}
     """
-    import requests
-    import json
     from config_encryption import decrypt_config
 
-    # Verificar si existe configuración
     config_exists = os.path.exists(CONFIG_FILE)
 
-    # Si ya existe config y se permite reconfiguración, acceso directo
     if config_exists and permitir_reconfiguracion:
-        return {'success': True, 'email': None, 'password': None}
+        return {'success': True, 'api_key': None}
 
-    # No hay config O no se permite reconfiguración - pedir autenticación
-    api_url = 'https://chrystal.com.ve/mobile/public/api'  # Default
+    if not config_exists:
+        return {'success': True, 'api_key': None}
 
-    # Crear ventana de autenticación
+    api_url = 'https://chrystal.com.ve/mobileTest/public/api'
+
     import tkinter as tk
     from tkinter import ttk, messagebox
 
     auth_window = tk.Tk()
-    auth_window.title("Sincronizador - Verificar Identidad")
-    auth_window.geometry("480x280")
+    auth_window.title("Sincronizador - Verificar API Key")
+    auth_window.geometry("480x220")
     auth_window.resizable(False, False)
 
-    # Forzar ventana al frente
     auth_window.attributes('-topmost', True)
     auth_window.lift()
     auth_window.focus_force()
 
-    # Centrar ventana
     auth_window.update_idletasks()
     width = auth_window.winfo_width()
     height = auth_window.winfo_height()
@@ -2154,128 +2026,82 @@ def autenticar_para_config(permitir_reconfiguracion=False):
     auth_window.geometry(f'{width}x{height}+{x}+{y}')
     auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
 
-    # Frame principal
     main_frame = ttk.Frame(auth_window, padding="20")
     main_frame.pack(fill=tk.BOTH, expand=True)
 
-    # Título
     ttk.Label(
         main_frame,
         text="🔐 Verificación Requerida",
         font=('Arial', 12, 'bold')
     ).pack(pady=(0, 15))
 
-    # Instrucción
-    # Nota: config_exists siempre es False aquí porque retornamos temprano si es True
-    instrucción = "Para configurar el sistema por primera vez, ingrese sus credenciales:"
-
     ttk.Label(
         main_frame,
-        text=instrucción,
+        text="Para reconfigurar el sistema, ingrese la API Key:",
         font=('Arial', 9)
     ).pack(pady=(0, 10))
 
-    # Email
-    ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
-    email_entry = ttk.Entry(main_frame, width=40)
-    email_entry.pack(fill=tk.X, pady=(0, 10))
-    email_entry.focus()
+    ttk.Label(main_frame, text="API Key:").pack(anchor=tk.W)
+    api_key_var = tk.StringVar()
+    api_key_entry = ttk.Entry(main_frame, textvariable=api_key_var, width=40, show="*")
+    api_key_entry.pack(fill=tk.X, pady=(0, 15))
+    api_key_entry.focus()
 
-    # Password
-    ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
-    password_entry = ttk.Entry(main_frame, width=40, show="*")
-    password_entry.pack(fill=tk.X, pady=(0, 15))
-
-    auth_result = {'success': False, 'email': None, 'password': None}
+    auth_result = {'success': False, 'api_key': None}
 
     def do_auth():
-        email = email_entry.get().strip()
-        password = password_entry.get().strip()
+        api_key = api_key_var.get().strip()
 
-        if not email or not password:
-            messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
+        if not api_key:
+            messagebox.showwarning("⚠️ Campo vacío", "Por favor ingrese la API Key")
             return
 
         try:
-            # Deshabilitar botón
             auth_btn.config(state='disabled')
             auth_window.update()
 
-            # Llamar a API
-            response = requests.post(
-                f"{api_url}/auth/login",
+            import requests
+            response = requests.get(
+                f"{api_url}/sync-client/ping",
                 headers={
+                    'Authorization': f'Bearer {api_key}',
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                json={
-                    'email': email,
-                    'password': password,
-                    'device_name': 'config_auth',
-                    'force_logout': True
                 },
                 timeout=30
             )
 
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 if data.get('success'):
-                    user_data = data.get('data', {})
-                    user = user_data.get('user', {})
-                    subscriptions = user_data.get('subscription', [])
-
-                    # Validar rol - SOLO cajeros
-                    role = user.get('role')
-                    if role != 'cajero':
-                        messagebox.showerror(
-                            "❌ Acceso Denegado",
-                            f"Rol no autorizado: {role}\n\nSolo pueden acceder usuarios con rol 'cajero'"
-                        )
-                        auth_btn.config(state='normal')
-                        return
-
-                    # Todo OK - guardar credenciales y retornar
-                    # (No validamos company_id porque es la primera instalación)
                     auth_result['success'] = True
-                    auth_result['email'] = email
-                    auth_result['password'] = password
+                    auth_result['api_key'] = api_key
                     auth_window.destroy()
                     return
 
-            # Error de autenticación
-            error_msg = "Credenciales inválidas"
+            error_msg = "API Key inválida"
             try:
                 error_data = response.json()
                 error_msg = error_data.get('message', error_msg)
             except:
                 pass
 
-            messagebox.showerror("❌ Error de Autenticación", f"{error_msg}")
+            messagebox.showerror("❌ Error", f"{error_msg}")
             auth_btn.config(state='normal')
 
         except Exception as e:
             messagebox.showerror("❌ Error", f"Error de conexión:\n{e}")
             auth_btn.config(state='normal')
 
-    # Botón de autenticación
     auth_btn = ttk.Button(main_frame, text="Verificar", command=do_auth)
     auth_btn.pack(fill=tk.X, pady=(0, 10))
 
-    # Enter en password envía el formulario
-    password_entry.bind('<Return>', lambda e: do_auth())
-
-    # Botón cancelar
+    api_key_entry.bind('<Return>', lambda e: do_auth())
     ttk.Button(main_frame, text="Cancelar", command=auth_window.destroy).pack()
 
     auth_window.mainloop()
 
     return auth_result
-
-
-# ==============================================================================
-# GUI - CONFIG WINDOW
-# ==============================================================================
-
 class ConfigWindow:
     """Ventana de configuración inicial."""
 
@@ -2309,9 +2135,8 @@ class ConfigWindow:
             self.root.title("⚙️ Nueva Configuración - Sincronizador API")
 
         # Variables
-        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://chrystal.com.ve/mobile/public/api"))
-        self.api_email_var = tk.StringVar(value=existing_config.get('api_email', ''))
-        self.api_password_var = tk.StringVar()  # Password nunca se carga
+        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://chrystal.com.ve/mobileTest/public/api"))
+        self.api_key_var = tk.StringVar()  # API Key nunca se carga de config existente
 
         self.pg_host_var = tk.StringVar(value=existing_config.get('postgres_host', "localhost"))
         self.pg_port_var = tk.StringVar(value=existing_config.get('postgres_port', "5432"))
@@ -2319,8 +2144,11 @@ class ConfigWindow:
         self.pg_user_var = tk.StringVar(value=existing_config.get('postgres_user', "postgres"))
         self.pg_password_var = tk.StringVar()  # Password se carga si existe
 
-        self.company_rif_var = tk.StringVar(value=existing_config.get('company_rif', ''))
-        self.company_email_var = tk.StringVar(value=existing_config.get('company_email', ''))
+        # Datos de empresa obtenidos del ping (read-only)
+        self.company_name_ping = ""
+        self.company_rif_ping = ""
+        self.company_email_ping = ""
+
         self.sync_interval_var = tk.StringVar(value=existing_config.get('sync_interval_minutes', '30'))
 
         self.log_text = None
@@ -2355,24 +2183,6 @@ class ConfigWindow:
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Pestaña API
-        api_frame = ttk.Frame(notebook)
-        notebook.add(api_frame, text="🔐 API REST")
-
-        # URL de la API fija, no mostrada al usuario
-        # ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
-        # ttk.Entry(api_frame, textvariable=self.api_url_var, width=60).pack(padx=10, pady=5)
-
-        ttk.Label(api_frame, text="Email:").pack(anchor="w", padx=10, pady=(10,0))
-        ttk.Entry(api_frame, textvariable=self.api_email_var, width=60).pack(padx=10, pady=5)
-
-        ttk.Label(api_frame, text="Password:").pack(anchor="w", padx=10, pady=(10,0))
-        ttk.Entry(api_frame, textvariable=self.api_password_var, show="*", width=60).pack(padx=10, pady=5)
-
-        # Botón probar API
-        ttk.Button(api_frame, text="🧪 Probar Conexión API",
-                  command=self.test_api_connection).pack(padx=10, pady=10)
-
         # Pestaña PostgreSQL
         pg_frame = ttk.Frame(notebook)
         notebook.add(pg_frame, text="🐘 PostgreSQL")
@@ -2396,20 +2206,36 @@ class ConfigWindow:
         ttk.Button(pg_frame, text="🧪 Probar Conexión PostgreSQL",
                   command=self.test_postgres_connection).pack(padx=10, pady=10)
 
-        # Pestaña Empresa
-        company_frame = ttk.Frame(notebook)
-        notebook.add(company_frame, text="🏢 Empresa")
+        # Pestaña API KEY
+        api_frame = ttk.Frame(notebook)
+        notebook.add(api_frame, text="🔐 API KEY")
 
-        ttk.Label(company_frame, text="RIF de la empresa (ej: J123456789):").pack(anchor="w", padx=10, pady=(10,0))
-        rif_entry = ttk.Entry(company_frame, textvariable=self.company_rif_var, width=60)
-        rif_entry.pack(padx=10, pady=5)
-        # Convertir a mayúsculas al escribir
-        rif_entry.bind('<KeyRelease>', lambda e: self.company_rif_var.set(self.company_rif_var.get().upper()))
-        rif_entry.bind('<FocusOut>', lambda e: self.company_rif_var.set(self.company_rif_var.get().upper()))
+        ttk.Label(api_frame, text="API Key:").pack(anchor="w", padx=10, pady=(15,0))
+        ttk.Entry(api_frame, textvariable=self.api_key_var, width=60, show="*").pack(padx=10, pady=5)
 
-        ttk.Label(company_frame, text="Email de la empresa:").pack(anchor="w", padx=10, pady=(10,0))
-        self.email_entry = ttk.Entry(company_frame, textvariable=self.company_email_var, width=60)
-        self.email_entry.pack(padx=10, pady=5)
+        ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
+        api_url_entry = ttk.Entry(api_frame, textvariable=self.api_url_var, width=60)
+        api_url_entry.pack(padx=10, pady=5)
+        api_url_entry.config(state="readonly")
+
+        # Botón probar API Key
+        ttk.Button(api_frame, text="🧪 Probar API Key",
+                  command=self.test_api_key).pack(padx=10, pady=10)
+
+        # Separador
+        ttk.Separator(api_frame, orient="horizontal").pack(fill="x", padx=10, pady=10)
+
+        # Datos de empresa (auto-llenados desde ping, read-only)
+        empresa_frame = ttk.LabelFrame(api_frame, text="  Datos de la Empresa  ")
+        empresa_frame.pack(fill="x", padx=10, pady=5)
+
+        self.company_name_label = ttk.Label(empresa_frame, text="Empresa: --", font=("Arial", 10, "bold"))
+        self.company_name_label.pack(anchor="w", padx=10, pady=(10,2))
+        self.company_rif_label = ttk.Label(empresa_frame, text="RIF: --")
+        self.company_rif_label.pack(anchor="w", padx=10, pady=2)
+        self.company_email_label = ttk.Label(empresa_frame, text="Email: --")
+        self.company_email_label.pack(anchor="w", padx=10, pady=(2,10))
+
 
         # Pestaña Configuración
         config_frame = ttk.Frame(notebook)
@@ -2441,130 +2267,118 @@ class ConfigWindow:
             self.log_text.insert("end", f"{message}\n")
             self.log_text.see("end")
 
-    def test_api_connection(self):
-        """Probar conexión a la API REST."""
+    def test_api_key(self):
+        """Probar API Key contra endpoint ping."""
         api_url = self.api_url_var.get().strip()
-        email = self.api_email_var.get().strip()
-        password = self.api_password_var.get().strip()
+        api_key = self.api_key_var.get().strip()
 
-        # Validar campos requeridos
-        if not api_url or not email or not password:
-            messagebox.showwarning("Advertencia", "Por favor complete Email y Password de la API")
+        if not api_url or not api_key:
+            messagebox.showwarning("Advertencia", "Por favor complete la API Key")
             return
 
-        # Deshabilitar botón durante la prueba
-        self.log("🧪 Probando conexión a la API...")
+        self.log("🧪 Probando API Key...")
 
         try:
             import requests
 
-            # Hacer login
-            response = requests.post(
-                f"{api_url}/auth/login",
+            response = requests.get(
+                f"{api_url}/sync-client/ping",
                 headers={
+                    'Authorization': f'Bearer {api_key}',
                     'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 },
-                json={
-                    'email': email,
-                    'password': password,
-                    'device_name': 'config-test',
-                    'force_logout': True
-                },
-                timeout=10
+                timeout=30
             )
 
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 if data.get('success'):
-                    user_data = data.get('data', {})
-                    user = user_data.get('user', {})
+                    response_data = data.get('data', {})
+                    empresa = response_data.get('empresa', 'N/A')
+                    rif = response_data.get('rif', 'N/A')
+                    email = response_data.get('email', 'N/A')
+
+                    # Validar que el email del ping coincida con el email en PostgreSQL
+                    pg_email = None
+                    try:
+                        import psycopg2
+                        pg_conn = psycopg2.connect(
+                            host=self.pg_host_var.get().strip(),
+                            port=self.pg_port_var.get().strip(),
+                            database=self.pg_database_var.get().strip(),
+                            user=self.pg_user_var.get().strip(),
+                            password=self.pg_password_var.get().strip()
+                        )
+                        pg_cursor = pg_conn.cursor()
+                        pg_cursor.execute("SELECT email FROM company LIMIT 1")
+                        row = pg_cursor.fetchone()
+                        if row:
+                            pg_email = row[0]
+                        pg_cursor.close()
+                        pg_conn.close()
+                    except Exception as e:
+                        messagebox.showerror("❌ Error",
+                            f"No se pudo conectar a PostgreSQL para validar la empresa.\n\n"
+                            f"Verifique la conexión en la pestaña PostgreSQL.\n{e}")
+                        self.log("❌ Error validando email en PostgreSQL")
+                        return
+
+                    if not pg_email:
+                        messagebox.showerror("❌ Error",
+                            "No se encontró ningún registro en la tabla 'company' de PostgreSQL.\n\n"
+                            "Debe existir al menos una empresa configurada en la base de datos local.")
+                        self.log("❌ No hay empresas en la tabla company de PostgreSQL")
+                        return
+
+                    # Comparar emails
+                    if email.lower().strip() != pg_email.lower().strip():
+                        messagebox.showerror("❌ Error de Validación",
+                            f"El email de la API Key no coincide con el email registrado en PostgreSQL.\n\n"
+                            f"Email de API: {email}\n"
+                            f"Email en PostgreSQL: {pg_email}\n\n"
+                            f"Verifique que la API Key corresponde a la misma empresa "
+                            f"configurada en la base de datos local.")
+                        self.log(f"❌ Email no coincide: API={email} vs PG={pg_email}")
+                        return
+
+                    # Guardar datos de empresa
+                    self.company_name_ping = empresa
+                    self.company_rif_ping = rif
+                    self.company_email_ping = email
+
+                    # Actualizar labels en la UI
+                    self.company_name_label.config(text=f"Empresa: {empresa}")
+                    self.company_rif_label.config(text=f"RIF: {rif}")
+                    self.company_email_label.config(text=f"Email: {email}")
 
                     messagebox.showinfo(
-                        "✅ Conexión Exitosa",
-                        f"Conexión a la API establecida correctamente.\n\n"
-                        f"Usuario: {user.get('email', 'N/A')}\n"
-                        f"Nombre: {user.get('name', 'N/A')}\n"                        
+                        "✅ API Key Válida",
+                        f"API Key validada correctamente.\n\n"
+                        f"Empresa: {empresa}\n"
+                        f"RIF: {rif}\n"
+                        f"Email: {email}"
                     )
-                    self.log("✅ API: Conexión exitosa")
+                    self.log("✅ API Key válida")
                 else:
-                    messagebox.showerror("❌ Error", f"Login falló: {data.get('message', 'Error desconocido')}")
-                    self.log("❌ API: Login falló")
+                    error_msg = data.get('message', data.get('error', 'Error desconocido'))
+                    messagebox.showerror("❌ Error", f"API Key inválida: {error_msg}")
+                    self.log("❌ API Key inválida")
             elif response.status_code == 401:
-                # Error de autenticación
-                error_msg = "Credenciales incorrectas\n\n"
-                try:
-                    error_detail = response.json()
-                    error_msg += error_detail.get('message', 'Contacta al administrador del sistema para verificar tus credenciales.')
-                except:
-                    error_msg += "Contacta al administrador del sistema para verificar tus credenciales."
-
-                messagebox.showerror("❌ Error de Autenticación", error_msg)
-                self.log(f"❌ API: Credenciales inválidas (401)")
-            elif response.status_code == 422:
-                # Error de validación
-                error_msg = "Datos de validación incorrectos\n\n"
-                try:
-                    error_detail = response.json()
-                    # Obtener mensaje general
-                    if 'message' in error_detail:
-                        error_msg += f"{error_detail['message']}\n\n"
-
-                    # Obtener errores específicos por campo
-                    if 'errors' in error_detail:
-                        errors_dict = error_detail['errors']
-                        for field, messages in errors_dict.items():
-                            if isinstance(messages, list) and messages:
-                                # Traducir campos comunes
-                                field_name = field
-                                if field == 'email':
-                                    field_name = 'Email'
-                                elif field == 'password':
-                                    field_name = 'Password'
-                                elif field == 'company_id':
-                                    field_name = 'ID de Empresa'
-
-                                # Traducir mensajes comunes
-                                message_es = messages[0]
-                                if 'required' in message_es.lower():
-                                    message_es = f"El campo {field_name} es obligatorio"
-                                elif 'email' in message_es.lower() and 'valid' in message_es.lower():
-                                    message_es = f"El formato del {field_name} no es válido"
-
-                                error_msg += f"• {message_es}\n"
-
-                except:
-                    error_msg += "Verifica los datos ingresados"
-
-                messagebox.showerror("❌ Error de Validación", error_msg)
-                self.log(f"❌ API: Error de validación (422)")
+                messagebox.showerror("❌ API Key Inválida",
+                    "La API Key no es válida o no tiene permisos suficientes.")
+                self.log("❌ API Key inválida (401)")
             elif response.status_code >= 500:
-                # Error del servidor (500, 502, 503, etc)
-                error_msg = f"Error del servidor ({response.status_code})\n\n"
+                error_msg = f"Error del servidor ({response.status_code})"
                 try:
                     error_detail = response.json()
-                    error_msg += f"Mensaje: {error_detail.get('message', 'No disponible')}\n"
-                    if 'error' in error_detail:
-                        error_msg += f"Error: {error_detail.get('error', 'No disponible')}"
+                    error_msg += f"\n{error_detail.get('message', '')}"
                 except:
-                    error_msg += f"Respuesta: {response.text[:200]}"
-
+                    pass
                 messagebox.showerror("❌ Error del Servidor", error_msg)
                 self.log(f"❌ API: Error del servidor {response.status_code}")
-                self.log(f"   Detalle: {response.text[:200]}")
             else:
-                # Otros errores
-                error_msg = f"Error HTTP {response.status_code}\n\n"
-                try:
-                    error_detail = response.json()
-                    if 'message' in error_detail:
-                        error_msg += error_detail['message']
-                    else:
-                        error_msg += response.text[:100]
-                except:
-                    error_msg += response.text[:100]
-
-                messagebox.showerror("❌ Error", error_msg)
+                messagebox.showerror("❌ Error", f"Error HTTP {response.status_code}")
                 self.log(f"❌ API: Error HTTP {response.status_code}")
 
         except requests.exceptions.Timeout:
@@ -2659,160 +2473,17 @@ class ConfigWindow:
             )
 
     def on_window_close(self):
-        """Manejador de cierre de ventana de configuración.
-        Valida email en PostgreSQL antes de permitir cerrar la ventana.
-        """
-        # Obtener email a validar
-        company_email = self.company_email_var.get().strip().lower()
-
-        if not company_email:
-            # Email vacío - permitir cerrar
-            self.root.destroy()
-            return
-
-        # Conectar a PostgreSQL para validar
-        try:
-            import psycopg2
-
-            conn = psycopg2.connect(
-                host=self.pg_host_var.get().strip(),
-                port=int(self.pg_port_var.get().strip()),
-                database=self.pg_database_var.get().strip(),
-                user=self.pg_user_var.get().strip(),
-                password=self.pg_password_var.get().strip() or '',
-                connect_timeout=10
-            )
-
-            cursor = conn.cursor()
-
-            # Buscar email en tabla company (case-insensitive)
-            cursor.execute("""
-                SELECT email, description
-                FROM company
-                WHERE LOWER(email) = LOWER(%s)
-                LIMIT 1
-            """, (company_email,))
-
-            result = cursor.fetchone()
-            cursor.close()
-            conn.close()
-
-            if result:
-                # Email encontrado - permitir cerrar
-                self.root.destroy()
-            else:
-                # Email NO encontrado - mostrar error, NO cerrar
-                messagebox.showerror(
-                    "Email no encontrado",
-                    f"El email '{company_email}' NO existe en la base de datos local.\n"
-                    f"Por favor verifica:\n"
-                    f"• El email esté escrito correctamente\n"
-                    f"• La empresa esté registrada en el sistema\n"
-                    f"Luego intenta guardar nuevamente."
-                )
-                # Enfocar campo de email para corregir
-                self.email_entry.focus_set()
-                self.email_entry.select_range(0, tk.END)
-
-        except psycopg2.OperationalError as e:
-            # Error de conexión - permitir cerrar pero mostrar error
-            messagebox.showerror(
-                "Error de conexión",
-                f"No se pudo conectar a PostgreSQL para validar el email:\n{e}\n"
-                f"Verifica los datos de conexión PostgreSQL."
-            )
-            self.root.destroy()
-        except Exception as e:
-            # Error general - permitir cerrar pero mostrar error
-            messagebox.showerror(
-                "Error",
-                f"Error validando email en PostgreSQL:\n{e}"
-            )
-            self.root.destroy()
-
-    def _validar_email_en_postgres(self, company_email: str) -> bool:
-        """
-        Validar que el email de la empresa exista en la tabla company de PostgreSQL.
-
-        Args:
-            company_email: Email de la empresa a validar
-
-        Returns:
-            True si el email existe, False si no existe
-        """
-        try:
-            import psycopg2
-
-            # Conectar a PostgreSQL usando los datos del formulario
-            pg_conn = psycopg2.connect(
-                host=self.pg_host_var.get(),
-                port=self.pg_port_var.get(),
-                database=self.pg_database_var.get(),
-                user=self.pg_user_var.get(),
-                password=self.pg_password_var.get() or '',  # Puede estar vacío
-                connect_timeout=10
-            )
-
-            cursor = pg_conn.cursor()
-
-            # Buscar el email en la tabla company (case-insensitive)
-            cursor.execute("""
-                SELECT email, description
-                FROM company
-                WHERE LOWER(email) = LOWER(%s)
-                LIMIT 1
-            """, (company_email,))
-
-            result = cursor.fetchone()
-            cursor.close()
-            pg_conn.close()
-
-            if result:
-                company_description = result[1]
-                self.log(f"✅ Email encontrado en PostgreSQL: {company_email} → {company_description}")
-                return True
-            else:
-                # Email NO encontrado - mostrar error y poner focus
-                messagebox.showerror(
-                    "❌ Email no encontrado",
-                    f"El email '{company_email}' NO existe en la base de datos local.\n\n"
-                    f"Por favor verifica:\n"
-                    f"• El email esté escrito correctamente\n"
-                    f"• La empresa esté registrada en el sistema\n\n"
-                    f"Luego intenta guardar nuevamente."
-                )
-
-                # Poner focus en el campo de email y seleccionar todo el texto
-                self.email_entry.focus_set()
-                self.email_entry.select_range(0, tk.END)
-
-                return False
-
-        except psycopg2.OperationalError as e:
-            messagebox.showerror(
-                "❌ Error de conexión",
-                f"No se pudo conectar a PostgreSQL para validar el email:\n\n{e}\n\n"
-                f"Verifica los datos de conexión PostgreSQL."
-            )
-            return False
-        except Exception as e:
-            messagebox.showerror(
-                "❌ Error",
-                f"Error validando email en PostgreSQL:\n\n{e}"
-            )
-            return False
+        """Manejador de cierre de ventana de configuración."""
+        self.root.destroy()
 
     def save_config(self):
         """Guardar configuración y verificar conexión con ventana de progreso."""
         # Validar campos requeridos
         required = {
             'URL de la API': self.api_url_var.get(),
-            'Email API': self.api_email_var.get(),
-            'Password API': self.api_password_var.get(),
+            'API Key': self.api_key_var.get(),
             'Database PostgreSQL': self.pg_database_var.get(),
             # Password PostgreSQL puede estar en blanco (confianza en el host)
-            'RIF de la empresa': self.company_rif_var.get(),
-            'Email de la empresa': self.company_email_var.get()
         }
 
         missing = [k for k, v in required.items() if not v]
@@ -2831,27 +2502,29 @@ class ConfigWindow:
             messagebox.showerror("Error", "El intervalo de sincronización debe ser al menos 1 minuto")
             return
 
-        # Validar que el email de la empresa exista en la tabla company de PostgreSQL
-        company_email = self.company_email_var.get().strip().lower()
-        if not self._validar_email_en_postgres(company_email):
-            return
 
         try:
-            # Convertir RIF a mayúsculas
-            company_rif = self.company_rif_var.get().strip().upper()
+            # Validar que tengamos datos de empresa del ping
+            if not self.company_rif_ping or not self.company_email_ping:
+                messagebox.showerror(
+                    "Error",
+                    "Debe probar la API Key primero para obtener los datos de la empresa.\n\n"
+                    "Haga clic en \"Probar API Key\" en la pestaña API KEY."
+                )
+                return
 
             # Crear configuración con datos en texto plano (AÚN NO SE GUARDA EN ARCHIVO)
             config = {
                 'api_url': self.api_url_var.get(),
-                'api_email': self.api_email_var.get(),
-                'api_password': self.api_password_var.get(),  # Se encriptará después si todo es exitoso
+                'api_key': self.api_key_var.get(),  # Se encriptará después si todo es exitoso
                 'postgres_host': self.pg_host_var.get(),
                 'postgres_port': self.pg_port_var.get(),
                 'postgres_database': self.pg_database_var.get(),
                 'postgres_user': self.pg_user_var.get(),
                 'postgres_password': self.pg_password_var.get(),
-                'company_rif': company_rif,
-                'company_email': self.company_email_var.get(),
+                'company_rif': self.company_rif_ping,
+                'company_email': self.company_email_ping,
+                'company_name': self.company_name_ping,
                 'sync_interval_minutes': str(interval_minutes),
                 'configured': True,
                 'first_run': False
@@ -3060,27 +2733,26 @@ class ConfigWindow:
                         actualizar_paso(1, "error", "Error de conexión", 0)
                         raise Exception(f"Error conectando a PostgreSQL: {e}")
 
-                    # PASO 2: Autenticar API
-                    actualizar_paso(2, "en_progreso", "Autenticando...", 0)
-                    actualizar_estado("🔐 Autenticando API...", f"Email: {config['api_email']}")
+                    # PASO 2: Validar API Key
+                    actualizar_paso(2, "en_progreso", "Validando API Key...", 0)
+                    actualizar_estado("🔐 Validando API Key...", "Ping a API")
 
                     auth_manager = None
                     try:
                         auth_manager = APIAuthManager(config['api_url'])
-                        login_result = auth_manager.login(
-                            config['api_email'],
-                            config['api_password']  # Usar password del config (ya está desencriptado)
+                        ping_result = auth_manager.ping_api_key(
+                            config['api_key']
                         )
 
-                        if login_result.get('success'):
-                            actualizar_paso(2, "completado", "Autenticación exitosa", 100)
-                            actualizar_estado("✅ API autenticada", "Token obtenido correctamente")
+                        if ping_result.get('success'):
+                            actualizar_paso(2, "completado", "API Key válida", 100)
+                            actualizar_estado("✅ API Key válida", "Conexión API establecida")
                         else:
-                            actualizar_paso(2, "error", "Autenticación fallida", 0)
-                            raise Exception(f"Login falló: {login_result.get('error')}")
+                            actualizar_paso(2, "error", "API Key inválida", 0)
+                            raise Exception(f"API Key inválida: {ping_result.get('error')}")
                     except Exception as e:
                         actualizar_paso(2, "error", "Error de autenticación", 0)
-                        raise Exception(f"Error autenticando API: {e}")
+                        raise Exception(f"Error validando API Key: {e}")
 
                     # PASO 3: Validar empresa
                     actualizar_paso(3, "en_progreso", "Validando empresa...", 0)
@@ -3104,7 +2776,7 @@ class ConfigWindow:
 
                     # Todo exitoso
                     resultado['exito'] = True
-                    resultado['api_password'] = config['api_password']  # Usar password del config
+                    resultado['api_key'] = config['api_key']  # Usar API Key del config
                     resultado['mensaje'] = "✅ Configuración guardada correctamente\n\n✅ Conexión a PostgreSQL verificada\n✅ Autenticación API validada\n✅ Empresa validada\n\nEl sistema está listo para sincronizar."
 
                 except Exception as e:
@@ -3153,12 +2825,12 @@ class ConfigWindow:
 
             keep_gui_alive()
 
-        def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
+        def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
             """
             Ejecuta la primera sincronización y luego inicia el System Tray
 
             Args:
-                api_password: Password de la API
+                api_key: API Key de la API
                 cerrar_ventana_callback: Función para cerrar la ventana de progreso después de la sync
             """
             # Archivo de log para diagnóstico
@@ -3187,7 +2859,7 @@ class ConfigWindow:
                 config = decrypt_config(config)
 
                 log_debug(f"[DEBUG] Config cargada: {config.get('company_email')}")
-                log_debug(f"[DEBUG] api_password recibido: {'Sí' if api_password else 'No'}")
+                log_debug(f"[DEBUG] api_key recibido: {'Sí' if api_key else 'No'}")
 
                 # Crear ventana de progreso para primera sincronización
                 log_debug("[DEBUG] Creando ventana de sincronización...")
@@ -3326,7 +2998,7 @@ class ConfigWindow:
                         # Login
                         log_debug("[DEBUG] Haciendo login a API...")
                         sync_queue.put("🔐 Autenticando con API...")
-                        auth_manager.login(config['api_email'], api_password)
+                        auth_manager.ping_api_key(config['api_key'])
                         auth_manager.validate_company(config['company_rif'], config['company_email'])
                         log_debug("[DEBUG] Login exitoso")
 
@@ -3359,7 +3031,7 @@ class ConfigWindow:
                                           f"   ✨ Nuevos: {total.get('created', 0)}\n"
                                           f"   🔄 Modificados: {total.get('updated', 0)}\n"
                                           f"   ❌ Eliminados: {total.get('deleted', 0)}",
-                                'api_password': api_password
+                                'api_key': api_key
                             }
                             log_debug(f"[DEBUG] Result sync: creado={total.get('created', 0)}, updated={total.get('updated', 0)}, deleted={total.get('deleted', 0)}")
                         else:
@@ -3367,7 +3039,7 @@ class ConfigWindow:
                             sync_result = {
                                 'exito': False,
                                 'mensaje': "❌ Error de conexión a PostgreSQL o API",
-                                'api_password': api_password
+                                'api_key': api_key
                             }
 
                         sync_manager.close()
@@ -3380,7 +3052,7 @@ class ConfigWindow:
                         sync_result = {
                             'exito': False,
                             'mensaje': f"❌ Error: {str(e)}",
-                            'api_password': api_password
+                            'api_key': api_key
                         }
 
                     log_debug("[DEBUG] Notificando completion...")
@@ -3438,12 +3110,12 @@ class ConfigWindow:
                                     # Ahora iniciar System Tray en un thread separado
                                     # para que no bloquee
                                     log_debug("[DEBUG] Iniciando System Tray en thread separado...")
-                                    log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
+                                    log_debug(f"[DEBUG] api_key en sync_result: {'Sí' if sync_result.get('api_key') else 'No'}")
 
                                     import threading
                                     tray_thread = threading.Thread(
                                         target=iniciar_system_tray,
-                                        args=(config, sync_result.get('api_password')),
+                                        args=(config, sync_result.get('api_key')),
                                         daemon=False  # System Tray debe seguir vivo
                                     )
                                     tray_thread.start()
@@ -3500,7 +3172,7 @@ class ConfigWindow:
                 log_file.close()
                 messagebox.showerror("Error", f"Error preparando sincronización:\n{e}")
 
-        def iniciar_system_tray(config, api_password):
+        def iniciar_system_tray(config, api_key):
             """Inicia el servicio System Tray"""
             # Continuar usando el mismo archivo de log
             log_file = open("primera_sync_log.txt", "a", encoding="utf-8")
@@ -3514,7 +3186,7 @@ class ConfigWindow:
             try:
                 log_debug("\n[DEBUG] ===== INICIAR SYSTEM TRAY =====")
                 log_debug(f"[DEBUG] Company: {config.get('company_email')}")
-                log_debug(f"[DEBUG] API Password: {'***' if api_password else 'None'}")
+                log_debug(f"[DEBUG] API Key: {'***' if api_key else 'None'}")
 
                 # Verificar que hay configuración válida
                 if not config:
@@ -3550,7 +3222,7 @@ class ConfigWindow:
                 log_debug("="*70)
 
                 log_debug("[DEBUG] Creando instancia de SystemTrayService...")
-                tray_service = SystemTrayService(config, None, config.get('api_email'), api_password)
+                tray_service = SystemTrayService(config, api_key)
                 log_debug("[DEBUG] SystemTrayService creada")
 
                 log_debug("[DEBUG] Llamando a tray_service.iniciar()...")
@@ -3581,7 +3253,7 @@ class ConfigWindow:
             except:
                 pass
 
-        def cerrar_ventana_y_iniciar_tray(api_password):
+        def cerrar_ventana_y_iniciar_tray(api_key):
             """Cerrar ventana de progreso y directamente iniciar System Tray"""
             try:
                 # Cerrar ventana de progreso
@@ -3602,7 +3274,7 @@ class ConfigWindow:
                     config = decrypt_config(config)
 
                     # Iniciar System Tray directamente (sin primera sincronización)
-                    iniciar_system_tray(config, api_password)
+                    iniciar_system_tray(config, api_key)
                 else:
                     messagebox.showerror("Error", "No se encontró configuración guardada")
             except Exception as e:
@@ -3644,15 +3316,15 @@ class ConfigWindow:
                     # Obtener config desde las variables (todavía están disponibles)
                     config = {
                         'api_url': self.api_url_var.get(),
-                        'api_email': self.api_email_var.get(),
-                        'api_password': self.api_password_var.get(),
+                        'api_key': self.api_key_var.get(),
                         'postgres_host': self.pg_host_var.get(),
                         'postgres_port': self.pg_port_var.get(),
                         'postgres_database': self.pg_database_var.get(),
                         'postgres_user': self.pg_user_var.get(),
                         'postgres_password': self.pg_password_var.get(),
-                        'company_rif': self.company_rif_var.get().strip().upper(),
-                        'company_email': self.company_email_var.get(),
+                        'company_rif': self.company_rif_ping,
+                        'company_email': self.company_email_ping,
+                        'company_name': self.company_name_ping,
                         'sync_interval_minutes': self.sync_interval_var.get().strip(),
                         'configured': True,
                         'first_run': False
@@ -3669,14 +3341,14 @@ class ConfigWindow:
                     return
 
                 # Mostrar ventana de primera sincronización con progreso detallado
-                progreso.after(1000, lambda: self._mostrar_ventana_carga_api(resultado['api_password']))
+                progreso.after(1000, lambda: self._mostrar_ventana_carga_api(resultado['api_key']))
             else:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana_progreso, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
                 estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
                 messagebox.showinfo("Resultado", resultado['mensaje'])
 
-        def iniciar_tray_despues_de_config(api_password):
+        def iniciar_tray_despues_de_config(api_key):
             """
             Ejecutar primera sincronización con ventana de progreso y luego iniciar System Tray
             (La autenticación ya se pidió ANTES de abrir ConfigWindow)
@@ -3698,7 +3370,7 @@ class ConfigWindow:
 
                 # Ejecutar primera sincronización con ventana de progreso
                 # Esto mostrará una ventana con el progreso de la sincronización
-                ejecutar_primera_sync_y_tray(api_password)
+                ejecutar_primera_sync_y_tray(api_key)
             except Exception as e:
                 messagebox.showerror("Error", f"Error iniciando sincronización:\n{e}")
 
@@ -3708,7 +3380,7 @@ class ConfigWindow:
         ejecutar_verificacion_thread()
 
 
-    def _mostrar_ventana_carga_api(self, api_password):
+    def _mostrar_ventana_carga_api(self, api_key):
         """Mostrar ventana de primera sincronización con progreso detallado."""
         # Cerrar ventana de progreso de verificación
         try:
@@ -3882,7 +3554,7 @@ class ConfigWindow:
                                     pass
                                 import threading
                                 t = threading.Thread(target=iniciar_system_tray,
-                                                    args=(config, api_password),
+                                                    args=(config, api_key),
                                                     daemon=False)
                                 t.start()
 
@@ -3920,11 +3592,11 @@ class ConfigWindow:
                                'text': 'Cargando configuración...'})
 
                 auth_manager = APIAuthManager(config['api_url'])
-                login_result = auth_manager.login(config['api_email'], api_password)
-                if not login_result.get('success'):
+                ping_result = auth_manager.ping_api_key(config['api_key'])
+                if not ping_result.get('success'):
                     sync_queue.put({
                         'type': 'error',
-                        'text': f"Error autenticación: {login_result.get('error', 'Error desconocido')}"
+                        'text': f"Error autenticación: {ping_result.get('error', 'Error desconocido')}"
                     })
                     return
 
@@ -4023,12 +3695,12 @@ class ConfigWindow:
 # PRIMERA SINCRONIZACIÓN Y SYSTEM TRAY
 # ==============================================================================
 
-def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
+def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
     """
     Ejecuta la primera sincronización y luego inicia el System Tray
 
     Args:
-        api_password: Password de la API
+        api_key: API Key de la API
         cerrar_ventana_callback: Función para cerrar la ventana de progreso después de la sync
     """
     # Archivo de log para diagnóstico
@@ -4057,7 +3729,7 @@ def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
         config = decrypt_config(config)
 
         log_debug(f"[DEBUG] Config cargada: {config.get('company_email')}")
-        log_debug(f"[DEBUG] api_password recibido: {'Sí' if api_password else 'No'}")
+        log_debug(f"[DEBUG] api_key recibido: {'Sí' if api_key else 'No'}")
 
         # Crear ventana de progreso para primera sincronización
         log_debug("[DEBUG] Creando ventana de sincronización...")
@@ -4174,12 +3846,12 @@ def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
                                         # Ahora iniciar System Tray en un thread separado
                                         # para que no bloquee
                                         log_debug("[DEBUG] Iniciando System Tray en thread separado...")
-                                        log_debug(f"[DEBUG] api_password en sync_result: {'Sí' if sync_result.get('api_password') else 'No'}")
+                                        log_debug(f"[DEBUG] api_key en sync_result: {'Sí' if sync_result.get('api_key') else 'No'}")
 
                                         import threading
                                         tray_thread = threading.Thread(
                                             target=iniciar_system_tray,
-                                            args=(config, sync_result.get('api_password')),
+                                            args=(config, sync_result.get('api_key')),
                                             daemon=False  # System Tray debe seguir vivo
                                         )
                                         tray_thread.start()
@@ -4255,7 +3927,7 @@ def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
                     sync_queue.put({
                         'type': 'complete',
                         'data': {
-                            'api_password': api_password
+                            'api_key': api_key
                         }
                     })
                 else:
@@ -4291,7 +3963,7 @@ def ejecutar_primera_sync_y_tray(api_password, cerrar_ventana_callback=None):
         messagebox.showerror("Error", f"Error preparando sincronización:\n{e}")
 
 
-def iniciar_system_tray(config, api_password):
+def iniciar_system_tray(config, api_key):
     """Inicia el servicio System Tray"""
     # Continuar usando el mismo archivo de log
     log_file = open("primera_sync_log.txt", "a", encoding="utf-8")
@@ -4305,7 +3977,7 @@ def iniciar_system_tray(config, api_password):
     try:
         log_debug("\n[DEBUG] ===== INICIAR SYSTEM TRAY =====")
         log_debug(f"[DEBUG] Company: {config.get('company_email')}")
-        log_debug(f"[DEBUG] API Password: {'***' if api_password else 'None'}")
+        log_debug(f"[DEBUG] API Key: {'***' if api_key else 'None'}")
 
         # Verificar que hay configuración válida
         if not config:
@@ -4322,7 +3994,7 @@ def iniciar_system_tray(config, api_password):
         log_debug("="*70)
 
         log_debug("[DEBUG] Creando instancia de SystemTrayService...")
-        tray_service = SystemTrayService(config, None, config.get('api_email'), api_password)
+        tray_service = SystemTrayService(config, api_key)
         log_debug("[DEBUG] SystemTrayService creada")
 
         log_debug("[DEBUG] Llamando a tray_service.iniciar()...")
@@ -4491,28 +4163,28 @@ class LauncherWindow:
             messagebox.showerror("Error", f"Error cargando configuración: {e}")
             return
 
-        # Obtener password de la API (ya viene desencriptado)
-        api_password = config.get('api_password')
+        # Obtener API Key (ya viene desencriptado)
+        api_key = config.get('api_key')
 
-        # Si no hay password en config, pedirlo manualmente
-        if not api_password:
-            print("🔐 Se requiere password de la API...")
+        # Si no hay API Key en config, pedirlo manualmente
+        if not api_key:
+            print("🔐 Se requiere API Key...")
             import getpass
             try:
-                api_password = getpass.getpass("Password de la API: ")
+                api_key = getpass.getpass("API Key: ")
             except:
                 # Si falla getpass (Windows a veces), usar tkinter
-                password_dialog = tk.Tk()
-                password_dialog.withdraw()
-                api_password = tk.simpledialog.askstring("Password", "Password de la API:", show='*')
-                password_dialog.destroy()
+                key_dialog = tk.Tk()
+                key_dialog.withdraw()
+                api_key = tk.simpledialog.askstring("API Key", "Ingrese la API Key:", show='*')
+                key_dialog.destroy()
 
-                if not api_password:
+                if not api_key:
                     return
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, None, config.get('api_email'), api_password)
+            tray = SystemTrayService(config, api_key)
             tray.iniciar()
         except Exception as e:
             messagebox.showerror("Error", f"Error iniciando System Tray: {e}\n\nAsegúrese de tener instaladas las dependencias:\npip install pystray Pillow")
@@ -4563,7 +4235,7 @@ class LauncherWindow:
 class ManagerWindow:
     """Ventana principal de administración."""
 
-    def __init__(self, root, api_password=None):
+    def __init__(self, root, api_key=None):
         self.root = root
         self.root.title("Sincronizador API REST - Manager")
         self.root.geometry("800x600")
@@ -4574,8 +4246,8 @@ class ManagerWindow:
         # Sync Manager
         self.sync_manager = None
 
-        # Password de la API (puede venir de reautenticar_usuario)
-        self.api_password = api_password
+        # API Key (puede venir de reautenticar_usuario)
+        self.api_key = api_key
 
         # Cargar configuración (puede ser None si no existe)
         self.config = self.load_config()
@@ -4595,15 +4267,15 @@ class ManagerWindow:
             self.log("⚠️ No hay configuración. Use el botón 'Configurar' para establecerla.")
             self.log("ℹ️ Configure el sistema para comenzar")
         else:
-            # Si hay configuración Y no se pasó password, pedirlo al inicio
-            # Si se pasó password (desde reautenticar_usuario), usarlo directamente
-            if self.api_password:
-                # Password ya proporcionado - hacer login directamente
-                self.log("✅ Password proporcionado desde autenticación previa")
-                self.do_login(self.api_password, None)
+            # Si hay configuración Y no se pasó API Key, pedirlo al inicio
+            # Si se pasó API Key (desde reautenticar_usuario), usarlo directamente
+            if self.api_key:
+                # API Key ya proporcionado - validar directamente
+                self.log("✅ API Key proporcionado desde autenticación previa")
+                self.do_validate_api_key(self.api_key, None)
             else:
-                # Pedir password al usuario
-                self.root.after(100, self.ask_password)
+                # Pedir API Key al usuario
+                self.root.after(100, self.ask_api_key)
 
     def load_config(self):
         """Cargar configuración desde archivo."""
@@ -4618,58 +4290,78 @@ class ManagerWindow:
             messagebox.showerror("Error", f"Error cargando configuración:\n{e}")
         return None
 
-    def ask_password(self):
-        """Pedir password de la API."""
-        # Primero intentar cargar password ya desencriptado del config
-        if self.config and 'api_password' in self.config:
-            api_password = self.config.get('api_password')
-            if api_password:
-                # Password cargado correctamente - hacer login directamente
-                self.log("✅ Password cargado desde configuración")
-                self.do_login(api_password, None)
+    def ask_api_key(self):
+        """Pedir API Key."""
+        # Primero intentar cargar API Key del config
+        if self.config and 'api_key' in self.config:
+            api_key = self.config.get('api_key')
+            if api_key:
+                self.log("API Key cargado desde configuración")
+                self.do_validate_api_key(api_key, None)
                 return
             else:
-                self.log("⚠️  Password en configuración está vacío")
+                self.log("API Key en configuración está vacío")
 
-        # Si no hay password o está vacío, mostrar ventana para pedirlo
         dialog = tk.Toplevel(self.root)
-        dialog.title("🔐 Login API")
-        dialog.geometry("450x220")
+        dialog.title("API Key")
+        dialog.geometry("500x200")
         dialog.resizable(False, False)
 
-        # Hacerla modal
         dialog.transient(self.root)
         dialog.grab_set()
 
-        # Centrar sobre la ventana padre
         dialog.update_idletasks()
         parent_x = self.root.winfo_x()
         parent_y = self.root.winfo_y()
         parent_width = self.root.winfo_width()
         parent_height = self.root.winfo_height()
 
-        x = parent_x + (parent_width // 2) - 225  # 225 = mitad de 450
-        y = parent_y + (parent_height // 2) - 110  # 110 = mitad de 220
+        x = parent_x + (parent_width // 2) - 250
+        y = parent_y + (parent_height // 2) - 100
         dialog.geometry(f"+{x}+{y}")
 
-        # Asegurar que la ventana se vea
         dialog.lift()
         dialog.attributes('-topmost', True)
         dialog.after_idle(lambda: dialog.attributes('-topmost', False))
         dialog.focus_force()
 
-        # Contenido
         frame = tk.Frame(dialog, padx=30, pady=20)
         frame.pack(fill="both", expand=True)
 
-        tk.Label(frame, text="🔐 Ingrese password de la API:",
+        tk.Label(frame, text="Ingrese la API Key:",
                 font=("Arial", 12, "bold")).pack(pady=(0, 15))
 
-        password_var = tk.StringVar()
-        entry = ttk.Entry(frame, textvariable=password_var, show="*", width=35, font=("Arial", 11))
+        key_var = tk.StringVar()
+        entry = ttk.Entry(frame, textvariable=key_var, show="*", width=40, font=("Arial", 11))
         entry.pack(pady=10)
         entry.focus()
 
+        def on_validate():
+            api_key = key_var.get()
+            if not api_key:
+                messagebox.showwarning("Advertencia", "Ingrese la API Key", parent=dialog)
+                entry.focus()
+                return
+
+            self.do_validate_api_key(api_key, dialog)
+
+        def on_cancel():
+            try:
+                dialog.destroy()
+            except:
+                pass
+            try:
+                self.root.destroy()
+            except:
+                pass
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=15)
+        ttk.Button(button_frame, text="Validar", command=on_validate, width=12).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancelar", command=on_cancel, width=12).pack(side="left", padx=5)
+
+        entry.bind("<Return>", lambda e: on_validate())
+        dialog.after(100, entry.focus)
         def on_login():
             password = password_var.get()
             if not password:
@@ -4699,23 +4391,18 @@ class ManagerWindow:
         # Asegurar focus
         dialog.after(100, entry.focus)
 
-    def do_login(self, password: str, dialog: tk.Tk):
-        """Ejecutar login."""
+    def do_validate_api_key(self, api_key: str, dialog: tk.Tk):
+        """Validar API Key mediante ping."""
         try:
-            self.log("🔐 Conectando a la API...")
+            self.log("Validando API Key...")
 
-            # Crear auth manager - usar valores desde config desencriptado
-            base_url = self.config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
+            base_url = self.config.get('api_url', 'https://chrystal.com.ve/mobileTest/public/api')
             self.auth_manager = APIAuthManager(base_url, self.log)
 
-            # Login - usar valores desde config desencriptado
-            result = self.auth_manager.login(
-                self.config.get('api_email'),
-                password
-            )
+            result = self.auth_manager.ping_api_key(api_key)
 
             if not result.get('success'):
-                messagebox.showerror("Error", f"Login falló:\n{result.get('error')}")
+                messagebox.showerror("Error", f"API Key inv\u00e1lida: {result.get('error')}")
                 if dialog:
                     try:
                         dialog.destroy()
@@ -4727,15 +4414,14 @@ class ManagerWindow:
                     pass
                 return
 
-            # Validar empresa
-            self.log("🏢 Validando empresa...")
+            self.log("Validando empresa...")
             result = self.auth_manager.validate_company(
                 self.config.get('company_rif'),
                 self.config.get('company_email')
             )
 
             if not result.get('success'):
-                messagebox.showerror("Error", f"Validación falló:\n{result.get('error')}")
+                messagebox.showerror("Error", f"Validaci\u00f3n fall\u00f3: {result.get('error')}")
                 if dialog:
                     try:
                         dialog.destroy()
@@ -4747,7 +4433,6 @@ class ManagerWindow:
                     pass
                 return
 
-            # Crear sync manager
             pg_config = {
                 'host': self.config.get('postgres_host'),
                 'port': self.config.get('postgres_port'),
@@ -4758,7 +4443,6 @@ class ManagerWindow:
 
             self.sync_manager = APISyncManager(pg_config, self.auth_manager, self.log)
 
-            # Conectar PostgreSQL
             if not self.sync_manager.connect_postgresql():
                 messagebox.showerror("Error", "No se pudo conectar a PostgreSQL")
                 if dialog:
@@ -4772,14 +4456,12 @@ class ManagerWindow:
                     pass
                 return
 
-            # Guardar company_id en sync_config (para que los triggers lo usen)
             try:
                 company_id = self.auth_manager.company_id
                 cursor = self.sync_manager.pg_conn.cursor()
 
-                self.log(f"📝 Guardando company_id {company_id} en sync_config...")
+                self.log(f"Guardando company_id {company_id} en sync_config...")
 
-                # Verificar si ya existe
                 cursor.execute("""
                     SELECT value FROM sync_config WHERE key = 'company_id'
                 """)
@@ -4789,33 +4471,26 @@ class ManagerWindow:
                     valor_actual = existe[0]
                     self.log(f"   sync_config tiene: {valor_actual}")
                     self.log(f"   Actualizando a: {company_id}")
-
-                    # Ya existe: Actualizar
                     cursor.execute("""
                         UPDATE sync_config
                         SET value = %s, updated_at = NOW()
                         WHERE key = 'company_id'
                     """, (str(company_id),))
-
                     self.log(f"   Filas afectadas: {cursor.rowcount}")
                 else:
                     self.log(f"   No existe, insertando nuevo registro...")
-
-                    # No existe: Insertar
                     cursor.execute("""
                         INSERT INTO sync_config (key, value, updated_at)
                         VALUES ('company_id', %s, NOW())
                     """, (str(company_id),))
-
                     self.log(f"   Insertado: {company_id}")
 
                 self.sync_manager.pg_conn.commit()
-                self.log(f"✅ Company_id {company_id} guardado en sync_config")
+                self.log(f"Company_id {company_id} guardado en sync_config")
             except Exception as e:
-                self.log(f"⚠️ Error guardando company_id en sync_config: {e}", "warning")
+                self.log(f"Error guardando company_id en sync_config: {e}", "warning")
                 self.sync_manager.pg_conn.rollback()
 
-            # Inicializar clientes API
             if not self.sync_manager.initialize_api_clients():
                 messagebox.showerror("Error", "No se pudieron inicializar los clientes API")
                 if dialog:
@@ -4829,16 +4504,15 @@ class ManagerWindow:
                     pass
                 return
 
-            # Cerrar diálogo y mostrar ventana principal
             if dialog:
                 try:
                     dialog.destroy()
                 except:
                     pass
-            self.log("✅ Sistema listo para sincronizar")
+            self.log("Sistema listo para sincronizar")
 
         except Exception as e:
-            messagebox.showerror("Error", f"Error durante login:\n{e}")
+            messagebox.showerror("Error", f"Error validando API Key: {e}")
             import traceback
             self.log(traceback.format_exc(), "error")
             if dialog:
@@ -4850,7 +4524,6 @@ class ManagerWindow:
                 self.root.destroy()
             except:
                 pass
-
     def create_widgets(self):
         """Crear widgets de la interfaz."""
 
@@ -5001,7 +4674,7 @@ class ManagerWindow:
 
         # Si hay configuración, pedir password
         if self.config:
-            self.root.after(100, self.ask_password)
+            self.root.after(100, self.ask_api_key)
 
         self.log("✅ Configuración guardada exitosamente")
 
@@ -5208,13 +4881,10 @@ class SystemTrayService:
     Ejecuta sincronizaciones automáticamente sin ventana visible.
     """
 
-    def __init__(self, config, api_token, api_email=None, api_password=None, company_id=None):
+    def __init__(self, config, api_key=None, company_id=None):
         self.config = config
-        self.api_token = api_token  # Token de autenticación
-        self.api_email = api_email  # Email para re-auth
-        self.api_password = api_password  # Password desencriptado (para re-auth)
+        self.api_key = api_key  # API Key para autenticación
         self.company_id = company_id  # Company ID validado al inicio
-        self.user_email = None  # Email del usuario autenticado
         self.sync_running = True
         self.is_syncing = False
         self.last_sync_time = None
@@ -5290,240 +4960,217 @@ class SystemTrayService:
             print(f"⚠️ No se pudo configurar auto-inicio: {e}")
 
     def reautenticar_usuario(self):
-        """
-        Pide autenticación nuevamente antes de ejecutar acciones sensibles.
-        Valida rol y company_id como en authenticate_user_tray().
+            """
+            Pide autenticación nuevamente antes de ejecutar acciones sensibles.
+            Valida rol y company_id como en authenticate_user_tray().
 
-        Returns:
-            bool: True si autenticación exitosa, False si falló
-        """
-        import requests
+            Returns:
+                bool: True si autenticación exitosa, False si falló
+            """
+            import requests
 
-        # Obtener company_id desde sync_config de PostgreSQL
-        company_id_from_config = None
-        try:
-            import psycopg2
-            pg_conn = psycopg2.connect(
-                host=self.config.get('postgres_host'),
-                port=self.config.get('postgres_port', 5432),
-                database=self.config.get('postgres_database'),
-                user=self.config.get('postgres_user'),
-                password=self.config.get('postgres_password')
-            )
-            pg_cursor = pg_conn.cursor()
-            pg_cursor.execute("""
-                SELECT value FROM sync_config WHERE key = 'company_id'
-            """)
-            result = pg_cursor.fetchone()
-            if result:
-                company_id_from_config = int(result[0])
-            pg_cursor.close()
-            pg_conn.close()
-        except Exception as e:
-            messagebox.showerror("❌ Error", f"Error leyendo company_id:\n{e}")
-            return False
-
-        # Crear ventana de reautenticación
-        auth_window = tk.Tk()
-        auth_window.title("Sincronizador - Verificar Identidad")
-        auth_window.geometry("480x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
-        auth_window.resizable(False, False)
-
-        # IMPORTANTE: Forzar ventana al frente en Windows
-        auth_window.attributes('-topmost', True)  # Traer al frente
-        auth_window.lift()  # Elevar ventana
-        auth_window.focus_force()  # Forzar focus
-
-        # Centrar ventana
-        auth_window.update_idletasks()
-        width = auth_window.winfo_width()
-        height = auth_window.winfo_height()
-        x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (auth_window.winfo_screenheight() // 2) - (height // 2)
-        auth_window.geometry(f'{width}x{height}+{x}+{y}')
-
-        # Programar para quitar topmost después de 100ms (para que aparezca arriba pero luego pueda ir atrás)
-        auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
-
-        # Frame principal
-        main_frame = ttk.Frame(auth_window, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Título
-        ttk.Label(
-            main_frame,
-            text="🔐 Verificación Requerida",
-            font=('Arial', 12, 'bold')
-        ).pack(pady=(0, 15))
-
-        # Instrucción
-        ttk.Label(
-            main_frame,
-            text="Para continuar, ingrese sus credenciales:",
-            font=('Arial', 9)
-        ).pack(pady=(0, 10))
-
-        # Email
-        ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
-        email_entry = ttk.Entry(main_frame, width=40)
-        email_entry.pack(fill=tk.X, pady=(0, 10))
-        email_entry.focus()  # Focus en email, campos limpios
-
-        # Password
-        ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
-        password_entry = ttk.Entry(main_frame, width=40, show="*")
-        password_entry.pack(fill=tk.X, pady=(0, 15))
-
-        auth_result = {'success': False}
-
-        def do_auth():
-            email = email_entry.get().strip()
-            password = password_entry.get().strip()
-
-            if not email or not password:
-                messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
-                return
-
+            # Obtener company_id desde sync_config de PostgreSQL (si está disponible)
+            company_id_from_config = None
             try:
-                # Deshabilitar botón
-                auth_btn.config(state='disabled')
-                auth_window.update()
-
-                # Llamar a API
-                api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
-                response = requests.post(
-                    f"{api_url}/auth/login",
-                    headers={
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    },
-                    json={
-                        'email': email,
-                        'password': password,
-                        'device_name': 'tray_auth',
-                        'force_logout': True
-                    },
-                    timeout=30
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('success'):
-                        user_data = data.get('data', {})
-                        user = user_data.get('user', {})
-                        subscriptions = user_data.get('subscription', [])
-
-                        # Validar rol
-                        role = user.get('role')
-                        if role not in ['admin', 'cajero']:
-                            messagebox.showerror(
-                                "❌ Acceso Denegado",
-                                f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
-                            )
-                            auth_btn.config(state='normal')
-                            return
-
-                        # Validar company_id - buscar en todas las suscripciones
-                        company_found = False
-                        company_name = None
-
-                        for subscription_item in subscriptions:
-                            company = subscription_item.get('companies', {})
-                            api_company_id = company.get('id')
-
-                            if api_company_id == company_id_from_config:
-                                company_found = True
-                                company_name = company.get('name', 'N/A')
-                                break
-
-                        if not company_found:
-                            # Mostrar IDs disponibles para debugging
-                            available_companies = [
-                                f"  - ID: {s.get('companies', {}).get('id')} | {s.get('companies', {}).get('name', 'N/A')}"
-                                for s in subscriptions
-                            ]
-                            companies_list = "\n".join(available_companies) if available_companies else "  (No hay compañías)"
-
-                            messagebox.showerror(
-                                "❌ Acceso Denegado",
-                                f"La compañía no coincide\n\n"
-                                f"Configuración local: Company ID {company_id_from_config}\n\n"
-                                f"Compañías disponibles del usuario:\n{companies_list}"
-                            )
-                            auth_btn.config(state='normal')
-                            return
-
-                        # Todo OK - guardar token, email y password
-                        self.api_token = user_data.get('token')
-                        self.user_email = email
-                        self.api_password = password  # Guardar password para usar en Manager
-                        auth_result['success'] = True
-                        auth_window.destroy()
-                        return
-
-                # Error de autenticación
-                error_msg = "Credenciales inválidas"
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('message', error_msg)
-                except:
-                    pass
-
-                messagebox.showerror("❌ Error", f"{error_msg}")
-                auth_btn.config(state='normal')
-
+                if self.config.get('postgres_host'):
+                    import psycopg2
+                    pg_conn = psycopg2.connect(
+                        host=self.config.get('postgres_host'),
+                        port=self.config.get('postgres_port', 5432),
+                        database=self.config.get('postgres_database'),
+                        user=self.config.get('postgres_user'),
+                        password=self.config.get('postgres_password')
+                    )
+                    pg_cursor = pg_conn.cursor()
+                    pg_cursor.execute("""
+                        SELECT value FROM sync_config WHERE key = 'company_id'
+                    """)
+                    result = pg_cursor.fetchone()
+                    if result:
+                        company_id_from_config = int(result[0])
+                    pg_cursor.close()
+                    pg_conn.close()
             except Exception as e:
-                messagebox.showerror("❌ Error", f"Error de conexión:\n{str(e)}")
-                auth_btn.config(state='normal')
+                print(f"Warning: No se pudo obtener company_id de PostgreSQL: {e}")
+                # No es fatal - continuar sin validación de empresa
 
-        def do_cancel():
-            auth_window.destroy()
+            # Crear ventana de reautenticación
+            auth_window = tk.Tk()
+            auth_window.title("Sincronizador - Verificar Identidad")
+            auth_window.geometry("480x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
+            auth_window.resizable(False, False)
 
-        # Botones - colores oscuros para mejor contraste
-        button_frame = tk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(15, 0))
+            # IMPORTANTE: Forzar ventana al frente en Windows
+            auth_window.attributes('-topmost', True)  # Traer al frente
+            auth_window.lift()  # Elevar ventana
+            auth_window.focus_force()  # Forzar focus
 
-        auth_btn = tk.Button(
-            button_frame,
-            text="✅ Verificar",
-            command=do_auth,
-            bg='#2E7D32',  # Verde oscuro
-            fg='white',
-            font=('Arial', 12, 'bold'),
-            relief=tk.RAISED,
-            bd=3,
-            padx=30,
-            pady=12,
-            cursor='hand2',
-            activebackground='#1B5E20',  # Verde más oscuro al hacer clic
-            activeforeground='white'
-        )
-        auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+            # Centrar ventana
+            auth_window.update_idletasks()
+            width = auth_window.winfo_width()
+            height = auth_window.winfo_height()
+            x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
+            y = (auth_window.winfo_screenheight() // 2) - (height // 2)
+            auth_window.geometry(f'{width}x{height}+{x}+{y}')
 
-        cancel_btn = tk.Button(
-            button_frame,
-            text="❌ Cancelar",
-            command=do_cancel,
-            bg='#C62828',  # Rojo oscuro
-            fg='white',
-            font=('Arial', 12, 'bold'),
-            relief=tk.RAISED,
-            bd=3,
-            padx=30,
-            pady=12,
-            cursor='hand2',
-            activebackground='#B71C1C',  # Rojo más oscuro al hacer clic
-            activeforeground='white'
-        )
-        cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
+            # Programar para quitar topmost después de 100ms (para que aparezca arriba pero luego pueda ir atrás)
+            auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
 
-        # Bind Enter
-        auth_window.bind('<Return>', lambda e: do_auth())
+            # Frame principal
+            main_frame = ttk.Frame(auth_window, padding="20")
+            main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Ejecutar ventana
-        auth_window.mainloop()
+            # Título
+            ttk.Label(
+                main_frame,
+                text="🔐 Verificación Requerida",
+                font=('Arial', 12, 'bold')
+            ).pack(pady=(0, 15))
 
-        return auth_result['success']
+            # Instrucción
+            ttk.Label(
+                main_frame,
+                text="Para continuar, ingrese sus credenciales:",
+                font=('Arial', 9)
+            ).pack(pady=(0, 10))
+
+            # Email
+            ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
+            email_entry = ttk.Entry(main_frame, width=40)
+            email_entry.pack(fill=tk.X, pady=(0, 10))
+            email_entry.focus()  # Focus en email, campos limpios
+
+            # Password
+            ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
+            password_entry = ttk.Entry(main_frame, width=40, show="*")
+            password_entry.pack(fill=tk.X, pady=(0, 15))
+
+            auth_result = {'success': False}
+
+            def do_auth():
+                email = email_entry.get().strip()
+                password = password_entry.get().strip()
+
+                if not email or not password:
+                    messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
+                    return
+
+                try:
+                    # Deshabilitar botón
+                    auth_btn.config(state='disabled')
+                    auth_window.update()
+
+                    # Llamar a API
+                    api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
+                    response = requests.post(
+                        f"{api_url}/auth/login",
+                        headers={
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        },
+                        json={
+                            'email': email,
+                            'password': password,
+                            'device_name': 'tray_auth',
+                            'force_logout': True
+                        },
+                        timeout=30
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('success'):
+                            user_data = data.get('data', {})
+                            user = user_data.get('user', {})
+                            subscriptions = user_data.get('subscription', [])
+
+                            # Validar rol
+                            role = user.get('role')
+                            if role not in ['admin', 'cajero']:
+                                messagebox.showerror(
+                                    "❌ Acceso Denegado",
+                                    f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
+                                )
+                                auth_btn.config(state='normal')
+                                return
+
+                            # Validar company_id - buscar en todas las suscripciones
+                            company_found = False
+                            company_name = None                            
+
+                            
+
+                            # Todo OK - guardar token, email y password
+                            self.api_token = user_data.get('token')
+                            self.user_email = email
+                            self.api_password = password  # Guardar password para usar en Manager
+                            auth_result['success'] = True
+                            auth_window.destroy()
+                            return
+
+                    # Error de autenticación
+                    error_msg = "Credenciales inválidas"
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('message', error_msg)
+                    except:
+                        pass
+
+                    messagebox.showerror("❌ Error", f"{error_msg}")
+                    auth_btn.config(state='normal')
+
+                except Exception as e:
+                    messagebox.showerror("❌ Error", f"Error de conexión:\n{str(e)}")
+                    auth_btn.config(state='normal')
+
+            def do_cancel():
+                auth_window.destroy()
+
+            # Botones - colores oscuros para mejor contraste
+            button_frame = tk.Frame(main_frame)
+            button_frame.pack(fill=tk.X, pady=(15, 0))
+
+            auth_btn = tk.Button(
+                button_frame,
+                text="✅ Verificar",
+                command=do_auth,
+                bg='#2E7D32',  # Verde oscuro
+                fg='white',
+                font=('Arial', 12, 'bold'),
+                relief=tk.RAISED,
+                bd=3,
+                padx=30,
+                pady=12,
+                cursor='hand2',
+                activebackground='#1B5E20',  # Verde más oscuro al hacer clic
+                activeforeground='white'
+            )
+            auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+
+            cancel_btn = tk.Button(
+                button_frame,
+                text="❌ Cancelar",
+                command=do_cancel,
+                bg='#C62828',  # Rojo oscuro
+                fg='white',
+                font=('Arial', 12, 'bold'),
+                relief=tk.RAISED,
+                bd=3,
+                padx=30,
+                pady=12,
+                cursor='hand2',
+                activebackground='#B71C1C',  # Rojo más oscuro al hacer clic
+                activeforeground='white'
+            )
+            cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
+
+            # Bind Enter
+            auth_window.bind('<Return>', lambda e: do_auth())
+
+            # Ejecutar ventana
+            auth_window.mainloop()
+
+            return auth_result['success']
 
     def limpiar_auto_inicio(self):
         """
@@ -5574,14 +5221,14 @@ class SystemTrayService:
                 logger=tray_logger
             )
 
-            # Login (usar self.api_email si está disponible, sino leer de config)
-            api_email = self.api_email or self.config.get('api_email')
-            login_result = auth_manager.login(api_email, self.api_password)
-            if not login_result.get('success'):
-                error_msg = login_result.get('error', 'Error de autenticación')
+            # Ping API Key (usar self.api_key si está disponible, sino leer de config)
+            api_key = self.api_key or self.config.get('api_key')
+            ping_result = auth_manager.ping_api_key(api_key)
+            if not ping_result.get('success'):
+                error_msg = ping_result.get('error', 'Error de autenticación')
                 tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
                 self.last_sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.last_sync_status = "❌ Credenciales incorrectas"
+                self.last_sync_status = "❌ API Key inválida"
 
                 # Mostrar mensaje visual al usuario
                 mostrar_banner(
@@ -5706,8 +5353,7 @@ class SystemTrayService:
     def abrir_manager(self):
         """Abre la ventana del manager"""
         # Autenticar antes de abrir manager (solo cajeros)
-        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
-        if not auth_result or not auth_result.get('success', False):
+        if not self.reautenticar_usuario():
             print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
             return
 
@@ -5720,7 +5366,7 @@ class SystemTrayService:
             import tkinter as tk
             root = tk.Tk()
             # Pasar password si está disponible (desde reautenticar_usuario)
-            app = ManagerWindow(root, api_password=getattr(self, 'api_password', None))
+            app = ManagerWindow(root, api_key=getattr(self, 'api_key', None))
             root.mainloop()
         except Exception as e:
             print(f"Error abriendo manager: {e}")
@@ -5728,8 +5374,7 @@ class SystemTrayService:
     def ver_logs(self):
         """Abre ventana de logs"""
         # Autenticar antes de ver logs (solo cajeros)
-        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
-        if not auth_result or not auth_result.get('success', False):
+        if not self.reautenticar_usuario():
             print("❌ Acceso a logs denegado: autenticación fallida o cancelada")
             return
 
@@ -5801,8 +5446,7 @@ class SystemTrayService:
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú"""
         # Autenticar antes de sincronizar (solo cajeros)
-        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
-        if not auth_result or not auth_result.get('success', False):
+        if not self.reautenticar_usuario():
             print("❌ Sincronización cancelada: autenticación fallida o cancelada")
             return
 
@@ -5834,8 +5478,7 @@ class SystemTrayService:
     def _abrir_config_thread(self):
         """Abre config en thread separado con autenticación"""
         # Verificar autenticación antes de abrir config
-        auth_result = autenticar_para_config()
-        if not auth_result or not auth_result.get('success', False):
+        if not self.reautenticar_usuario():
             print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
             return
 
@@ -5850,8 +5493,7 @@ class SystemTrayService:
     def salir(self):
         """Sale del sistema tray con autenticación"""
         # Autenticar antes de salir (solo cajeros)
-        auth_result = autenticar_para_config(permitir_reconfiguracion=False)
-        if not auth_result or not auth_result.get('success', False):
+        if not self.reautenticar_usuario():
             print("❌ Salida cancelada: autenticación fallida o cancelada")
             return
 
@@ -6014,14 +5656,14 @@ def run_sync_console():
         sys.exit(1)
 
     # Obtener password de la API (ya desencriptado)
-    api_password = config.get('api_password')
-    if api_password:
+    api_key = config.get('api_key')
+    if api_key:
         print("✅ Password de la API cargado desde configuración")
 
     # Si no hay password en config, pedirlo
-    if not api_password:
+    if not api_key:
         import getpass
-        api_password = getpass.getpass("Password de la API: ")
+        api_key = getpass.getpass("API Key: ")
 
     # Crear logger para consola
     def console_logger(msg, level="info"):
@@ -6042,9 +5684,9 @@ def run_sync_console():
 
         # Login
         print("\n🔐 Autenticando...")
-        result = auth_manager.login(config['api_email'], api_password)
+        result = auth_manager.ping_api_key(api_key)
         if not result.get('success'):
-            print(f"❌ Login falló: {result.get('error')}")
+            print(f"❌ API Key inválida: {result.get('error')}")
             sys.exit(1)
 
         # Validar empresa
@@ -6148,14 +5790,14 @@ def run_service_loop():
     print("💡 Presione Ctrl+C para detener\n")
 
     # Obtener password de la API (ya desencriptado)
-    api_password = config.get('api_password')
-    if api_password:
+    api_key = config.get('api_key')
+    if api_key:
         print("✅ Password de la API cargado desde configuración")
 
     # Si no hay password en config, pedirlo UNA vez
-    if not api_password:
+    if not api_key:
         import getpass
-        api_password = getpass.getpass("Password de la API: ")
+        api_key = getpass.getpass("API Key: ")
 
     sync_count = 0
 
@@ -6194,7 +5836,7 @@ def run_service_loop():
                     logger=console_logger
                 )
 
-                auth_manager.login(config['api_email'], api_password)
+                auth_manager.ping_api_key(api_key)
                 auth_manager.validate_company(config['company_rif'], config['company_email'])
 
                 sync_manager = APISyncManager(
@@ -6248,8 +5890,26 @@ def main():
 
     if is_exe and no_args:
         # MODO AUTOMÁTICO para .exe (como sync_system.py)
-        # 1. Si no hay config → abrir configuración → sync → tray
-        # 2. Si hay config → sync → tray
+        # 1. Validar identidad del usuario (email/password)
+        # 2. Si no hay config → abrir configuración → sync → tray
+        # 3. Si hay config → sync → tray
+
+        # Validar identidad del usuario primero (email/password)
+        try:
+            _cfg_first = None
+            if os.path.exists(CONFIG_FILE):
+                from config_encryption import decrypt_config
+                with open(CONFIG_FILE, 'r') as f:
+                    _cfg_first = decrypt_config(json.load(f))
+            else:
+                _cfg_first = {'api_url': 'https://chrystal.com.ve/mobileTest/public/api'}
+            _tray_first = SystemTrayService(_cfg_first, _cfg_first.get('api_key'))
+            if not _tray_first.reautenticar_usuario():
+                print("❌ Verificación de identidad fallida o cancelada")
+                return
+        except Exception as e:
+            print(f"❌ Error en verificación de identidad: {e}")
+            return
 
         if not os.path.exists(CONFIG_FILE):
             # No hay configuración - abrir modo config con autenticación PRIMERO
@@ -6270,24 +5930,24 @@ def main():
             from config_encryption import decrypt_config
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
-            # Desencriptar todos los campos sensibles
             config = decrypt_config(config)
         except Exception as e:
             print(f"❌ Error cargando configuración: {e}")
             return
 
-        # Obtener password de la API (ya desencriptado)
-        api_password = config.get('api_password')
 
-        # Si no hay password en config, pedirlo con ventana GUI
-        if not api_password:
+        # Obtener API Key (ya desencriptado)
+        api_key = config.get('api_key')
+
+        # Si no hay API Key en config, pedirlo con ventana GUI
+        if not api_key:
             import tkinter.simpledialog as simpledialog
-            pass_root = tk.Tk()
-            pass_root.withdraw()
-            api_password = simpledialog.askstring("🔐 Password de la API", "Ingrese su password:", show='*')
-            pass_root.destroy()
+            key_root = tk.Tk()
+            key_root.withdraw()
+            api_key = simpledialog.askstring("🔐 API Key", "Ingrese la API Key:", show='*')
+            key_root.destroy()
 
-            if not api_password:
+            if not api_key:
                 return
 
         # Ejecutar sincronización
@@ -6300,9 +5960,9 @@ def main():
                 logger=lambda msg, level="info": print(f"{'✅' if level == 'info' else '❌'} {msg}")
             )
 
-            result = auth_manager.login(config['api_email'], api_password)
+            result = auth_manager.ping_api_key(api_key)
             if not result.get('success'):
-                print(f"❌ Login falló: {result.get('error')}")
+                print(f"❌ API Key inválida: {result.get('error')}")
                 return
 
             sync_manager = APISyncManager(
@@ -6342,7 +6002,7 @@ def main():
         print("="*70 + "\n")
 
         try:
-            tray = SystemTrayService(config, None, config.get('api_email'), api_password)
+            tray = SystemTrayService(config, config.get('api_key'))
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
@@ -6372,6 +6032,23 @@ def main():
 
     # Ejecutar según modo
     if args.mode == "config":
+        # Verificar identidad del usuario (email/password) primero
+        try:
+            _cfg = None
+            if os.path.exists(CONFIG_FILE):
+                from config_encryption import decrypt_config
+                with open(CONFIG_FILE, 'r') as f:
+                    _cfg = decrypt_config(json.load(f))
+            else:
+                _cfg = {'api_url': 'https://chrystal.com.ve/mobileTest/public/api'}
+            _tray_first = SystemTrayService(_cfg, _cfg.get('api_key'))
+            if not _tray_first.reautenticar_usuario():
+                print("❌ Verificación de identidad fallida o cancelada")
+                sys.exit(1)
+        except Exception as e:
+            print(f"❌ Error verificando identidad:\n{e}")
+            sys.exit(1)
+
         # Verificar autenticación antes de abrir config
         auth_result = autenticar_para_config()
         if auth_result and auth_result.get('success', False):
@@ -6389,11 +6066,11 @@ def main():
                 # y luego iniciará el System Tray automáticamente
                 try:
                     # Obtener password de autenticación para usar en la primera sync
-                    api_password = auth_result.get('password')
+                    api_key = auth_result.get('api_key')
 
                     # Ejecutar primera sincronización con ventana de progreso
                     # Esta función iniciará el System Tray después de completar la sync
-                    ejecutar_primera_sync_y_tray(api_password)
+                    ejecutar_primera_sync_y_tray(api_key)
                 except Exception as e:
                     print(f"❌ Error ejecutando primera sincronización: {e}")
                     print("💡 Ejecute manualmente: python3 sync_system_api.py --mode tray")
@@ -6442,38 +6119,36 @@ def main():
             print(f"❌ Error cargando configuración: {e}")
             sys.exit(1)
 
-        # Intentar cargar password encriptado del config
-        api_password = None
-        if 'api_password_encrypted' in config:
+        # Intentar cargar API Key del config
+        api_key = None
+        if 'api_key' in config:
             try:
-                from config_encryption import decrypt_password
-                api_password = decrypt_password(config['api_password_encrypted'])
-                if api_password:
-                    print("✅ Password de la API cargado desde configuración")
+                from config_encryption import decrypt_config
+                decrypted = decrypt_config(config)
+                api_key = decrypted.get('api_key')
+                if api_key:
+                    print("✅ API Key cargado desde configuración")
             except Exception as e:
-                print(f"⚠️  Error cargando password encriptado: {e}")
+                print(f"⚠️  Error cargando API Key: {e}")
 
-        # Si no hay password en config, pedirlo
-        if not api_password:
+        # Si no hay API Key en config, pedirlo
+        if not api_key:
             import getpass
-            api_password = getpass.getpass("Password de la API: ")
+            api_key = getpass.getpass("API Key: ")
 
-        # Autenticar y validar empresa
-        print("🔐 Autenticando con API...")
-        from APIAuthManager import APIAuthManager
+        print("🔐 Validando API Key...")
         auth_manager = APIAuthManager(
-            base_url=config.get('api_url', 'https://chrystal.com.ve/mobile/public/api'),
+            base_url=config.get('api_url', 'https://chrystal.com.ve/mobileTest/public/api'),
             logger=None
         )
 
-        # Login
-        login_result = auth_manager.login(config.get('api_email'), api_password)
-        if not login_result.get('success'):
-            print(f"❌ Login falló: {login_result.get('message', 'Error desconocido')}")
+        # Ping API Key
+        ping_result = auth_manager.ping_api_key(config.get('api_key', api_key))
+        if not ping_result.get('success'):
+            print(f"❌ API Key inválida: {ping_result.get('error', 'Error desconocido')}")
             sys.exit(1)
 
-        api_token = auth_manager.api_token
-        print("✅ Login exitoso")
+        print("✅ API Key válida")
 
         # Validar empresa para obtener company_id
         print("🏢 Validando empresa...")
@@ -6487,15 +6162,13 @@ def main():
 
         # Iniciar System Tray
         try:
-            tray = SystemTrayService(config, api_token, config.get('api_email'), api_password, company_id)
+            tray = SystemTrayService(config, api_key, company_id)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
             print("\nAsegúrese de tener instaladas las dependencias:")
             print("  pip install pystray Pillow")
             sys.exit(1)
-
-
 if __name__ == "__main__":
     try:
         main()

@@ -13,9 +13,9 @@ class SellersClient(BaseAPIClient):
     Cliente para el endpoint de sellers con batch inteligente.
 
     Endpoints implementados:
-    - GET /api/sync-batch/sellers
-    - POST /api/sync-batch/sellers
-    - DELETE /api/sync-batch/sellers
+    - GET /api/sync-client/batch/sellers
+    - POST /api/sync-client/batch/sellers
+    - DELETE /api/sync-client/batch/sellers
 
     Particularidad:
     - Crea users automáticamente cuando no existen
@@ -109,7 +109,7 @@ class SellersClient(BaseAPIClient):
                 params['from_date'] = from_date
 
             try:
-                response = self.get('/sync-batch/sellers', params)
+                response = self.get('/sync-client/batch/sellers', params)
             except Exception as e:
                 self.logger.error(f"Error fetching sellers page {page}: {e}")
                 break
@@ -237,7 +237,7 @@ class SellersClient(BaseAPIClient):
             )
 
             try:
-                result = self.post('/sync-batch/sellers', {
+                result = self.post('/sync-client/batch/sellers', {
                     'company_id': company_id,
                     'sellers': batch
                 })
@@ -312,7 +312,7 @@ class SellersClient(BaseAPIClient):
         self.logger.info(f"Deleting {len(codes)} sellers from company {company_id}")
 
         try:
-            result = self.delete('/sync-batch/sellers', {
+            result = self.delete('/sync-client/batch/sellers', {
                 'company_id': company_id,
                 'codes': codes
             })

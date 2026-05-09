@@ -45,7 +45,7 @@ class QuotesClient(BaseAPIClient):
         """
         try:
             response = self.get(
-                "/sync-batch/quotes",
+                "/sync-client/batch/quotes",
                 params={
                     'company_id': company_id,
                     'status': 'draft'
@@ -72,7 +72,7 @@ class QuotesClient(BaseAPIClient):
             True si exitoso
         """
         try:
-            response = self.post(f"/sync-batch/quotes/{quote_id}/synced", json_data={})
+            response = self.post(f"/sync-client/batch/quotes/{quote_id}/synced", json_data={})
             return True
 
         except Exception as e:
@@ -93,7 +93,7 @@ class QuotesClient(BaseAPIClient):
         """
         try:
             response = self.put(
-                f"/sync-batch/quotes/{quote_id}/status",
+                f"/sync-client/batch/quotes/{quote_id}/status",
                 json_data={
                     'company_id': company_id,
                     'status': status

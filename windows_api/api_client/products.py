@@ -13,9 +13,9 @@ class ProductsClient(BaseAPIClient):
     Cliente para el endpoint de products con batch inteligente.
 
     Endpoints implementados:
-    - GET /api/sync-batch/products
-    - POST /api/sync-batch/products
-    - DELETE /api/sync-batch/products
+    - GET /api/sync-client/batch/products
+    - POST /api/sync-client/batch/products
+    - DELETE /api/sync-client/batch/products
 
     Uso:
         client = ProductsClient(
@@ -118,7 +118,7 @@ class ProductsClient(BaseAPIClient):
                 params['category_id'] = category_id
 
             try:
-                response = self.get('/sync-batch/products', params)
+                response = self.get('/sync-client/batch/products', params)
             except Exception as e:
                 self.logger.error(f"Error fetching products page {page}: {e}")
                 break
@@ -270,7 +270,7 @@ class ProductsClient(BaseAPIClient):
             )
 
             try:
-                result = self.post('/sync-batch/products', {
+                result = self.post('/sync-client/batch/products', {
                     'company_id': company_id,
                     'products': batch
                 })
@@ -344,7 +344,7 @@ class ProductsClient(BaseAPIClient):
         self.logger.info(f"Deleting {len(codes)} products from company {company_id}")
 
         try:
-            result = self.delete('/sync-batch/products', {
+            result = self.delete('/sync-client/batch/products', {
                 'company_id': company_id,
                 'codes': codes
             })

@@ -13,7 +13,7 @@ class CompanyClient(BaseAPIClient):
     Cliente para el endpoint de company.
 
     Endpoint:
-    - POST /api/sync-batch/company/validate
+    - POST /api/sync-client/batch/company/validate
 
     Uso:
         client = CompanyClient(
@@ -104,7 +104,7 @@ class CompanyClient(BaseAPIClient):
         self.logger.info(f"Validating company: RIF={rif}, Email={email}")
 
         try:
-            result = self.post('/sync-batch/company/validate', payload)
+            result = self.post('/sync-client/batch/company/validate', payload)
 
             if result.get('success'):
                 company_id = result.get('company_id')

@@ -13,9 +13,9 @@ class CustomersClient(BaseAPIClient):
     Cliente para el endpoint de customers con batch inteligente.
 
     Endpoints implementados:
-    - GET /api/sync-batch/customers
-    - POST /api/sync-batch/customers
-    - DELETE /api/sync-batch/customers
+    - GET /api/sync-client/batch/customers
+    - POST /api/sync-client/batch/customers
+    - DELETE /api/sync-client/batch/customers
 
     Uso:
         client = CustomersClient(
@@ -103,7 +103,7 @@ class CustomersClient(BaseAPIClient):
                 params['from_date'] = from_date
 
             try:
-                response = self.get('/sync-batch/customers', params)
+                response = self.get('/sync-client/batch/customers', params)
             except Exception as e:
                 self.logger.error(f"Error fetching customers page {page}: {e}")
                 break
@@ -232,7 +232,7 @@ class CustomersClient(BaseAPIClient):
             )
 
             try:
-                result = self.post('/sync-batch/customers', {
+                result = self.post('/sync-client/batch/customers', {
                     'company_id': company_id,
                     'customers': batch
                 })
@@ -306,7 +306,7 @@ class CustomersClient(BaseAPIClient):
         self.logger.info(f"Deleting {len(documents)} customers from company {company_id}")
 
         try:
-            result = self.delete('/sync-batch/customers', {
+            result = self.delete('/sync-client/batch/customers', {
                 'company_id': company_id,
                 'documents': documents
             })

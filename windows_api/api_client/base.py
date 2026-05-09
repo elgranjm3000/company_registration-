@@ -63,8 +63,8 @@ class BaseAPIClient:
             timeout=30
         )
 
-        response = client.get('/sync-batch/products', params={'company_id': 1})
-        response = client.post('/sync-batch/products', json_data={...})
+        response = client.get('/sync-client/batch/products', params={'company_id': 1})
+        response = client.post('/sync-client/batch/products', json_data={...})
     """
 
     def __init__(
@@ -147,7 +147,7 @@ class BaseAPIClient:
 
         Args:
             method: Método HTTP (GET, POST, PUT, DELETE)
-            endpoint: Endpoint sin la base URL (ej: '/sync-batch/products')
+            endpoint: Endpoint sin la base URL (ej: '/sync-client/batch/products')
             params: Query parameters para GET
             json_data: Body para POST/PUT
             retry_on_rate_limit: Si True, espera y reintenta en 429
