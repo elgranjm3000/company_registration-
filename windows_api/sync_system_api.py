@@ -3988,6 +3988,45 @@ def iniciar_system_tray(config, api_key):
         log_file.close()
 
 
+
+    # Ejecutar primera sincronización y luego iniciar System Tray
+    print("="*70)
+    print("🔄 SINCRONIZACIÓN INICIAL...")
+    print("="*70)
+    
+    # Cargar configuración
+    if not os.path.exists(CONFIG_FILE):
+        print("❌ No hay configuración. Ejecute --mode config primero")
+        return False
+    
+    try:
+        from config_encryption import decrypt_config
+        with open(CONFIG_FILE, 'r') as f:
+            cfg = json.load(f)
+        config = decrypt_config(cfg)
+    except Exception as e:
+        print(f"❌ Error cargando configuración: {e}")
+        return False
+    
+    api_key = config.get('api_key', '')
+    if not api_key:
+        print("❌ No hay API Key en configuración")
+        return False
+    
+    # Ejecutar sincronización
+    try:
+        from sync_system_api import ejecutar_primera_sync_y_tray, log_startup_error
+        ejecutar_primera_sync_y_tray(api_key)
+        print("✅ Primera sincronización completada")
+        print("✅ System Tray iniciado")
+        return True
+    except Exception as e:
+        print(f"❌ Error en primera sincronización: {e}")
+        import traceback
+        print(traceback.format_exc())
+        log_startup_error("FIRST_SYNC_ERROR", str(e), traceback.format_exc())
+        return False
+
 # ==============================================================================
 # GUI - LAUNCHER WINDOW (Menú Principal)
 # ==============================================================================
@@ -5874,30 +5913,7 @@ def run_service_loop():
 # MAIN
 # ==============================================================================
 
-def main():
-    """Función principal."""
 
-    # Verificar si es ejecutable compilado y no hay argumentos
-    # O si no se pasan argumentos explícitos
-    import sys
-    is_exe = getattr(sys, 'frozen', False)
-    no_args = len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[0].endswith('.exe'))
-
-    if is_exe and no_args:
-        # MODO AUTOMÁTICO para .exe (como sync_system.py)
-        # 1. Validar identidad del usuario (email/password)
-        # 2. Si no hay config → abrir configuración → sync → tray
-        # 3. Si hay config → sync → tray
-
-        # Validar identidad del usuario primero (email/password)
-        try:
-            _cfg_first = None
-            if os.path.exists(CONFIG_FILE):
-                from config_encryption import decrypt_config
-                with open(CONFIG_FILE, 'r') as f:
-                    _cfg_first = decrypt_config(json.load(f))
-            else:
-                _cfg_first = {'api_url': 'https://chrystal.com.ve/mobiletest/public/api'}
             _tray_first = SystemTrayService(_cfg_first, _cfg_first.get('api_key'))
             if not _tray_first.reautenticar_usuario():
                 print("❌ Verificación de identidad fallida o cancelada")
