@@ -5914,7 +5914,8 @@ def run_service_loop():
 # ==============================================================================
 
 
-        _tray_first = SystemTrayService(_cfg_first, _cfg_first.get('api_key'))
+
+def main():\n# =============================================================================\n# MAIN\n# =============================================================================\n\ndef main():\n
         if not _tray_first.reautenticar_usuario():
         print("❌ Verificación de identidad fallida o cancelada")
         return

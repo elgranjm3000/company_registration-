@@ -5914,37 +5914,38 @@ def run_service_loop():
 # ==============================================================================
 
 
-            _tray_first = SystemTrayService(_cfg_first, _cfg_first.get('api_key'))
-            if not _tray_first.reautenticar_usuario():
-                print("❌ Verificación de identidad fallida o cancelada")
-                return
+
+def main():\n# =============================================================================\n# MAIN\n# =============================================================================\n\ndef main():\n
+        if not _tray_first.reautenticar_usuario():
+        print("❌ Verificación de identidad fallida o cancelada")
+        return
         except Exception as e:
-            print(f"❌ Error en verificación de identidad: {e}")
-            return
+        print(f"❌ Error en verificación de identidad: {e}")
+        return
 
         if not os.path.exists(CONFIG_FILE):
-            # No hay configuración - abrir modo config con autenticación PRIMERO
-            # Pedir autenticación ANTES de configurar
-            auth_result = autenticar_para_config()
-            if not auth_result or not auth_result.get('success', False):
-                print("❌ Acceso denegado: autenticación fallida o cancelada")
-                return
+        # No hay configuración - abrir modo config con autenticación PRIMERO
+        # Pedir autenticación ANTES de configurar
+        auth_result = autenticar_para_config()
+        if not auth_result or not auth_result.get('success', False):
+        print("❌ Acceso denegado: autenticación fallida o cancelada")
+        return
 
-            root = tk.Tk()
-            app = ConfigWindow(root)
-            root.mainloop()
-            # Después de configurar, continuar con sync y tray
+        root = tk.Tk()
+        app = ConfigWindow(root)
+        root.mainloop()
+        # Después de configurar, continuar con sync y tray
         # Continuar con sincronización y tray (hay config o se acaba de crear)
 
         # Cargar configuración
         try:
-            from config_encryption import decrypt_config
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-            config = decrypt_config(config)
+        from config_encryption import decrypt_config
+        with open(CONFIG_FILE, 'r') as f:
+        config = json.load(f)
+        config = decrypt_config(config)
         except Exception as e:
-            print(f"❌ Error cargando configuración: {e}")
-            return
+        print(f"❌ Error cargando configuración: {e}")
+        return
 
 
         # Obtener API Key (ya desencriptado)
