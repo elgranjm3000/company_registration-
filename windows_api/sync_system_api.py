@@ -3481,7 +3481,6 @@ class ConfigWindow:
                                 from datetime import datetime
                                 error_file = "tray_error_log.txt"
                                 try:
-                                    import threading
                                     log_msg = f"[{datetime.now()}] Iniciando thread de system tray..."
                                     print(log_msg)
                                     with open(error_file, "a") as ef:
@@ -3641,16 +3640,14 @@ class ConfigWindow:
                 print(fallback_log)
                 with open("tray_error_log.txt", "a") as ef:
                     ef.write(fallback_log + "\n")
-                import threading
                 t = threading.Thread(target=iniciar_system_tray,
                                     args=(config, api_key),
                                     daemon=False)
                 t.start()
                 print(f"[{datetime.now()}] FALLBACK: Tray iniciado correctamente")
             except Exception as e:
-                import traceback
                 print(f"[{datetime.now()}] FALLBACK: Error iniciando tray: {e}")
-                print(traceback.format_exc())
+                traceback.print_exc()
 
 
 
@@ -6065,7 +6062,6 @@ def main():
             print("✅ Sistema iniciado en segundo plano (bandeja de tareas)")
             try:
                 # Bloquear el hilo principal para que el proceso no termine
-                import threading
                 evento_espera = threading.Event()
                 evento_espera.wait()  # Espera indefinida
             except KeyboardInterrupt:
@@ -6093,7 +6089,6 @@ def main():
                 api_key = _cfg.get('api_key', '')
                 if api_key:
                     # Iniciar tray en un hilo
-                    import threading
                     tray_thread = threading.Thread(
                         target=iniciar_system_tray,
                         args=(_cfg, api_key),
@@ -6109,8 +6104,7 @@ def main():
                         print("\n👋 Cerrando sistema...")
             except Exception as e:
                 print(f"❌ Error iniciando System Tray desde Manager: {e}")
-                import traceback
-                print(traceback.format_exc())
+                traceback.print_exc()
 
     elif args.mode == "sync":
         # Modo sincronización única (sin GUI)
