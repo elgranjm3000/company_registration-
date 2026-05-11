@@ -5913,39 +5913,61 @@ def run_service_loop():
 # MAIN
 # ==============================================================================
 
+def main():
+    """Función principal."""
 
+    # Verificar si es ejecutable compilado y no hay argumentos
+    # O si no se pasan argumentos explícitos
+    import sys
+    is_exe = getattr(sys, 'frozen', False)
+    no_args = len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[0].endswith('.exe'))
 
-def main():\n# =============================================================================\n# MAIN\n# =============================================================================\n\ndef main():\n
-        if not _tray_first.reautenticar_usuario():
-        print("❌ Verificación de identidad fallida o cancelada")
-        return
+    if is_exe and no_args:
+        # MODO AUTOMÁTICO para .exe (como sync_system.py)
+        # 1. Validar identidad del usuario (email/password)
+        # 2. Si no hay config → abrir configuración → sync → tray
+        # 3. Si hay config → sync → tray
+
+        # Validar identidad del usuario primero (email/password)
+        try:
+            _cfg_first = None
+            if os.path.exists(CONFIG_FILE):
+                from config_encryption import decrypt_config
+                with open(CONFIG_FILE, 'r') as f:
+                    _cfg_first = decrypt_config(json.load(f))
+            else:
+                _cfg_first = {'api_url': 'https://chrystal.com.ve/mobiletest/public/api'}
+            _tray_first = SystemTrayService(_cfg_first, _cfg_first.get('api_key'))
+            if not _tray_first.reautenticar_usuario():
+                print("❌ Verificación de identidad fallida o cancelada")
+                return
         except Exception as e:
-        print(f"❌ Error en verificación de identidad: {e}")
-        return
+            print(f"❌ Error en verificación de identidad: {e}")
+            return
 
         if not os.path.exists(CONFIG_FILE):
-        # No hay configuración - abrir modo config con autenticación PRIMERO
-        # Pedir autenticación ANTES de configurar
-        auth_result = autenticar_para_config()
-        if not auth_result or not auth_result.get('success', False):
-        print("❌ Acceso denegado: autenticación fallida o cancelada")
-        return
+            # No hay configuración - abrir modo config con autenticación PRIMERO
+            # Pedir autenticación ANTES de configurar
+            auth_result = autenticar_para_config()
+            if not auth_result or not auth_result.get('success', False):
+                print("❌ Acceso denegado: autenticación fallida o cancelada")
+                return
 
-        root = tk.Tk()
-        app = ConfigWindow(root)
-        root.mainloop()
-        # Después de configurar, continuar con sync y tray
+            root = tk.Tk()
+            app = ConfigWindow(root)
+            root.mainloop()
+            # Después de configurar, continuar con sync y tray
         # Continuar con sincronización y tray (hay config o se acaba de crear)
 
         # Cargar configuración
         try:
-        from config_encryption import decrypt_config
-        with open(CONFIG_FILE, 'r') as f:
-        config = json.load(f)
-        config = decrypt_config(config)
+            from config_encryption import decrypt_config
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+            config = decrypt_config(config)
         except Exception as e:
-        print(f"❌ Error cargando configuración: {e}")
-        return
+            print(f"❌ Error cargando configuración: {e}")
+            return
 
 
         # Obtener API Key (ya desencriptado)
@@ -6205,6 +6227,38 @@ def main():\n# =================================================================
             print("  pip install pystray Pillow")
             sys.exit(1)
 
+
+
+    # Sistema en segundo plano - System Tray activado
+    if os.path.exists("sync_encryption.json"):
+        try:
+            from config_encryption import decrypt_config
+            with open("sync_encryption.json", "r") as config_file:
+                config = decrypt_config(json.load(config_file))
+            
+            if config.get("api_key"):
+                print("📬 Iniciando System Tray en segundo plano...")
+                print("💡 El sistema quedará activo sincronizando automáticamente")
+                try:
+                    from sync_system_api import SystemTrayService
+                    tray_service = SystemTrayService(config, config["api_key"])
+                    tray_service.iniciar()
+                    
+                    import threading
+                    evento = threading.Event()
+                    try:
+                        evento.wait()
+                    except KeyboardInterrupt:
+                        print()
+                        print("👋 Cerrando sistema...")
+                except Exception as e:
+                    import traceback
+                    print(f"❌ Error iniciando System Tray: {e}")
+                    print(traceback.format_exc())
+        except Exception as e:
+            import traceback
+            print(f"❌ Error iniciando System Tray: {e}")
+            print(traceback.format_exc())
 # Suprimir error "main thread is not in main loop" al hacer GC
 # de variables Tkinter desde hilos secundarios (es inofensivo)
 import tkinter
