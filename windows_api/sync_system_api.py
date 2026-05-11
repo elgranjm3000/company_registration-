@@ -5072,7 +5072,20 @@ class SystemTrayService:
             # Ejecutar ventana
             auth_window.mainloop()
 
-            return auth_result['success']
+            # Forzar limpieza en este hilo para evitar
+            # "RuntimeError: main thread is not in main loop" al hacer GC
+            result = auth_result['success']
+            try:
+                auth_window.destroy()
+            except:
+                pass
+            # Eliminar referencias y forzar GC antes de salir del hilo
+            del auth_window, main_frame, email_entry, password_entry
+            del auth_btn, cancel_btn, auth_result
+            import gc
+            gc.collect()
+
+            return result
 
     def limpiar_auto_inicio(self):
         """
@@ -6071,6 +6084,18 @@ def main():
             print("\nAsegúrese de tener instaladas las dependencias:")
             print("  pip install pystray Pillow")
             sys.exit(1)
+
+# Suprimir error "main thread is not in main loop" al hacer GC
+# de variables Tkinter desde hilos secundarios (es inofensivo)
+import tkinter
+_del_original = tkinter.Variable.__del__
+def _del_seguro(self):
+    try:
+        _del_original(self)
+    except RuntimeError:
+        pass
+tkinter.Variable.__del__ = _del_seguro
+
 if __name__ == "__main__":
     try:
         main()
