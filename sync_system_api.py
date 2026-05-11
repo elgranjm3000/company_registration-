@@ -2404,6 +2404,15 @@ class ConfigWindow:
             messagebox.showerror("Error", "El intervalo de sincronización debe ser al menos 1 minuto")
             return
 
+        if interval_minutes >= 30:
+            messagebox.showerror(
+                "⚠️ Intervalo no válido",
+                "El intervalo de sincronización debe ser menor a 30 minutos.\n\n"
+                "Establezca un intervalo adecuado para su empresa\n"
+                "en la pestaña Configuración."
+            )
+            return
+
 
         try:
             # Validar que tengamos datos de empresa del ping
