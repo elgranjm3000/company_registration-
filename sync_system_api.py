@@ -3829,7 +3829,7 @@ def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
                     sync_queue.put({
                         'type': 'complete',
                         'data': {
-                            'api_key': api_key
+                            'api_key': config.get('api_key') or api_key
                         }
                     })
                 else:
