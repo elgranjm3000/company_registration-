@@ -5463,6 +5463,8 @@ class SystemTrayService:
                 self.sync_running = False
                 if self.icon:
                     self.icon.stop()
+                import os
+                os._exit(0)
             else:
                 print("❌ Salida cancelada")
 
@@ -5473,6 +5475,8 @@ class SystemTrayService:
             self.sync_running = False
             if self.icon:
                 self.icon.stop()
+            import os
+            os._exit(0)
 
     def iniciar(self):
         """Inicia el servicio system tray"""
@@ -5984,27 +5988,22 @@ def main():
             app = ConfigWindow(root)
             root.mainloop()
 
-            # Después de completar la configuración, ejecutar primera sincronización con ventana de progreso
-            if os.path.exists(CONFIG_FILE):
-                print("✅ Configuración completada exitosamente")
-                print("🔄 Ejecutando primera sincronización...")
-
-                # Ejecutar primera sincronización con ventana de progreso
-                # Esta función mostrará el loading de la primera sincronización
-                # y luego iniciará el System Tray automáticamente
-                try:
-                    # Obtener password de autenticación para usar en la primera sync
-                    api_key = auth_result.get('api_key')
-
-                    # Ejecutar primera sincronización con ventana de progreso
-                    # Esta función iniciará el System Tray después de completar la sync
-                    ejecutar_primera_sync_y_tray(api_key)
-                except Exception as e:
-                    print(f"❌ Error ejecutando primera sincronización: {e}")
-                    print("💡 Ejecute manualmente: python3 sync_system_api.py --mode tray")
-            else:
+            # NOTA: La sincronización y el System Tray ya se inician
+            # automáticamente desde ConfigWindow._mostrar_ventana_carga_api()
+            # al hacer clic en "Guardar". No duplicar la llamada aquí.
+            if not os.path.exists(CONFIG_FILE):
                 print("❌ Configuración no completada o fallida")
                 sys.exit(1)
+
+            # Mantener el proceso vivo para el System Tray (importante en .exe compilado)
+            print("✅ Sistema iniciado en segundo plano (bandeja de tareas)")
+            try:
+                # Bloquear el hilo principal para que el proceso no termine
+                import threading
+                evento_espera = threading.Event()
+                evento_espera.wait()  # Espera indefinida
+            except KeyboardInterrupt:
+                print("\n👋 Cerrando sistema...")
         else:
             print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
             sys.exit(1)
