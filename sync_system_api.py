@@ -2560,6 +2560,7 @@ class ConfigWindow:
 
         # Variable para controlar el resultado
         resultado = {'exito': False, 'mensaje': ''}
+        verification_queue = queue.Queue()
 
         def actualizar_paso(paso_num, estado="en_progreso", mensaje="", porcentaje=None):
             """Actualizar estado de un paso"""
@@ -2719,7 +2720,7 @@ class ConfigWindow:
                             pass
 
                     progress_bar.stop()
-                    progreso.after(0, lambda: progreso.event_generate('<<VerificationComplete>>'))
+                    verification_queue.put(True)
 
             # Crear e iniciar thread
             thread = threading.Thread(target=verification_worker, daemon=True)
@@ -2727,12 +2728,25 @@ class ConfigWindow:
 
             # Mantener GUI viva
             def keep_gui_alive():
-                if thread.is_alive():
-                    try:
-                        progreso.update()
-                    except:
-                        pass
-                    progreso.after(50, keep_gui_alive)
+                try:
+                    # Verificar si la verificacion termino (thread-safe, desde el main thread)
+                    if not verification_queue.empty():
+                        verification_queue.get()
+                        try:
+                            if progreso.winfo_exists():
+                                progreso.event_generate('<<VerificationComplete>>')
+                        except:
+                            pass
+                        return
+
+                    if thread.is_alive():
+                        try:
+                            progreso.update()
+                        except:
+                            pass
+                        progreso.after(50, keep_gui_alive)
+                except:
+                    pass
 
             keep_gui_alive()
 
@@ -3405,6 +3419,7 @@ class ConfigWindow:
         # Variables compartidas
         sync_completada = [False]
         sync_error = [None]
+        tray_started = [False]
 
         # Animación del spinner (ciclo de 4 cuadrantes)
         spinner_frames = ["◐", "◓", "◑", "◒"]
@@ -3463,11 +3478,29 @@ class ConfigWindow:
                                         sync_window.destroy()
                                 except:
                                     pass
-                                import threading
-                                t = threading.Thread(target=iniciar_system_tray,
-                                                    args=(config, api_key),
-                                                    daemon=False)
-                                t.start()
+                                from datetime import datetime
+                                error_file = "tray_error_log.txt"
+                                try:
+                                    import threading
+                                    log_msg = f"[{datetime.now()}] Iniciando thread de system tray..."
+                                    print(log_msg)
+                                    with open(error_file, "a") as ef:
+                                        ef.write(log_msg + "\n")
+                                    t = threading.Thread(target=iniciar_system_tray,
+                                                        args=(config, api_key),
+                                                        daemon=False)
+                                    t.start()
+                                    tray_started[0] = True
+                                    log_msg = f"[{datetime.now()}] Thread de system tray iniciado correctamente"
+                                    print(log_msg)
+                                    with open(error_file, "a") as ef:
+                                        ef.write(log_msg + "\n")
+                                except Exception as e:
+                                    import traceback
+                                    err_msg = f"[{datetime.now()}] ERROR iniciando tray: {e}\n{traceback.format_exc()}"
+                                    print(err_msg)
+                                    with open(error_file, "a") as ef:
+                                        ef.write(err_msg + "\n")
 
                             sync_window.after(2000, iniciar_tray)
 
@@ -3598,6 +3631,26 @@ class ConfigWindow:
 
         # Iniciar mainloop
         sync_window.mainloop()
+
+        # Fallback: si el tray no se inicio (por ejemplo si la sincronizacion fallo),
+        # iniciarlo de todas formas para que el sistema quede en segundo plano
+        if not tray_started[0] and os.path.exists(CONFIG_FILE):
+            try:
+                from datetime import datetime
+                fallback_log = f"[{datetime.now()}] FALLBACK: Iniciando tray despues de sync_window.mainloop()"
+                print(fallback_log)
+                with open("tray_error_log.txt", "a") as ef:
+                    ef.write(fallback_log + "\n")
+                import threading
+                t = threading.Thread(target=iniciar_system_tray,
+                                    args=(config, api_key),
+                                    daemon=False)
+                t.start()
+                print(f"[{datetime.now()}] FALLBACK: Tray iniciado correctamente")
+            except Exception as e:
+                import traceback
+                print(f"[{datetime.now()}] FALLBACK: Error iniciando tray: {e}")
+                print(traceback.format_exc())
 
 
 
@@ -3880,6 +3933,9 @@ def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
 
 def iniciar_system_tray(config, api_key):
     """Inicia el servicio System Tray"""
+    from datetime import datetime
+    error_log_path = os.path.join(os.getcwd(), 'tray_error_log.txt')
+
     # Continuar usando el mismo archivo de log
     log_file = open("primera_sync_log.txt", "a", encoding="utf-8")
 
@@ -3897,7 +3953,11 @@ def iniciar_system_tray(config, api_key):
         # Verificar que hay configuración válida
         if not config:
             log_debug("[DEBUG] ERROR: Config es None o vacío")
-            messagebox.showerror("Error", "No hay configuración válida")
+            try:
+                with open(error_log_path, "a", encoding="utf-8") as ef:
+                    ef.write(f"[{datetime.now()}] ERROR: Config es None o vacío\n")
+            except:
+                pass
             log_file.close()
             return
 
@@ -3918,11 +3978,17 @@ def iniciar_system_tray(config, api_key):
         log_debug("[DEBUG] tray_service.iniciar() retornó (no debería llegar aquí nunca)")
 
     except Exception as e:
-        log_debug(f"[DEBUG] ERROR en iniciar_system_tray: {e}")
         import traceback
+        error_msg = f"[{datetime.now()}] ERROR en iniciar_system_tray: {e}\n{traceback.format_exc()}"
+        log_debug(f"[DEBUG] ERROR en iniciar_system_tray: {e}")
         log_debug(traceback.format_exc())
+        print(error_msg)
+        try:
+            with open(error_log_path, "a", encoding="utf-8") as ef:
+                ef.write(error_msg + "\n")
+        except:
+            pass
         log_file.close()
-        messagebox.showerror("Error", f"Error iniciando System Tray:\n{e}\n\nRevisa el archivo primera_sync_log.txt para detalles.")
 
 
 # ==============================================================================
@@ -6014,6 +6080,37 @@ def main():
         root = tk.Tk()
         app = ManagerWindow(root)
         root.mainloop()
+
+        # Despues de cerrar el Manager, si hay configuracion, iniciar System Tray
+        if os.path.exists(CONFIG_FILE):
+            try:
+                print("\n📌 Iniciando System Tray desde Manager...")
+                from config_encryption import decrypt_config
+                with open(CONFIG_FILE, 'r') as f:
+                    _cfg_enc = json.load(f)
+                _cfg = decrypt_config(_cfg_enc)
+
+                api_key = _cfg.get('api_key', '')
+                if api_key:
+                    # Iniciar tray en un hilo
+                    import threading
+                    tray_thread = threading.Thread(
+                        target=iniciar_system_tray,
+                        args=(_cfg, api_key),
+                        daemon=False
+                    )
+                    tray_thread.start()
+                    print("✅ System Tray iniciado desde Manager")
+                    print("✅ Sistema en ejecucion en segundo plano")
+                    try:
+                        evento_espera = threading.Event()
+                        evento_espera.wait()
+                    except KeyboardInterrupt:
+                        print("\n👋 Cerrando sistema...")
+            except Exception as e:
+                print(f"❌ Error iniciando System Tray desde Manager: {e}")
+                import traceback
+                print(traceback.format_exc())
 
     elif args.mode == "sync":
         # Modo sincronización única (sin GUI)
