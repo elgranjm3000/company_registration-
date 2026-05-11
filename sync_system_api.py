@@ -3851,6 +3851,10 @@ def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
         sync_thread = threading.Thread(target=ejecutar_sync_worker, daemon=False)
         sync_thread.start()
 
+        # Iniciar procesamiento de mensajes de la cola
+        log_debug("[DEBUG] Iniciando procesamiento de mensajes...")
+        sync_window.after(100, procesar_mensajes_queue)
+
         # Iniciar mainloop de la ventana para procesar eventos
         # Esto permite que funcione el after() para cerrar la ventana
         log_debug("[DEBUG] Iniciando mainloop de sync_window...")
