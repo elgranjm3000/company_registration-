@@ -1988,9 +1988,9 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
 
 def autenticar_para_config(permitir_reconfiguracion=False):
     """
-    Verifica acceso antes de abrir configuración.
-    - Si permitir_reconfiguracion=True y ya existe config, permite acceso directo
-    - Si permitir_reconfiguracion=False y ya existe config, pide API Key
+    Obtiene la API Key para usar en configuración.
+    - Si existe config, lee la API Key del archivo encriptado
+    - Si no existe config, retorna éxito sin API Key
 
     Retorna dict con {'success': bool, 'api_key': str}
     """
@@ -1998,110 +1998,18 @@ def autenticar_para_config(permitir_reconfiguracion=False):
 
     config_exists = os.path.exists(CONFIG_FILE)
 
-    if config_exists and permitir_reconfiguracion:
-        return {'success': True, 'api_key': None}
-
-    if not config_exists:
-        return {'success': True, 'api_key': None}
-
-    api_url = 'https://chrystal.com.ve/mobileTest/public/api'
-
-    import tkinter as tk
-    from tkinter import ttk, messagebox
-
-    auth_window = tk.Tk()
-    auth_window.title("Sincronizador - Verificar API Key")
-    auth_window.geometry("480x220")
-    auth_window.resizable(False, False)
-
-    auth_window.attributes('-topmost', True)
-    auth_window.lift()
-    auth_window.focus_force()
-
-    auth_window.update_idletasks()
-    width = auth_window.winfo_width()
-    height = auth_window.winfo_height()
-    x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
-    y = (auth_window.winfo_screenheight() // 2) - (height // 2)
-    auth_window.geometry(f'{width}x{height}+{x}+{y}')
-    auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
-
-    main_frame = ttk.Frame(auth_window, padding="20")
-    main_frame.pack(fill=tk.BOTH, expand=True)
-
-    ttk.Label(
-        main_frame,
-        text="🔐 Verificación Requerida",
-        font=('Arial', 12, 'bold')
-    ).pack(pady=(0, 15))
-
-    ttk.Label(
-        main_frame,
-        text="Para reconfigurar el sistema, ingrese la API Key:",
-        font=('Arial', 9)
-    ).pack(pady=(0, 10))
-
-    ttk.Label(main_frame, text="API Key:").pack(anchor=tk.W)
-    api_key_var = tk.StringVar()
-    api_key_entry = ttk.Entry(main_frame, textvariable=api_key_var, width=40, show="*")
-    api_key_entry.pack(fill=tk.X, pady=(0, 15))
-    api_key_entry.focus()
-
-    auth_result = {'success': False, 'api_key': None}
-
-    def do_auth():
-        api_key = api_key_var.get().strip()
-
-        if not api_key:
-            messagebox.showwarning("⚠️ Campo vacío", "Por favor ingrese la API Key")
-            return
-
+    if config_exists:
         try:
-            auth_btn.config(state='disabled')
-            auth_window.update()
-
-            import requests
-            response = requests.get(
-                f"{api_url}/sync-client/ping",
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                timeout=30
-            )
-
-            if response.status_code in [200, 201]:
-                data = response.json()
-                if data.get('success'):
-                    auth_result['success'] = True
-                    auth_result['api_key'] = api_key
-                    auth_window.destroy()
-                    return
-
-            error_msg = "API Key inválida"
-            try:
-                error_data = response.json()
-                error_msg = error_data.get('message', error_msg)
-            except:
-                pass
-
-            messagebox.showerror("❌ Error", f"{error_msg}")
-            auth_btn.config(state='normal')
-
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+            config = decrypt_config(config)
+            api_key = config.get('api_key')
+            if api_key:
+                return {'success': True, 'api_key': api_key}
         except Exception as e:
-            messagebox.showerror("❌ Error", f"Error de conexión:\n{e}")
-            auth_btn.config(state='normal')
+            print(f"⚠️ Error leyendo API Key del config: {e}")
 
-    auth_btn = ttk.Button(main_frame, text="Verificar", command=do_auth)
-    auth_btn.pack(fill=tk.X, pady=(0, 10))
-
-    api_key_entry.bind('<Return>', lambda e: do_auth())
-    ttk.Button(main_frame, text="Cancelar", command=auth_window.destroy).pack()
-
-    auth_window.mainloop()
-
-    return auth_result
+    return {'success': True, 'api_key': None}
 class ConfigWindow:
     """Ventana de configuración inicial."""
 
@@ -2135,7 +2043,7 @@ class ConfigWindow:
             self.root.title("⚙️ Nueva Configuración - Sincronizador API")
 
         # Variables
-        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://chrystal.com.ve/mobileTest/public/api"))
+        self.api_url_var = tk.StringVar(value=existing_config.get('api_url', "https://chrystal.com.ve/mobiletest/public/api"))
         self.api_key_var = tk.StringVar()  # API Key nunca se carga de config existente
 
         self.pg_host_var = tk.StringVar(value=existing_config.get('postgres_host', "localhost"))
@@ -2212,11 +2120,7 @@ class ConfigWindow:
 
         ttk.Label(api_frame, text="API Key:").pack(anchor="w", padx=10, pady=(15,0))
         ttk.Entry(api_frame, textvariable=self.api_key_var, width=60, show="*").pack(padx=10, pady=5)
-
-        ttk.Label(api_frame, text="URL de la API:").pack(anchor="w", padx=10, pady=(10,0))
-        api_url_entry = ttk.Entry(api_frame, textvariable=self.api_url_var, width=60)
-        api_url_entry.pack(padx=10, pady=5)
-        api_url_entry.config(state="readonly")
+        
 
         # Botón probar API Key
         ttk.Button(api_frame, text="🧪 Probar API Key",
@@ -2334,9 +2238,7 @@ class ConfigWindow:
                     # Comparar emails
                     if email.lower().strip() != pg_email.lower().strip():
                         messagebox.showerror("❌ Error de Validación",
-                            f"El email de la API Key no coincide con el email registrado en PostgreSQL.\n\n"
-                            f"Email de API: {email}\n"
-                            f"Email en PostgreSQL: {pg_email}\n\n"
+                            f"El email de la API Key no coincide con el email registrado en PostgreSQL.\n\n"                            
                             f"Verifique que la API Key corresponde a la misma empresa "
                             f"configurada en la base de datos local.")
                         self.log(f"❌ Email no coincide: API={email} vs PG={pg_email}")
@@ -4396,7 +4298,7 @@ class ManagerWindow:
         try:
             self.log("Validando API Key...")
 
-            base_url = self.config.get('api_url', 'https://chrystal.com.ve/mobileTest/public/api')
+            base_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
             self.auth_manager = APIAuthManager(base_url, self.log)
 
             result = self.auth_manager.ping_api_key(api_key)
@@ -5061,7 +4963,7 @@ class SystemTrayService:
                     auth_window.update()
 
                     # Llamar a API
-                    api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobile/public/api')
+                    api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
                     response = requests.post(
                         f"{api_url}/auth/login",
                         headers={
@@ -5902,7 +5804,7 @@ def main():
                 with open(CONFIG_FILE, 'r') as f:
                     _cfg_first = decrypt_config(json.load(f))
             else:
-                _cfg_first = {'api_url': 'https://chrystal.com.ve/mobileTest/public/api'}
+                _cfg_first = {'api_url': 'https://chrystal.com.ve/mobiletest/public/api'}
             _tray_first = SystemTrayService(_cfg_first, _cfg_first.get('api_key'))
             if not _tray_first.reautenticar_usuario():
                 print("❌ Verificación de identidad fallida o cancelada")
@@ -6040,7 +5942,7 @@ def main():
                 with open(CONFIG_FILE, 'r') as f:
                     _cfg = decrypt_config(json.load(f))
             else:
-                _cfg = {'api_url': 'https://chrystal.com.ve/mobileTest/public/api'}
+                _cfg = {'api_url': 'https://chrystal.com.ve/mobiletest/public/api'}
             _tray_first = SystemTrayService(_cfg, _cfg.get('api_key'))
             if not _tray_first.reautenticar_usuario():
                 print("❌ Verificación de identidad fallida o cancelada")
@@ -6138,7 +6040,7 @@ def main():
 
         print("🔐 Validando API Key...")
         auth_manager = APIAuthManager(
-            base_url=config.get('api_url', 'https://chrystal.com.ve/mobileTest/public/api'),
+            base_url=config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api'),
             logger=None
         )
 

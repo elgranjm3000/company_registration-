@@ -112,11 +112,19 @@ class BaseAPIClient:
         """
         session = requests.Session()
 
-        # Configurar retry strategy
+        # Configurar retry strategy.
+        #
+        # Importante: NO incluir 5xx en status_forcelist. El bucle manual
+        # en _request() maneja los errores 5xx con mejor logging, evita el
+        # doble-retry (urllib3 + manual), y permite ver el cuerpo de la
+        # respuesta del servidor (response.text) en el mensaje de error.
+        #
+        # 429 se mantiene en status_forcelist como fallback rápido, aunque
+        # el bucle manual también lo maneja.
         retry_strategy = Retry(
             total=self.max_retries,
             backoff_factor=self.backoff_factor,
-            status_forcelist=[429, 500, 502, 503, 504],
+            status_forcelist=[429],
             allowed_methods=["GET", "POST", "PUT", "DELETE", "PATCH"]
         )
 
