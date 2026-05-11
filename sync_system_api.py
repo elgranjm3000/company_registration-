@@ -6240,7 +6240,7 @@ def main():
                 print("📬 Iniciando System Tray en segundo plano...")
                 print("💡 El sistema quedará activo sincronizando automáticamente")
                 try:
-                    from sync_system_api import SystemTrayService
+                    SystemTrayService
                     tray_service = SystemTrayService(config, config["api_key"])
                     tray_service.iniciar()
                     
