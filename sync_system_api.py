@@ -116,6 +116,149 @@ def get_log_file(company_email=None):
         return os.path.join(LOGS_DIR, f"sync_api_{email_safe}.log")
     return os.path.join(LOGS_DIR, "sync_api.log")
 
+def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
+    """
+    Windows balloon notification using ctypes Shell_NotifyIconW.
+    No depende de pywin32, evita el error WNDPROC/LRESULT en threads.
+    """
+    import ctypes
+    from ctypes import wintypes
+    import time
+
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        # Constants
+        NIM_ADD = 0
+        NIM_DELETE = 2
+        NIF_MESSAGE = 1
+        NIF_ICON = 2
+        NIF_INFO = 0x10
+        NIIF_INFO = 1
+        WM_DESTROY = 2
+        WM_TIMER = 0x0113
+        WM_USER = 0x0400
+
+        # Structure definitions
+        WNDPROC = ctypes.WINFUNCTYPE(
+            wintypes.LRESULT, wintypes.HWND, wintypes.UINT,
+            wintypes.WPARAM, wintypes.LPARAM,
+        )
+
+        class NOTIFYICONDATAW(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("hWnd", wintypes.HWND),
+                ("uID", wintypes.UINT),
+                ("uFlags", wintypes.UINT),
+                ("uCallbackMessage", wintypes.UINT),
+                ("hIcon", wintypes.HANDLE),
+                ("szTip", wintypes.WCHAR * 128),
+                ("dwState", wintypes.DWORD),
+                ("dwStateMask", wintypes.DWORD),
+                ("szInfo", wintypes.WCHAR * 256),
+                ("uVersion", wintypes.UINT),
+                ("szInfoTitle", wintypes.WCHAR * 64),
+                ("dwInfoFlags", wintypes.DWORD),
+                ("guidItem", ctypes.c_byte * 16),
+                ("hBalloonIcon", wintypes.HANDLE),
+            ]
+
+        class WNDCLASSEXW(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.UINT),
+                ("style", wintypes.UINT),
+                ("lpfnWndProc", WNDPROC),
+                ("cbClsExtra", ctypes.c_int),
+                ("cbWndExtra", ctypes.c_int),
+                ("hInstance", wintypes.HINSTANCE),
+                ("hIcon", wintypes.HANDLE),
+                ("hCursor", wintypes.HANDLE),
+                ("hbrBackground", wintypes.HANDLE),
+                ("lpszMenuName", wintypes.LPCWSTR),
+                ("lpszClassName", wintypes.LPCWSTR),
+                ("hIconSm", wintypes.HANDLE),
+            ]
+
+        done = [False]
+
+        @WNDPROC
+        def wndproc(hwnd, msg, wparam, lparam):
+            if msg == WM_DESTROY:
+                user32.PostQuitMessage(0)
+                done[0] = True
+            elif msg == WM_TIMER:
+                user32.KillTimer(hwnd, wparam)
+                user32.DestroyWindow(hwnd)
+                done[0] = True
+            return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+        # Register window class
+        ts = str(int(time.time() * 1000))
+        class_name = "ChrystalSyncNotify_" + ts
+        hinst = kernel32.GetModuleHandleW(None)
+
+        wc = WNDCLASSEXW()
+        wc.cbSize = ctypes.sizeof(WNDCLASSEXW)
+        wc.lpfnWndProc = wndproc
+        wc.hInstance = hinst
+        wc.lpszClassName = class_name
+
+        atom = user32.RegisterClassExW(ctypes.byref(wc))
+        if not atom:
+            return False
+
+        # Create hidden window
+        hwnd = user32.CreateWindowExW(0, class_name, "", 0,
+                                      0, 0, 0, 0, 0, 0, hinst, 0)
+        if not hwnd:
+            user32.UnregisterClassW(class_name, hinst)
+            return False
+
+        # Default application icon
+        hicon = user32.LoadIconW(0, 32512)  # IDI_APPLICATION
+
+        # Setup NOTIFYICONDATA
+        nid = NOTIFYICONDATAW()
+        nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+        nid.hWnd = hwnd
+        nid.uID = 1
+        nid.uFlags = NIF_INFO | NIF_MESSAGE | NIF_ICON
+        nid.uCallbackMessage = WM_USER + 100
+        nid.hIcon = hicon
+        nid.szInfo = mensaje[:255]
+        nid.szInfoTitle = titulo[:63]
+        nid.dwInfoFlags = NIIF_INFO
+
+        # Show balloon notification
+        shown = user32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
+        if not shown:
+            user32.DestroyWindow(hwnd)
+            user32.UnregisterClassW(class_name, hinst)
+            return False
+
+        # Set timer for auto-close (en ms)
+        user32.SetTimer(hwnd, 1, int(duracion * 1000), None)
+
+        # Message loop — runs until window is destroyed
+        msg = wintypes.MSG()
+        while not done[0]:
+            result = user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
+            if result <= 0:
+                break
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+
+        # Cleanup: ensure icon is removed
+        user32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+        user32.UnregisterClassW(class_name, hinst)
+        return True
+
+    except Exception as e:
+        print(f"[NOTIFICACION CTYPES] Error: {e}")
+        return False
+
 
 def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
     """
@@ -145,19 +288,28 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
             print(f"[NOTIFICACION] Sistema: {sistema}")
 
             if sistema == "Windows":
-                # Windows: usar win10toast con COM inicializado
-                # (los threads secundarios necesitan COM para pywin32)
+                # Windows: usar ctypes Shell_NotifyIconW (sin pywin32/WNDPROC)
+                # Crea su propia ventana oculta y message pump en este thread.
+                try:
+                    exito = _notificacion_windows_ctypes(titulo, mensaje, duracion)
+                    if exito:
+                        print("[NOTIFICACION] Notificación ctypes enviada exitosamente")
+                        return
+                    print("[NOTIFICACION] ctypes falló, probando win10toast...")
+                except Exception as e:
+                    print(f"[NOTIFICACION] ctypes error: {e}")
+
+                # Fallback 1: win10toast con COM inicializado
                 try:
                     import pythoncom
                     pythoncom.CoInitialize()
                 except ImportError:
-                    pass  # pythoncom no disponible, intentar sin COM init
+                    pass
 
                 try:
                     import win32con
-                    print("[NOTIFICACION] win32con importado correctamente")
                 except ImportError as e:
-                    print(f"[NOTIFICACION] ERROR: win32con no disponible: {e}")
+                    print(f"[NOTIFICACION] win32con no disponible: {e}")
                     try:
                         pythoncom.CoUninitialize()
                     except:
@@ -166,12 +318,7 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
 
                 try:
                     from win10toast import ToastNotifier
-                    print("[NOTIFICACION] ToastNotifier importado correctamente")
-
                     toast = ToastNotifier()
-                    print("[NOTIFICACION] ToastNotifier creado")
-
-                    # Intentar usar icono personalizado
                     icon_path = icono
                     if not icon_path:
                         try:
@@ -187,31 +334,20 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                                     break
                         except:
                             pass
-
-                    # threaded=False porque ya estamos en un thread con COM init
-                    print(f"[NOTIFICACION] Llamando toast.show_toast (duration={duracion})...")
-                    toast.show_toast(
-                        titulo,
-                        mensaje,
-                        duration=duracion,
-                        icon_path=icon_path,
-                        threaded=False,
-                    )
-                    print("[NOTIFICACION] toast.show_toast completado exitosamente")
+                    toast.show_toast(titulo, mensaje, duration=duracion,
+                                     icon_path=icon_path, threaded=False)
+                    print("[NOTIFICACION] win10toast enviada exitosamente")
                 except Exception as e:
-                    print(f"[NOTIFICACION] Error con win10toast: {e}")
-                    # Fallback: notification con plyer
+                    print(f"[NOTIFICACION] Error win10toast: {e}")
                     try:
                         from plyer.platforms.win.notification import WindowsNotification
                         WindowsNotification().notify(
-                            title=titulo,
-                            message=mensaje,
-                            app_name="SyncAPISystem",
-                            timeout=duracion
+                            title=titulo, message=mensaje,
+                            app_name="SyncAPISystem", timeout=duracion
                         )
-                        print("[NOTIFICACION] Notificación plyer enviada")
+                        print("[NOTIFICACION] plyer enviada")
                     except Exception as e2:
-                        print(f"[NOTIFICACION] Fallback plyer también falló: {e2}")
+                        print(f"[NOTIFICACION] plyer falló: {e2}")
                 finally:
                     try:
                         pythoncom.CoUninitialize()
