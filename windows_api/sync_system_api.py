@@ -145,108 +145,59 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
             print(f"[NOTIFICACION] Sistema: {sistema}")
 
             if sistema == "Windows":
-                # Windows: usar PowerShell NotifyIcon (toast nativo)
-                # No depende de pywin32, evita el error WNDPROC.
-                try:
-                    import sys as _sys
-                    if getattr(_sys, 'frozen', False):
-                        import subprocess as _sp
-                        import uuid as _uuid
-                        import tempfile as _tf
-                        import os as _os
-                        # Escapar comillas simples para PowerShell
-                        _t = titulo.replace("'", "''")
-                        _m = mensaje.replace("'", "''")
-                        _ps = (
-                            "Add-Type -AssemblyName System.Windows.Forms;"
-                            "$n=New-Object System.Windows.Forms.NotifyIcon;"
-                            "$n.Icon=[System.Drawing.Icon]::ExtractAssociatedIcon"
-                            "(\"$env:SystemRoot\\System32\\notepad.exe\");"
-                            f"$n.BalloonTipTitle='{_t}';"
-                            f"$n.BalloonTipText='{_m}';"
-                            "$n.Visible=$true;"
-                            f"$n.ShowBalloonTip({duracion * 1000});"
-                            f"Start-Sleep -Seconds {duracion};"
-                            "$n.Dispose()"
-                        )
-                        # Escribir a temp file para evitar problemas de encoding
-                        _f_path = _os.path.join(
-                            _tf.gettempdir(), f"notify_{_uuid.uuid4().hex}.ps1"
-                        )
-                        try:
-                            with open(_f_path, "w", encoding="utf-8") as _f:
-                                _f.write(_ps)
-                            _sp.run(
-                                ["powershell", "-NoProfile", "-ExecutionPolicy",
-                                 "Bypass", "-File", _f_path],
-                                creationflags=0x08000000,
-                                timeout=duracion + 10, capture_output=True
-                            )
-                        finally:
-                            try:
-                                _os.remove(_f_path)
-                            except:
-                                pass
-                        print("[NOTIFICACION] PowerShell toast enviada")
-                        return
-                except Exception as e:
-                    print(f"[NOTIFICACION] Error PowerShell: {e}")
-
-                # Fallback: win10toast con COM init en este thread
-                try:
-                    import pythoncom
-                    pythoncom.CoInitialize()
-                except ImportError:
-                    pass
-
+                # Windows: usar win10toast
+                # Verificar que pywin32 esté disponible
                 try:
                     import win32con
+                    print("[NOTIFICACION] win32con importado correctamente")
                 except ImportError as e:
-                    print(f"[NOTIFICACION] win32con no disponible: {e}")
-                    try:
-                        pythoncom.CoUninitialize()
-                    except:
-                        pass
-                    return
+                    print(f"[NOTIFICACION] ERROR: win32con no disponible: {e}")
+                    return  # pywin32 no instalado, salir silenciosamente
 
-                try:
-                    from win10toast import ToastNotifier
-                    toast = ToastNotifier()
-                    icon_path = icono
-                    if not icon_path:
-                        try:
-                            import os as _os2
-                            script_dir = _os2.path.dirname(_os2.path.abspath(__file__))
-                            possible_icons = [
-                                _os2.path.join(script_dir, "icon.ico"),
-                                _os2.path.join(script_dir, "icon.png"),
-                                _os2.path.join(script_dir, "app.ico"),
-                            ]
-                            for path in possible_icons:
-                                if _os2.path.exists(path):
-                                    icon_path = path
-                                    break
-                        except:
-                            pass
-                    toast.show_toast(titulo, mensaje, duration=duracion,
-                                     icon_path=icon_path, threaded=False)
-                    print("[NOTIFICACION] win10toast enviada exitosamente")
-                except Exception as e:
-                    print(f"[NOTIFICACION] Error win10toast: {e}")
+                from win10toast import ToastNotifier
+                print("[NOTIFICACION] ToastNotifier importado correctamente")
+
+                toast = ToastNotifier()
+                print("[NOTIFICACION] ToastNotifier creado")
+
+                # Forzar la creación de classAtom si no existe
+                if not hasattr(toast, 'classAtom'):
                     try:
-                        from plyer.platforms.win.notification import WindowsNotification
-                        WindowsNotification().notify(
-                            title=titulo, message=mensaje,
-                            app_name="SyncAPISystem", timeout=duracion
-                        )
-                        print("[NOTIFICACION] plyer enviada")
-                    except Exception as e2:
-                        print(f"[NOTIFICACION] plyer falló: {e2}")
-                finally:
+                        import win32gui
+                        toast.classAtom = None
+                        print("[NOTIFICACION] classAtom forzado a None")
+                    except Exception as e:
+                        print(f"[NOTIFICACION] WARNING: No se pudo forzar classAtom: {e}")
+
+                # Intentar usar icono personalizado
+                icon_path = icono
+                if not icon_path:
                     try:
-                        pythoncom.CoUninitialize()
-                    except:
-                        pass
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        possible_icons = [
+                            os.path.join(script_dir, "icon.ico"),
+                            os.path.join(script_dir, "icon.png"),
+                            os.path.join(script_dir, "app.ico"),
+                        ]
+                        for path in possible_icons:
+                            if os.path.exists(path):
+                                icon_path = path
+                                break
+                        print(f"[NOTIFICACION] Icono encontrado: {icon_path}")
+                    except Exception as e:
+                        print(f"[NOTIFICACION] WARNING buscando icono: {e}")
+
+                # Usar threaded=True para evitar errores de WPARAM
+                # cuando se ejecuta desde un thread separado
+                print(f"[NOTIFICACION] Llamando toast.show_toast (duration={duracion})...")
+                toast.show_toast(
+                    titulo,
+                    mensaje,
+                    duration=duracion,
+                    icon_path=icon_path,
+                    threaded=True,  # Threaded para evitar errores de Windows callbacks
+                )
+                print("[NOTIFICACION] toast.show_toast completado exitosamente")
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
@@ -305,17 +256,9 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
 
         except Exception as e:
             # Loguear error pero no interrumpir el programa
-            error_msg = f"[NOTIFICACION] ERROR mostrando notificación: {e}"
-            print(error_msg)
+            print(f"[NOTIFICACION] ERROR mostrando notificación: {e}")
             import traceback
-            trace = traceback.format_exc()
-            print(f"[NOTIFICACION] Traceback: {trace}")
-            # Escribir a archivo para diagnóstico en .exe compilado
-            try:
-                with open("notification_errors.log", "a", encoding="utf-8") as ef:
-                    ef.write(f"[{__import__('datetime').datetime.now()}] {error_msg}\n{trace}\n")
-            except:
-                pass
+            print(f"[NOTIFICACION] Traceback: {traceback.format_exc()}")
 
     # Ejecutar en un thread daemon para no bloquear
     thread = threading.Thread(target=_mostrar_notificacion_thread, daemon=True)
