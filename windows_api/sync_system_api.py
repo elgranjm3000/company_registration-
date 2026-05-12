@@ -122,12 +122,27 @@ def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
     No depende de pywin32, evita el error WNDPROC/LRESULT en threads.
     """
     import ctypes
-    from ctypes import wintypes
     import time
 
     try:
+        # Tipos base (evitar wintypes que falla en Python < 3.10)
+        HANDLE = ctypes.c_void_p
+        HWND = ctypes.c_void_p
+        HINSTANCE = ctypes.c_void_p
+        UINT = ctypes.c_uint
+        DWORD = ctypes.c_uint32
+        BOOL = ctypes.c_int
+        WCHAR = ctypes.c_wchar
+        LPWSTR = ctypes.c_wchar_p
+        # WPARAM = UINT_PTR = signed en win32, unsigned en win64
+        # Usamos ctypes.c_void_p que acepta cualquier valor sin overflow
+        WPARAM = ctypes.c_void_p
+        LPARAM = ctypes.c_void_p
+        LRESULT = ctypes.c_void_p
+
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
+        shell32 = ctypes.windll.shell32
 
         # Constants
         NIM_ADD = 0
@@ -140,55 +155,57 @@ def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
         WM_TIMER = 0x0113
         WM_USER = 0x0400
 
-        # LRESULT no está disponible en ctypes.wintypes en Python < 3.10
-        # Usamos c_ssize_t que es INT_PTR (pointer-size) en todas las versiones
-        try:
-            WPARAM = wintypes.WPARAM
-        except AttributeError:
-            WPARAM = ctypes.c_ssize_t  # fallback
-        try:
-            LPARAM = wintypes.LPARAM
-        except AttributeError:
-            LPARAM = ctypes.c_ssize_t  # fallback
-
+        # WNDPROC callback type
         WNDPROC = ctypes.WINFUNCTYPE(
-            ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT,
-            WPARAM, LPARAM,
+            LRESULT, HWND, UINT, WPARAM, LPARAM,
         )
 
+        # NOTIFYICONDATAW structure (Win32)
         class NOTIFYICONDATAW(ctypes.Structure):
             _fields_ = [
-                ("cbSize", wintypes.DWORD),
-                ("hWnd", wintypes.HWND),
-                ("uID", wintypes.UINT),
-                ("uFlags", wintypes.UINT),
-                ("uCallbackMessage", wintypes.UINT),
-                ("hIcon", wintypes.HANDLE),
-                ("szTip", wintypes.WCHAR * 128),
-                ("dwState", wintypes.DWORD),
-                ("dwStateMask", wintypes.DWORD),
-                ("szInfo", wintypes.WCHAR * 256),
-                ("uVersion", wintypes.UINT),
-                ("szInfoTitle", wintypes.WCHAR * 64),
-                ("dwInfoFlags", wintypes.DWORD),
+                ("cbSize", DWORD),
+                ("hWnd", HWND),
+                ("uID", UINT),
+                ("uFlags", UINT),
+                ("uCallbackMessage", UINT),
+                ("hIcon", HANDLE),
+                ("szTip", WCHAR * 128),
+                ("dwState", DWORD),
+                ("dwStateMask", DWORD),
+                ("szInfo", WCHAR * 256),
+                ("uVersion", UINT),
+                ("szInfoTitle", WCHAR * 64),
+                ("dwInfoFlags", DWORD),
                 ("guidItem", ctypes.c_byte * 16),
-                ("hBalloonIcon", wintypes.HANDLE),
+                ("hBalloonIcon", HANDLE),
             ]
 
+        # WNDCLASSEXW structure
         class WNDCLASSEXW(ctypes.Structure):
             _fields_ = [
-                ("cbSize", wintypes.UINT),
-                ("style", wintypes.UINT),
+                ("cbSize", UINT),
+                ("style", UINT),
                 ("lpfnWndProc", WNDPROC),
                 ("cbClsExtra", ctypes.c_int),
                 ("cbWndExtra", ctypes.c_int),
-                ("hInstance", wintypes.HINSTANCE),
-                ("hIcon", wintypes.HANDLE),
-                ("hCursor", wintypes.HANDLE),
-                ("hbrBackground", wintypes.HANDLE),
-                ("lpszMenuName", wintypes.LPCWSTR),
-                ("lpszClassName", wintypes.LPCWSTR),
-                ("hIconSm", wintypes.HANDLE),
+                ("hInstance", HINSTANCE),
+                ("hIcon", HANDLE),
+                ("hCursor", HANDLE),
+                ("hbrBackground", HANDLE),
+                ("lpszMenuName", LPWSTR),
+                ("lpszClassName", LPWSTR),
+                ("hIconSm", HANDLE),
+            ]
+
+        # MSG structure for message loop
+        class MSG(ctypes.Structure):
+            _fields_ = [
+                ("hwnd", HWND),
+                ("message", UINT),
+                ("wParam", WPARAM),
+                ("lParam", LPARAM),
+                ("time", DWORD),
+                ("pt", ctypes.c_long * 2),
             ]
 
         done = [False]
@@ -198,10 +215,12 @@ def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
             if msg == WM_DESTROY:
                 user32.PostQuitMessage(0)
                 done[0] = True
+                return 0
             elif msg == WM_TIMER:
                 user32.KillTimer(hwnd, wparam)
                 user32.DestroyWindow(hwnd)
                 done[0] = True
+                return 0
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
         # Register window class
@@ -227,7 +246,7 @@ def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
             return False
 
         # Default application icon
-        hicon = user32.LoadIconW(0, 32512)  # IDI_APPLICATION
+        hicon = user32.LoadIconW(None, 32512)  # IDI_APPLICATION
 
         # Setup NOTIFYICONDATA
         nid = NOTIFYICONDATAW()
@@ -242,7 +261,7 @@ def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
         nid.dwInfoFlags = NIIF_INFO
 
         # Show balloon notification
-        shown = user32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
+        shown = shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
         if not shown:
             user32.DestroyWindow(hwnd)
             user32.UnregisterClassW(class_name, hinst)
@@ -251,17 +270,17 @@ def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
         # Set timer for auto-close (en ms)
         user32.SetTimer(hwnd, 1, int(duracion * 1000), None)
 
-        # Message loop — runs until window is destroyed
-        msg = wintypes.MSG()
+        # Message loop — runs until window is destroyed or timer fires
+        msg = MSG()
         while not done[0]:
-            result = user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
-            if result <= 0:
+            ret = user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
+            if ret <= 0:
                 break
             user32.TranslateMessage(ctypes.byref(msg))
             user32.DispatchMessageW(ctypes.byref(msg))
 
         # Cleanup: ensure icon is removed
-        user32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+        shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
         user32.UnregisterClassW(class_name, hinst)
         return True
 
