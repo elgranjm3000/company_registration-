@@ -145,28 +145,54 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
             print(f"[NOTIFICACION] Sistema: {sistema}")
 
             if sistema == "Windows":
-                # Windows: win10toast
-                # Si es .exe compilado, lanzar subproceso para evitar error WNDPROC
-                # de pywin32 en threads secundarios.
+                # Windows: usar PowerShell NotifyIcon (toast nativo)
+                # No depende de pywin32, evita el error WNDPROC.
                 try:
                     import sys as _sys
                     if getattr(_sys, 'frozen', False):
                         import subprocess as _sp
-                        import json as _json
-                        import base64 as _b64
-                        _data = _b64.b64encode(
-                            _json.dumps({"t": titulo, "m": mensaje, "d": duracion},
-                                        ensure_ascii=True).encode('utf-8')
-                        ).decode('ascii')
-                        _sp.Popen([_sys.executable, "--notify", _data],
-                                  creationflags=0x08000000)  # CREATE_NO_WINDOW
-                        print("[NOTIFICACION] Subproceso lanzado")
+                        import uuid as _uuid
+                        import tempfile as _tf
+                        import os as _os
+                        # Escapar comillas simples para PowerShell
+                        _t = titulo.replace("'", "''")
+                        _m = mensaje.replace("'", "''")
+                        _ps = (
+                            "Add-Type -AssemblyName System.Windows.Forms;"
+                            "$n=New-Object System.Windows.Forms.NotifyIcon;"
+                            "$n.Icon=[System.Drawing.Icon]::ExtractAssociatedIcon"
+                            "(\"$env:SystemRoot\\System32\\notepad.exe\");"
+                            f"$n.BalloonTipTitle='{_t}';"
+                            f"$n.BalloonTipText='{_m}';"
+                            "$n.Visible=$true;"
+                            f"$n.ShowBalloonTip({duracion * 1000});"
+                            f"Start-Sleep -Seconds {duracion};"
+                            "$n.Dispose()"
+                        )
+                        # Escribir a temp file para evitar problemas de encoding
+                        _f_path = _os.path.join(
+                            _tf.gettempdir(), f"notify_{_uuid.uuid4().hex}.ps1"
+                        )
+                        try:
+                            with open(_f_path, "w", encoding="utf-8") as _f:
+                                _f.write(_ps)
+                            _sp.run(
+                                ["powershell", "-NoProfile", "-ExecutionPolicy",
+                                 "Bypass", "-File", _f_path],
+                                creationflags=0x08000000,
+                                timeout=duracion + 10, capture_output=True
+                            )
+                        finally:
+                            try:
+                                _os.remove(_f_path)
+                            except:
+                                pass
+                        print("[NOTIFICACION] PowerShell toast enviada")
                         return
                 except Exception as e:
-                    print(f"[NOTIFICACION] Error lanzando subproceso: {e}")
+                    print(f"[NOTIFICACION] Error PowerShell: {e}")
 
-                # Ejecutar win10toast en este thread (para script directo)
-                # o en el subproceso (para .exe)
+                # Fallback: win10toast con COM init en este thread
                 try:
                     import pythoncom
                     pythoncom.CoInitialize()
@@ -189,14 +215,15 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     icon_path = icono
                     if not icon_path:
                         try:
-                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            import os as _os2
+                            script_dir = _os2.path.dirname(_os2.path.abspath(__file__))
                             possible_icons = [
-                                os.path.join(script_dir, "icon.ico"),
-                                os.path.join(script_dir, "icon.png"),
-                                os.path.join(script_dir, "app.ico"),
+                                _os2.path.join(script_dir, "icon.ico"),
+                                _os2.path.join(script_dir, "icon.png"),
+                                _os2.path.join(script_dir, "app.ico"),
                             ]
                             for path in possible_icons:
-                                if os.path.exists(path):
+                                if _os2.path.exists(path):
                                     icon_path = path
                                     break
                         except:
@@ -5917,37 +5944,6 @@ def main():
 
     import sys
 
-    # Manejar --notify: subproceso para mostrar notificación win10toast
-    # (evita error WNDPROC en threads secundarios del .exe compilado)
-    if '--notify' in sys.argv:
-        try:
-            import base64 as _b64
-            import json as _json
-            idx = sys.argv.index('--notify')
-            raw = _b64.b64decode(sys.argv[idx + 1]).decode('utf-8')
-            data = _json.loads(raw)
-            titulo = data.get('t', '')
-            mensaje = data.get('m', '')
-            duracion = data.get('d', 5)
-            # Mostrar notificación bloqueante en el main thread del subproceso
-            import pythoncom
-            pythoncom.CoInitialize()
-            try:
-                from win10toast import ToastNotifier
-                toast = ToastNotifier()
-                toast.show_toast(titulo, mensaje, duration=duracion, threaded=False)
-            finally:
-                try:
-                    pythoncom.CoUninitialize()
-                except:
-                    pass
-        except Exception as e:
-            try:
-                with open("notify_errors.log", "a", encoding="utf-8") as _ef:
-                    _ef.write(f"[NOTIFY] Error: {e}\n")
-            except:
-                pass
-        return
 
     # Verificar si es ejecutable compilado y no hay argumentos
     # O si no se pasan argumentos explícitos
