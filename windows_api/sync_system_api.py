@@ -5947,7 +5947,7 @@ def main():
 
         if not os.path.exists(CONFIG_FILE):
             # No hay configuración - abrir modo config con autenticación PRIMERO
-            # Pedir autenticación ANTES de configurar
+            # ConfigWindow internamente hace: guardar -> sync -> iniciar tray en thread
             auth_result = autenticar_para_config()
             if not auth_result or not auth_result.get('success', False):
                 print("❌ Acceso denegado: autenticación fallida o cancelada")
@@ -5956,9 +5956,18 @@ def main():
             root = tk.Tk()
             app = ConfigWindow(root)
             root.mainloop()
-            # Después de configurar, continuar con sync y tray
-        # Continuar con sincronización y tray (hay config o se acaba de crear)
 
+            # ConfigWindow ya ejecutó sync e inició System Tray en un thread
+            # Solo mantener el proceso vivo
+            if os.path.exists(CONFIG_FILE):
+                print("\n✅ Sistema iniciado en segundo plano (bandeja de tareas)")
+                try:
+                    threading.Event().wait()
+                except KeyboardInterrupt:
+                    print("\n👋 Cerrando sistema...")
+            return
+
+        # Si llegamos aquí, ya HAY configuración guardada
         # Cargar configuración
         try:
             from config_encryption import decrypt_config
@@ -5968,7 +5977,6 @@ def main():
         except Exception as e:
             print(f"❌ Error cargando configuración: {e}")
             return
-
 
         # Obtener API Key (ya desencriptado)
         api_key = config.get('api_key')
