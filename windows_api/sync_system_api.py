@@ -5923,31 +5923,24 @@ def main():
     no_args = len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[0].endswith('.exe'))
 
     if is_exe and no_args:
-        # MODO AUTOMÁTICO para .exe (como sync_system.py)
-        # 1. Validar identidad del usuario (email/password)
-        # 2. Si no hay config → abrir configuración → sync → tray
-        # 3. Si hay config → sync → tray
-
-        # Validar identidad del usuario primero (email/password)
-        try:
-            _cfg_first = None
-            if os.path.exists(CONFIG_FILE):
-                from config_encryption import decrypt_config
-                with open(CONFIG_FILE, 'r') as f:
-                    _cfg_first = decrypt_config(json.load(f))
-            else:
-                _cfg_first = {'api_url': 'https://chrystal.com.ve/mobiletest/public/api'}
-            _tray_first = SystemTrayService(_cfg_first, _cfg_first.get('api_key'))
-            if not _tray_first.reautenticar_usuario():
-                print("❌ Verificación de identidad fallida o cancelada")
-                return
-        except Exception as e:
-            print(f"❌ Error en verificación de identidad: {e}")
-            return
+        # MODO AUTOMÁTICO para .exe
+        # Dos caminos:
+        #   1. Sin config  → autenticar → ConfigWindow (sync + tray en thread)
+        #   2. Con config  → validar API Key → sync → tray bloqueante
 
         if not os.path.exists(CONFIG_FILE):
-            # No hay configuración - abrir modo config con autenticación PRIMERO
-            # ConfigWindow internamente hace: guardar -> sync -> iniciar tray en thread
+            # ---- CAMINO 1: PRIMERA CONFIGURACIÓN ----
+            # Validar identidad del usuario (email/password) antes de configurar
+            try:
+                _cfg_first = {'api_url': 'https://chrystal.com.ve/mobiletest/public/api'}
+                _tray_first = SystemTrayService(_cfg_first, None)
+                if not _tray_first.reautenticar_usuario():
+                    print("❌ Verificación de identidad fallida o cancelada")
+                    return
+            except Exception as e:
+                print(f"❌ Error en verificación de identidad: {e}")
+                return
+
             auth_result = autenticar_para_config()
             if not auth_result or not auth_result.get('success', False):
                 print("❌ Acceso denegado: autenticación fallida o cancelada")
@@ -5958,7 +5951,6 @@ def main():
             root.mainloop()
 
             # ConfigWindow ya ejecutó sync e inició System Tray en un thread
-            # Solo mantener el proceso vivo
             if os.path.exists(CONFIG_FILE):
                 print("\n✅ Sistema iniciado en segundo plano (bandeja de tareas)")
                 try:
@@ -5967,7 +5959,12 @@ def main():
                     print("\n👋 Cerrando sistema...")
             return
 
-        # Si llegamos aquí, ya HAY configuración guardada
+        # ---- CAMINO 2: YA HAY CONFIGURACIÓN ----
+        # No pedir email/password, validar API Key directamente
+        print("\n" + "="*70)
+        print("🔄 INICIANDO SINCRONIZACIÓN AUTOMÁTICA...")
+        print("="*70)
+
         # Cargar configuración
         try:
             from config_encryption import decrypt_config
@@ -5978,7 +5975,6 @@ def main():
             print(f"❌ Error cargando configuración: {e}")
             return
 
-        # Obtener API Key (ya desencriptado)
         api_key = config.get('api_key')
 
         # Si no hay API Key en config, pedirlo con ventana GUI
@@ -5988,25 +5984,32 @@ def main():
             key_root.withdraw()
             api_key = simpledialog.askstring("🔐 API Key", "Ingrese la API Key:", show='*')
             key_root.destroy()
-
             if not api_key:
                 return
 
+        # Validar API Key
+        print("🔐 Validando API Key...")
+        auth_manager = APIAuthManager(base_url=config['api_url'])
+        ping_result = auth_manager.ping_api_key(api_key)
+        if not ping_result.get('success'):
+            print(f"❌ API Key inválida: {ping_result.get('error', 'Error desconocido')}")
+            return
+
+        print("✅ API Key válida")
+
+        # Validar empresa
+        print("🏢 Validando empresa...")
+        validate_result = auth_manager.validate_company(config['company_rif'], config['company_email'])
+        if not validate_result.get('success'):
+            print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
+            return
+
+        company_id = validate_result.get('company_id')
+        print(f"✅ Company ID: {company_id}")
+
         # Ejecutar sincronización
-        print("\n" + "="*70)
-        print("🔄 SINCRONIZANDO...")
-        print("="*70)
+        print("\n🔄 SINCRONIZANDO...")
         try:
-            auth_manager = APIAuthManager(
-                base_url=config['api_url'],
-                logger=lambda msg, level="info": print(f"{'✅' if level == 'info' else '❌'} {msg}")
-            )
-
-            result = auth_manager.ping_api_key(api_key)
-            if not result.get('success'):
-                print(f"❌ API Key inválida: {result.get('error')}")
-                return
-
             sync_manager = APISyncManager(
                 postgres_config={
                     'host': config['postgres_host'],
@@ -6035,7 +6038,7 @@ def main():
             import traceback
             traceback.print_exc()
 
-        # Iniciar System Tray
+        # Iniciar System Tray (bloqueante, mantiene proceso vivo)
         print("\n" + "="*70)
         print("📬 INICIANDO SYSTEM TRAY...")
         print("="*70)
@@ -6044,7 +6047,7 @@ def main():
         print("="*70 + "\n")
 
         try:
-            tray = SystemTrayService(config, config.get('api_key'))
+            tray = SystemTrayService(config, api_key, company_id)
             tray.iniciar()
         except Exception as e:
             print(f"❌ Error iniciando System Tray: {e}")
