@@ -153,8 +153,12 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     if getattr(_sys, 'frozen', False):
                         import subprocess as _sp
                         import json as _json
-                        _args = _json.dumps({"t": titulo, "m": mensaje, "d": duracion})
-                        _sp.Popen([_sys.executable, "--notify", _args],
+                        import base64 as _b64
+                        _data = _b64.b64encode(
+                            _json.dumps({"t": titulo, "m": mensaje, "d": duracion},
+                                        ensure_ascii=True).encode('utf-8')
+                        ).decode('ascii')
+                        _sp.Popen([_sys.executable, "--notify", _data],
                                   creationflags=0x08000000)  # CREATE_NO_WINDOW
                         print("[NOTIFICACION] Subproceso lanzado")
                         return
@@ -5917,13 +5921,15 @@ def main():
     # (evita error WNDPROC en threads secundarios del .exe compilado)
     if '--notify' in sys.argv:
         try:
+            import base64 as _b64
             import json as _json
             idx = sys.argv.index('--notify')
-            data = _json.loads(sys.argv[idx + 1])
+            raw = _b64.b64decode(sys.argv[idx + 1]).decode('utf-8')
+            data = _json.loads(raw)
             titulo = data.get('t', '')
             mensaje = data.get('m', '')
             duracion = data.get('d', 5)
-            # Mostrar notificación bloqueante en el main thread
+            # Mostrar notificación bloqueante en el main thread del subproceso
             import pythoncom
             pythoncom.CoInitialize()
             try:
@@ -5931,9 +5937,16 @@ def main():
                 toast = ToastNotifier()
                 toast.show_toast(titulo, mensaje, duration=duracion, threaded=False)
             finally:
-                pythoncom.CoUninitialize()
+                try:
+                    pythoncom.CoUninitialize()
+                except:
+                    pass
         except Exception as e:
-            print(f"[NOTIFY] Error: {e}")
+            try:
+                with open("notify_errors.log", "a", encoding="utf-8") as _ef:
+                    _ef.write(f"[NOTIFY] Error: {e}\n")
+            except:
+                pass
         return
 
     # Verificar si es ejecutable compilado y no hay argumentos
