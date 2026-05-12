@@ -256,9 +256,17 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
 
         except Exception as e:
             # Loguear error pero no interrumpir el programa
-            print(f"[NOTIFICACION] ERROR mostrando notificación: {e}")
+            error_msg = f"[NOTIFICACION] ERROR mostrando notificación: {e}"
+            print(error_msg)
             import traceback
-            print(f"[NOTIFICACION] Traceback: {traceback.format_exc()}")
+            trace = traceback.format_exc()
+            print(f"[NOTIFICACION] Traceback: {trace}")
+            # Escribir a archivo para diagnóstico en .exe compilado
+            try:
+                with open("notification_errors.log", "a", encoding="utf-8") as ef:
+                    ef.write(f"[{__import__('datetime').datetime.now()}] {error_msg}\n{trace}\n")
+            except:
+                pass
 
     # Ejecutar en un thread daemon para no bloquear
     thread = threading.Thread(target=_mostrar_notificacion_thread, daemon=True)
@@ -5637,6 +5645,16 @@ Clic derecho para opciones"""
             sync_thread.start()
             log_debug("[DEBUG] Thread de sincronización iniciado")
 
+            # Notificación de inicio
+            try:
+                mostrar_banner(
+                    "🔄 Sync API System",
+                    f"System Tray iniciado\n{self.config.get('company_rif', '')}",
+                    duracion=3
+                )
+            except Exception:
+                pass
+
             # Ejecutar icono (bloqueante)
             log_debug("✅ Servicio iniciado en la bandeja del sistema")
             log_debug("💡 El icono está en la barra de tareas (junto al reloj)")
@@ -6032,6 +6050,14 @@ def main():
 
             sync_manager.sync_all()
             print("\n✅ Sincronización completada")
+            try:
+                mostrar_banner(
+                    "✅ Sincronización Inicial Completada",
+                    "Iniciando System Tray en segundo plano...",
+                    duracion=3
+                )
+            except Exception:
+                pass
 
         except Exception as e:
             print(f"❌ Error: {e}")
