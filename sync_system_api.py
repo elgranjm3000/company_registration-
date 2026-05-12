@@ -6229,36 +6229,6 @@ def main():
 
 
 
-    # Sistema en segundo plano - System Tray activado
-    if os.path.exists("sync_encryption.json"):
-        try:
-            from config_encryption import decrypt_config
-            with open("sync_encryption.json", "r") as config_file:
-                config = decrypt_config(json.load(config_file))
-            
-            if config.get("api_key"):
-                print("📬 Iniciando System Tray en segundo plano...")
-                print("💡 El sistema quedará activo sincronizando automáticamente")
-                try:
-                    SystemTrayService
-                    tray_service = SystemTrayService(config, config["api_key"])
-                    tray_service.iniciar()
-                    
-                    import threading
-                    evento = threading.Event()
-                    try:
-                        evento.wait()
-                    except KeyboardInterrupt:
-                        print()
-                        print("👋 Cerrando sistema...")
-                except Exception as e:
-                    import traceback
-                    print(f"❌ Error iniciando System Tray: {e}")
-                    print(traceback.format_exc())
-        except Exception as e:
-            import traceback
-            print(f"❌ Error iniciando System Tray: {e}")
-            print(traceback.format_exc())
 # Suprimir error "main thread is not in main loop" al hacer GC
 # de variables Tkinter desde hilos secundarios (es inofensivo)
 import tkinter
