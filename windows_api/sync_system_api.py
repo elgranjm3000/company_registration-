@@ -140,10 +140,20 @@ def _notificacion_windows_ctypes(titulo, mensaje, duracion=5):
         WM_TIMER = 0x0113
         WM_USER = 0x0400
 
-        # Structure definitions
+        # LRESULT no está disponible en ctypes.wintypes en Python < 3.10
+        # Usamos c_ssize_t que es INT_PTR (pointer-size) en todas las versiones
+        try:
+            WPARAM = wintypes.WPARAM
+        except AttributeError:
+            WPARAM = ctypes.c_ssize_t  # fallback
+        try:
+            LPARAM = wintypes.LPARAM
+        except AttributeError:
+            LPARAM = ctypes.c_ssize_t  # fallback
+
         WNDPROC = ctypes.WINFUNCTYPE(
-            wintypes.LRESULT, wintypes.HWND, wintypes.UINT,
-            wintypes.WPARAM, wintypes.LPARAM,
+            ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT,
+            WPARAM, LPARAM,
         )
 
         class NOTIFYICONDATAW(ctypes.Structure):
