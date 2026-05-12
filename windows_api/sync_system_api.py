@@ -145,59 +145,78 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
             print(f"[NOTIFICACION] Sistema: {sistema}")
 
             if sistema == "Windows":
-                # Windows: usar win10toast
-                # Verificar que pywin32 esté disponible
+                # Windows: usar win10toast con COM inicializado
+                # (los threads secundarios necesitan COM para pywin32)
+                try:
+                    import pythoncom
+                    pythoncom.CoInitialize()
+                except ImportError:
+                    pass  # pythoncom no disponible, intentar sin COM init
+
                 try:
                     import win32con
                     print("[NOTIFICACION] win32con importado correctamente")
                 except ImportError as e:
                     print(f"[NOTIFICACION] ERROR: win32con no disponible: {e}")
-                    return  # pywin32 no instalado, salir silenciosamente
-
-                from win10toast import ToastNotifier
-                print("[NOTIFICACION] ToastNotifier importado correctamente")
-
-                toast = ToastNotifier()
-                print("[NOTIFICACION] ToastNotifier creado")
-
-                # Forzar la creación de classAtom si no existe
-                if not hasattr(toast, 'classAtom'):
                     try:
-                        import win32gui
-                        toast.classAtom = None
-                        print("[NOTIFICACION] classAtom forzado a None")
-                    except Exception as e:
-                        print(f"[NOTIFICACION] WARNING: No se pudo forzar classAtom: {e}")
+                        pythoncom.CoUninitialize()
+                    except:
+                        pass
+                    return
 
-                # Intentar usar icono personalizado
-                icon_path = icono
-                if not icon_path:
+                try:
+                    from win10toast import ToastNotifier
+                    print("[NOTIFICACION] ToastNotifier importado correctamente")
+
+                    toast = ToastNotifier()
+                    print("[NOTIFICACION] ToastNotifier creado")
+
+                    # Intentar usar icono personalizado
+                    icon_path = icono
+                    if not icon_path:
+                        try:
+                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            possible_icons = [
+                                os.path.join(script_dir, "icon.ico"),
+                                os.path.join(script_dir, "icon.png"),
+                                os.path.join(script_dir, "app.ico"),
+                            ]
+                            for path in possible_icons:
+                                if os.path.exists(path):
+                                    icon_path = path
+                                    break
+                        except:
+                            pass
+
+                    # threaded=False porque ya estamos en un thread con COM init
+                    print(f"[NOTIFICACION] Llamando toast.show_toast (duration={duracion})...")
+                    toast.show_toast(
+                        titulo,
+                        mensaje,
+                        duration=duracion,
+                        icon_path=icon_path,
+                        threaded=False,
+                    )
+                    print("[NOTIFICACION] toast.show_toast completado exitosamente")
+                except Exception as e:
+                    print(f"[NOTIFICACION] Error con win10toast: {e}")
+                    # Fallback: notification con plyer
                     try:
-                        script_dir = os.path.dirname(os.path.abspath(__file__))
-                        possible_icons = [
-                            os.path.join(script_dir, "icon.ico"),
-                            os.path.join(script_dir, "icon.png"),
-                            os.path.join(script_dir, "app.ico"),
-                        ]
-                        for path in possible_icons:
-                            if os.path.exists(path):
-                                icon_path = path
-                                break
-                        print(f"[NOTIFICACION] Icono encontrado: {icon_path}")
-                    except Exception as e:
-                        print(f"[NOTIFICACION] WARNING buscando icono: {e}")
-
-                # Usar threaded=True para evitar errores de WPARAM
-                # cuando se ejecuta desde un thread separado
-                print(f"[NOTIFICACION] Llamando toast.show_toast (duration={duracion})...")
-                toast.show_toast(
-                    titulo,
-                    mensaje,
-                    duration=duracion,
-                    icon_path=icon_path,
-                    threaded=True,  # Threaded para evitar errores de Windows callbacks
-                )
-                print("[NOTIFICACION] toast.show_toast completado exitosamente")
+                        from plyer.platforms.win.notification import WindowsNotification
+                        WindowsNotification().notify(
+                            title=titulo,
+                            message=mensaje,
+                            app_name="SyncAPISystem",
+                            timeout=duracion
+                        )
+                        print("[NOTIFICACION] Notificación plyer enviada")
+                    except Exception as e2:
+                        print(f"[NOTIFICACION] Fallback plyer también falló: {e2}")
+                finally:
+                    try:
+                        pythoncom.CoUninitialize()
+                    except:
+                        pass
 
             elif sistema == "Linux":
                 # Linux: usar notify2 (libnotify)
