@@ -2057,7 +2057,7 @@ class ConfigWindow:
         self.company_rif_ping = ""
         self.company_email_ping = ""
 
-        self.sync_interval_var = tk.StringVar(value=existing_config.get('sync_interval_minutes', '30'))
+        self.sync_interval_var = tk.StringVar(value=existing_config.get('sync_interval_minutes', '0'))
 
         self.log_text = None
 
@@ -2270,6 +2270,12 @@ class ConfigWindow:
                 messagebox.showerror("❌ API Key Inválida",
                     "La API Key no es válida o no tiene permisos suficientes.")
                 self.log("❌ API Key inválida (401)")
+            elif response.status_code == 403:
+                error_detail = response.json()
+                error_msg = error_detail.get('message', error_detail.get('error', 'Error desconocido'))
+                print(f"[DEBUG] Detalle error 403: {error_msg}")
+                messagebox.showerror("❌ Error de acceso", error_msg)
+                self.log("❌ Acceso denegado (403)")
             elif response.status_code >= 500:
                 error_msg = f"Error del servidor ({response.status_code})"
                 try:
@@ -2404,10 +2410,10 @@ class ConfigWindow:
             messagebox.showerror("Error", "El intervalo de sincronización debe ser al menos 1 minuto")
             return
 
-        if interval_minutes >= 30:
+        if interval_minutes == 0:
             messagebox.showerror(
                 "⚠️ Intervalo no válido",
-                "El intervalo de sincronización debe ser menor a 30 minutos.\n\n"
+                "El intervalo de sincronización debe ser mayor a 0 minutos.\n\n"
                 "Establezca un intervalo adecuado para su empresa\n"
                 "en la pestaña Configuración."
             )
