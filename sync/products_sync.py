@@ -477,7 +477,20 @@ class ProductsSync(BaseSync):
                 # Si es memoryview, convertir a bytes primero
                 if isinstance(product_image, memoryview):
                     product_image = product_image.tobytes()
+
+                # Log para diagnóstico
+                image_bytes_len = len(product_image)
+                self.debug(f"   🖼️ Imagen detectada para {code}: {image_bytes_len} bytes, tipo: {type(product_image).__name__}")
+
                 product_image_encoded = base64.b64encode(product_image).decode('utf-8')
+
+                # Log del resultado de codificación
+                self.debug(f"   📦 Imagen codificada: {len(product_image_encoded)} caracteres (base64)")
+                self.debug(f"   🏷️ image_type: {image_type}")
+                # Mostrar primeros 50 chars del base64 para verificar
+                self.debug(f"   🔍 Preview base64: {product_image_encoded[:50]}...")
+            else:
+                self.warning(f"   ⚠️ Tipo de imagen no soportado para {code}: {type(product_image)}")
 
         return {
             'code': code,

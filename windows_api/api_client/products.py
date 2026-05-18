@@ -270,6 +270,28 @@ class ProductsClient(BaseAPIClient):
             )
 
             try:
+                # Log de diagnóstico del payload
+                products_with_image = sum(1 for p in batch if p.get('product_image'))
+                self.logger.info(
+                    f"Enviando batch {i}/{total_batches}: {len(batch)} productos "
+                    f"({products_with_image} con imagen)"
+                )
+
+                # Log detallado del primer producto (si hay)
+                if batch:
+                    first = batch[0]
+                    self.logger.debug(
+                        f"Primer producto payload: code={first.get('code')}, "
+                        f"name={first.get('name')}, "
+                        f"has_image={'YES' if first.get('product_image') else 'NO'}, "
+                        f"image_type={first.get('image_type')}"
+                    )
+                    if first.get('product_image'):
+                        img_len = len(first['product_image'])
+                        self.logger.debug(
+                            f"Base64 length: {img_len} chars, preview: {first['product_image'][:50]}..."
+                        )
+
                 result = self.post('/sync-client/batch/products', {
                     'company_id': company_id,
                     'products': batch
