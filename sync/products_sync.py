@@ -468,6 +468,15 @@ class ProductsSync(BaseSync):
         if not description_coin or description_coin.strip() in ['', 'N/A', 'N/A']:
             valid_description_coin = coin_descriptions.get(coin, 'Dólares americanos')
 
+        # Codificar imagen en base64 para enviar en JSON
+        product_image_encoded = None
+        if product_image:
+            import base64
+            if isinstance(product_image, bytes):
+                product_image_encoded = base64.b64encode(product_image).decode('utf-8')
+            else:
+                product_image_encoded = base64.b64encode(str(product_image).encode('utf-8')).decode('utf-8')
+
         return {
             'code': code,
             'name': name,
@@ -489,7 +498,9 @@ class ProductsSync(BaseSync):
             'aliquot': float(safe_float(aliquot)),
             'product_type': product_type if product_type else 'P',  # Tipo de producto (P=Producto, C=Combo, etc.)
             'unidad': unidad if unidad else 'Unidad',  # Descripción de la unidad de medida
-            'allow_decimal': bool(allow_decimal) if allow_decimal is not None else False  # Permite decimales (booleano)
+            'allow_decimal': bool(allow_decimal) if allow_decimal is not None else False,  # Permite decimales (booleano)
+            'image_type': image_type,
+            'product_image': product_image_encoded
         }
 
     def _get_category_id(self, department_name: str) -> int:
