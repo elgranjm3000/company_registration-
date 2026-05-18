@@ -472,10 +472,12 @@ class ProductsSync(BaseSync):
         product_image_encoded = None
         if product_image:
             import base64
-            if isinstance(product_image, bytes):
+            # Manejar bytes o memoryview
+            if isinstance(product_image, (bytes, memoryview)):
+                # Si es memoryview, convertir a bytes primero
+                if isinstance(product_image, memoryview):
+                    product_image = product_image.tobytes()
                 product_image_encoded = base64.b64encode(product_image).decode('utf-8')
-            else:
-                product_image_encoded = base64.b64encode(str(product_image).encode('utf-8')).decode('utf-8')
 
         return {
             'code': code,
