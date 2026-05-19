@@ -1107,7 +1107,7 @@ BEGIN
     SELECT COUNT(*) INTO v_exists
     FROM sync_hashes
     WHERE table_name = 'products'
-    AND record_key = NEW.main_code
+    AND record_key = NEW.code
     AND company_id = v_company_id;
 
     -- Si existe, actualizar; si no, insertar
@@ -1116,11 +1116,11 @@ BEGIN
         SET pending_sync = TRUE,
             updated_at = NOW()
         WHERE table_name = 'products'
-        AND record_key = NEW.main_code
+        AND record_key = NEW.code
         AND company_id = v_company_id;
     ELSE
         INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-        VALUES ('products', NEW.main_code, md5(NEW.main_code::text), TRUE, v_company_id, NOW());
+        VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
     END IF;
 
     RETURN NEW;
