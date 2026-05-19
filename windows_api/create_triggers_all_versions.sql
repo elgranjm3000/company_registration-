@@ -349,4 +349,48 @@ SELECT 'UPDATE sellers',
 UNION ALL
 SELECT 'DELETE sellers',
     CASE WHEN EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tr_sellers_mark_deleted_sync_hashes')
+         THEN '✅' ELSE '❌' END
+UNION ALL
+SELECT 'UPDATE product_image',
+    CASE WHEN EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tr_product_image_mark_updated')
          THEN '✅' ELSE '❌' END;
+
+-- ===========================================================================
+-- PRODUCTS IMAGE - Trigger específico para detectar cambios en product_image
+-- ============================================================================
+
+-- Función para marcar sync cuando cambia product_image
+CREATE OR REPLACE FUNCTION trigger_mark_product_image_updated()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+BEGIN
+    -- Obtener el company_id desde sync_config
+    SELECT value INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    -- Si no existe, usar 1 como fallback
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    -- Marcar como pending_sync
+    INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+    VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW())
+    ON CONFLICT (table_name, record_key, company_id)
+    DO UPDATE SET
+        pending_sync = TRUE,
+        updated_at = NOW();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger que se dispara solo cuando cambia product_image
+DROP TRIGGER IF EXISTS tr_product_image_mark_updated ON products;
+CREATE TRIGGER tr_product_image_mark_updated
+    AFTER UPDATE OF product_image ON products
+    FOR EACH ROW
+    WHEN (OLD.product_image IS DISTINCT FROM NEW.product_image)
+    EXECUTE PROCEDURE trigger_mark_product_image_updated();
