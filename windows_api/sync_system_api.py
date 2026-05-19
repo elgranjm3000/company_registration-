@@ -1187,6 +1187,60 @@ CREATE TRIGGER tr_products_mark_deleted_sync_hashes
     EXECUTE PROCEDURE trigger_mark_product_deleted_sync_hashes();
 
 -- ===========================================================================
+-- PRODUCTS IMAGE - Trigger específico para detectar cambios en product_image
+-- ===========================================================================
+
+-- Función para marcar sync cuando cambia product_image
+CREATE OR REPLACE FUNCTION trigger_mark_product_image_updated()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+    v_exists INTEGER;
+BEGIN
+    -- Obtener el company_id desde sync_config
+    SELECT value INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    -- Si no existe, usar 1 como fallback
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    -- Verificar si ya existe el registro
+    SELECT COUNT(*) INTO v_exists
+    FROM sync_hashes
+    WHERE table_name = 'products'
+    AND record_key = NEW.code
+    AND company_id = v_company_id;
+
+    -- Marcar como pending_sync
+    IF v_exists > 0 THEN
+        UPDATE sync_hashes
+        SET pending_sync = TRUE,
+            updated_at = NOW()
+        WHERE table_name = 'products'
+        AND record_key = NEW.code
+        AND company_id = v_company_id;
+    ELSE
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('products', NEW.code, md5(NEW.code::text), TRUE, v_company_id, NOW());
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger que se dispara solo cuando cambia product_image
+DROP TRIGGER IF EXISTS tr_product_image_mark_updated ON products;
+CREATE TRIGGER tr_product_image_mark_updated
+    AFTER UPDATE OF product_image ON products
+    FOR EACH ROW
+    WHEN (OLD.product_image IS DISTINCT FROM NEW.product_image)
+    EXECUTE PROCEDURE trigger_mark_product_image_updated();
+
+
+-- ===========================================================================
 -- CLIENTS
 -- ===========================================================================
 
