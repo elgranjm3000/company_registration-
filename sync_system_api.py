@@ -4997,9 +4997,10 @@ class SystemTrayService:
             auth_window.resizable(False, False)
 
             # IMPORTANTE: Forzar ventana al frente en Windows
-            auth_window.attributes('-topmost', True)  # Traer al frente
+            auth_window.attributes('-topmost', True)  # Mantener siempre al frente
             auth_window.lift()  # Elevar ventana
             auth_window.focus_force()  # Forzar focus
+            auth_window.grab_set()  # Hacer modal (bloquea interacción con otras ventanas)
 
             # Centrar ventana
             auth_window.update_idletasks()
@@ -5009,8 +5010,6 @@ class SystemTrayService:
             y = (auth_window.winfo_screenheight() // 2) - (height // 2)
             auth_window.geometry(f'{width}x{height}+{x}+{y}')
 
-            # Programar para quitar topmost después de 100ms (para que aparezca arriba pero luego pueda ir atrás)
-            auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
 
             # Frame principal
             main_frame = ttk.Frame(auth_window, padding="20")
