@@ -455,6 +455,22 @@ class APIAuthManager:
                         'company': self.company_data
                     }
 
+            # Manejo específico para 403 (acceso bloqueado/suspendido)
+            if response.status_code == 403:
+                try:
+                    error_data = response.json()
+                    api_message = error_data.get('message', '')
+                    self._log(f"❌ Acceso denegado (403): {api_message}", "error")
+                    return {
+                        'success': False,
+                        'error': api_message or 'Acceso suspendido. Contacte a su proveedor.'
+                    }
+                except:
+                    return {
+                        'success': False,
+                        'error': 'Acceso suspendido. Contacte a su proveedor para reactivar el servicio.'
+                    }
+
             error_msg = 'API Key inválida'
             try:
                 error_data = response.json()
@@ -5665,16 +5681,23 @@ Clic derecho para opciones"""
             except Exception:
                 pass
 
-            # Ejecutar icono (bloqueante)
+            # Ejecutar icono en modo detached (no bloqueante)
             log_debug("✅ Servicio iniciado en la bandeja del sistema")
             log_debug("💡 El icono está en la barra de tareas (junto al reloj)")
             log_debug("💡 Clic derecho para ver opciones")
             log_debug("")
-            log_debug("[DEBUG] Llamando a icon.run() (esto es bloqueante)...")
+            log_debug("[DEBUG] Llamando a icon.run_detached() (no bloqueante)...")
 
-            self.icon.run()
+            self.icon.run_detached()
 
-            log_debug("[DEBUG] icon.run() retornó (no debería llegar aquí)")
+            log_debug("[DEBUG] icon.run_detached() ejecutado, manteniendo hilo principal vivo...")
+
+            # Mantener el hilo principal vivo mientras el icono está activo
+            while self.sync_running:
+                import time
+                time.sleep(1)
+
+            log_debug("[DEBUG] sync_running=False, saliendo del hilo principal")
 
         except ImportError as e:
             error_msg = f"Falta dependencia: {str(e)}"
