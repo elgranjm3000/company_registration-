@@ -1886,17 +1886,6 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
         """Sincronizar solo categories."""
         self._log("\n📁 SINCRONIZANDO CATEGORIES...")
 
-        # Refrescar token si es necesario y actualizar clientes
-        refresh_result = self.auth_manager.refresh_token_if_needed()
-        if not refresh_result['success']:
-            self._log("❌ No se pudo refrescar el token", "error")
-            return {'success': False, 'stats': {}}
-
-        # Si se refrescó el token, actualizar todos los clientes
-        if refresh_result.get('refreshed'):
-            self._log("🔄 Token refrescado, actualizando clientes API...")
-            self._update_client_tokens(refresh_result['token'])
-
         company_id = self.auth_manager.company_id
 
         categories_sync = CategoriesSync(
@@ -1915,17 +1904,6 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
     def sync_products(self) -> dict:
         """Sincronizar solo products."""
         self._log("\n📦 SINCRONIZANDO PRODUCTS...")
-
-        # Refrescar token si es necesario y actualizar clientes
-        refresh_result = self.auth_manager.refresh_token_if_needed()
-        if not refresh_result['success']:
-            self._log("❌ No se pudo refrescar el token", "error")
-            return {'success': False, 'stats': {}}
-
-        # Si se refrescó el token, actualizar todos los clientes
-        if refresh_result.get('refreshed'):
-            self._log("🔄 Token refrescado, actualizando clientes API...")
-            self._update_client_tokens(refresh_result['token'])
 
         company_id = self.auth_manager.company_id
 
@@ -1946,17 +1924,6 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
         """Sincronizar solo customers."""
         self._log("\n👥 SINCRONIZANDO CUSTOMERS...")
 
-        # Refrescar token si es necesario y actualizar clientes
-        refresh_result = self.auth_manager.refresh_token_if_needed()
-        if not refresh_result['success']:
-            self._log("❌ No se pudo refrescar el token", "error")
-            return {'success': False, 'stats': {}}
-
-        # Si se refrescó el token, actualizar todos los clientes
-        if refresh_result.get('refreshed'):
-            self._log("🔄 Token refrescado, actualizando clientes API...")
-            self._update_client_tokens(refresh_result['token'])
-
         company_id = self.auth_manager.company_id
 
         customers_sync = CustomersSync(
@@ -1976,17 +1943,6 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
         """Sincronizar solo sellers."""
         self._log("\n👔 SINCRONIZANDO SELLERS...")
 
-        # Refrescar token si es necesario y actualizar clientes
-        refresh_result = self.auth_manager.refresh_token_if_needed()
-        if not refresh_result['success']:
-            self._log("❌ No se pudo refrescar el token", "error")
-            return {'success': False, 'stats': {}}
-
-        # Si se refrescó el token, actualizar todos los clientes
-        if refresh_result.get('refreshed'):
-            self._log("🔄 Token refrescado, actualizando clientes API...")
-            self._update_client_tokens(refresh_result['token'])
-
         company_id = self.auth_manager.company_id
 
         sellers_sync = SellersSync(
@@ -2005,17 +1961,6 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
     def sync_quotes(self) -> dict:
         """Sincronizar solo quotes."""
         self._log("\n💰 SINCRONIZANDO QUOTES...")
-
-        # Refrescar token si es necesario y actualizar clientes
-        refresh_result = self.auth_manager.refresh_token_if_needed()
-        if not refresh_result['success']:
-            self._log("❌ No se pudo refrescar el token", "error")
-            return {'success': False, 'stats': {}}
-
-        # Si se refrescó el token, actualizar todos los clientes
-        if refresh_result.get('refreshed'):
-            self._log("🔄 Token refrescado, actualizando clientes API...")
-            self._update_client_tokens(refresh_result['token'])
 
         company_id = self.auth_manager.company_id
 
