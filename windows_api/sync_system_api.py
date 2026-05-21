@@ -5625,23 +5625,31 @@ Clic derecho para opciones"""
             except Exception:
                 pass
 
-            # Ejecutar icono en modo detached (no bloqueante)
+            # Ejecutar icono con bucle de reinicio automático
+            # run() es bloqueante y procesa los mensajes de Windows.
+            # Si el icono desaparece (Explorer crash, etc.), run() retorna
+            # y el bucle lo reinicia automáticamente.
             log_debug("✅ Servicio iniciado en la bandeja del sistema")
             log_debug("💡 El icono está en la barra de tareas (junto al reloj)")
             log_debug("💡 Clic derecho para ver opciones")
             log_debug("")
-            log_debug("[DEBUG] Llamando a icon.run_detached() (no bloqueante)...")
+            log_debug("[DEBUG] Llamando a icon.run() (bloqueante)...")
 
-            self.icon.run_detached()
-
-            log_debug("[DEBUG] icon.run_detached() ejecutado, manteniendo hilo principal vivo...")
-
-            # Mantener el hilo principal vivo mientras el icono está activo
+            self.sync_running = True
+            reintentos = 0
             while self.sync_running:
-                import time
-                time.sleep(1)
+                try:
+                    self.icon.run()
+                except Exception as e:
+                    log_debug(f"[WARNING] Icono detenido inesperadamente: {e}")
 
-            log_debug("[DEBUG] sync_running=False, saliendo del hilo principal")
+                if self.sync_running:
+                    reintentos += 1
+                    log_debug(f"[DEBUG] El icono se detuvo (reintento #{reintentos}), reiniciando en 3 segundos...")
+                    import time
+                    time.sleep(3)
+
+            log_debug("[DEBUG] sync_running=False, saliendo del bucle principal")
 
         except ImportError as e:
             error_msg = f"Falta dependencia: {str(e)}"
