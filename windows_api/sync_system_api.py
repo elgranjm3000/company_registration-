@@ -1489,7 +1489,7 @@ BEGIN
     SET pending_sync = TRUE,
         updated_at = NOW()
     WHERE table_name = 'sellers'
-      AND record_key = OLD.code
+      AND record_key = (SELECT code FROM sellers WHERE user_code = OLD.code LIMIT 1)
       AND company_id = v_company_id;
 
     RETURN NEW;
