@@ -122,9 +122,26 @@ class SellersSync(BaseSync):
                 pending_codes = [row[0] for row in self.pg_cursor.fetchall()]
 
             if not pending_codes:
+                # Detectar eliminados (usando trigger deleted_at)
+                # IMPORTANTE: Esto debe ejecutar SIEMPRE, incluso si no hay pending_codes
+                self.pg_cursor.execute("""
+                    SELECT record_key
+                    FROM sync_hashes
+                    WHERE table_name = 'sellers'
+                      AND company_id = %s
+                      AND deleted_at IS NOT NULL
+                    ORDER BY deleted_at DESC
+                """, (self.company_id,))
+
+                eliminados = self.pg_cursor.fetchall()
+
+                for (eliminado,) in eliminados:
+                    cambios['eliminados'].append({'code': eliminado})
+                    self.debug(f"  ❌ ELIMINADO: {eliminado}")
+
+                self.info(f"{len(cambios['eliminados'])} vendedores eliminados detectados")
                 return cambios
 
-            # Construir filtro IN para query principal
             placeholders = ','.join(['%s'] * len(pending_codes))
 
             # Query de sellers
