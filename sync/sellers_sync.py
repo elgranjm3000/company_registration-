@@ -273,18 +273,22 @@ class SellersSync(BaseSync):
         }
         api_status = status_map.get(status, 'active')
 
-        # Generar password bcrypt si no existe
+        # Generar password bcrypt si no existe o si está en texto plano
         # Nota: En producción, esto debería generar un password aleatorio
         # y enviarlo por email al usuario
-        if not password:
-            # Password por defecto: mismos últimos 6 dígitos del código
-            # En producción, usar bcrypt.hashpw() con password aleatorio
-            default_password = f"Temp{code[-6:]}" if len(code) >= 6 else f"Temp{code}123"
-            password = self._generate_bcrypt_hash(default_password)
-            self.warning(
-                f"⚠️  No password found for seller {code}, "
-                f"using default. CHANGE THIS IN PRODUCTION!"
-            )
+        if not password or not password.startswith('$2y$'):
+            if password:
+                # Password en texto plano desde BD -> hashear
+                password = self._generate_bcrypt_hash(password)
+            else:
+                # Password por defecto: mismos últimos 6 dígitos del código
+                # En producción, usar bcrypt.hashpw() con password aleatorio
+                default_password = f"Temp{code[-6:]}" if len(code) >= 6 else f"Temp{code}123"
+                password = self._generate_bcrypt_hash(default_password)
+                self.warning(
+                    f"⚠️  No password found for seller {code}, "
+                    f"using default. CHANGE THIS IN PRODUCTION!"
+                )
 
         # Validar email: usar email por defecto si es None
         # Nota: Los emails con valor '@', '' o solo espacios ya fueron filtrados en el query
