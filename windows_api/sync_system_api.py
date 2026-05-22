@@ -948,7 +948,7 @@ class APISyncManager:
                 WHERE key = 'company_id';
 
                 UPDATE sync_hashes
-                SET pending_sync = TRUE, updated_at = NOW()
+                SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
                 WHERE table_name = 'products'
                 AND record_key = NEW.code;
 
@@ -993,7 +993,7 @@ class APISyncManager:
                 WHERE key = 'company_id';
 
                 UPDATE sync_hashes
-                SET pending_sync = TRUE, updated_at = NOW()
+                SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
                 WHERE table_name = 'customers'
                 AND record_key = NEW.code;
 
@@ -1130,6 +1130,7 @@ BEGIN
     IF v_exists > 0 THEN
         UPDATE sync_hashes
         SET pending_sync = TRUE,
+            deleted_at = NULL,
             updated_at = NOW()
         WHERE table_name = 'products'
         AND record_key = NEW.code
@@ -1234,6 +1235,7 @@ BEGIN
     IF v_exists > 0 THEN
         UPDATE sync_hashes
         SET pending_sync = TRUE,
+            deleted_at = NULL,
             updated_at = NOW()
         WHERE table_name = 'products'
         AND record_key = NEW.main_code
@@ -1287,6 +1289,7 @@ BEGIN
     IF v_exists > 0 THEN
         UPDATE sync_hashes
         SET pending_sync = TRUE,
+            deleted_at = NULL,
             updated_at = NOW()
         WHERE table_name = 'customers'
         AND record_key = NEW.code
@@ -1391,6 +1394,7 @@ BEGIN
     IF v_exists > 0 THEN
         UPDATE sync_hashes
         SET pending_sync = TRUE,
+            deleted_at = NULL,
             updated_at = NOW()
         WHERE table_name = 'sellers'
         AND record_key = NEW.code
@@ -1462,6 +1466,42 @@ CREATE TRIGGER tr_sellers_mark_deleted_sync_hashes
     AFTER DELETE ON sellers
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_seller_deleted_sync_hashes();
+
+-- ===========================================================================
+-- SELLERS PASSWORD - Detectar cambios de password en users
+-- ===========================================================================
+
+-- Función para marcar vendedor pendiente cuando cambia su password
+CREATE OR REPLACE FUNCTION trigger_mark_seller_password_updated()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+BEGIN
+    SELECT value INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    UPDATE sync_hashes
+    SET pending_sync = TRUE,
+        updated_at = NOW()
+    WHERE table_name = 'sellers'
+      AND record_key = OLD.code
+      AND company_id = v_company_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_users_mark_seller_password_updated ON users;
+CREATE TRIGGER tr_users_mark_seller_password_updated
+    AFTER UPDATE OF user_password ON users
+    FOR EACH ROW
+    WHEN (OLD.user_password IS DISTINCT FROM NEW.user_password)
+    EXECUTE PROCEDURE trigger_mark_seller_password_updated();
 
 -- ===========================================================================
 -- DEPARTMENTS (CATEGORIES)
