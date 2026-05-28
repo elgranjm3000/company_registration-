@@ -1553,6 +1553,62 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
     AFTER DELETE ON department
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_department_deleted_sync_hashes();
+
+-- ===========================================================================
+-- SALES OPERATION (QUOTES - APROBADOS LOCALMENTE)
+-- ===========================================================================
+
+-- Función para detectar pending → FALSE en sales_operation
+-- Cuando el POS local procesa un presupuesto, marca pending = FALSE
+-- Este trigger lo detecta y lo marca en sync_hashes para enviar approved a la API
+CREATE OR REPLACE FUNCTION trigger_mark_sales_operation_approved()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+    v_exists INTEGER;
+BEGIN
+    -- Solo cuando cambia pending de TRUE a FALSE
+    IF OLD.pending = TRUE AND NEW.pending = FALSE THEN
+
+        -- Obtener el company_id desde sync_config
+        SELECT value INTO v_company_id
+        FROM sync_config
+        WHERE key = 'company_id';
+
+        IF v_company_id IS NULL THEN
+            v_company_id := 1;
+        END IF;
+
+        -- Verificar si ya existe el registro en sync_hashes
+        SELECT COUNT(*) INTO v_exists
+        FROM sync_hashes
+        WHERE table_name = 'quotes_approved'
+          AND record_key = NEW.document_no::text
+          AND company_id = v_company_id;
+
+        IF v_exists > 0 THEN
+            UPDATE sync_hashes
+            SET pending_sync = TRUE,
+                updated_at = NOW()
+            WHERE table_name = 'quotes_approved'
+              AND record_key = NEW.document_no::text
+              AND company_id = v_company_id;
+        ELSE
+            INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+            VALUES ('quotes_approved', NEW.document_no::text, md5(NEW.document_no::text), TRUE, v_company_id, NOW());
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_sales_operation_mark_approved ON sales_operation;
+CREATE TRIGGER tr_sales_operation_mark_approved
+    AFTER UPDATE OF pending ON sales_operation
+    FOR EACH ROW
+    WHEN (OLD.pending = TRUE AND NEW.pending = FALSE)
+    EXECUTE PROCEDURE trigger_mark_sales_operation_approved();
 """
 
         try:
@@ -1894,6 +1950,10 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
         if cambios_quotes.get('nuevos'):
             quotes_sync.sync_to_postgresql(cambios_quotes)
 
+        # Detectar presupuestos aprobados localmente (pending → FALSE)
+        # y enviar status=approved a la API
+        quotes_sync.sync_approved_quotes()
+
         self.stats['quotes'] = quotes_sync.get_stats()
 
         # Resumen
@@ -2016,6 +2076,9 @@ CREATE TRIGGER tr_department_mark_deleted_sync_hashes
 
         if cambios_quotes.get('nuevos'):
             quotes_sync.sync_to_postgresql(cambios_quotes)
+
+        # Detectar presupuestos aprobados localmente
+        quotes_sync.sync_approved_quotes()
 
         return {
             'success': quotes_sync.get_stats()['errors'] == 0,

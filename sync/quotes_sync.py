@@ -157,10 +157,10 @@ class QuotesSync:
                 quote_id = quote.get('id')
                 quote_number = quote.get('quote_number')
 
-                # Marcar como 'approved' en la API
-                self._log(f"  📡 Actualizando status en API: Quote #{quote_id} ({quote_number}) → 'approved'", "info")
-                if self.quotes_client.update_quote_status(quote_id, self.company_id, 'approved'):
-                    self._log(f"  ✅ Estado actualizado en API: Cotización #{quote_id} ({quote_number}) → approved", "info")
+                # Marcar como 'rejected' en la API (presupuesto ya procesado/descargado)
+                self._log(f"  📡 Actualizando status en API: Quote #{quote_id} ({quote_number}) → 'rejected'", "info")
+                if self.quotes_client.update_quote_status(quote_id, self.company_id, 'rejected'):
+                    self._log(f"  ✅ Estado actualizado en API: Cotización #{quote_id} ({quote_number}) → rejected", "info")
                 else:
                     self._log(f"  ⚠️ No se pudo actualizar estado en API: Cotización #{quote_id}", "warning")
 
@@ -961,3 +961,104 @@ class QuotesSync:
     def get_stats(self) -> Dict[str, int]:
         """Obtener estadísticas de sincronización"""
         return self.stats
+
+    # =========================================================================
+    # PRESUPUESTOS APROBADOS LOCALMENTE (pending → FALSE)
+    # =========================================================================
+
+    def detect_approved_quotes(self) -> List[Dict]:
+        """
+        Detectar presupuestos que fueron procesados localmente (pending → FALSE).
+        El trigger tr_sales_operation_mark_approved los marca en sync_hashes
+        con table_name = 'quotes_approved' y pending_sync = TRUE.
+
+        Returns:
+            Lista de dicts con document_no de los presupuestos aprobados
+        """
+        aprobados = []
+
+        try:
+            self._log("🔍 Detectando presupuestos aprobados localmente (pending → FALSE)...", "info")
+
+            self.pg_cursor.execute("""
+                SELECT record_key
+                FROM sync_hashes
+                WHERE table_name = 'quotes_approved'
+                  AND company_id = %s
+                  AND pending_sync = TRUE
+                  AND deleted_at IS NULL
+                ORDER BY updated_at ASC
+            """, (self.company_id,))
+
+            resultados = self.pg_cursor.fetchall()
+
+            for (record_key,) in resultados:
+                aprobados.append({'document_no': record_key})
+                self._log(f"  📋 Presupuesto aprobado detectado: #{record_key}", "info")
+
+            if aprobados:
+                self._log(f"✅ {len(aprobados)} presupuestos aprobados localmente", "info")
+            else:
+                self._log("   No hay presupuestos aprobados pendientes de notificar", "info")
+
+        except Exception as e:
+            self._log(f"❌ Error detectando presupuestos aprobados: {e}", "error")
+            import traceback
+            self._log(traceback.format_exc(), "error")
+
+        return aprobados
+
+    def sync_approved_quotes(self) -> int:
+        """
+        Enviar status=approved a la API por cada presupuesto procesado localmente.
+        Luego limpia el registro de sync_hashes.
+
+        Returns:
+            Cantidad de presupuestos notificados como approved
+        """
+        aprobados = self.detect_approved_quotes()
+
+        if not aprobados:
+            return 0
+
+        self._log(f"📡 Enviando {len(aprobados)} presupuestos como approved a la API...", "info")
+
+        notificados = 0
+        for aprobado in aprobados:
+            try:
+                document_no = aprobado['document_no']
+
+                # Buscar el quote_id original en la API por document_no
+                # El endpoint update_quote_status usa quote_id, no document_no
+                # Pero el trigger guardó document_no en record_key
+                self._log(f"  📡 Notificando presupuesto #{document_no} como approved...", "info")
+
+                # Enviar status=approved a la API
+                # Nota: quote_id en el endpoint es realmente el document_no del presupuesto
+                if self.quotes_client.update_quote_status(
+                    int(document_no) if document_no.isdigit() else document_no,
+                    self.company_id,
+                    'approved'
+                ):
+                    self._log(f"  ✅ Presupuesto #{document_no} → approved", "info")
+                    notificados += 1
+
+                    # Limpiar sync_hashes (ya no necesitamos trackearlo)
+                    self.pg_cursor.execute("""
+                        DELETE FROM sync_hashes
+                        WHERE table_name = 'quotes_approved'
+                          AND record_key = %s
+                          AND company_id = %s
+                    """, (document_no, self.company_id))
+                else:
+                    self._log(f"  ⚠️ No se pudo notificar presupuesto #{document_no}", "warning")
+
+            except Exception as e:
+                self._log(f"  ❌ Error notificando presupuesto #{aprobado.get('document_no')}: {e}", "error")
+                continue
+
+        self.pg_conn.commit()
+        self._log(f"✅ {notificados} presupuestos notificados como approved", "info")
+
+        self.stats['updated'] += notificados
+        return notificados
