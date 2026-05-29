@@ -1607,7 +1607,7 @@ DROP TRIGGER IF EXISTS tr_sales_operation_mark_approved ON sales_operation;
 CREATE TRIGGER tr_sales_operation_mark_approved
     AFTER UPDATE OF pending ON sales_operation
     FOR EACH ROW
-    WHEN (OLD.pending = TRUE AND NEW.pending = FALSE)
+    WHEN (OLD.pending = TRUE AND NEW.pending = FALSE AND NEW.document_no LIKE 'W%')
     EXECUTE PROCEDURE trigger_mark_sales_operation_approved();
 """
 
