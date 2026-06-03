@@ -1503,6 +1503,29 @@ CREATE TRIGGER tr_users_mark_seller_password_updated
     WHEN (OLD.user_password IS DISTINCT FROM NEW.user_password)
     EXECUTE PROCEDURE trigger_mark_seller_password_updated();
 
+-- Función para marcar seller cuando cambia email
+CREATE OR REPLACE FUNCTION trigger_mark_seller_email_updated()
+RETURNS TRIGGER AS $$
+DECLARE v_company_id INTEGER;
+BEGIN
+    SELECT value INTO v_company_id FROM sync_config WHERE key = 'company_id';
+    IF v_company_id IS NULL THEN v_company_id := 1; END IF;
+
+    UPDATE sync_hashes SET pending_sync = TRUE, updated_at = NOW()
+    WHERE table_name = 'sellers'
+      AND record_key = (SELECT code FROM sellers WHERE user_code = OLD.code LIMIT 1)
+      AND company_id = v_company_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tr_users_mark_seller_email_updated
+    AFTER UPDATE OF email ON users
+    FOR EACH ROW
+    WHEN (OLD.email IS DISTINCT FROM NEW.email)
+    EXECUTE PROCEDURE trigger_mark_seller_email_updated();
+
 -- ===========================================================================
 -- DEPARTMENTS (CATEGORIES)
 -- ===========================================================================
