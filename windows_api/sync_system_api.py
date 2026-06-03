@@ -1207,12 +1207,13 @@ CREATE TRIGGER tr_products_mark_deleted_sync_hashes
 -- PRODUCTS IMAGE - Trigger específico para detectar cambios en product_image
 -- ===========================================================================
 
--- Función para marcar sync cuando cambia product_image
+-- Función para marcar sync cuando cambia product_image (INSERT, UPDATE, DELETE)
 CREATE OR REPLACE FUNCTION trigger_mark_product_image_updated()
 RETURNS TRIGGER AS $$
 DECLARE
     v_company_id INTEGER;
     v_exists INTEGER;
+    v_product_code VARCHAR(50);
 BEGIN
     -- Obtener el company_id desde sync_config
     SELECT value INTO v_company_id
@@ -1224,11 +1225,20 @@ BEGIN
         v_company_id := 1;
     END IF;
 
+    -- Determinar el código del producto según la operación
+    -- INSERT/UPDATE: usar NEW.main_code
+    -- DELETE: usar OLD.main_code (porque NEW no existe en DELETE)
+    IF TG_OP = 'DELETE' THEN
+        v_product_code := OLD.main_code;
+    ELSE
+        v_product_code := NEW.main_code;
+    END IF;
+
     -- Verificar si ya existe el registro
     SELECT COUNT(*) INTO v_exists
     FROM sync_hashes
     WHERE table_name = 'products'
-    AND record_key = NEW.main_code
+    AND record_key = v_product_code
     AND company_id = v_company_id;
 
     -- Marcar como pending_sync
@@ -1238,21 +1248,26 @@ BEGIN
             deleted_at = NULL,
             updated_at = NOW()
         WHERE table_name = 'products'
-        AND record_key = NEW.main_code
+        AND record_key = v_product_code
         AND company_id = v_company_id;
     ELSE
         INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
-        VALUES ('products', NEW.main_code, md5(NEW.main_code::text), TRUE, v_company_id, NOW());
+        VALUES ('products', v_product_code, md5(v_product_code::text), TRUE, v_company_id, NOW());
     END IF;
 
-    RETURN NEW;
+    -- Retornar según la operación
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger que se dispara solo cuando cambia product_image
+-- Trigger que se dispara cuando cambia la imagen en products_image (INSERT, UPDATE, DELETE)
 DROP TRIGGER IF EXISTS tr_product_image_mark_updated ON products_image;
 CREATE TRIGGER tr_product_image_mark_updated
-    AFTER INSERT OR UPDATE ON products_image
+    AFTER INSERT OR UPDATE OR DELETE ON products_image
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_product_image_updated();
 

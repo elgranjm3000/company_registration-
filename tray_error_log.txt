@@ -1,0 +1,17 @@
+[2026-05-11 23:19:12.276524] Iniciando thread de system tray...
+[2026-05-11 23:19:12.277461] Thread de system tray iniciado correctamente
+[2026-05-11 23:19:12.286086] ERROR en iniciar_system_tray: Falta dependencia: No module named 'pystray'
+Traceback (most recent call last):
+  File "/home/muentes/devs/sincronizadorchrystal/sync_system_api.py", line 5599, in iniciar
+    import pystray
+ModuleNotFoundError: No module named 'pystray'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/muentes/devs/sincronizadorchrystal/sync_system_api.py", line 3974, in iniciar_system_tray
+    tray_service.iniciar()
+  File "/home/muentes/devs/sincronizadorchrystal/sync_system_api.py", line 5655, in iniciar
+    raise Exception(error_msg)
+Exception: Falta dependencia: No module named 'pystray'
+
