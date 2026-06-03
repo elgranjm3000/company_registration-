@@ -5741,7 +5741,7 @@ class SystemTrayService:
             log_debug("[DEBUG] Menú creado")
 
             # Crear icono
-            tooltip_text = f"""Sync API System
+            tooltip_text = f"""Sync API System v1.0.0
 RIF: {self.config['company_rif']}
 
 Clic derecho para opciones"""
