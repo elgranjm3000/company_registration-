@@ -333,6 +333,35 @@ def setup_logging(company_email=None):
     return log_func
 
 
+def set_window_favicon(window):
+    """
+    Establecer el favicon (icono) para una ventana Tkinter.
+
+    Args:
+        window: Ventana Tkinter (root o Toplevel)
+    """
+    try:
+        # Obtener directorio del script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(script_dir, 'logo.ico')
+
+        # Si no existe, intentar en windows_api/
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(script_dir, 'windows_api', 'logo.ico')
+
+        # Si está empaquetado como exe
+        if getattr(sys, 'frozen', False):
+            script_dir = os.path.dirname(sys.executable)
+            icon_path = os.path.join(script_dir, 'logo.ico')
+
+        # Establecer icono si existe
+        if os.path.exists(icon_path):
+            window.iconbitmap(icon_path)
+    except Exception as e:
+        # Silencioso - no fallar si no se puede cargar el icono
+        pass
+
+
 def add_gui_handler(logger_func, gui_log_func):
     """
     Agregar handler para enviar logs del logger de Python a la GUI.
@@ -2951,6 +2980,7 @@ class ConfigWindow:
                 log_debug("[DEBUG] Creando ventana de sincronización...")
                 # Crear nueva ventana Tk independiente (self.root ya fue destruido)
                 sync_window = tk.Tk()
+                set_window_favicon(sync_window)
                 sync_window.title("🔄 Primera Sincronización")
                 sync_window.geometry("600x300")
                 sync_window.resizable(False, False)
@@ -3498,6 +3528,7 @@ class ConfigWindow:
 
         # Crear ventana de primera sincronización
         sync_window = tk.Tk()
+        set_window_favicon(sync_window)
         sync_window.title("Primera Sincronización")
         sync_window.geometry("650x580")
         sync_window.resizable(False, False)
@@ -3816,6 +3847,7 @@ def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
         log_debug("[DEBUG] Creando ventana de sincronización...")
         # Crear nueva ventana Tk independiente
         sync_window = tk.Tk()
+        set_window_favicon(sync_window)
         sync_window.title("🔄 Primera Sincronización")
         sync_window.geometry("600x300")
         sync_window.resizable(False, False)
@@ -4271,6 +4303,7 @@ class LauncherWindow:
 
         self.root.destroy()
         root = tk.Tk()
+        set_window_favicon(root)
         app = ConfigWindow(root)
         root.mainloop()
 
@@ -4278,6 +4311,7 @@ class LauncherWindow:
         """Lanzar modo manager"""
         self.root.destroy()
         root = tk.Tk()
+        set_window_favicon(root)
         app = ManagerWindow(root)
         root.mainloop()
 
@@ -4335,6 +4369,7 @@ class LauncherWindow:
             messagebox.showerror("Error", "No hay configuración. Ejecute 'Configurar Sistema' primero")
             # Volver al launcher
             root = tk.Tk()
+            set_window_favicon(root)
             app = LauncherWindow(root)
             root.mainloop()
             return
@@ -5147,6 +5182,7 @@ class SystemTrayService:
 
             # Crear ventana de reautenticación
             auth_window = tk.Tk()
+            set_window_favicon(auth_window)
             auth_window.title("Sincronizador - Verificar Identidad")
             auth_window.geometry("480x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
             auth_window.resizable(False, False)
@@ -5528,6 +5564,7 @@ class SystemTrayService:
         try:
             import tkinter as tk
             root = tk.Tk()
+            set_window_favicon(root)
             # Pasar password si está disponible (desde reautenticar_usuario)
             app = ManagerWindow(root, api_key=getattr(self, 'api_key', None))
             root.mainloop()
@@ -5552,6 +5589,7 @@ class SystemTrayService:
 
             # Crear ventana principal nueva (no Toplevel, porque no hay padre activo)
             log_window = tk.Tk()
+            set_window_favicon(log_window)
             log_window.title(f"Logs - Sync API ({self.config.get('company_rif', 'N/A')})")
             log_window.geometry("900x700")
 
@@ -5648,6 +5686,7 @@ class SystemTrayService:
         try:
             import tkinter as tk
             root = tk.Tk()
+            set_window_favicon(root)
             app = ConfigWindow(root)
             root.mainloop()
         except Exception as e:
@@ -6107,6 +6146,7 @@ def main():
                 return
 
             root = tk.Tk()
+            set_window_favicon(root)
             app = ConfigWindow(root)
             root.mainloop()
 
@@ -6286,6 +6326,7 @@ def main():
         auth_result = autenticar_para_config()
         if auth_result and auth_result.get('success', False):
             root = tk.Tk()
+            set_window_favicon(root)
             app = ConfigWindow(root)
             root.mainloop()
 
@@ -6327,6 +6368,7 @@ def main():
         # Manager siempre abre, con o sin configuración
         # (puede configurarse desde el botón "Configurar")
         root = tk.Tk()
+        set_window_favicon(root)
         app = ManagerWindow(root)
         root.mainloop()
 
