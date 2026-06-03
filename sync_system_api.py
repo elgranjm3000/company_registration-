@@ -5033,20 +5033,32 @@ class SystemTrayService:
         self.configurar_auto_inicio()
 
     def crear_icono(self):
-        """Crea icono simple para la bandeja del sistema"""
+        """Crea icono para la bandeja del sistema usando el logo"""
         try:
-            from PIL import Image, ImageDraw
-            # Crear imagen simple 64x64
-            image = Image.new('RGB', (64, 64), color='white')
-            draw = ImageDraw.Draw(image)
+            from PIL import Image
 
-            # Dibujar círculo azul (sincronización)
-            draw.ellipse([10, 10, 54, 54], fill='#3498db', outline='#2980b9', width=3)
+            # Obtener ruta del logo (script_dir/logo.png)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            logo_path = os.path.join(script_dir, 'logo.png')
 
-            # Dibujar flechas de sincronización
-            draw.polygon([(20, 32), (32, 20), (32, 28), (44, 28), (44, 20), (56, 32), (44, 44), (44, 36), (32, 36), (32, 44)], fill='white')
+            # Si no existe, usar ruta alternativa (windows_api/)
+            if not os.path.exists(logo_path):
+                logo_path = os.path.join(script_dir, 'windows_api', 'logo.png')
 
-            return image
+            # Cargar y redimensionar logo a 64x64
+            if os.path.exists(logo_path):
+                image = Image.open(logo_path)
+                image = image.resize((64, 64), Image.Resampling.LANCZOS)
+                return image
+            else:
+                # Fallback: crear imagen simple si no hay logo
+                from PIL import ImageDraw
+                image = Image.new('RGB', (64, 64), color='white')
+                draw = ImageDraw.Draw(image)
+                draw.ellipse([10, 10, 54, 54], fill='#3498db', outline='#2980b9', width=3)
+                draw.polygon([(20, 32), (32, 20), (32, 28), (44, 28), (44, 20), (56, 32), (44, 44), (44, 36), (32, 36), (32, 44)], fill='white')
+                return image
+
         except ImportError:
             print("ERROR: PIL no está instalado. Ejecute: pip install Pillow")
             return None
