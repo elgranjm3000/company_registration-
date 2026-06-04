@@ -175,7 +175,9 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                     try:
                         script_dir = os.path.dirname(os.path.abspath(__file__))
                         possible_icons = [
-                            os.path.join(script_dir, "icon.ico"),
+                            os.path.join(script_dir, "logo.ico"),  # Nuevo logo
+                            os.path.join(script_dir, "logo.png"),
+                            os.path.join(script_dir, "icon.ico"),  # Legacy
                             os.path.join(script_dir, "icon.png"),
                             os.path.join(script_dir, "app.ico"),
                         ]
@@ -186,17 +188,30 @@ def mostrar_banner(titulo, mensaje, duracion=5, icono=None):
                         print(f"[NOTIFICACION] Icono encontrado: {icon_path}")
                     except Exception as e:
                         print(f"[NOTIFICACION] WARNING buscando icono: {e}")
+                        icon_path = None
 
                 # Usar threaded=True para evitar errores de WPARAM
                 # cuando se ejecuta desde un thread separado
                 print(f"[NOTIFICACION] Llamando toast.show_toast (duration={duracion})...")
-                toast.show_toast(
-                    titulo,
-                    mensaje,
-                    duration=duracion,
-                    icon_path=icon_path,
-                    threaded=True,  # Threaded para evitar errores de Windows callbacks
-                )
+
+                # Solo pasar icon_path si existe y es válido
+                # Si no existe, win10toast usará el icono por defecto de Windows
+                if icon_path and os.path.exists(icon_path):
+                    toast.show_toast(
+                        titulo,
+                        mensaje,
+                        duration=duracion,
+                        icon_path=icon_path,
+                        threaded=True,
+                    )
+                else:
+                    print("[NOTIFICACION] Sin icono, usando icono por defecto de Windows")
+                    toast.show_toast(
+                        titulo,
+                        mensaje,
+                        duration=duracion,
+                        threaded=True,
+                    )
                 print("[NOTIFICACION] toast.show_toast completado exitosamente")
 
             elif sistema == "Linux":
