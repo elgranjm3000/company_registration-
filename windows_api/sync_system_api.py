@@ -17,6 +17,11 @@ Características:
 """
 
 # ========================================
+# VERSIÓN DE LA APLICACIÓN
+# ========================================
+APP_VERSION = "1.0.0"
+
+# ========================================
 # DIAGNÓSTICO DE INICIO (antes de cualquier import)
 # ========================================
 import sys
