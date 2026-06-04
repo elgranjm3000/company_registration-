@@ -1871,31 +1871,36 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             self.categories_client = CategoriesClient(
                 base_url=base_url,
                 api_key=api_key,
-                logger=api_logger
+                logger=api_logger,
+                app_version=APP_VERSION
             )
 
             self.products_client = ProductsClient(
                 base_url=base_url,
                 api_key=api_key,
-                logger=api_logger
+                logger=api_logger,
+                app_version=APP_VERSION
             )
 
             self.customers_client = CustomersClient(
                 base_url=base_url,
                 api_key=api_key,
-                logger=api_logger
+                logger=api_logger,
+                app_version=APP_VERSION
             )
 
             self.sellers_client = SellersClient(
                 base_url=base_url,
                 api_key=api_key,
-                logger=api_logger
+                logger=api_logger,
+                app_version=APP_VERSION
             )
 
             self.quotes_client = QuotesClient(
                 base_url=base_url,
                 api_key=api_key,
-                logger=api_logger
+                logger=api_logger,
+                app_version=APP_VERSION
             )
 
             self._log("✅ Clientes API inicializados")

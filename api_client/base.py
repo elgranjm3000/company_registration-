@@ -75,7 +75,8 @@ class BaseAPIClient:
         backoff_factor: float = 0.5,
         timeout: int = 30,
         batch_size: int = 5000,
-        logger=None
+        logger=None,
+        app_version: Optional[str] = None
     ):
         """
         Args:
@@ -86,6 +87,7 @@ class BaseAPIClient:
             timeout: Timeout en segundos para cada request (default: 30)
             batch_size: Tamaño máximo de lote (default: 5000)
             logger: Logger de Python personalizado (opcional)
+            app_version: Versión de la aplicación para header X-App-Version (opcional)
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
@@ -93,6 +95,7 @@ class BaseAPIClient:
         self.backoff_factor = backoff_factor
         self.timeout = timeout
         self.batch_size = batch_size
+        self.app_version = app_version  # Versión de la app
 
         # Configurar sesión con retry automático
         self.session = self._create_session()
@@ -133,12 +136,19 @@ class BaseAPIClient:
         session.mount("https://", adapter)
 
         # Headers por defecto
-        session.headers.update({
+        headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'X-App-Name': 'sincronizador'
+        }
+
+        # Agregar versión de la aplicación si está disponible
+        if self.app_version:
+            headers['X-App-Version'] = self.app_version
+
+        session.headers.update(headers)
 
         return session
 
