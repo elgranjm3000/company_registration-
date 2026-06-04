@@ -4443,7 +4443,7 @@ class ManagerWindow:
 
     def __init__(self, root, api_key=None):
         self.root = root
-        self.root.title("Sincronizador API REST v1.0.0 - Manager")
+        self.root.title(f"Sincronizador API REST v{APP_VERSION} - Manager")
         self.root.geometry("800x600")
 
         # Auth Manager (en memoria)
@@ -4737,7 +4737,7 @@ class ManagerWindow:
         header = tk.Frame(self.root, bg="#2c3e50", height=60)
         header.pack(fill="x")
 
-        title = tk.Label(header, text="🔄 Sincronizador API REST v1.0.0 - Manager",
+        title = tk.Label(header, text=f"🔄 Sincronizador API REST v{APP_VERSION} - Manager",
                         font=("Arial", 18, "bold"), bg="#2c3e50", fg="white")
         title.pack(pady=15)
 
@@ -5826,7 +5826,7 @@ class SystemTrayService:
             log_debug("[DEBUG] Menú creado")
 
             # Crear icono
-            tooltip_text = f"""Sync API System v1.0.0
+            tooltip_text = f"""Sync API System v{APP_VERSION}
 RIF: {self.config['company_rif']}
 
 Clic derecho para opciones"""
