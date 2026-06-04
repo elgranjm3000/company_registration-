@@ -345,20 +345,26 @@ def set_window_favicon(window):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         icon_path = os.path.join(script_dir, 'logo.ico')
 
+        # Si está empaquetado como exe, usar directorio del ejecutable
+        if getattr(sys, 'frozen', False):
+            exe_dir = os.path.dirname(sys.executable)
+            icon_path = os.path.join(exe_dir, 'logo.ico')
+
         # Si no existe, intentar en windows_api/
         if not os.path.exists(icon_path):
-            icon_path = os.path.join(script_dir, 'windows_api', 'logo.ico')
-
-        # Si está empaquetado como exe
-        if getattr(sys, 'frozen', False):
-            script_dir = os.path.dirname(sys.executable)
-            icon_path = os.path.join(script_dir, 'logo.ico')
+            alt_path = os.path.join(script_dir, 'windows_api', 'logo.ico')
+            if os.path.exists(alt_path):
+                icon_path = alt_path
 
         # Establecer icono si existe
         if os.path.exists(icon_path):
             window.iconbitmap(icon_path)
+            print(f"[DEBUG] Icono cargado: {icon_path}")
+        else:
+            print(f"[WARNING] No se encontró logo.ico")
     except Exception as e:
-        # Silencioso - no fallar si no se puede cargar el icono
+        # Mostrar error para depuración
+        print(f"[ERROR] Error cargando icono: {e}")
         pass
 
 
