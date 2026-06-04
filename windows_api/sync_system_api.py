@@ -358,29 +358,37 @@ def set_window_favicon(window):
     try:
         # Obtener directorio del script
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_path = os.path.join(script_dir, 'logo.ico')
 
-        # Si está empaquetado como exe, usar directorio del ejecutable
+        # Buscar logo.ico en varios lugares
+        possible_paths = [
+            os.path.join(script_dir, 'logo.ico'),
+            os.path.join(script_dir, 'windows_api', 'logo.ico'),
+        ]
+
+        # Si está empaquetado como exe, buscar en directorio del ejecutable
         if getattr(sys, 'frozen', False):
             exe_dir = os.path.dirname(sys.executable)
-            icon_path = os.path.join(exe_dir, 'logo.ico')
+            possible_paths.insert(0, os.path.join(exe_dir, 'logo.ico'))
 
-        # Si no existe, intentar en windows_api/
-        if not os.path.exists(icon_path):
-            alt_path = os.path.join(script_dir, 'windows_api', 'logo.ico')
-            if os.path.exists(alt_path):
-                icon_path = alt_path
+        # Buscar el primer icono que exista
+        icon_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                icon_path = path
+                print(f"[DEBUG] Icono encontrado: {icon_path}")
+                break
 
-        # Establecer icono si existe
-        if os.path.exists(icon_path):
+        # Establecer icono si se encontró
+        if icon_path:
             window.iconbitmap(icon_path)
-            print(f"[DEBUG] Icono cargado: {icon_path}")
+            print(f"[DEBUG] Iconbitmap aplicado: {icon_path}")
         else:
-            print(f"[WARNING] No se encontró logo.ico")
+            print(f"[WARNING] No se encontró logo.ico en: {possible_paths}")
     except Exception as e:
         # Mostrar error para depuración
-        print(f"[ERROR] Error cargando icono: {e}")
-        pass
+        print(f"[ERROR] Error en set_window_favicon: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def add_gui_handler(logger_func, gui_log_func):
