@@ -40,7 +40,15 @@ datas_list = [
     ('config_encryption.py', '.'),
 ] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas + cryptography_datas + cffi_datas
 
-# Agregar icono solo si existe
+# Agregar logo.ico (favicon de ventanas)
+if os.path.exists('logo.ico'):
+    datas_list.append(('logo.ico', '.'))
+
+# Agregar logo.png (para system tray)
+if os.path.exists('logo.png'):
+    datas_list.append(('logo.png', '.'))
+
+# Agregar icon.ico solo si existe (legacy)
 if os.path.exists('icon.ico'):
     datas_list.append(('icon.ico', '.'))
 
@@ -214,6 +222,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico' if os.path.exists('icon.ico') else None,
+    # Usar logo.ico si existe, si no icon.ico
+    icon='logo.ico' if os.path.exists('logo.ico') else ('icon.ico' if os.path.exists('icon.ico') else None),
     version='version_info.txt' if os.path.exists('version_info.txt') else None,
 )
