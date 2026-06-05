@@ -1911,7 +1911,13 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             return True
 
         except Exception as e:
-            self._log(f"❌ Error inicializando clientes API: {e}", "error")
+            import traceback
+            error_detail = str(e)
+            self._log(f"❌ Error inicializando clientes API: {error_detail}", "error")
+            print(traceback.format_exc())
+            with open("primera_sync_log.txt", "a") as f:
+                f.write(f"\n[ERROR] initialize_api_clients: {error_detail}\n")
+                f.write(traceback.format_exc() + "\n")
             return False
 
     def sync_all(self) -> dict:
