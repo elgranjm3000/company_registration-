@@ -1602,6 +1602,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS tr_users_mark_seller_email_updated ON users;
 CREATE TRIGGER tr_users_mark_seller_email_updated
     AFTER UPDATE OF email ON users
     FOR EACH ROW

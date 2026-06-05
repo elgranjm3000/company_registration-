@@ -15,7 +15,8 @@ class QuotesClient(BaseAPIClient):
         api_key: str,
         timeout: int = 30,
         max_retries: int = 3,
-        logger=None
+        logger=None,
+        app_version: Optional[str] = None
     ):
         """
         Args:
@@ -24,13 +25,15 @@ class QuotesClient(BaseAPIClient):
             timeout: Timeout en segundos
             max_retries: Máximo de reintentos
             logger: Logger de Python personalizado (opcional)
+            app_version: Versión de la aplicación para header X-App-Version (opcional)
         """
         super().__init__(
             base_url=base_url,
             api_key=api_key,
             timeout=timeout,
             max_retries=max_retries,
-            logger=logger
+            logger=logger,
+            app_version=app_version
         )
 
     def get_pending_quotes(self, company_id: int) -> List[Dict]:

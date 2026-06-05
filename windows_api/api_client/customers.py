@@ -41,7 +41,8 @@ class CustomersClient(BaseAPIClient):
         timeout: int = 30,
         max_retries: int = 3,
         batch_size: int = 5000,
-        logger=None
+        logger=None,
+        app_version: Optional[str] = None
     ):
         """
         Args:
@@ -51,8 +52,9 @@ class CustomersClient(BaseAPIClient):
             max_retries: Máximo de reintentos
             batch_size: Tamaño máximo de lote (default: 5000)
             logger: Logger de Python personalizado (opcional)
+            app_version: Versión de la aplicación para header X-App-Version (opcional)
         """
-        super().__init__(base_url, api_key, max_retries, 0.5, timeout, batch_size, logger=logger)
+        super().__init__(base_url, api_key, max_retries, 0.5, timeout, batch_size, logger=logger, app_version=app_version)
 
     # =========================================================================
     # CRUD BÁSICO
