@@ -2474,9 +2474,8 @@ class ConfigWindow:
                     # Comparar emails
                     if email.lower().strip() != pg_email.lower().strip():
                         messagebox.showerror("❌ Error de Validación",
-                            f"El email de la API Key no coincide con el email registrado en PostgreSQL.\n\n"                            
-                            f"Verifique que la API Key corresponde a la misma empresa "
-                            f"configurada en la base de datos local.")
+                            "Su email de empresa no está configurado en Chrystal.\n\n"
+                            "Por favor verifique y luego intente de nuevo la verificación.")
                         self.log(f"❌ Email no coincide: API={email} vs PG={pg_email}")
                         return
 
