@@ -5239,19 +5239,23 @@ class SystemTrayService:
             auth_window.geometry("480x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
             auth_window.resizable(False, False)
 
-            # IMPORTANTE: Forzar ventana al frente en Windows
-            auth_window.attributes('-topmost', True)  # Mantener siempre al frente
-            auth_window.lift()  # Elevar ventana
-            auth_window.focus_force()  # Forzar focus
-            auth_window.grab_set()  # Hacer modal (bloquea interacción con otras ventanas)
-
-            # Centrar ventana
+            # Centrar ventana PRIMERO (antes de topmost/grab_set)
             auth_window.update_idletasks()
             width = auth_window.winfo_width()
             height = auth_window.winfo_height()
             x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
             y = (auth_window.winfo_screenheight() // 2) - (height // 2)
             auth_window.geometry(f'{width}x{height}+{x}+{y}')
+
+            # DESPUÉS de posicionar, hacer topmost/focus
+            auth_window.attributes('-topmost', True)
+            auth_window.lift()
+
+            # IMPORTANTE: En Windows 11, esperar a que la ventana esté completamente
+            # renderizada ANTES de hacer grab_set() y focus_force()
+            auth_window.update()
+            auth_window.after(50, lambda: auth_window.focus_force())  # Retraso para Win11
+            auth_window.after(100, lambda: auth_window.grab_set() if auth_window.winfo_exists() else None)  # Retraso para Win11
 
 
             # Frame principal
@@ -5405,17 +5409,26 @@ class SystemTrayService:
             # Bind Enter
             auth_window.bind('<Return>', lambda e: do_auth())
 
-            # Ejecutar ventana
-            auth_window.mainloop()
+            # IMPORTANTE: Forzar actualización final para Windows 11
+            # Esto asegura que todos los widgets estén listos para recibir input
+            auth_window.update()
+            auth_window.deiconify()  # Asegurar visibilidad
 
-            # Forzar limpieza en este hilo para evitar
-            # "RuntimeError: main thread is not in main loop" al hacer GC
+            # Usar wait_window() en lugar de mainloop() para Windows 11
+            # wait_window es compatible con event loops existentes (pystray)
+            auth_window.wait_window()
+
+            # Resultado de la autenticación
             result = auth_result['success']
+
+            # Limpiar ventana
             try:
-                auth_window.destroy()
+                if auth_window.winfo_exists():
+                    auth_window.destroy()
             except:
                 pass
-            # Eliminar referencias y forzar GC antes de salir del hilo
+
+            # Eliminar referencias y forzar GC
             del auth_window, main_frame, email_entry, password_entry
             del auth_btn, cancel_btn, auth_result
             import gc
