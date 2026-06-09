@@ -2525,13 +2525,20 @@ class ConfigWindow:
                 self.log(f"❌ API: Error HTTP {response.status_code}")
 
         except requests.exceptions.Timeout:
-            messagebox.showerror("❌ Error", "Tiempo de espera agotado. La API no responde.")
+            messagebox.showerror("❌ Error de Conexión",
+                "La API no responde. Por favor verifique su conexión a internet e intente nuevamente.")
             self.log("❌ API: Timeout")
         except requests.exceptions.ConnectionError:
-            messagebox.showerror("❌ Error", "No se puede conectar a la API. Verifique la URL.")
+            messagebox.showerror("❌ Error de Conexión",
+                "No se puede conectar con el servidor.\n\n"
+                "Por favor verifique:\n"
+                "• Su conexión a internet\n"
+                "• Que la URL de la API sea correcta")
             self.log("❌ API: Error de conexión")
         except Exception as e:
-            messagebox.showerror("❌ Error", f"Error inesperado: {str(e)}")
+            messagebox.showerror("❌ Error",
+                "Ocurrió un error inesperado al validar la API Key.\n\n"
+                "Por favor intente nuevamente. Si el problema persiste, contacte soporte.")
             self.log(f"❌ API: {str(e)}")
 
     def test_postgres_connection(self):
