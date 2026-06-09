@@ -2531,9 +2531,7 @@ class ConfigWindow:
         except requests.exceptions.ConnectionError:
             messagebox.showerror("❌ Error de Conexión",
                 "No se puede conectar con el servidor.\n\n"
-                "Por favor verifique:\n"
-                "• Su conexión a internet\n"
-                "• Que la URL de la API sea correcta")
+                "Por favor verifique su conexión a internet e intente nuevamente.")
             self.log("❌ API: Error de conexión")
         except Exception as e:
             messagebox.showerror("❌ Error",
