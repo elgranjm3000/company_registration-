@@ -5248,16 +5248,19 @@ class SystemTrayService:
             auth_window = tk.Tk()
             set_window_favicon(auth_window)
             auth_window.title("Sincronizador - Verificar Identidad")
-            auth_window.geometry("480x280")  # Aumentado de 220 a 280 para mejor visibilidad de botones
             auth_window.resizable(False, False)
 
-            # Centrar ventana PRIMERO (antes de topmost/grab_set)
+            # Centrar ventana usando el tamaño especificado (no winfo_width que puede fallar en Win11)
+            window_width = 480
+            window_height = 280
+            screen_width = auth_window.winfo_screenwidth()
+            screen_height = auth_window.winfo_screenheight()
+            x = (screen_width // 2) - (window_width // 2)
+            y = (screen_height // 2) - (window_height // 2)
+            auth_window.geometry(f'{window_width}x{window_height}+{x}+{y}')
+
+            # Forzar actualización para asegurar que la posición se aplique
             auth_window.update_idletasks()
-            width = auth_window.winfo_width()
-            height = auth_window.winfo_height()
-            x = (auth_window.winfo_screenwidth() // 2) - (width // 2)
-            y = (auth_window.winfo_screenheight() // 2) - (height // 2)
-            auth_window.geometry(f'{width}x{height}+{x}+{y}')
 
             # DESPUÉS de posicionar, hacer topmost/focus
             auth_window.attributes('-topmost', True)
