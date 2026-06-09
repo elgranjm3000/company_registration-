@@ -5123,14 +5123,23 @@ class SystemTrayService:
         """Crea icono para la bandeja del sistema usando el logo"""
         try:
             from PIL import Image
+            import sys
 
-            # Obtener ruta del logo (script_dir/logo.png)
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            logo_path = os.path.join(script_dir, 'logo.png')
+            # Determinar el directorio base para encontrar logo.png
+            # Si está compilado con PyInstaller, usar sys._MEIPASS
+            if getattr(sys, 'frozen', False):
+                # Ejecutable compilado: sys._MEIPASS es el dir de datos desempaquetados
+                base_dir = sys._MEIPASS
+            else:
+                # Desarrollo: usar el directorio del script
+                base_dir = os.path.dirname(os.path.abspath(__file__))
 
-            # Si no existe, usar ruta alternativa (windows_api/)
+            # Buscar logo.png en el directorio base
+            logo_path = os.path.join(base_dir, 'logo.png')
+
+            # Si no existe, intentar en windows_api/ (solo en desarrollo)
             if not os.path.exists(logo_path):
-                logo_path = os.path.join(script_dir, 'windows_api', 'logo.png')
+                logo_path = os.path.join(base_dir, 'windows_api', 'logo.png')
 
             # Cargar y redimensionar logo a 64x64
             if os.path.exists(logo_path):
@@ -5138,6 +5147,7 @@ class SystemTrayService:
                 image = image.resize((64, 64), Image.Resampling.LANCZOS)
                 return image
             else:
+                print(f"[WARNING] logo.png no encontrado en: {base_dir}")
                 # Fallback: crear imagen simple si no hay logo
                 from PIL import ImageDraw
                 image = Image.new('RGB', (64, 64), color='white')
