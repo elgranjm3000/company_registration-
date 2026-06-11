@@ -5632,30 +5632,48 @@ class SystemTrayService:
 
     def abrir_manager(self):
         """Abre la ventana del manager"""
-        # Autenticar antes de abrir manager (solo cajeros)
-        if not self.reautenticar_usuario():
-            print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
-            return
+        print("[DEBUG] abrir_manager: Iniciando...")
+        try:
+            # Autenticar antes de abrir manager (solo cajeros)
+            print("[DEBUG] abrir_manager: Llamando reautenticar_usuario...")
+            if not self.reautenticar_usuario():
+                print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
+                return
 
-        # IMPORTANTE: En Windows 11, dar tiempo a Tkinter para limpiar estado
-        # después de cerrar la ventana de reautenticación
-        import time
-        time.sleep(0.5)  # 500ms para asegurar limpieza de Tkinter
+            print("[DEBUG] abrir_manager: Autenticación exitosa, esperando 500ms...")
+            # IMPORTANTE: En Windows 11, dar tiempo a Tkinter para limpiar estado
+            # después de cerrar la ventana de reautenticación
+            import time
+            time.sleep(0.5)  # 500ms para asegurar limpieza de Tkinter
 
-        import threading
-        threading.Thread(target=self._abrir_manager_thread, daemon=True).start()
+            print("[DEBUG] abrir_manager: Creando thread para manager...")
+            import threading
+            thread = threading.Thread(target=self._abrir_manager_thread, daemon=True)
+            thread.start()
+            print("[DEBUG] abrir_manager: Thread iniciado")
+        except Exception as e:
+            print(f"[ERROR] abrir_manager: Excepción: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _abrir_manager_thread(self):
         """Abre manager en un thread separado"""
+        print("[DEBUG] _abrir_manager_thread: Iniciando...")
         try:
             import tkinter as tk
+            print("[DEBUG] _abrir_manager_thread: Creando ventana Tk...")
             root = tk.Tk()
             set_window_favicon(root)
+            print("[DEBUG] _abrir_manager_thread: Ventana creada, creando ManagerWindow...")
             # Pasar password si está disponible (desde reautenticar_usuario)
             app = ManagerWindow(root, api_key=getattr(self, 'api_key', None))
+            print("[DEBUG] _abrir_manager_thread: ManagerWindow creado, iniciando mainloop...")
             root.mainloop()
+            print("[DEBUG] _abrir_manager_thread: Mainloop terminado")
         except Exception as e:
-            print(f"Error abriendo manager: {e}")
+            print(f"[ERROR] Error abriendo manager: {e}")
+            import traceback
+            traceback.print_exc()
 
     def ver_logs(self):
         """Abre ventana de logs"""
@@ -5737,30 +5755,38 @@ class SystemTrayService:
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú"""
-        # Autenticar antes de sincronizar (solo cajeros)
-        if not self.reautenticar_usuario():
-            print("❌ Sincronización cancelada: autenticación fallida o cancelada")
-            return
+        print("[DEBUG] sincronizar_ahora: Iniciando...")
+        try:
+            # Autenticar antes de sincronizar (solo cajeros)
+            print("[DEBUG] sincronizar_ahora: Llamando reautenticar_usuario...")
+            if not self.reautenticar_usuario():
+                print("❌ Sincronización cancelada: autenticación fallida o cancelada")
+                return
 
-        print("\n" + "="*70)
-        print("🔄 Sincronización manual solicitada desde el menú")
-        print("="*70)
+            print("\n" + "="*70)
+            print("🔄 Sincronización manual solicitada desde el menú")
+            print("="*70)
 
-        import threading
-        import traceback
+            import threading
+            import traceback
 
-        def sync_thread_wrapper():
-            try:
-                print("[DEBUG] Iniciando thread de sincronización manual...")
-                self.ejecutar_sincronizacion(es_manual=True)
-                print("[DEBUG] Thread de sincronización manual completado")
-            except Exception as e:
-                print(f"[DEBUG] Error en thread de sincronización manual: {e}")
-                traceback.print_exc()
+            def sync_thread_wrapper():
+                try:
+                    print("[DEBUG] Iniciando thread de sincronización manual...")
+                    self.ejecutar_sincronizacion(es_manual=True)
+                    print("[DEBUG] Thread de sincronización manual completado")
+                except Exception as e:
+                    print(f"[DEBUG] Error en thread de sincronización manual: {e}")
+                    traceback.print_exc()
 
-        thread = threading.Thread(target=sync_thread_wrapper, daemon=False)
-        thread.start()
-        print("[DEBUG] Thread iniciado (daemon=False)")
+            print("[DEBUG] Creando thread de sincronización...")
+            thread = threading.Thread(target=sync_thread_wrapper, daemon=False)
+            thread.start()
+            print("[DEBUG] Thread de sincronización iniciado (daemon=False)")
+        except Exception as e:
+            print(f"[ERROR] sincronizar_ahora: Excepción: {e}")
+            import traceback
+            traceback.print_exc()
 
     def abrir_config(self):
         """Abre ventana de configuración con autenticación"""
