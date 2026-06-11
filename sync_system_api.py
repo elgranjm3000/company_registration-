@@ -5294,7 +5294,7 @@ class SystemTrayService:
             ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
             email_entry = ttk.Entry(main_frame, width=40)
             email_entry.pack(fill=tk.X, pady=(0, 10))
-            email_entry.focus()  # Focus en email, campos limpios
+            # NOTA: Focus se establecerá después de update() para Windows 11
 
             # Password
             ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
@@ -5427,6 +5427,9 @@ class SystemTrayService:
             # Esto asegura que todos los widgets estén listos para recibir input
             auth_window.update()
             auth_window.deiconify()  # Asegurar visibilidad
+
+            # Colocar focus en email DESPUÉS de update() para Windows 11
+            email_entry.focus_set()
 
             # Usar wait_window() en lugar de mainloop() para Windows 11
             # wait_window es compatible con event loops existentes (pystray)
