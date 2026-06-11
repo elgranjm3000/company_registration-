@@ -1770,8 +1770,13 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             # Ejecutar cada statement individualmente
             for i, statement in enumerate(statements, 1):
                 if statement.strip():  # Solo ejecutar si no está vacío
+                    # Mostrar primer fragmento del statement para identificación
+                    stmt_preview = statement.split()[0:3]
+                    stmt_preview = ' '.join(stmt_preview) if stmt_preview else 'EMPTY'
+                    print(f"[DEBUG] Ejecutando statement {i}/{len(statements)}: {stmt_preview}...")
                     try:
                         self.pg_cursor.execute(statement)
+                        print(f"[DEBUG] Statement {i} OK")
                     except Exception as stmt_error:
                         print(f"[DEBUG] Error en statement {i}: {str(stmt_error)[:200]}")
                         # Hacer rollback para limpiar el estado
