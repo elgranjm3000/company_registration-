@@ -5618,23 +5618,52 @@ class SystemTrayService:
     def bucle_sincronizacion(self):
         """Bucle de sincronización automática"""
         import time
+        print("[DEBUG] bucle_sincronizacion: Iniciando...")
+        print(f"[DEBUG] bucle_sincronizacion: sync_running={self.sync_running}")
 
         interval = int(self.config.get('sync_interval_minutes', 30))
         print(f"⏱️  Intervalo de sincronización: {interval} minutos")
+        print(f"[DEBUG] bucle_sincronizacion: Intervalo configurado: {interval} minutos")
 
         # Primera sincronización inmediata
+        print(f"[DEBUG] bucle_sincronizacion: Verificando sync_running para primera sync...")
         if self.sync_running:
             print("🔄 Ejecutando primera sincronización al inicio...")
-            self.ejecutar_sincronizacion()
+            try:
+                self.ejecutar_sincronizacion()
+                print("[DEBUG] bucle_sincronizacion: Primera sincronización completada")
+            except Exception as e:
+                print(f"[ERROR] bucle_sincronizacion: Error en primera sincronización: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"[WARNING] bucle_sincronizacion: sync_running=False, saltando primera sync")
 
         # Bucle
+        print(f"[DEBUG] bucle_sincronizacion: Iniciando bucle infinito...")
+        iteration = 0
         while self.sync_running:
             try:
+                iteration += 1
+                print(f"[DEBUG] bucle_sincronizacion: Iteración {iteration}, esperando {interval} minutos...")
                 time.sleep(interval * 60)
+                print(f"[DEBUG] bucle_sincronizacion: Despertó de sleep, sync_running={self.sync_running}")
                 if self.sync_running:
-                    self.ejecutar_sincronizacion()
+                    print(f"🔄 Ejecutando sincronización automática #{iteration}...")
+                    try:
+                        self.ejecutar_sincronizacion()
+                        print(f"[DEBUG] bucle_sincronizacion: Sincronización #{iteration} completada")
+                    except Exception as e:
+                        print(f"[ERROR] bucle_sincronizacion: Error en sync #{iteration}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"[DEBUG] bucle_sincronizacion: sync_running=False, saliendo del bucle")
+                    break
             except KeyboardInterrupt:
+                print(f"[DEBUG] bucle_sincronizacion: KeyboardInterrupt detectado")
                 break
+        print(f"[DEBUG] bucle_sincronizacion: Bucle terminado")
 
     def abrir_manager(self):
         """Abre la ventana del manager"""
