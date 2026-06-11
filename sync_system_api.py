@@ -5177,14 +5177,25 @@ class ManagerWindow:
                 messagebox.showerror("Error", "El intervalo máximo es 1440 minutos (24 horas)")
                 return
 
-            # Actualizar configuración en memoria
-            self.config['sync_interval_minutes'] = nuevo_interval
+            # Leer archivo existente y modificar solo sync_interval_minutes
+            import os
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    config_data = json.load(f)
 
-            # Guardar en archivo .chrystal_sync_config.json
-            from config_encryption import encrypt_config
-            config_encrypted = encrypt_config(self.config)
-            with open(CONFIG_FILE, 'w') as f:
-                json.dump(config_encrypted, f, indent=2)
+                # Modificar solo el campo sync_interval_minutes
+                config_data['sync_interval_minutes'] = nuevo_interval
+
+                # Guardar solo modificado (reescribir archivo con solo ese cambio)
+                with open(CONFIG_FILE, 'w') as f:
+                    json.dump(config_data, f, indent=2)
+            else:
+                # Si no existe archivo, error
+                messagebox.showerror("Error", "No existe archivo de configuración")
+                return
+
+            # Actualizar en memoria también
+            self.config['sync_interval_minutes'] = nuevo_interval
 
             messagebox.showinfo("✅ Intervalo Actualizado",
                               f"El intervalo de sincronización se ha actualizado a {nuevo_interval} minutos.\n\n"
@@ -5192,11 +5203,6 @@ class ManagerWindow:
                               f"debe reiniciar el sistema tray (cerrar y abrir nuevamente).")
 
             self.log(f"⏱️ Intervalo actualizado a {nuevo_interval} minutos", "success")
-
-            # Actualizar label de intervalo actual
-            import os
-            if os.path.exists(CONFIG_FILE):
-                self.interval_var.set(nuevo_interval)
 
         except Exception as e:
             messagebox.showerror("Error", f"Error actualizando intervalo:\n{e}")
