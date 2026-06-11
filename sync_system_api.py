@@ -745,28 +745,41 @@ class APISyncManager:
 
             # VERIFICAR: ¿Los triggers ya existen? Si sí, saltar creación para evitar bloqueos en Win11
             print("[DEBUG] Verificando si triggers ya existen...")
-            triggers_check = """
-                SELECT COUNT(*) FROM information_schema.triggers
-                WHERE trigger_name LIKE 'tr_%_sync_hashes';
-            """
             try:
-                self.pg_cursor.execute(triggers_check)
-                trigger_count = self.pg_cursor.fetchone()[0]
-                print(f"[DEBUG] Triggers existentes: {trigger_count}")
-
-                # Si hay al menos 4 triggers principales, asumir que ya están todos creados
-                if trigger_count >= 4:
-                    print("[DEBUG] ✅ Triggers ya existen ({trigger_count}), saltando creación para evitar bloqueos")
-                    print("[DEBUG] Triggers creados/actualizados (skipped - already exist)")
-                else:
-                    print("[DEBUG] Creando/actualizando triggers...")
+                # Verificar que la conexión existe antes de consultar
+                if not self.pg_conn or not self.pg_cursor:
+                    print("[DEBUG] No hay conexión PostgreSQL, creando triggers sin verificación...")
                     self._crear_triggers_desde_sql()
-                    print("[DEBUG] Triggers creados/actualizados")
+                else:
+                    triggers_check = """
+                        SELECT COUNT(*) FROM information_schema.triggers
+                        WHERE trigger_name LIKE 'tr_%_sync_hashes';
+                    """
+                    self.pg_cursor.execute(triggers_check)
+                    trigger_count = self.pg_cursor.fetchone()[0]
+                    print(f"[DEBUG] Triggers existentes: {trigger_count}")
+
+                    # Si hay al menos 4 triggers principales, asumir que ya están todos creados
+                    if trigger_count >= 4:
+                        print("[DEBUG] ✅ Triggers ya existen ({trigger_count}), saltando creación para evitar bloqueos")
+                        print("[DEBUG] Triggers creados/actualizados (skipped - already exist)")
+                    else:
+                        print("[DEBUG] Creando/actualizando triggers...")
+                        self._crear_triggers_desde_sql()
+                        print("[DEBUG] Triggers creados/actualizados")
             except Exception as check_error:
                 print(f"[DEBUG] Error verificando triggers: {check_error}")
+                import traceback
+                traceback.print_exc()
                 print("[DEBUG] Intentando crear triggers de todas formas...")
-                self._crear_triggers_desde_sql()
-                print("[DEBUG] Triggers creados/actualizados")
+                try:
+                    self._crear_triggers_desde_sql()
+                    print("[DEBUG] Triggers creados/actualizados")
+                except Exception as create_error:
+                    print(f"[ERROR] Error crítico creando triggers: {create_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # NO propagar el error para no cerrar el sistema
 
             # Corregir registros existentes con company_id NULL
             self._corregir_company_id_sync_hashes()
