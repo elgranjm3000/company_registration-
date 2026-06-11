@@ -5177,10 +5177,14 @@ class ManagerWindow:
                 messagebox.showerror("Error", "El intervalo máximo es 1440 minutos (24 horas)")
                 return
 
-            # Actualizar configuración
-            from config_encryption import save_config
+            # Actualizar configuración en memoria
             self.config['sync_interval_minutes'] = nuevo_interval
-            save_config(self.config)
+
+            # Guardar en archivo .chrystal_sync_config.json
+            from config_encryption import encrypt_config
+            config_encrypted = encrypt_config(self.config)
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(config_encrypted, f, indent=2)
 
             messagebox.showinfo("✅ Intervalo Actualizado",
                               f"El intervalo de sincronización se ha actualizado a {nuevo_interval} minutos.\n\n"
@@ -5189,8 +5193,15 @@ class ManagerWindow:
 
             self.log(f"⏱️ Intervalo actualizado a {nuevo_interval} minutos", "success")
 
+            # Actualizar label de intervalo actual
+            import os
+            if os.path.exists(CONFIG_FILE):
+                self.interval_var.set(nuevo_interval)
+
         except Exception as e:
             messagebox.showerror("Error", f"Error actualizando intervalo:\n{e}")
+            import traceback
+            traceback.print_exc()
 
 
 # ==============================================================================
