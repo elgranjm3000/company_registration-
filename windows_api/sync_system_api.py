@@ -5637,6 +5637,11 @@ class SystemTrayService:
             print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
             return
 
+        # IMPORTANTE: En Windows 11, dar tiempo a Tkinter para limpiar estado
+        # después de cerrar la ventana de reautenticación
+        import time
+        time.sleep(0.5)  # 500ms para asegurar limpieza de Tkinter
+
         import threading
         threading.Thread(target=self._abrir_manager_thread, daemon=True).start()
 
@@ -5658,6 +5663,11 @@ class SystemTrayService:
         if not self.reautenticar_usuario():
             print("❌ Acceso a logs denegado: autenticación fallida o cancelada")
             return
+
+        # IMPORTANTE: En Windows 11, dar tiempo a Tkinter para limpiar estado
+        # después de cerrar la ventana de reautenticación
+        import time
+        time.sleep(0.5)  # 500ms para asegurar limpieza de Tkinter
 
         import threading
         threading.Thread(target=self._ver_logs_thread, daemon=True).start()
