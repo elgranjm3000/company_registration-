@@ -4844,6 +4844,25 @@ class ManagerWindow:
         self.lbl_progress = tk.Label(stats_frame, text="Listo para sincronizar", font=("Arial", 9), fg="blue")
         self.lbl_progress.pack(pady=(5,0))
 
+        # Panel de configuración de intervalo
+        interval_frame = tk.LabelFrame(main_frame, text="⏱️ Intervalo de Sincronización Automática", font=("Arial", 12, "bold"))
+        interval_frame.pack(fill="x", pady=5, padx=5)
+
+        interval_input_frame = tk.Frame(interval_frame)
+        interval_input_frame.pack(pady=5)
+
+        current_interval = self.config.get('sync_interval_minutes', '30')
+        tk.Label(interval_input_frame, text=f"Intervalo actual: {current_interval} minutos",
+                font=("Arial", 10)).pack(side="left", padx=5)
+
+        tk.Label(interval_input_frame, text="Nuevo intervalo (minutos):").pack(side="left", padx=5)
+        self.interval_var = tk.StringVar(value=current_interval)
+        interval_entry = ttk.Entry(interval_input_frame, textvariable=self.interval_var, width=10)
+        interval_entry.pack(side="left", padx=5)
+
+        ttk.Button(interval_input_frame, text="💾 Guardar", command=self.actualizar_interval, width=15).pack(side="left", padx=5)
+        tk.Label(interval_input_frame, text="(1-1440 minutos)", font=("Arial", 8), fg="gray").pack(side="left", padx=5)
+
         # Botones de sincronización individual
         sync_btn_frame = tk.Frame(main_frame)
         sync_btn_frame.pack(fill="x", pady=5)
@@ -5139,6 +5158,39 @@ class ManagerWindow:
 
             except Exception as e:
                 messagebox.showerror("Error", f"Error reconfigurando:\n{e}")
+
+    def actualizar_interval(self):
+        """Actualizar el intervalo de sincronización automática."""
+        try:
+            nuevo_interval = self.interval_var.get().strip()
+
+            # Validar
+            if not nuevo_interval.isdigit():
+                messagebox.showerror("Error", "El intervalo debe ser un número entero")
+                return
+
+            interval_int = int(nuevo_interval)
+            if interval_int < 1:
+                messagebox.showerror("Error", "El intervalo mínimo es 1 minuto")
+                return
+            if interval_int > 1440:
+                messagebox.showerror("Error", "El intervalo máximo es 1440 minutos (24 horas)")
+                return
+
+            # Actualizar configuración
+            from config_encryption import save_config
+            self.config['sync_interval_minutes'] = nuevo_interval
+            save_config(self.config)
+
+            messagebox.showinfo("✅ Intervalo Actualizado",
+                              f"El intervalo de sincronización se ha actualizado a {nuevo_interval} minutos.\n\n"
+                              f"NOTA: Para que el cambio tome efecto en la sincronización automática,\n"
+                              f"debe reiniciar el sistema tray (cerrar y abrir nuevamente).")
+
+            self.log(f"⏱️ Intervalo actualizado a {nuevo_interval} minutos", "success")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error actualizando intervalo:\n{e}")
 
 
 # ==============================================================================
