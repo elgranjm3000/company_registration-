@@ -743,10 +743,30 @@ class APISyncManager:
             # Crear índices (son seguros con IF NOT EXISTS)
             self._crear_indices_sync_hashes()
 
-            # SIEMPRE crear/actualizar triggers (usando CREATE OR REPLACE que es seguro)
-            print("[DEBUG] Creando/actualizando triggers...")
-            self._crear_triggers_desde_sql()
-            print("[DEBUG] Triggers creados/actualizados")
+            # VERIFICAR: ¿Los triggers ya existen? Si sí, saltar creación para evitar bloqueos en Win11
+            print("[DEBUG] Verificando si triggers ya existen...")
+            triggers_check = """
+                SELECT COUNT(*) FROM information_schema.triggers
+                WHERE trigger_name LIKE 'tr_%_sync_hashes';
+            """
+            try:
+                self.pg_cursor.execute(triggers_check)
+                trigger_count = self.pg_cursor.fetchone()[0]
+                print(f"[DEBUG] Triggers existentes: {trigger_count}")
+
+                # Si hay al menos 4 triggers principales, asumir que ya están todos creados
+                if trigger_count >= 4:
+                    print("[DEBUG] ✅ Triggers ya existen ({trigger_count}), saltando creación para evitar bloqueos")
+                    print("[DEBUG] Triggers creados/actualizados (skipped - already exist)")
+                else:
+                    print("[DEBUG] Creando/actualizando triggers...")
+                    self._crear_triggers_desde_sql()
+                    print("[DEBUG] Triggers creados/actualizados")
+            except Exception as check_error:
+                print(f"[DEBUG] Error verificando triggers: {check_error}")
+                print("[DEBUG] Intentando crear triggers de todas formas...")
+                self._crear_triggers_desde_sql()
+                print("[DEBUG] Triggers creados/actualizados")
 
             # Corregir registros existentes con company_id NULL
             self._corregir_company_id_sync_hashes()
@@ -1766,6 +1786,11 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                     statements.append(stmt)
 
             print(f"[DEBUG] Ejecutando {len(statements)} statements...")
+
+            # IMPORTANTE: Agregar timeout de 5 segundos por statement para evitar bloqueos
+            # Esto es crítico en Windows 11 donde statements pueden colgarse
+            print(f"[DEBUG] Configurando statement_timeout=5s para evitar bloqueos...")
+            self.pg_cursor.execute("SET statement_timeout = 5000")  # 5 segundos en ms
 
             # Ejecutar cada statement individualmente
             for i, statement in enumerate(statements, 1):
