@@ -4870,7 +4870,6 @@ class ManagerWindow:
         self.btn_sync = ttk.Button(btn_frame, text="🔄 Sincronizar Todo", command=self.sync_all, width=20)
         self.btn_sync.pack(side="left", padx=5)
 
-        ttk.Button(btn_frame, text="⚙️ Configuración", command=self.configurar, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="🔄 Reconfigurar", command=self.reconfig, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="📋 Ver Logs", command=self.ver_logs, width=20).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="❌ Salir", command=self.cerrar_ventana, width=20).pack(side="right", padx=5)
