@@ -5265,11 +5265,10 @@ class SystemTrayService:
             auth_window.attributes('-topmost', True)
             auth_window.lift()
 
-            # IMPORTANTE: En Windows 11, esperar a que la ventana esté completamente
-            # renderizada ANTES de hacer grab_set() y focus_force()
+            # IMPORTANTE: En Windows 11, NO usar grab_set() porque bloquea la ventana
+            # Simplemente hacer topmost y focus - wait_window() maneja el bloqueo del flujo
             auth_window.update()
-            auth_window.after(50, lambda: auth_window.focus_force())  # Retraso para Win11
-            auth_window.after(100, lambda: auth_window.grab_set() if auth_window.winfo_exists() else None)  # Retraso para Win11
+            auth_window.focus_force()
 
 
             # Frame principal
