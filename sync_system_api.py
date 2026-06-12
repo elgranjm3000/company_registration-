@@ -5420,13 +5420,11 @@ class SystemTrayService:
             y = (screen_height // 2) - (window_height // 2)
             auth_window.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
-            # Forzar que la ventana sea visible y tenga el foco
-            auth_window.deiconify()
+            # Forzar visibilidad
             auth_window.lift()
             auth_window.attributes('-topmost', True)
-            auth_window.update_idletasks()
             auth_window.update()
-            auth_window.attributes('-topmost', False)
+            auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
 
             # Frame principal
             main_frame = ttk.Frame(auth_window, padding="20")
