@@ -5348,6 +5348,8 @@ class SystemTrayService:
                 # Windows 11 requiere que la ventana raíz sea "visible" para
                 # poder enfocar ventanas Toplevel hijas correctamente.
                 _temp_root.geometry('1x1+0+0')
+                _temp_root.overrideredirect(True)
+                _temp_root.attributes('-alpha', 0.01)
                 _temp_root.title("SyncAPI - Temp")
                 _temp_root.resizable(False, False)
                 self._root = _temp_root
@@ -6181,11 +6183,13 @@ Clic derecho para opciones"""
             import tkinter as tk
             self._root = tk.Tk()
             self._root.title("SyncAPI - Raíz")
-            # 1x1 píxel en la esquina superior izquierda: visible para Windows,
-            # prácticamente invisible para el usuario
+            # 1x1 píxel + overrideredirect + alpha mínimo: invisible para el usuario,
+            # pero visible para Windows 11 (necesario para el foco en Toplevel hijos)
             self._root.geometry('1x1+0+0')
+            self._root.overrideredirect(True)
+            self._root.attributes('-alpha', 0.01)
             set_window_favicon(self._root)
-            log_debug("[DEBUG] Ventana Tk raíz creada (1x1 en 0,0)")
+            log_debug("[DEBUG] Ventana Tk raíz creada (invisible, 1x1 en 0,0)")
 
             # Notificación de inicio
             try:
