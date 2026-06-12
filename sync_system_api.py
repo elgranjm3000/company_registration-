@@ -5420,48 +5420,61 @@ class SystemTrayService:
             y = (screen_height // 2) - (window_height // 2)
             auth_window.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
+            print(f"[DEBUG_FOCUS] auth window creada, hwnd={auth_window.winfo_id()}, root hwnd={self._root.winfo_id() if self._root else 'N/A'}")
+
             # Forzar actualización para asegurar que la posición se aplique
             auth_window.update_idletasks()
 
             # Forzar foco con Windows API (necesario en Windows 11 donde Tkinter falla)
+            print("[DEBUG_FOCUS] Aplicando ctypes para forzar foco de ventana auth...")
             try:
                 if sys.platform == 'win32':
                     import ctypes
 
                     # HWND de la ventana de autenticación (NO GetParent, que da el root)
                     hwnd = auth_window.winfo_id()
+                    print(f"[DEBUG_FOCUS] auth_window hwnd={hwnd}")
 
                     current_tid = ctypes.windll.kernel32.GetCurrentThreadId()
                     foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
                     foreground_tid = ctypes.windll.user32.GetWindowThreadProcessId(foreground_hwnd, None)
+                    print(f"[DEBUG_FOCUS] current_tid={current_tid}, foreground_hwnd={foreground_hwnd}, foreground_tid={foreground_tid}")
 
                     # Adjuntar colas de input para poder SetForegroundWindow
-                    ctypes.windll.user32.AttachThreadInput(current_tid, foreground_tid, True)
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
-                    ctypes.windll.user32.BringWindowToTop(hwnd)
+                    attach_result = ctypes.windll.user32.AttachThreadInput(current_tid, foreground_tid, True)
+                    print(f"[DEBUG_FOCUS] AttachThreadInput={attach_result}")
+                    sf_result = ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    print(f"[DEBUG_FOCUS] SetForegroundWindow({hwnd})={sf_result}")
+                    bt_result = ctypes.windll.user32.BringWindowToTop(hwnd)
+                    print(f"[DEBUG_FOCUS] BringWindowToTop({hwnd})={bt_result}")
 
                     # Traer al frente con HWND_TOPMOST temporal
                     HWND_TOPMOST = -1
                     SWP_NOMOVE = 0x0002
                     SWP_NOSIZE = 0x0001
                     SWP_SHOWWINDOW = 0x0040
-                    ctypes.windll.user32.SetWindowPos(
+                    swp_result = ctypes.windll.user32.SetWindowPos(
                         hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                         SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW
                     )
+                    print(f"[DEBUG_FOCUS] SetWindowPos(HWND_TOPMOST)={swp_result}")
 
                     # FlashWindow para notificar al usuario
-                    ctypes.windll.user32.FlashWindow(hwnd, True)
+                    flash_result = ctypes.windll.user32.FlashWindow(hwnd, True)
+                    print(f"[DEBUG_FOCUS] FlashWindow={flash_result}")
 
                     # Restaurar colas de input
                     ctypes.windll.user32.AttachThreadInput(current_tid, foreground_tid, False)
-            except Exception:
-                pass
+                    print("[DEBUG_FOCUS] ctypes OK, colas restauradas")
+            except Exception as e:
+                print(f"[DEBUG_FOCUS] Error en ctypes: {e}")
 
             # Fallback: focus de Tkinter
+            print("[DEBUG_FOCUS] Fallback Tkinter: lift+update+focus_force...")
             auth_window.lift()
             auth_window.update()
             auth_window.focus_force()
+            print("[DEBUG_FOCUS] Fallback Tkinter completado")
 
             # Quitar HWND_TOPMOST después de 1.5s para que la ventana se comporte normal
             def _remove_topmost():
@@ -5641,20 +5654,31 @@ class SystemTrayService:
             # Si se llama inmediatamente, el SetFocus se pierde porque el sistema
             # operativo no ha terminado de procesar WM_ACTIVATE / WM_SETFOCUS.
             def _set_focus_on_email():
+                print("[DEBUG_FOCUS] _set_focus_on_email ejecutándose...")
                 try:
                     if sys.platform == 'win32':
                         import ctypes
                         email_hwnd = email_entry.winfo_id()
+                        print(f"[DEBUG_FOCUS] email_entry hwnd={email_hwnd}")
                         if email_hwnd:
-                            ctypes.windll.user32.SetFocus(email_hwnd)
+                            result = ctypes.windll.user32.SetFocus(email_hwnd)
+                            print(f"[DEBUG_FOCUS] SetFocus(email_hwnd)={result}")
+                            # Verificar qué ventana tiene el foco ahora
+                            focused = ctypes.windll.user32.GetFocus()
+                            print(f"[DEBUG_FOCUS] GetFocus()={focused} (debe ser {email_hwnd})")
                             return
                     email_entry.focus_force()
-                except Exception:
+                    print("[DEBUG_FOCUS] focus_force() llamado (fallback)")
+                except Exception as ex:
+                    print(f"[DEBUG_FOCUS] Error en SetFocus: {ex}")
                     try:
                         email_entry.focus_force()
-                    except Exception:
+                        print("[DEBUG_FOCUS] focus_force() llamado (except fallback)")
+                    except Exception as ex2:
+                        print(f"[DEBUG_FOCUS] Error en focus_force fallback: {ex2}")
                         pass
-            auth_window.after(150, _set_focus_on_email)
+            print("[DEBUG_FOCUS] Programando _set_focus_on_email con after(300ms)...")
+            auth_window.after(300, _set_focus_on_email)
 
             # Usar wait_window() - procesa eventos localmente
             auth_window.wait_window()
