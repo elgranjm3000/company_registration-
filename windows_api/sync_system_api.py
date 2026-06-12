@@ -5338,10 +5338,13 @@ class SystemTrayService:
             """
             import requests
 
-            # Verificar que la ventana raíz existe
+            # Si no hay ventana raíz, crear una temporal (ej: primera configuración)
+            _temp_root = None
             if not self._root:
-                print("[ERROR] Ventana Tk raíz no disponible para reautenticación")
-                return False
+                print("[DEBUG] Creando ventana Tk temporal para reautenticación")
+                _temp_root = tk.Tk()
+                _temp_root.withdraw()
+                self._root = _temp_root
 
             # Obtener company_id desde sync_config de PostgreSQL (si está disponible)
             company_id_from_config = None
@@ -5570,6 +5573,14 @@ class SystemTrayService:
                     auth_window.destroy()
             except:
                 pass
+
+            # Si se creó un root temporal, destruirlo y restaurar self._root
+            if _temp_root:
+                try:
+                    _temp_root.destroy()
+                except:
+                    pass
+                self._root = None
 
             # Eliminar referencias y forzar GC
             del auth_window, main_frame, email_entry, password_entry
