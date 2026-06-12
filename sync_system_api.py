@@ -5344,8 +5344,11 @@ class SystemTrayService:
             if not self._root:
                 print("[DEBUG] Creando ventana Tk temporal para reautenticación")
                 _temp_root = tk.Tk()
-                _temp_root.geometry('0x0+0+0')
-                _temp_root.attributes('-alpha', 0.0)
+                # NO usar alpha(0.0) ni posición fuera de pantalla.
+                # Windows 11 requiere que la ventana raíz sea "visible" para
+                # poder enfocar ventanas Toplevel hijas correctamente.
+                _temp_root.geometry('1x1+0+0')
+                _temp_root.title("SyncAPI - Temp")
                 _temp_root.resizable(False, False)
                 self._root = _temp_root
 
@@ -5398,11 +5401,60 @@ class SystemTrayService:
             # Forzar actualización para asegurar que la posición se aplique
             auth_window.update_idletasks()
 
-            # NO usar attributes('-topmost') - en Windows 11 interfiere con el foco
-            # Simplemente levantar la ventana y darle foco
+            # Forzar foco con Windows API (necesario en Windows 11 donde Tkinter falla)
+            try:
+                if sys.platform == 'win32':
+                    import ctypes
+
+                    # HWND de la ventana de autenticación (NO GetParent, que da el root)
+                    hwnd = auth_window.winfo_id()
+
+                    current_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+                    foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                    foreground_tid = ctypes.windll.user32.GetWindowThreadProcessId(foreground_hwnd, None)
+
+                    # Adjuntar colas de input para poder SetForegroundWindow
+                    ctypes.windll.user32.AttachThreadInput(current_tid, foreground_tid, True)
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    ctypes.windll.user32.BringWindowToTop(hwnd)
+
+                    # Traer al frente con HWND_TOPMOST temporal
+                    HWND_TOPMOST = -1
+                    SWP_NOMOVE = 0x0002
+                    SWP_NOSIZE = 0x0001
+                    SWP_SHOWWINDOW = 0x0040
+                    ctypes.windll.user32.SetWindowPos(
+                        hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW
+                    )
+
+                    # FlashWindow para notificar al usuario
+                    ctypes.windll.user32.FlashWindow(hwnd, True)
+
+                    # Restaurar colas de input
+                    ctypes.windll.user32.AttachThreadInput(current_tid, foreground_tid, False)
+            except Exception:
+                pass
+
+            # Fallback: focus de Tkinter
             auth_window.lift()
             auth_window.update()
             auth_window.focus_force()
+
+            # Quitar HWND_TOPMOST después de 1.5s para que la ventana se comporte normal
+            def _remove_topmost():
+                try:
+                    if sys.platform == 'win32' and auth_window.winfo_exists():
+                        import ctypes
+                        hwnd = auth_window.winfo_id()
+                        HWND_NOTOPMOST = -2
+                        ctypes.windll.user32.SetWindowPos(
+                            hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                            0x0002 | 0x0001  # SWP_NOMOVE | SWP_NOSIZE
+                        )
+                except Exception:
+                    pass
+            auth_window.after(1500, _remove_topmost)
 
 
             # Frame principal
@@ -5564,7 +5616,17 @@ class SystemTrayService:
             auth_window.update()
 
             # Colocar focus en email después de grab_set() y update()
-            email_entry.focus_force()
+            # En Windows 11, se usa SetFocus con el HWND del Entry para garantizar
+            # que el cursor parpadee y el teclado responda.
+            try:
+                if sys.platform == 'win32':
+                    import ctypes
+                    email_hwnd = email_entry.winfo_id()
+                    ctypes.windll.user32.SetFocus(email_hwnd)
+                else:
+                    email_entry.focus_force()
+            except Exception:
+                email_entry.focus_force()
 
             # Usar wait_window() - procesa eventos localmente
             auth_window.wait_window()
@@ -6120,19 +6182,19 @@ Clic derecho para opciones"""
             sync_thread.start()
             log_debug("[DEBUG] Thread de sincronización iniciado")
 
-            # Crear ventana Tk raíz oculta para reautenticación
-            # IMPORTANTE: Una sola ventana Tk raíz evita crear múltiples
-            # intérpretes Tcl, lo que causa problemas de teclado en Windows 11
-            # NOTA: En Windows 11, withdraw() interfiere con el foco de los Toplevel hijos
+            # Crear ventana Tk raíz para reautenticación
+            # IMPORTANTE: La ventana debe estar en una posición VISIBLE (no -32000,-32000)
+            # porque Windows 11 no enruta el foco del teclado a Toplevel hijos
+            # si la ventana padre está fuera de la pantalla.
             log_debug("[DEBUG] Creando ventana Tk raíz para reautenticación...")
             import tkinter as tk
             self._root = tk.Tk()
-            self._root.title("SyncAPI - Raíz")  # Título visible ayuda en Win11
-            self._root.geometry('0x0+0+0')  # Tamaño mínimo
-            self._root.attributes('-alpha', 0.0)  # Invisible pero no withdraw()
-            self._root.resizable(False, False)
+            self._root.title("SyncAPI - Raíz")
+            # 1x1 píxel en la esquina superior izquierda: visible para Windows,
+            # prácticamente invisible para el usuario
+            self._root.geometry('1x1+0+0')
             set_window_favicon(self._root)
-            log_debug("[DEBUG] Ventana Tk raíz creada (invisible)")
+            log_debug("[DEBUG] Ventana Tk raíz creada (1x1 en 0,0)")
 
             # Notificación de inicio
             try:
