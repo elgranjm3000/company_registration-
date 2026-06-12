@@ -5668,13 +5668,26 @@ class SystemTrayService:
                     if sys.platform == 'win32':
                         import ctypes
                         email_hwnd = email_entry.winfo_id()
-                        print(f"[DEBUG_FOCUS] email_entry hwnd={email_hwnd}")
+                        auth_hwnd = auth_window.winfo_id()
+                        print(f"[DEBUG_FOCUS] email_entry hwnd={email_hwnd}, auth_hwnd={auth_hwnd}")
                         if email_hwnd:
-                            # Intentar SetFocus primero
+                            # Reintentar SetForegroundWindow ahora que la ventana está lista
+                            ASFW_ANY = -1
+                            ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY)
+                            sf_result = ctypes.windll.user32.SetForegroundWindow(auth_hwnd)
+                            print(f"[DEBUG_FOCUS] SetForegroundWindow({auth_hwnd})={sf_result}")
+
+                            if sf_result == 0:
+                                # Si SetForegroundWindow aún falla, usar SwitchToThisWindow
+                                # (API no documentada pero usada internamente por Alt+Tab)
+                                ctypes.windll.user32.SwitchToThisWindow(auth_hwnd, True)
+                                print(f"[DEBUG_FOCUS] SwitchToThisWindow({auth_hwnd}) enviado")
+
+                            # Intentar SetFocus ahora
                             result = ctypes.windll.user32.SetFocus(email_hwnd)
                             print(f"[DEBUG_FOCUS] SetFocus(email_hwnd)={result}")
                             if result == 0:
-                                # Si falla, usar SendMessageW con WM_SETFOCUS
+                                # Si SetFocus aún falla, forzar con SendMessageW + WM_SETFOCUS
                                 WM_SETFOCUS = 0x0007
                                 ctypes.windll.user32.SendMessageW(email_hwnd, WM_SETFOCUS, 0, 0)
                                 print(f"[DEBUG_FOCUS] SendMessageW(WM_SETFOCUS) enviado")
