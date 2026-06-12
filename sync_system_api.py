@@ -5424,7 +5424,14 @@ class SystemTrayService:
             auth_window.lift()
             auth_window.attributes('-topmost', True)
             auth_window.update()
-            auth_window.after(100, lambda: auth_window.attributes('-topmost', False))
+            # Quitar topmost después de 100ms (verificar que ventana existe)
+            def remove_topmost():
+                try:
+                    if auth_window.winfo_exists():
+                        auth_window.attributes('-topmost', False)
+                except:
+                    pass
+            auth_window.after(100, remove_topmost)
 
             # Frame principal
             main_frame = ttk.Frame(auth_window, padding="20")
