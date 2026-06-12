@@ -5352,89 +5352,36 @@ class SystemTrayService:
     def reautenticar_usuario(self):
             """
             Pide autenticación nuevamente antes de ejecutar acciones sensibles.
-            Valida rol y company_id como en authenticate_user_tray().
+            Usa una ventana Tk independiente para evitar problemas de foco en Windows 11.
 
             Returns:
                 bool: True si autenticación exitosa, False si falló
             """
             import requests
 
-            # Si no hay ventana raíz, crear una temporal (ej: primera configuración)
-            _temp_root = None
-            if not self._root:
-                print("[DEBUG] Creando ventana Tk temporal para reautenticación")
-                _temp_root = tk.Tk()
-                # NO usar alpha(0.0) ni posición fuera de pantalla.
-                # Windows 11 requiere que la ventana raíz sea "visible" para
-                # poder enfocar ventanas Toplevel hijas correctamente.
-                _temp_root.geometry('1x1+0+0')
-                _temp_root.overrideredirect(True)
-                _temp_root.attributes('-alpha', 0.01)
-                _temp_root.title("SyncAPI - Temp")
-                _temp_root.resizable(False, False)
-                self._root = _temp_root
+            # Guardar la raíz original para restaurar después
+            original_root = self._root
 
-            # Obtener company_id desde sync_config de PostgreSQL (si está disponible)
-            company_id_from_config = None
-            try:
-                if self.config.get('postgres_host'):
-                    import psycopg2
-                    pg_conn = psycopg2.connect(
-                        host=self.config.get('postgres_host'),
-                        port=self.config.get('postgres_port', 5432),
-                        database=self.config.get('postgres_database'),
-                        user=self.config.get('postgres_user'),
-                        password=self.config.get('postgres_password')
-                    )
-                    pg_cursor = pg_conn.cursor()
-                    pg_cursor.execute("""
-                        SELECT value FROM sync_config WHERE key = 'company_id'
-                    """)
-                    result = pg_cursor.fetchone()
-                    if result:
-                        company_id_from_config = int(result[0])
-                    pg_cursor.close()
-                    pg_conn.close()
-            except Exception as e:
-                print(f"Warning: No se pudo obtener company_id de PostgreSQL: {e}")
-                # No es fatal - continuar sin validación de empresa
+            # Crear ventana Tk temporal INDEPENDIENTE (no conectada al root de pystray)
+            # Esto evita problemas de foco en Windows 11 con overrideredirect + alpha
+            auth_root = tk.Tk()
+            auth_root.title("Sincronizador - Verificar Identidad")
+            auth_root.resizable(False, False)
 
-            # Crear ventana de reautenticación (Toplevel de la raíz oculta)
-            # IMPORTANTE: Usar Toplevel en lugar de Tk() evita crear un segundo
-            # intérprete Tcl, lo que causa problemas de teclado en algunas versiones de Windows
-            auth_window = tk.Toplevel(self._root)
-            set_window_favicon(auth_window)
-            auth_window.title("Sincronizador - Verificar Identidad")
-            auth_window.resizable(False, False)
-
-            # Hacer que la ventana sea transient (diálogo modal padre-hijo)
-            # En Windows 11 esto ayuda a que el sistema operativo maneje correctamente el foco
-            auth_window.transient(self._root)
-
-            # Centrar ventana
+            # Centrar ventana en la pantalla
             window_width = 480
             window_height = 280
-            screen_width = auth_window.winfo_screenwidth()
-            screen_height = auth_window.winfo_screenheight()
+            screen_width = auth_root.winfo_screenwidth()
+            screen_height = auth_root.winfo_screenheight()
             x = (screen_width // 2) - (window_width // 2)
             y = (screen_height // 2) - (window_height // 2)
-            auth_window.geometry(f'{window_width}x{window_height}+{x}+{y}')
+            auth_root.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
-            # Forzar visibilidad
-            auth_window.lift()
-            auth_window.attributes('-topmost', True)
-            auth_window.update()
-            # Quitar topmost después de 100ms (verificar que ventana existe)
-            def remove_topmost():
-                try:
-                    if auth_window.winfo_exists():
-                        auth_window.attributes('-topmost', False)
-                except:
-                    pass
-            auth_window.after(100, remove_topmost)
+            # Icono de ventana
+            set_window_favicon(auth_root)
 
             # Frame principal
-            main_frame = ttk.Frame(auth_window, padding="20")
+            main_frame = ttk.Frame(auth_root, padding="20")
             main_frame.pack(fill=tk.BOTH, expand=True)
 
             # Título
@@ -5451,20 +5398,25 @@ class SystemTrayService:
                 font=('Arial', 9)
             ).pack(pady=(0, 10))
 
-            # Email
-            ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
-            email_entry = ttk.Entry(main_frame, width=40)
-            email_entry.pack(fill=tk.X, pady=(0, 10))
-            # NOTA: Focus se establecerá después de update() para Windows 11
+            # Variables para los campos (StringVar permite obtener el valor con .get())
+            email_var = tk.StringVar()
+            password_var = tk.StringVar()
 
-            # Password
+            # Campo Email
+            ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
+            email_entry = ttk.Entry(main_frame, width=40, textvariable=email_var)
+            email_entry.pack(fill=tk.X, pady=(0, 10))
+
+            # Campo Password
             ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
-            password_entry = ttk.Entry(main_frame, width=40, show="*")
+            password_entry = ttk.Entry(main_frame, width=40, textvariable=password_var, show="*")
             password_entry.pack(fill=tk.X, pady=(0, 15))
 
+            # Variable para almacenar resultado de autenticación
             auth_result = {'success': False}
 
             def do_auth():
+                """Valida credenciales contra la API"""
                 email = email_entry.get().strip()
                 password = password_entry.get().strip()
 
@@ -5473,11 +5425,11 @@ class SystemTrayService:
                     return
 
                 try:
-                    # Deshabilitar botón
+                    # Deshabilitar botón para evitar doble clic
                     auth_btn.config(state='disabled')
-                    auth_window.update()
+                    auth_root.update()
 
-                    # Llamar a API
+                    # Llamar a API de autenticación
                     api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
                     response = requests.post(
                         f"{api_url}/auth/login",
@@ -5499,9 +5451,8 @@ class SystemTrayService:
                         if data.get('success'):
                             user_data = data.get('data', {})
                             user = user_data.get('user', {})
-                            subscriptions = user_data.get('subscription', [])
 
-                            # Validar rol
+                            # Validar rol del usuario
                             role = user.get('role')
                             if role not in ['admin', 'cajero']:
                                 messagebox.showerror(
@@ -5511,18 +5462,12 @@ class SystemTrayService:
                                 auth_btn.config(state='normal')
                                 return
 
-                            # Validar company_id - buscar en todas las suscripciones
-                            company_found = False
-                            company_name = None                            
-
-                            
-
-                            # Todo OK - guardar token, email y password
+                            # Autenticación exitosa - guardar credenciales
                             self.api_token = user_data.get('token')
                             self.user_email = email
-                            self.api_password = password  # Guardar password para usar en Manager
+                            self.api_password = password
                             auth_result['success'] = True
-                            auth_window.destroy()
+                            auth_root.destroy()
                             return
 
                     # Error de autenticación
@@ -5541,17 +5486,19 @@ class SystemTrayService:
                     auth_btn.config(state='normal')
 
             def do_cancel():
-                auth_window.destroy()
+                """Cierra la ventana sin autenticar"""
+                auth_root.destroy()
 
-            # Botones - colores oscuros para mejor contraste
+            # Frame de botones
             button_frame = tk.Frame(main_frame)
             button_frame.pack(fill=tk.X, pady=(15, 0))
 
+            # Botón Verificar
             auth_btn = tk.Button(
                 button_frame,
                 text="✅ Verificar",
                 command=do_auth,
-                bg='#2E7D32',  # Verde oscuro
+                bg='#2E7D32',
                 fg='white',
                 font=('Arial', 12, 'bold'),
                 relief=tk.RAISED,
@@ -5559,16 +5506,17 @@ class SystemTrayService:
                 padx=30,
                 pady=12,
                 cursor='hand2',
-                activebackground='#1B5E20',  # Verde más oscuro al hacer clic
+                activebackground='#1B5E20',
                 activeforeground='white'
             )
             auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
 
+            # Botón Cancelar
             cancel_btn = tk.Button(
                 button_frame,
                 text="❌ Cancelar",
                 command=do_cancel,
-                bg='#C62828',  # Rojo oscuro
+                bg='#C62828',
                 fg='white',
                 font=('Arial', 12, 'bold'),
                 relief=tk.RAISED,
@@ -5576,52 +5524,33 @@ class SystemTrayService:
                 padx=30,
                 pady=12,
                 cursor='hand2',
-                activebackground='#B71C1C',  # Rojo más oscuro al hacer clic
+                activebackground='#B71C1C',
                 activeforeground='white'
             )
             cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
 
-            # Bind Enter
-            auth_window.bind('<Return>', lambda e: do_auth())
+            # Permitir Enter para autenticar
+            auth_root.bind('<Return>', lambda e: do_auth())
 
-            # Hacer modal: grab_set() redirige todos los eventos a esta ventana
-            auth_window.grab_set()
-
-            # Establecer foco en el campo email
+            # Establecer foco inicial en el campo email
             email_entry.focus_set()
-            auth_window.update()
+            auth_root.update()
 
-            # Usar wait_window() - espera hasta que la ventana se cierre
-            # Verificar que la ventana existe antes de esperar
-            if auth_window.winfo_exists():
-                auth_window.wait_window()
-            else:
-                print("[WARNING] auth_window fue destruida antes de wait_window()")
-                result = False
+            # Loop modal - espera hasta que auth_root sea destruido
+            if auth_root.winfo_exists():
+                auth_root.wait_window()
 
-            # Resultado de la autenticación
+            # Restaurar el root original
+            self._root = original_root
+
+            # Limpiar referencias
             result = auth_result['success']
-
-            # Limpiar ventana
             try:
-                if auth_window.winfo_exists():
-                    auth_window.destroy()
+                del auth_root, main_frame, email_entry, password_entry
+                del auth_btn, cancel_btn, auth_result
+                del email_var, password_var
             except:
                 pass
-
-            # Si se creó un root temporal, destruirlo y restaurar self._root
-            if _temp_root:
-                try:
-                    _temp_root.destroy()
-                except:
-                    pass
-                self._root = None
-
-            # Eliminar referencias y forzar GC
-            del auth_window, main_frame, email_entry, password_entry
-            del auth_btn, cancel_btn, auth_result
-            import gc
-            gc.collect()
 
             return result
 
