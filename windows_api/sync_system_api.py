@@ -5600,24 +5600,30 @@ class SystemTrayService:
             auth_window.bind('<Return>', lambda e: do_auth())
 
             # Hacer modal: grab_set() en el Toplevel (NO en root, eso bloquea Win11)
-            # En Windows 11, grab_set() en Toplevel transient funciona correctamente
             auth_window.grab_set()
 
             # Forzar visibilidad y actualización final
+            auth_window.update_idletasks()
             auth_window.update()
 
-            # Colocar focus en email después de grab_set() y update()
-            # En Windows 11, se usa SetFocus con el HWND del Entry para garantizar
-            # que el cursor parpadee y el teclado responda.
-            try:
-                if sys.platform == 'win32':
-                    import ctypes
-                    email_hwnd = email_entry.winfo_id()
-                    ctypes.windll.user32.SetFocus(email_hwnd)
-                else:
+            # Programar focus para DESPUÉS de que Windows 11 active la ventana.
+            # Si se llama inmediatamente, el SetFocus se pierde porque el sistema
+            # operativo no ha terminado de procesar WM_ACTIVATE / WM_SETFOCUS.
+            def _set_focus_on_email():
+                try:
+                    if sys.platform == 'win32':
+                        import ctypes
+                        email_hwnd = email_entry.winfo_id()
+                        if email_hwnd:
+                            ctypes.windll.user32.SetFocus(email_hwnd)
+                            return
                     email_entry.focus_force()
-            except Exception:
-                email_entry.focus_force()
+                except Exception:
+                    try:
+                        email_entry.focus_force()
+                    except Exception:
+                        pass
+            auth_window.after(150, _set_focus_on_email)
 
             # Usar wait_window() - procesa eventos localmente
             auth_window.wait_window()
