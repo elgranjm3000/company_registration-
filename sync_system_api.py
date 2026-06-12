@@ -5440,11 +5440,22 @@ class SystemTrayService:
                     foreground_tid = ctypes.windll.user32.GetWindowThreadProcessId(foreground_hwnd, None)
                     print(f"[DEBUG_FOCUS] current_tid={current_tid}, foreground_hwnd={foreground_hwnd}, foreground_tid={foreground_tid}")
 
-                    # Adjuntar colas de input para poder SetForegroundWindow
-                    attach_result = ctypes.windll.user32.AttachThreadInput(current_tid, foreground_tid, True)
-                    print(f"[DEBUG_FOCUS] AttachThreadInput={attach_result}")
-                    sf_result = ctypes.windll.user32.SetForegroundWindow(hwnd)
-                    print(f"[DEBUG_FOCUS] SetForegroundWindow({hwnd})={sf_result}")
+                    # Relajar el foreground lock
+                    ASFW_ANY = -1
+                    ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY)
+                    LSFW_UNLOCK = 2
+                    ctypes.windll.user32.LockSetForegroundWindow(LSFW_UNLOCK)
+                    print(f"[DEBUG_FOCUS] Foreground lock released")
+
+                    # ShowWindow para asegurar estado visible
+                    SW_SHOW = 5
+                    ctypes.windll.user32.ShowWindow(hwnd, SW_SHOW)
+                    print(f"[DEBUG_FOCUS] ShowWindow({hwnd}, SW_SHOW) called")
+
+                    # SetActiveWindow en lugar de SetForegroundWindow
+                    # (funciona en mismo hilo, no requiere foreground lock)
+                    saw_result = ctypes.windll.user32.SetActiveWindow(hwnd)
+                    print(f"[DEBUG_FOCUS] SetActiveWindow({hwnd})={saw_result}")
                     bt_result = ctypes.windll.user32.BringWindowToTop(hwnd)
                     print(f"[DEBUG_FOCUS] BringWindowToTop({hwnd})={bt_result}")
 
@@ -5463,9 +5474,7 @@ class SystemTrayService:
                     flash_result = ctypes.windll.user32.FlashWindow(hwnd, True)
                     print(f"[DEBUG_FOCUS] FlashWindow={flash_result}")
 
-                    # Restaurar colas de input
-                    ctypes.windll.user32.AttachThreadInput(current_tid, foreground_tid, False)
-                    print("[DEBUG_FOCUS] ctypes OK, colas restauradas")
+                    print("[DEBUG_FOCUS] ctypes OK")
             except Exception as e:
                 print(f"[DEBUG_FOCUS] Error en ctypes: {e}")
 
@@ -5661,8 +5670,14 @@ class SystemTrayService:
                         email_hwnd = email_entry.winfo_id()
                         print(f"[DEBUG_FOCUS] email_entry hwnd={email_hwnd}")
                         if email_hwnd:
+                            # Intentar SetFocus primero
                             result = ctypes.windll.user32.SetFocus(email_hwnd)
                             print(f"[DEBUG_FOCUS] SetFocus(email_hwnd)={result}")
+                            if result == 0:
+                                # Si falla, usar SendMessageW con WM_SETFOCUS
+                                WM_SETFOCUS = 0x0007
+                                ctypes.windll.user32.SendMessageW(email_hwnd, WM_SETFOCUS, 0, 0)
+                                print(f"[DEBUG_FOCUS] SendMessageW(WM_SETFOCUS) enviado")
                             # Verificar qué ventana tiene el foco ahora
                             focused = ctypes.windll.user32.GetFocus()
                             print(f"[DEBUG_FOCUS] GetFocus()={focused} (debe ser {email_hwnd})")
