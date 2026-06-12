@@ -5586,7 +5586,12 @@ class SystemTrayService:
             auth_window.update()
 
             # Usar wait_window() - espera hasta que la ventana se cierre
-            auth_window.wait_window()
+            # Verificar que la ventana existe antes de esperar
+            if auth_window.winfo_exists():
+                auth_window.wait_window()
+            else:
+                print("[WARNING] auth_window fue destruida antes de wait_window()")
+                result = False
             auth_window.wait_window()
 
             # Resultado de la autenticación
