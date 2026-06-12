@@ -5866,28 +5866,26 @@ class SystemTrayService:
 
     def abrir_manager(self):
         """Abre la ventana del manager en el hilo principal usando Toplevel"""
-        # Protección: verificar si ya hay una operación en progreso
-        if self._auth_in_progress:
-            print("⚠️ Ya hay una operación de autenticación en progreso, espere...")
-            return
-
         if self._manager_open:
             print("⚠️ La ventana del Manager ya está abierta")
             return
 
-        print("[DEBUG] abrir_manager: Iniciando...")
+        # Autenticar (solo durante el diálogo, no bloquea otras acciones después)
+        if self._auth_in_progress:
+            print("⚠️ Ya hay una autenticación en progreso, espere...")
+            return
         self._auth_in_progress = True
         try:
-            # Autenticar antes de abrir manager (solo cajeros)
-            print("[DEBUG] abrir_manager: Llamando reautenticar_usuario...")
             if not self.reautenticar_usuario():
                 print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
                 return
+        finally:
+            self._auth_in_progress = False
 
-            print("[DEBUG] abrir_manager: Autenticación exitosa, abriendo Manager...")
-            self._manager_open = True
-
-            # Crear Manager como Toplevel de la raíz (mismo Tcl interpreter)
+        # Si llegó aquí, autenticación exitosa
+        print("[DEBUG] abrir_manager: Autenticación exitosa, abriendo Manager...")
+        self._manager_open = True
+        try:
             import tkinter as tk
             manager_window = tk.Toplevel(self._root)
             set_window_favicon(manager_window)
@@ -5899,43 +5897,39 @@ class SystemTrayService:
 
             manager_window.protocol("WM_DELETE_WINDOW", on_closing)
 
-            # Pasar password si está disponible (desde reautenticar_usuario)
             app = ManagerWindow(manager_window, api_key=getattr(self, 'api_key', None))
             print("[DEBUG] abrir_manager: ManagerWindow creado, esperando cierre...")
 
-            # wait_window() procesa eventos sin crear un segundo Tcl interpreter
             self._root.wait_window(manager_window)
             print("[DEBUG] abrir_manager: Manager cerrado")
-            self._manager_open = False
         except Exception as e:
             print(f"[ERROR] abrir_manager: Excepción: {e}")
             import traceback
             traceback.print_exc()
-            self._manager_open = False
         finally:
-            self._auth_in_progress = False
+            self._manager_open = False
 
     def ver_logs(self):
         """Abre ventana de logs en el hilo principal usando Toplevel"""
-        # Protección: verificar si ya hay una operación en progreso
-        if self._auth_in_progress:
-            print("⚠️ Ya hay una operación de autenticación en progreso, espere...")
-            return
-
         if self._logs_open:
             print("⚠️ La ventana de Logs ya está abierta")
             return
 
+        # Autenticar (solo durante el diálogo)
+        if self._auth_in_progress:
+            print("⚠️ Ya hay una autenticación en progreso, espere...")
+            return
         self._auth_in_progress = True
         try:
-            # Autenticar antes de ver logs (solo cajeros)
             if not self.reautenticar_usuario():
                 print("❌ Acceso a logs denegado: autenticación fallida o cancelada")
                 return
+        finally:
+            self._auth_in_progress = False
 
-            self._logs_open = True
-
-            # Crear ventana de logs como Toplevel de la raíz (mismo Tcl interpreter)
+        # Si llegó aquí, autenticación exitosa
+        self._logs_open = True
+        try:
             import tkinter as tk
             from tkinter import scrolledtext, ttk
 
@@ -5996,62 +5990,53 @@ class SystemTrayService:
 
             # wait_window() procesa eventos sin crear un segundo Tcl interpreter
             self._root.wait_window(log_window)
-            self._logs_open = False
 
         except Exception as e:
             print(f"Error abriendo logs: {e}")
             import traceback
             traceback.print_exc()
-            self._logs_open = False
         finally:
-            self._auth_in_progress = False
+            self._logs_open = False
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú con protección contra múltiples clicks"""
-        # Protección: verificar si ya hay una operación en progreso
-        if self._auth_in_progress:
-            print("⚠️ Ya hay una operación de autenticación en progreso, espere...")
-            return
-
         if self.is_syncing:
             print("⚠️ Ya hay una sincronización en progreso")
             return
 
-        print("[DEBUG] sincronizar_ahora: Iniciando...")
+        # Autenticar (solo durante el diálogo)
+        if self._auth_in_progress:
+            print("⚠️ Ya hay una autenticación en progreso, espere...")
+            return
         self._auth_in_progress = True
         try:
-            # Autenticar antes de sincronizar (solo cajeros)
-            print("[DEBUG] sincronizar_ahora: Llamando reautenticar_usuario...")
             if not self.reautenticar_usuario():
                 print("❌ Sincronización cancelada: autenticación fallida o cancelada")
                 return
-
-            print("\n" + "="*70)
-            print("🔄 Sincronización manual solicitada desde el menú")
-            print("="*70)
-
-            import threading
-            import traceback
-
-            def sync_thread_wrapper():
-                try:
-                    print("[DEBUG] Iniciando thread de sincronización manual...")
-                    self.ejecutar_sincronizacion(es_manual=True)
-                    print("[DEBUG] Thread de sincronización manual completado")
-                except Exception as e:
-                    print(f"[DEBUG] Error en thread de sincronización manual: {e}")
-                    traceback.print_exc()
-
-            print("[DEBUG] Creando thread de sincronización...")
-            thread = threading.Thread(target=sync_thread_wrapper, daemon=False)
-            thread.start()
-            print("[DEBUG] Thread de sincronización iniciado (daemon=False)")
-        except Exception as e:
-            print(f"[ERROR] sincronizar_ahora: Excepción: {e}")
-            import traceback
-            traceback.print_exc()
         finally:
             self._auth_in_progress = False
+
+        # Si llegó aquí, autenticación exitosa
+        print("\n" + "="*70)
+        print("🔄 Sincronización manual solicitada desde el menú")
+        print("="*70)
+
+        import threading
+        import traceback
+
+        def sync_thread_wrapper():
+            try:
+                print("[DEBUG] Iniciando thread de sincronización manual...")
+                self.ejecutar_sincronizacion(es_manual=True)
+                print("[DEBUG] Thread de sincronización manual completado")
+            except Exception as e:
+                print(f"[DEBUG] Error en thread de sincronización manual: {e}")
+                traceback.print_exc()
+
+        print("[DEBUG] Creando thread de sincronización...")
+        thread = threading.Thread(target=sync_thread_wrapper, daemon=False)
+        thread.start()
+        print("[DEBUG] Thread de sincronización iniciado (daemon=False)")
 
     def abrir_config(self):
         """Abre ventana de configuración con autenticación"""
