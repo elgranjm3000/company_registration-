@@ -5788,7 +5788,7 @@ class SystemTrayService:
         print(f"[DEBUG] bucle_sincronizacion: Bucle terminado")
 
     def abrir_manager(self):
-        """Abre la ventana del manager con protección contra múltiples clicks"""
+        """Abre la ventana del manager en el hilo principal usando Toplevel"""
         # Protección: verificar si ya hay una operación en progreso
         if self._auth_in_progress:
             print("⚠️ Ya hay una operación de autenticación en progreso, espere...")
@@ -5807,51 +5807,39 @@ class SystemTrayService:
                 print("❌ Acceso a manager denegado: autenticación fallida o cancelada")
                 return
 
-            print("[DEBUG] abrir_manager: Autenticación exitosa, creando thread inmediatamente...")
+            print("[DEBUG] abrir_manager: Autenticación exitosa, abriendo Manager...")
             self._manager_open = True
-            import threading
-            thread = threading.Thread(target=self._abrir_manager_thread, daemon=True)
-            thread.start()
-            print("[DEBUG] abrir_manager: Thread iniciado")
+
+            # Crear Manager como Toplevel de la raíz (mismo Tcl interpreter)
+            import tkinter as tk
+            manager_window = tk.Toplevel(self._root)
+            set_window_favicon(manager_window)
+
+            def on_closing():
+                print("[DEBUG] abrir_manager: Ventana cerrada, limpiando flags...")
+                self._manager_open = False
+                manager_window.destroy()
+
+            manager_window.protocol("WM_DELETE_WINDOW", on_closing)
+
+            # Pasar password si está disponible (desde reautenticar_usuario)
+            app = ManagerWindow(manager_window, api_key=getattr(self, 'api_key', None))
+            print("[DEBUG] abrir_manager: ManagerWindow creado, esperando cierre...")
+
+            # wait_window() procesa eventos sin crear un segundo Tcl interpreter
+            self._root.wait_window(manager_window)
+            print("[DEBUG] abrir_manager: Manager cerrado")
+            self._manager_open = False
         except Exception as e:
             print(f"[ERROR] abrir_manager: Excepción: {e}")
             import traceback
             traceback.print_exc()
+            self._manager_open = False
         finally:
             self._auth_in_progress = False
 
-    def _abrir_manager_thread(self):
-        """Abre manager en un thread separado"""
-        print("[DEBUG] _abrir_manager_thread: Iniciando...")
-        try:
-            import tkinter as tk
-            print("[DEBUG] _abrir_manager_thread: Creando ventana Tk...")
-            root = tk.Tk()
-            set_window_favicon(root)
-
-            # Registrar callback cuando se cierre la ventana
-            def on_closing():
-                print("[DEBUG] _abrir_manager_thread: Ventana cerrada, limpiando flags...")
-                self._manager_open = False
-                root.destroy()
-
-            root.protocol("WM_DELETE_WINDOW", on_closing)
-
-            print("[DEBUG] _abrir_manager_thread: Ventana creada, creando ManagerWindow...")
-            # Pasar password si está disponible (desde reautenticar_usuario)
-            app = ManagerWindow(root, api_key=getattr(self, 'api_key', None))
-            print("[DEBUG] _abrir_manager_thread: ManagerWindow creado, iniciando mainloop...")
-            root.mainloop()
-            print("[DEBUG] _abrir_manager_thread: Mainloop terminado")
-            self._manager_open = False
-        except Exception as e:
-            print(f"[ERROR] Error abriendo manager: {e}")
-            import traceback
-            traceback.print_exc()
-            self._manager_open = False
-
     def ver_logs(self):
-        """Abre ventana de logs con protección contra múltiples clicks"""
+        """Abre ventana de logs en el hilo principal usando Toplevel"""
         # Protección: verificar si ya hay una operación en progreso
         if self._auth_in_progress:
             print("⚠️ Ya hay una operación de autenticación en progreso, espere...")
@@ -5869,33 +5857,18 @@ class SystemTrayService:
                 return
 
             self._logs_open = True
-            # IMPORTANTE: En Windows 11, dar tiempo a Tkinter para limpiar estado
-            # después de cerrar la ventana de reautenticación
-            import threading
-            threading.Thread(target=self._ver_logs_thread, daemon=True).start()
-        except Exception as e:
-            print(f"[ERROR] Error en ver_logs: {e}")
-            import traceback
-            traceback.print_exc()
-            self._logs_open = False
-        finally:
-            self._auth_in_progress = False
 
-    def _ver_logs_thread(self):
-        """Muestra logs en ventana separada"""
-        try:
+            # Crear ventana de logs como Toplevel de la raíz (mismo Tcl interpreter)
             import tkinter as tk
             from tkinter import scrolledtext, ttk
 
-            # Crear ventana principal nueva (no Toplevel, porque no hay padre activo)
-            log_window = tk.Tk()
+            log_window = tk.Toplevel(self._root)
             set_window_favicon(log_window)
             log_window.title(f"Logs - Sync API ({self.config.get('company_rif', 'N/A')})")
             log_window.geometry("900x700")
 
-            # Registrar callback cuando se cierre la ventana
             def on_closing():
-                print("[DEBUG] _ver_logs_thread: Ventana cerrada, limpiando flags...")
+                print("[DEBUG] ver_logs: Ventana cerrada, limpiando flags...")
                 self._logs_open = False
                 log_window.destroy()
 
@@ -5944,8 +5917,8 @@ class SystemTrayService:
             tk.Button(btn_frame, text="❌ Cerrar", command=on_closing,
                      font=("Arial", 11), width=20).pack()
 
-            # Ejecutar mainloop
-            log_window.mainloop()
+            # wait_window() procesa eventos sin crear un segundo Tcl interpreter
+            self._root.wait_window(log_window)
             self._logs_open = False
 
         except Exception as e:
@@ -5953,6 +5926,8 @@ class SystemTrayService:
             import traceback
             traceback.print_exc()
             self._logs_open = False
+        finally:
+            self._auth_in_progress = False
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú con protección contra múltiples clicks"""
