@@ -5662,23 +5662,40 @@ class SystemTrayService:
                         auth_hwnd = auth_window.winfo_id()
                         print(f"[DEBUG_FOCUS] email_entry hwnd={email_hwnd}, auth_hwnd={auth_hwnd}")
                         if email_hwnd:
-                            # Reintentar SetForegroundWindow ahora que la ventana está lista
+                            # 1. Relajar foreground lock
                             ASFW_ANY = -1
                             ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY)
+                            LSFW_UNLOCK = 2
+                            ctypes.windll.user32.LockSetForegroundWindow(LSFW_UNLOCK)
+
+                            # 2. Simular pulsación de Alt para resetear foreground lock
+                            #    (truco conocido: Windows permite SetForegroundWindow
+                            #     inmediatamente después de Alt keydown+keyup)
+                            KEYEVENTF_KEYUP = 0x0002
+                            VK_MENU = 0x12  # Alt
+                            ctypes.windll.user32.keybd_event(VK_MENU, 0, 0, 0)
+                            ctypes.windll.user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+                            print(f"[DEBUG_FOCUS] Alt key simulation done")
+
+                            # 3. Intentar SetForegroundWindow ahora (el Alt debería haberlo liberado)
                             sf_result = ctypes.windll.user32.SetForegroundWindow(auth_hwnd)
                             print(f"[DEBUG_FOCUS] SetForegroundWindow({auth_hwnd})={sf_result}")
 
                             if sf_result == 0:
-                                # Si SetForegroundWindow aún falla, usar SwitchToThisWindow
-                                # (API no documentada pero usada internamente por Alt+Tab)
-                                ctypes.windll.user32.SwitchToThisWindow(auth_hwnd, True)
-                                print(f"[DEBUG_FOCUS] SwitchToThisWindow({auth_hwnd}) enviado")
+                                # 4. Si aún falla, minimizar la ventana que retiene el foco
+                                #    para forzar a Windows a elegir otra ventana
+                                foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                                print(f"[DEBUG_FOCUS] Minimizando ventana que retiene foco: {foreground_hwnd}")
+                                SW_MINIMIZE = 6
+                                ctypes.windll.user32.ShowWindow(foreground_hwnd, SW_MINIMIZE)
+                                ctypes.windll.user32.SetForegroundWindow(auth_hwnd)
+                                print(f"[DEBUG_FOCUS] SetForegroundWindow tras minimizar")
 
-                            # Intentar SetFocus ahora
+                            # 5. Intentar SetFocus en el campo email
                             result = ctypes.windll.user32.SetFocus(email_hwnd)
                             print(f"[DEBUG_FOCUS] SetFocus(email_hwnd)={result}")
                             if result == 0:
-                                # Si SetFocus aún falla, forzar con SendMessageW + WM_SETFOCUS
+                                # 6. Si aún falla, forzar con SendMessageW + WM_SETFOCUS
                                 WM_SETFOCUS = 0x0007
                                 ctypes.windll.user32.SendMessageW(email_hwnd, WM_SETFOCUS, 0, 0)
                                 print(f"[DEBUG_FOCUS] SendMessageW(WM_SETFOCUS) enviado")
