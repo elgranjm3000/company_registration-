@@ -5351,36 +5351,52 @@ class SystemTrayService:
     def reautenticar_usuario(self):
             """
             Pide autenticación nuevamente antes de ejecutar acciones sensibles.
-            Usa una ventana Tk independiente para evitar problemas de foco en Windows 11.
+            Temporalmente hace visible el root para permitir input en Windows 11.
 
             Returns:
                 bool: True si autenticación exitosa, False si falló
             """
             import requests
 
-            # Guardar la raíz original para restaurar después
-            original_root = self._root
+            # Si no hay root, crear uno temporal (sucede en primera config)
+            if not self._root:
+                print("[WARNING] No hay root para reautenticación, creando temporal...")
+                self._root = tk.Tk()
+                self._root.geometry('1x1+0+0')
+                self._root.overrideredirect(True)
+                self._root.attributes('-alpha', 0.01)
 
-            # Crear ventana Tk temporal INDEPENDIENTE (no conectada al root de pystray)
-            # Esto evita problemas de foco en Windows 11 con overrideredirect + alpha
-            auth_root = tk.Tk()
-            auth_root.title("Sincronizador - Verificar Identidad")
-            auth_root.resizable(False, False)
+            # GUARDAR estado original del root
+            was_overrideredirect = self._root.overrideredirect()
+            original_alpha = self._root.attributes('-alpha')
+
+            # TEMPORALMENTE hacer el root NORMAL para que Windows 11 permita input
+            try:
+                self._root.overrideredirect(False)
+                self._root.attributes('-alpha', 1.0)
+                self._root.update_idletasks()
+            except:
+                pass
+
+            # Crear ventana de autenticación como Toplevel del root
+            auth_window = tk.Toplevel(self._root)
+            auth_window.title("Sincronizador - Verificar Identidad")
+            auth_window.resizable(False, False)
 
             # Centrar ventana en la pantalla
             window_width = 480
             window_height = 280
-            screen_width = auth_root.winfo_screenwidth()
-            screen_height = auth_root.winfo_screenheight()
+            screen_width = auth_window.winfo_screenwidth()
+            screen_height = auth_window.winfo_screenheight()
             x = (screen_width // 2) - (window_width // 2)
             y = (screen_height // 2) - (window_height // 2)
-            auth_root.geometry(f'{window_width}x{window_height}+{x}+{y}')
+            auth_window.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
             # Icono de ventana
-            set_window_favicon(auth_root)
+            set_window_favicon(auth_window)
 
             # Frame principal
-            main_frame = ttk.Frame(auth_root, padding="20")
+            main_frame = ttk.Frame(auth_window, padding="20")
             main_frame.pack(fill=tk.BOTH, expand=True)
 
             # Título
@@ -5426,7 +5442,7 @@ class SystemTrayService:
                 try:
                     # Deshabilitar botón para evitar doble clic
                     auth_btn.config(state='disabled')
-                    auth_root.update()
+                    auth_window.update()
 
                     # Llamar a API de autenticación
                     api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
@@ -5466,7 +5482,7 @@ class SystemTrayService:
                             self.user_email = email
                             self.api_password = password
                             auth_result['success'] = True
-                            auth_root.destroy()
+                            auth_window.destroy()
                             return
 
                     # Error de autenticación
@@ -5486,7 +5502,7 @@ class SystemTrayService:
 
             def do_cancel():
                 """Cierra la ventana sin autenticar"""
-                auth_root.destroy()
+                auth_window.destroy()
 
             # Frame de botones
             button_frame = tk.Frame(main_frame)
@@ -5529,23 +5545,30 @@ class SystemTrayService:
             cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
 
             # Permitir Enter para autenticar
-            auth_root.bind('<Return>', lambda e: do_auth())
+            auth_window.bind('<Return>', lambda e: do_auth())
 
             # Establecer foco inicial en el campo email
             email_entry.focus_set()
-            auth_root.update()
 
-            # Loop modal - espera hasta que auth_root sea destruido
-            if auth_root.winfo_exists():
-                auth_root.wait_window()
+            # Loop modal - espera hasta que auth_window sea destruido
+            try:
+                if auth_window.winfo_exists():
+                    auth_window.wait_window()
+            except:
+                pass
 
-            # Restaurar el root original
-            self._root = original_root
+            # RESTAURAR el root a su estado original (invisible)
+            try:
+                self._root.overrideredirect(was_overrideredirect)
+                self._root.attributes('-alpha', original_alpha)
+                self._root.update_idletasks()
+            except:
+                pass
 
             # Limpiar referencias
             result = auth_result['success']
             try:
-                del auth_root, main_frame, email_entry, password_entry
+                del auth_window, main_frame, email_entry, password_entry
                 del auth_btn, cancel_btn, auth_result
                 del email_var, password_var
             except:
