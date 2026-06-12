@@ -4527,6 +4527,9 @@ class ManagerWindow:
         email = self.config.get('company_email') if self.config else 'user'
         self.log_func = setup_logging(email)
 
+        # Cola thread-safe para logs desde hilos secundarios (Tkinter no es thread-safe)
+        self._log_queue = queue.Queue()
+
         # Crear widgets PRIMERO (antes de cualquier log)
         self.create_widgets()
 
@@ -4908,6 +4911,28 @@ class ManagerWindow:
         # Cargar últimos logs
         self.cargar_logs()
 
+        # Iniciar polling de logs thread-safe
+        self._poll_log_queue()
+
+    def _poll_log_queue(self):
+        """Procesa logs desde hilos secundarios en el hilo principal (Tkinter)."""
+        try:
+            while True:
+                msg, level = self._log_queue.get_nowait()
+                if self.log_text:
+                    try:
+                        self.log_text.config(state="normal")
+                        tag = {'error': 'error', 'warning': 'warning', 'success': 'success'}.get(level, 'normal')
+                        self.log_text.insert("end", f"{msg}\n", tag)
+                        self.log_text.see("end")
+                        self.log_text.config(state="disabled")
+                    except Exception:
+                        pass
+        except queue.Empty:
+            pass
+        # Repetir cada 100ms
+        self.root.after(100, self._poll_log_queue)
+
     def cargar_logs(self):
         """Cargar últimos logs del archivo."""
         try:
@@ -5049,27 +5074,10 @@ class ManagerWindow:
             messagebox.showerror("Error", f"No se pudo abrir el archivo de logs:\n{e}")
 
     def log(self, message: str, level: str = "info"):
-        """Escribir log a la GUI solamente. El logger de Python maneja el archivo."""
-        # IMPORTANTE: No llamar a log_func aquí porque causaría duplicados
-        # log_func → logger → GUIHandler → GUI (ciclo)
-        # En su lugar, escribir directamente a la GUI
-
-        # Los logs que vienen de los clientes API ya pasan por el logger → GUIHandler
-        # Solo necesitamos escribir a la GUI para logs directos de ManagerWindow
-        if self.log_text:
-            self.log_text.config(state="normal")
-
-            # Colores según nivel
-            tags = {
-                'error': 'error',
-                'warning': 'warning',
-                'success': 'success'
-            }
-
-            tag = tags.get(level, 'normal')
-            self.log_text.insert("end", f"{message}\n", tag)
-            self.log_text.see("end")
-            self.log_text.config(state="disabled")
+        """Escribir log a la GUI desde cualquier hilo (thread-safe via cola)."""
+        # Usar cola thread-safe en lugar de modificar Tkinter directamente.
+        # _poll_log_queue procesa la cola en el hilo principal vía after().
+        self._log_queue.put((message, level))
 
     def sync_all(self):
         """Sincronizar todas las entidades."""
