@@ -5592,7 +5592,6 @@ class SystemTrayService:
             else:
                 print("[WARNING] auth_window fue destruida antes de wait_window()")
                 result = False
-            auth_window.wait_window()
 
             # Resultado de la autenticación
             result = auth_result['success']
