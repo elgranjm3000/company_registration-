@@ -4527,8 +4527,9 @@ class ManagerWindow:
         email = self.config.get('company_email') if self.config else 'user'
         self.log_func = setup_logging(email)
 
-        # Cola thread-safe para logs desde hilos secundarios (Tkinter no es thread-safe)
+        # Colas thread-safe para logs y acciones UI desde hilos secundarios
         self._log_queue = queue.Queue()
+        self._ui_queue = queue.Queue()
 
         # Crear widgets PRIMERO (antes de cualquier log)
         self.create_widgets()
@@ -4915,7 +4916,8 @@ class ManagerWindow:
         self._poll_log_queue()
 
     def _poll_log_queue(self):
-        """Procesa logs desde hilos secundarios en el hilo principal (Tkinter)."""
+        """Procesa logs y acciones UI desde hilos secundarios en el hilo principal."""
+        # Procesar logs pendientes
         try:
             while True:
                 msg, level = self._log_queue.get_nowait()
@@ -4928,6 +4930,16 @@ class ManagerWindow:
                         self.log_text.config(state="disabled")
                     except Exception:
                         pass
+        except queue.Empty:
+            pass
+        # Procesar acciones UI pendientes (messagebox, etc.)
+        try:
+            while True:
+                callback = self._ui_queue.get_nowait()
+                try:
+                    callback()
+                except Exception:
+                    pass
         except queue.Empty:
             pass
         # Repetir cada 100ms
@@ -5090,12 +5102,12 @@ class ManagerWindow:
                 result = self.sync_manager.sync_all()
 
                 if result.get('success'):
-                    messagebox.showinfo("✅ Éxito", "Sincronización completada exitosamente")
+                    self._ui_queue.put(lambda: messagebox.showinfo("✅ Éxito", "Sincronización completada exitosamente"))
                 else:
-                    messagebox.showwarning("⚠️ Advertencia", "La sincronización tuvo errores. Revise el log.")
+                    self._ui_queue.put(lambda: messagebox.showwarning("⚠️ Advertencia", "La sincronización tuvo errores. Revise el log."))
 
             except Exception as e:
-                messagebox.showerror("❌ Error", f"Error durante sincronización:\n{e}")
+                self._ui_queue.put(lambda: messagebox.showerror("❌ Error", f"Error durante sincronización:\n{e}"))
                 import traceback
                 self.log(traceback.format_exc(), "error")
 
@@ -5137,14 +5149,14 @@ class ManagerWindow:
 
                 if errors == 0:
                     self.log(f"✅ {entity.capitalize()} sincronizados: {created} creados, {updated} actualizados, {deleted} eliminados", "success")
-                    messagebox.showinfo("✅ Éxito", f"{entity.capitalize()} sincronizados:\n{created} creados\n{updated} actualizados\n{deleted} eliminados")
+                    self._ui_queue.put(lambda e=entity, c=created, u=updated, d=deleted: messagebox.showinfo("✅ Éxito", f"{e.capitalize()} sincronizados:\n{c} creados\n{u} actualizados\n{d} eliminados"))
                 else:
                     self.log(f"⚠️ {entity.capitalize()} sincronizados con errores: {created} creados, {updated} actualizados, {errors} errores", "warning")
-                    messagebox.showwarning("⚠️ Advertencia", f"{entity.capitalize()} sincronizados con {errors} errores.\nRevise el log.")
+                    self._ui_queue.put(lambda e=entity, errs=errors: messagebox.showwarning("⚠️ Advertencia", f"{e.capitalize()} sincronizados con {errs} errores.\nRevise el log."))
 
             except Exception as e:
                 self.log(f"❌ Error sincronizando {entity}: {e}", "error")
-                messagebox.showerror("❌ Error", f"Error durante sincronización de {entity}:\n{e}")
+                self._ui_queue.put(lambda e=entity, err=e: messagebox.showerror("❌ Error", f"Error durante sincronización de {e}:\n{err}"))
                 import traceback
                 self.log(traceback.format_exc(), "error")
 
