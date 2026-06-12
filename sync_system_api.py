@@ -5344,7 +5344,9 @@ class SystemTrayService:
             if not self._root:
                 print("[DEBUG] Creando ventana Tk temporal para reautenticación")
                 _temp_root = tk.Tk()
-                _temp_root.withdraw()
+                _temp_root.geometry('0x0+0+0')
+                _temp_root.attributes('-alpha', 0.0)
+                _temp_root.resizable(False, False)
                 self._root = _temp_root
 
             # Obtener company_id desde sync_config de PostgreSQL (si está disponible)
@@ -5380,6 +5382,10 @@ class SystemTrayService:
             auth_window.title("Sincronizador - Verificar Identidad")
             auth_window.resizable(False, False)
 
+            # Hacer que la ventana sea transient (diálogo modal padre-hijo)
+            # En Windows 11 esto ayuda a que el sistema operativo maneje correctamente el foco
+            auth_window.transient(self._root)
+
             # Centrar ventana
             window_width = 480
             window_height = 280
@@ -5392,12 +5398,9 @@ class SystemTrayService:
             # Forzar actualización para asegurar que la posición se aplique
             auth_window.update_idletasks()
 
-            # DESPUÉS de posicionar, hacer topmost/focus
-            auth_window.attributes('-topmost', True)
+            # NO usar attributes('-topmost') - en Windows 11 interfiere con el foco
+            # Simplemente levantar la ventana y darle foco
             auth_window.lift()
-
-            # IMPORTANTE: En Windows 11, NO usar grab_set() porque bloquea la ventana
-            # Simplemente hacer topmost y focus - wait_window() maneja el bloqueo del flujo
             auth_window.update()
             auth_window.focus_force()
 
@@ -5553,16 +5556,17 @@ class SystemTrayService:
             # Bind Enter
             auth_window.bind('<Return>', lambda e: do_auth())
 
-            # IMPORTANTE: Forzar actualización final para Windows 11
-            # Esto asegura que todos los widgets estén listos para recibir input
+            # Hacer modal: grab_set() en el Toplevel (NO en root, eso bloquea Win11)
+            # En Windows 11, grab_set() en Toplevel transient funciona correctamente
+            auth_window.grab_set()
+
+            # Forzar visibilidad y actualización final
             auth_window.update()
-            auth_window.deiconify()  # Asegurar visibilidad
 
-            # Colocar focus en email DESPUÉS de update() para Windows 11
-            email_entry.focus_set()
+            # Colocar focus en email después de grab_set() y update()
+            email_entry.focus_force()
 
-            # Usar wait_window() en lugar de mainloop() para Windows 11
-            # wait_window es compatible con event loops existentes (pystray)
+            # Usar wait_window() - procesa eventos localmente
             auth_window.wait_window()
 
             # Resultado de la autenticación
@@ -6119,12 +6123,16 @@ Clic derecho para opciones"""
             # Crear ventana Tk raíz oculta para reautenticación
             # IMPORTANTE: Una sola ventana Tk raíz evita crear múltiples
             # intérpretes Tcl, lo que causa problemas de teclado en Windows 11
-            log_debug("[DEBUG] Creando ventana Tk raíz oculta para reautenticación...")
+            # NOTA: En Windows 11, withdraw() interfiere con el foco de los Toplevel hijos
+            log_debug("[DEBUG] Creando ventana Tk raíz para reautenticación...")
             import tkinter as tk
             self._root = tk.Tk()
-            self._root.withdraw()  # Oculta la ventana raíz
+            self._root.title("SyncAPI - Raíz")  # Título visible ayuda en Win11
+            self._root.geometry('0x0+0+0')  # Tamaño mínimo
+            self._root.attributes('-alpha', 0.0)  # Invisible pero no withdraw()
+            self._root.resizable(False, False)
             set_window_favicon(self._root)
-            log_debug("[DEBUG] Ventana Tk raíz creada y oculta")
+            log_debug("[DEBUG] Ventana Tk raíz creada (invisible)")
 
             # Notificación de inicio
             try:
