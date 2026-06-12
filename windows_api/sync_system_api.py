@@ -5237,6 +5237,9 @@ class SystemTrayService:
         self._logs_open = False
         self._operation_lock = None  # Thread lock para operaciones críticas
 
+        # Ventana Tk raíz oculta para reautenticación (creada en iniciar())
+        self._root = None
+
         # Configurar auto-inicio al encender el equipo
         self.configurar_auto_inicio()
 
@@ -5335,6 +5338,11 @@ class SystemTrayService:
             """
             import requests
 
+            # Verificar que la ventana raíz existe
+            if not self._root:
+                print("[ERROR] Ventana Tk raíz no disponible para reautenticación")
+                return False
+
             # Obtener company_id desde sync_config de PostgreSQL (si está disponible)
             company_id_from_config = None
             try:
@@ -5360,13 +5368,15 @@ class SystemTrayService:
                 print(f"Warning: No se pudo obtener company_id de PostgreSQL: {e}")
                 # No es fatal - continuar sin validación de empresa
 
-            # Crear ventana de reautenticación
-            auth_window = tk.Tk()
+            # Crear ventana de reautenticación (Toplevel de la raíz oculta)
+            # IMPORTANTE: Usar Toplevel en lugar de Tk() evita crear un segundo
+            # intérprete Tcl, lo que causa problemas de teclado en algunas versiones de Windows
+            auth_window = tk.Toplevel(self._root)
             set_window_favicon(auth_window)
             auth_window.title("Sincronizador - Verificar Identidad")
             auth_window.resizable(False, False)
 
-            # Centrar ventana usando el tamaño especificado (no winfo_width que puede fallar en Win11)
+            # Centrar ventana
             window_width = 480
             window_height = 280
             screen_width = auth_window.winfo_screenwidth()
@@ -6028,17 +6038,10 @@ class SystemTrayService:
             import tkinter as tk
             from tkinter import messagebox
 
-            # Crear ventana oculta para el diálogo
-            root = tk.Tk()
-            root.withdraw()  # Ocultar ventana principal
-
-            # Centrar el diálogo en la pantalla
-            root.update_idletasks()
-            width = 400
-            height = 150
-            x = (root.winfo_screenwidth() // 2) - (width // 2)
-            y = (root.winfo_screenheight() // 2) - (height // 2)
-            root.geometry(f'{width}x{height}+{x}+{y}')
+            # Usar la ventana raíz oculta existente (no crear otra)
+            root = self._root if self._root else tk.Tk()
+            if not self._root:
+                root.withdraw()
 
             # Mostrar confirmación
             respuesta = messagebox.askyesno(
@@ -6048,8 +6051,6 @@ class SystemTrayService:
                 icon=messagebox.WARNING,
                 default=messagebox.NO
             )
-
-            root.destroy()
 
             if respuesta:
                 print("\n👋 Deteniendo servicio...")
@@ -6128,6 +6129,16 @@ Clic derecho para opciones"""
             sync_thread.start()
             log_debug("[DEBUG] Thread de sincronización iniciado")
 
+            # Crear ventana Tk raíz oculta para reautenticación
+            # IMPORTANTE: Una sola ventana Tk raíz evita crear múltiples
+            # intérpretes Tcl, lo que causa problemas de teclado en Windows 11
+            log_debug("[DEBUG] Creando ventana Tk raíz oculta para reautenticación...")
+            import tkinter as tk
+            self._root = tk.Tk()
+            self._root.withdraw()  # Oculta la ventana raíz
+            set_window_favicon(self._root)
+            log_debug("[DEBUG] Ventana Tk raíz creada y oculta")
+
             # Notificación de inicio
             try:
                 mostrar_banner(
@@ -6177,6 +6188,13 @@ Clic derecho para opciones"""
             log_debug(traceback.format_exc())
             raise
         finally:
+            # Limpiar ventana Tk raíz
+            try:
+                if self._root:
+                    self._root.destroy()
+                    self._root = None
+            except:
+                pass
             try:
                 log_file.close()
             except:
