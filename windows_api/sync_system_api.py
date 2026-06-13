@@ -5839,6 +5839,8 @@ def _handle_config_window(result_path: str) -> None:
                         'Authorization': f'Bearer {api_key}',
                         'Content-Type': 'application/json',
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'X-App-Version': APP_VERSION,
+                        'X-App-Type': 'sincronizador',
                     },
                     timeout=30
                 )
@@ -5855,13 +5857,19 @@ def _handle_config_window(result_path: str) -> None:
                         self.emp_rif_label.setText(f"RIF: {self.company_rif or '--'}")
                         self.emp_email_label.setText(f"Email: {self.company_email or '--'}")
 
-                        self.api_status.setText("✅ API Key válida")
+                        self.api_status.setText("API Key valida")
                         self.api_status.setStyleSheet("color: green;")
                     else:
-                        self.api_status.setText(f"❌ API Key inválida: {data.get('message', 'Error')}")
+                        msg = data.get('message', data.get('error', 'Error'))
+                        self.api_status.setText(f"API Key invalida: {msg}")
                         self.api_status.setStyleSheet("color: red;")
                 else:
-                    self.api_status.setText(f"❌ HTTP {response.status_code}")
+                    try:
+                        err_data = response.json()
+                        err_msg = err_data.get('message') or err_data.get('error') or f"HTTP {response.status_code}"
+                    except Exception:
+                        err_msg = f"HTTP {response.status_code}"
+                    self.api_status.setText(f"Error: {err_msg}")
                     self.api_status.setStyleSheet("color: red;")
             except Exception as e:
                 self.api_status.setText(f"❌ Error: {str(e)[:80]}")
