@@ -30,6 +30,13 @@ import sys
 import os
 import traceback
 
+# Forzar UTF-8 en stdout para evitar UnicodeEncodeError con emojis en Windows (cp1252)
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 CRASH_LOG = "startup_crash.log"
 
 def log_startup_error(error_type, error_msg, traceback_str):
