@@ -5351,6 +5351,27 @@ def run_service_loop():
 # MAIN
 # ==============================================================================
 
+def _get_window_icon():
+    """Retorna QIcon del logo si existe, None si no."""
+    import os
+    import sys as _sys
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    possible = [
+        os.path.join(script_dir, 'windows_api', 'logo.ico'),
+        os.path.join(script_dir, 'logo.ico'),
+    ]
+    if getattr(_sys, 'frozen', False):
+        exe_dir = os.path.dirname(_sys.executable)
+        possible.insert(0, os.path.join(exe_dir, 'logo.ico'))
+
+    for p in possible:
+        if os.path.exists(p):
+            from PySide6.QtGui import QIcon
+            return QIcon(p)
+    return None
+
+
 def _handle_auth_dialog(result_path: str, error_message: str = "") -> None:
     """Muestra dialogo de autenticacion con PySide6 en proceso separado.
 
@@ -5391,6 +5412,9 @@ def _handle_auth_dialog(result_path: str, error_message: str = "") -> None:
         def __init__(self, error_msg: str = "") -> None:
             super().__init__()
             self.setWindowTitle("Sincronizador - Verificar Identidad")
+            icon = _get_window_icon()
+            if icon:
+                self.setWindowIcon(icon)
             self.setFixedSize(420, 300)
             self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
             self.setStyleSheet("""
@@ -5518,6 +5542,9 @@ def _handle_log_window(log_file: str) -> None:
         def __init__(self, log_path: str) -> None:
             super().__init__()
             self.setWindowTitle("📊 Logs del Sistema - Visor")
+            icon = _get_window_icon()
+            if icon:
+                self.setWindowIcon(icon)
             self.resize(900, 700)
             self.setMinimumSize(500, 300)
             self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
@@ -5636,6 +5663,9 @@ def _handle_config_window(result_path: str) -> None:
         def __init__(self) -> None:
             super().__init__()
             self.setWindowTitle("⚙️ Configuración del Sincronizador API")
+            icon = _get_window_icon()
+            if icon:
+                self.setWindowIcon(icon)
             self.resize(600, 550)
             self.setMinimumSize(500, 450)
             self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
@@ -6161,6 +6191,9 @@ def _handle_manager_window(config_path: str) -> None:
         def __init__(self) -> None:
             super().__init__()
             self.setWindowTitle(f"Sincronizador API REST - Manager")
+            icon = _get_window_icon()
+            if icon:
+                self.setWindowIcon(icon)
             self.resize(850, 700)
             self.setMinimumSize(700, 500)
 
@@ -6431,6 +6464,9 @@ def _handle_launcher_window(result_path: str) -> None:
         def __init__(self) -> None:
             super().__init__()
             self.setWindowTitle("Sincronizador API REST - Chrystal")
+            icon = _get_window_icon()
+            if icon:
+                self.setWindowIcon(icon)
             self.setFixedSize(600, 500)
             self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
             self.setStyleSheet("""
@@ -6643,6 +6679,9 @@ def _handle_confirm_dialog(result_path: str) -> None:
 
     dialog = QDialog()
     dialog.setWindowTitle("Confirmar")
+    icon = _get_window_icon()
+    if icon:
+        dialog.setWindowIcon(icon)
     dialog.setFixedSize(400, 160)
     dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
     dialog.setStyleSheet("""
