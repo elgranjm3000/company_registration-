@@ -5822,18 +5822,62 @@ class SystemTrayService:
         threading.Thread(target=self._abrir_config_thread, daemon=True).start()
 
     def _abrir_config_thread(self):
-        """Abre config en thread separado con autenticación"""
+        """Abre config con PySide6 en proceso separado."""
         # Verificar autenticación antes de abrir config
         if not self.reautenticar_usuario():
             print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
             return
 
         try:
-            import tkinter as tk
-            root = tk.Tk()
-            set_window_favicon(root)
-            app = ConfigWindow(root)
-            root.mainloop()
+            import subprocess
+            import json
+            import sys
+            import tempfile
+
+            from config_encryption import encrypt_config, decrypt_config
+
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
+                result_path = f.name
+
+            try:
+                if getattr(sys, 'frozen', False):
+                    args = [sys.executable, '--config-window', result_path]
+                else:
+                    args = [sys.executable, __file__, '--config-window', result_path]
+
+                creationflags = 0
+                if sys.platform == 'win32':
+                    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+
+                subprocess.run(
+                    args,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    creationflags=creationflags
+                )
+
+                # Leer resultado
+                try:
+                    with open(result_path, 'r') as f:
+                        data = json.load(f)
+                except (json.JSONDecodeError, FileNotFoundError):
+                    data = {}
+
+                if data.get('saved'):
+                    # Encriptar y guardar configuración
+                    config_data = {k: v for k, v in data.items() if k != 'saved'}
+                    config_encrypted = encrypt_config(config_data)
+                    import json as _json
+                    with open(CONFIG_FILE, 'w') as f:
+                        _json.dump(config_encrypted, f, indent=2)
+                    print("✅ Configuración guardada desde PySide6")
+                else:
+                    print("ℹ️ Configuración cancelada por el usuario")
+
+            finally:
+                os.unlink(result_path)
+
         except Exception as e:
             print(f"Error abriendo config: {e}")
 
@@ -6491,6 +6535,432 @@ def _handle_log_window(log_file: str) -> None:
     dialog.exec()
 
 
+def _handle_config_window(result_path: str) -> None:
+    """Muestra ventana de configuración con PySide6 en proceso separado.
+
+    Args:
+        result_path: Ruta donde guardar el resultado JSON con la configuración
+    """
+    import sys
+    import os
+    import json
+    from PySide6.QtWidgets import (
+        QApplication, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+        QLabel, QLineEdit, QPushButton, QTabWidget, QWidget,
+        QMessageBox, QFrame, QSpinBox
+    )
+    from PySide6.QtCore import Qt
+
+    # Cargar configuración existente si hay
+    CONFIG_FILE_CFG = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
+    existing_config = {}
+    if os.path.exists(CONFIG_FILE_CFG):
+        try:
+            with open(CONFIG_FILE_CFG, 'r') as f:
+                cfg_enc = json.load(f)
+            from config_encryption import decrypt_config
+            existing_config = decrypt_config(cfg_enc)
+        except Exception:
+            pass
+
+    class ConfigDialog(QDialog):
+        """Ventana de configuración con PySide6."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.setWindowTitle("⚙️ Configuración del Sincronizador API")
+            self.resize(600, 550)
+            self.setMinimumSize(500, 450)
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+            # Variables del formulario
+            self.api_url = existing_config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
+            self.api_key = ''
+            self.pg_host = existing_config.get('postgres_host', 'localhost')
+            self.pg_port = str(existing_config.get('postgres_port', '5432'))
+            self.pg_database = existing_config.get('postgres_database', '')
+            self.pg_user = existing_config.get('postgres_user', 'postgres')
+            self.pg_password = ''
+            self.sync_interval = str(existing_config.get('sync_interval_minutes', '30'))
+
+            # Datos de empresa (del ping)
+            self.company_rif = ''
+            self.company_email = ''
+            self.company_name = ''
+
+            self._build_ui()
+            self._apply_styles()
+
+        def _apply_styles(self) -> None:
+            self.setStyleSheet("""
+                QDialog { background-color: #f5f5f5; }
+                QTabWidget::pane { border: 1px solid #ccc; background: white; }
+                QTabBar::tab {
+                    padding: 8px 16px; font-size: 12px;
+                    border: 1px solid #ccc; border-bottom: none;
+                    background: #e0e0e0; margin-right: 2px;
+                }
+                QTabBar::tab:selected { background: white; font-weight: bold; }
+                QLineEdit {
+                    padding: 6px; font-size: 12px;
+                    border: 1px solid #ccc; border-radius: 3px;
+                    background: white;
+                }
+                QLineEdit:focus { border-color: #2E7D32; }
+                QPushButton { font-size: 12px; padding: 6px 16px; }
+                QLabel { font-size: 12px; }
+            """)
+
+        def _build_ui(self) -> None:
+            layout = QVBoxLayout()
+            layout.setContentsMargins(12, 12, 12, 12)
+
+            # Título
+            title = QLabel("⚙️ Configuración del Sincronizador API")
+            title.setStyleSheet("font-size: 16px; font-weight: bold; color: #1a1a1a; padding: 4px 0;")
+            title.setAlignment(Qt.AlignCenter)
+            layout.addWidget(title)
+
+            # Tabs
+            tabs = QTabWidget()
+            tabs.addTab(self._build_pg_tab(), "🐘 PostgreSQL")
+            tabs.addTab(self._build_api_tab(), "🔐 API Key")
+            tabs.addTab(self._build_config_tab(), "⚙️ Configuración")
+            layout.addWidget(tabs)
+
+            # Botones
+            btn_layout = QHBoxLayout()
+            save_btn = QPushButton("💾 Guardar y Salir")
+            save_btn.setStyleSheet("""
+                QPushButton { background-color: #2E7D32; color: white;
+                    font-weight: bold; padding: 8px 24px; border-radius: 4px; border: none; }
+                QPushButton:hover { background-color: #1B5E20; }
+            """)
+            save_btn.clicked.connect(self._on_save)
+            btn_layout.addWidget(save_btn)
+
+            cancel_btn = QPushButton("❌ Cancelar")
+            cancel_btn.setStyleSheet("""
+                QPushButton { background-color: #C62828; color: white;
+                    font-weight: bold; padding: 8px 24px; border-radius: 4px; border: none; }
+                QPushButton:hover { background-color: #B71C1C; }
+            """)
+            cancel_btn.clicked.connect(self.reject)
+            btn_layout.addWidget(cancel_btn)
+
+            layout.addLayout(btn_layout)
+            self.setLayout(layout)
+
+        def _build_pg_tab(self) -> QWidget:
+            tab = QWidget()
+            form = QFormLayout()
+            form.setContentsMargins(16, 16, 16, 16)
+            form.setSpacing(8)
+
+            self.pg_host_edit = QLineEdit(self.pg_host)
+            self.pg_host_edit.setPlaceholderText("localhost")
+            form.addRow("Host:", self.pg_host_edit)
+
+            self.pg_port_edit = QLineEdit(self.pg_port)
+            self.pg_port_edit.setPlaceholderText("5432")
+            form.addRow("Port:", self.pg_port_edit)
+
+            self.pg_db_edit = QLineEdit(self.pg_database)
+            self.pg_db_edit.setPlaceholderText("chrystal_db")
+            form.addRow("Database:", self.pg_db_edit)
+
+            self.pg_user_edit = QLineEdit(self.pg_user)
+            self.pg_user_edit.setPlaceholderText("postgres")
+            form.addRow("User:", self.pg_user_edit)
+
+            self.pg_pass_edit = QLineEdit(self.pg_password)
+            self.pg_pass_edit.setEchoMode(QLineEdit.Password)
+            self.pg_pass_edit.setPlaceholderText("••••••••")
+            form.addRow("Password:", self.pg_pass_edit)
+
+            test_btn = QPushButton("🧪 Probar Conexión PostgreSQL")
+            test_btn.setStyleSheet(
+                "QPushButton { background-color: #1976D2; color: white;"
+                " border: none; border-radius: 3px; padding: 6px 12px; }"
+                " QPushButton:hover { background-color: #1565C0; }")
+            test_btn.clicked.connect(self._test_pg)
+            form.addRow("", test_btn)
+
+            self.pg_status = QLabel("")
+            form.addRow("", self.pg_status)
+
+            tab.setLayout(form)
+            return tab
+
+        def _build_api_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout()
+            layout.setContentsMargins(16, 16, 16, 16)
+            layout.setSpacing(8)
+
+            form = QFormLayout()
+            self.api_key_edit = QLineEdit()
+            self.api_key_edit.setEchoMode(QLineEdit.Password)
+            self.api_key_edit.setPlaceholderText("Ingrese la API Key")
+            form.addRow("API Key:", self.api_key_edit)
+            layout.addLayout(form)
+
+            test_btn = QPushButton("🧪 Probar API Key")
+            test_btn.setStyleSheet(
+                "QPushButton { background-color: #1976D2; color: white;"
+                " border: none; border-radius: 3px; padding: 6px 12px; }"
+                " QPushButton:hover { background-color: #1565C0; }")
+            test_btn.clicked.connect(self._test_api)
+            layout.addWidget(test_btn)
+
+            self.api_status = QLabel("")
+            layout.addWidget(self.api_status)
+
+            # Datos de empresa
+            sep = QFrame()
+            sep.setFrameShape(QFrame.HLine)
+            sep.setStyleSheet("color: #ccc;")
+            layout.addWidget(sep)
+
+            emp_label = QLabel("Datos de la Empresa")
+            emp_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #333;")
+            layout.addWidget(emp_label)
+
+            self.emp_name_label = QLabel("Empresa: --")
+            self.emp_name_label.setStyleSheet("font-size: 12px;")
+            layout.addWidget(self.emp_name_label)
+            self.emp_rif_label = QLabel("RIF: --")
+            layout.addWidget(self.emp_rif_label)
+            self.emp_email_label = QLabel("Email: --")
+            layout.addWidget(self.emp_email_label)
+
+            tab.setLayout(layout)
+            return tab
+
+        def _build_config_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout()
+            layout.setContentsMargins(16, 16, 16, 16)
+            layout.setSpacing(8)
+
+            form = QFormLayout()
+            self.interval_spin = QSpinBox()
+            self.interval_spin.setMinimum(1)
+            self.interval_spin.setMaximum(1440)
+            self.interval_spin.setValue(int(self.sync_interval) if self.sync_interval.isdigit() else 30)
+            self.interval_spin.setSuffix(" minutos")
+            self.interval_spin.setFixedWidth(160)
+            form.addRow("Intervalo de sincronización:", self.interval_spin)
+            layout.addLayout(form)
+
+            info = QLabel("ℹ️ El sistema se sincronizará automáticamente cada X minutos.")
+            info.setStyleSheet("color: gray; font-size: 11px;")
+            layout.addWidget(info)
+
+            layout.addStretch()
+            tab.setLayout(layout)
+            return tab
+
+        def _test_pg(self) -> None:
+            """Probar conexión PostgreSQL."""
+            host = self.pg_host_edit.text().strip()
+            port = self.pg_port_edit.text().strip()
+            db = self.pg_db_edit.text().strip()
+            user = self.pg_user_edit.text().strip()
+            password = self.pg_pass_edit.text().strip()
+
+            if not all([host, port, db, user]):
+                self.pg_status.setText("❌ Complete Host, Puerto, Database y Usuario")
+                self.pg_status.setStyleSheet("color: red;")
+                return
+
+            self.pg_status.setText("⏳ Probando conexión...")
+            self.pg_status.setStyleSheet("color: blue;")
+            QApplication.processEvents()
+
+            try:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=host, port=int(port), database=db,
+                    user=user, password=password, connect_timeout=10
+                )
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM products")
+                count = cursor.fetchone()[0]
+                cursor.close()
+                conn.close()
+                self.pg_status.setText(f"✅ Conexión exitosa ({count:,} productos)")
+                self.pg_status.setStyleSheet("color: green;")
+            except Exception as e:
+                self.pg_status.setText(f"❌ Error: {str(e)[:80]}")
+                self.pg_status.setStyleSheet("color: red;")
+
+        def _test_api(self) -> None:
+            """Probar API Key contra ping."""
+            api_key = self.api_key_edit.text().strip()
+            if not api_key:
+                self.api_status.setText("❌ Ingrese la API Key")
+                self.api_status.setStyleSheet("color: red;")
+                return
+
+            self.api_status.setText("⏳ Probando API Key...")
+            self.api_status.setStyleSheet("color: blue;")
+            QApplication.processEvents()
+
+            try:
+                import requests
+                response = requests.get(
+                    f"{self.api_url}/sync-client/ping",
+                    headers={
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                    timeout=30
+                )
+
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    if data.get('success'):
+                        rd = data.get('data', {})
+                        self.company_name = rd.get('empresa', '')
+                        self.company_rif = rd.get('rif', '')
+                        self.company_email = rd.get('email', '')
+
+                        self.emp_name_label.setText(f"Empresa: {self.company_name or '--'}")
+                        self.emp_rif_label.setText(f"RIF: {self.company_rif or '--'}")
+                        self.emp_email_label.setText(f"Email: {self.company_email or '--'}")
+
+                        self.api_status.setText("✅ API Key válida")
+                        self.api_status.setStyleSheet("color: green;")
+                    else:
+                        self.api_status.setText(f"❌ API Key inválida: {data.get('message', 'Error')}")
+                        self.api_status.setStyleSheet("color: red;")
+                else:
+                    self.api_status.setText(f"❌ HTTP {response.status_code}")
+                    self.api_status.setStyleSheet("color: red;")
+            except Exception as e:
+                self.api_status.setText(f"❌ Error: {str(e)[:80]}")
+                self.api_status.setStyleSheet("color: red;")
+
+        def _on_save(self) -> None:
+            """Validar y guardar configuración."""
+            api_key = self.api_key_edit.text().strip()
+            pg_host = self.pg_host_edit.text().strip()
+            pg_port = self.pg_port_edit.text().strip()
+            pg_db = self.pg_db_edit.text().strip()
+            pg_user = self.pg_user_edit.text().strip()
+            pg_pass = self.pg_pass_edit.text().strip()
+            interval = str(self.interval_spin.value())
+
+            if not api_key or not pg_db:
+                QMessageBox.warning(self, "Advertencia", "API Key y Database son obligatorios")
+                return
+
+            if not self.company_rif or not self.company_email:
+                QMessageBox.warning(self, "Advertencia",
+                    "Debe probar la API Key primero para obtener los datos de la empresa.")
+                return
+
+            self._run_verification({
+                'api_url': self.api_url,
+                'api_key': api_key,
+                'postgres_host': pg_host,
+                'postgres_port': pg_port,
+                'postgres_database': pg_db,
+                'postgres_user': pg_user,
+                'postgres_password': pg_pass,
+                'company_rif': self.company_rif,
+                'company_email': self.company_email,
+                'company_name': self.company_name,
+                'sync_interval_minutes': interval,
+                'configured': True,
+                'first_run': False
+            })
+
+        def _run_verification(self, config: dict) -> None:
+            """Ejecuta verificación en 3 pasos con feedback en UI."""
+            from PySide6.QtWidgets import QProgressDialog
+
+            progress = QProgressDialog("Verificando configuración...", None, 0, 3, self)
+            progress.setWindowTitle("⏳ Verificando")
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.setValue(0)
+            progress.show()
+            QApplication.processEvents()
+
+            try:
+                # PASO 1: PostgreSQL
+                progress.setLabelText("🔌 Conectando a PostgreSQL...")
+                QApplication.processEvents()
+                import psycopg2
+                pg_conn = psycopg2.connect(
+                    host=config['postgres_host'],
+                    port=config['postgres_port'],
+                    database=config['postgres_database'],
+                    user=config['postgres_user'],
+                    password=config['postgres_password'],
+                    connect_timeout=10
+                )
+                pg_conn.close()
+                progress.setValue(1)
+                QApplication.processEvents()
+
+                # PASO 2: API Key
+                progress.setLabelText("🔐 Validando API Key...")
+                QApplication.processEvents()
+                import requests
+                ping = requests.get(
+                    f"{config['api_url']}/sync-client/ping",
+                    headers={'Authorization': f'Bearer {config["api_key"]}',
+                            'Content-Type': 'application/json'},
+                    timeout=30
+                )
+                ping_data = ping.json()
+                if not ping_data.get('success'):
+                    raise Exception(f"API Key inválida: {ping_data.get('message', 'Error')}")
+                progress.setValue(2)
+                QApplication.processEvents()
+
+                # PASO 3: Validar empresa
+                progress.setLabelText("🏢 Validando empresa...")
+                QApplication.processEvents()
+                validate = requests.post(
+                    f"{config['api_url']}/sync-client/company/validate",
+                    headers={'Authorization': f'Bearer {config["api_key"]}',
+                            'Content-Type': 'application/json'},
+                    json={'rif': config['company_rif'], 'email': config['company_email']},
+                    timeout=30
+                )
+                val_data = validate.json()
+                if not val_data.get('success'):
+                    raise Exception(f"Validación empresa falló: {val_data.get('message', 'Error')}")
+                progress.setValue(3)
+                QApplication.processEvents()
+
+                progress.close()
+
+                # Éxito
+                result_data = {k: v for k, v in config.items()}
+                result_data['saved'] = True
+                with open(result_path, 'w') as f:
+                    json.dump(result_data, f, indent=2)
+                self.accept()
+
+            except Exception as e:
+                progress.close()
+                QMessageBox.critical(self, "❌ Error de Verificación",
+                    f"La verificación falló:\n\n{str(e)}\n\n"
+                    "La configuración NO se guardó.")
+                return
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    dialog = ConfigDialog()
+    dialog.exec()
+
+
 def main():
     """Función principal."""
 
@@ -6526,13 +6996,38 @@ def main():
                 print("❌ Acceso denegado: autenticación fallida o cancelada")
                 return
 
-            root = tk.Tk()
-            set_window_favicon(root)
-            app = ConfigWindow(root)
-            root.mainloop()
+            # Lanzar ConfigWindow con PySide6 en proceso separado
+            import subprocess as _sp
+            import json as _json
+            import tempfile
+            _result_path = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as _f:
+                    _result_path = _f.name
+                if getattr(sys, 'frozen', False):
+                    _sp_args = [sys.executable, '--config-window', _result_path]
+                else:
+                    _sp_args = [sys.executable, __file__, '--config-window', _result_path]
+                _sp.run(_sp_args, capture_output=True, text=True, timeout=300,
+                        creationflags=getattr(_sp, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+                try:
+                    with open(_result_path) as _f:
+                        _cfg_data = _json.load(_f)
+                except Exception:
+                    _cfg_data = {}
+                if _cfg_data.get('saved'):
+                    from config_encryption import encrypt_config
+                    _encrypted = encrypt_config({k: v for k, v in _cfg_data.items() if k != 'saved'})
+                    with open(CONFIG_FILE, 'w') as _f:
+                        _json.dump(_encrypted, _f, indent=2)
+                    print("✅ Configuración guardada")
+            except Exception as _e:
+                print(f"❌ Error en configuración: {_e}")
+            finally:
+                if _result_path and os.path.exists(_result_path):
+                    os.unlink(_result_path)
 
-            # ConfigWindow guardó la configuración e hizo la primera sync.
-            # Ahora iniciar System Tray en el hilo principal (bloqueante).
+            # Iniciar System Tray si hay configuración.
             if os.path.exists(CONFIG_FILE):
                 print("\n" + "="*70)
                 print("📬 INICIANDO SYSTEM TRAY...")
@@ -6673,6 +7168,8 @@ def main():
                        help=argparse.SUPPRESS)
     parser.add_argument("--log-window", metavar="LOG_FILE",
                        help=argparse.SUPPRESS)
+    parser.add_argument("--config-window", metavar="RESULT_PATH",
+                       help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -6682,6 +7179,11 @@ def main():
 
     # Si se pasa --log-window, mostrar visor de logs en proceso propio y salir
     if args.log_window:
+        return _handle_log_window(args.log_window)
+
+    # Si se pasa --config-window, mostrar config en proceso propio y salir
+    if args.config_window:
+        return _handle_config_window(args.config_window)
         return _handle_log_window(args.log_window)
 
     # Si --reconfig o mode=reconfig, borrar config
@@ -6718,41 +7220,66 @@ def main():
         # Verificar autenticación antes de abrir config
         auth_result = autenticar_para_config()
         if auth_result and auth_result.get('success', False):
-            root = tk.Tk()
-            set_window_favicon(root)
-            app = ConfigWindow(root)
-            root.mainloop()
-
-            # NOTA: La sincronización se ejecutó desde ConfigWindow
-            # con ventana de progreso. El System Tray se inicia aquí.
-            if not os.path.exists(CONFIG_FILE):
-                print("❌ Configuración no completada o fallida")
-                sys.exit(1)
-
-            print("\n" + "="*70)
-            print("📬 INICIANDO SYSTEM TRAY...")
-            print("="*70)
+            # Lanzar ConfigWindow con PySide6 en proceso separado
+            import subprocess as _sp
+            import json as _json
+            import tempfile
+            _result_path = None
             try:
-                from config_encryption import decrypt_config
-                with open(CONFIG_FILE, 'r') as f:
-                    _cfg_enc = json.load(f)
-                _cfg = decrypt_config(_cfg_enc)
-                _key = _cfg.get('api_key', '')
-                if _key:
-                    print("🔐 Validando API Key...")
-                    _auth = APIAuthManager(base_url=_cfg.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api'))
-                    _ping = _auth.ping_api_key(_key)
-                    if _ping.get('success'):
-                        _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
-                        SystemTrayService(_cfg, _key).iniciar()
-                    else:
-                        print(f"❌ API Key inválida: {_ping.get('error', 'Error')}")
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as _f:
+                    _result_path = _f.name
+                _sp_args = ([sys.executable, '--config-window', _result_path]
+                           if getattr(sys, 'frozen', False)
+                           else [sys.executable, __file__, '--config-window', _result_path])
+                _sp.run(_sp_args, capture_output=True, text=True, timeout=300,
+                        creationflags=getattr(_sp, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+                try:
+                    with open(_result_path) as _f:
+                        _cfg_data = _json.load(_f)
+                except Exception:
+                    _cfg_data = {}
+                if _cfg_data.get('saved'):
+                    from config_encryption import encrypt_config
+                    _encrypted = encrypt_config({k: v for k, v in _cfg_data.items() if k != 'saved'})
+                    with open(CONFIG_FILE, 'w') as _f:
+                        _json.dump(_encrypted, _f, indent=2)
+                    print("✅ Configuración guardada")
                 else:
-                    print("❌ No hay API Key en la configuración")
-            except Exception as e:
-                print(f"❌ Error iniciando System Tray: {e}")
-                import traceback
-                traceback.print_exc()
+                    print("❌ Configuración no completada o cancelada")
+                    sys.exit(1)
+            except Exception as _e:
+                print(f"❌ Error en configuración: {_e}")
+                sys.exit(1)
+            finally:
+                if _result_path and os.path.exists(_result_path):
+                    os.unlink(_result_path)
+
+            # Iniciar System Tray
+            if os.path.exists(CONFIG_FILE):
+                print("\n" + "="*70)
+                print("📬 INICIANDO SYSTEM TRAY...")
+                print("="*70)
+                try:
+                    from config_encryption import decrypt_config
+                    with open(CONFIG_FILE, 'r') as f:
+                        _cfg_enc = json.load(f)
+                    _cfg = decrypt_config(_cfg_enc)
+                    _key = _cfg.get('api_key', '')
+                    if _key:
+                        print("🔐 Validando API Key...")
+                        _auth = APIAuthManager(base_url=_cfg.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api'))
+                        _ping = _auth.ping_api_key(_key)
+                        if _ping.get('success'):
+                            _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
+                            SystemTrayService(_cfg, _key).iniciar()
+                        else:
+                            print(f"❌ API Key inválida: {_ping.get('error', 'Error')}")
+                    else:
+                        print("❌ No hay API Key en la configuración")
+                except Exception as e:
+                    print(f"❌ Error iniciando System Tray: {e}")
+                    import traceback
+                    traceback.print_exc()
         else:
             print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
             sys.exit(1)
