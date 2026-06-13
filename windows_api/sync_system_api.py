@@ -4367,127 +4367,141 @@ class SystemTrayService:
             print(f"⚠️ No se pudo configurar auto-inicio: {e}")
 
     def reautenticar_usuario(self):
-        """Pide autenticación en proceso separado (compatible Win11 25H2).
-
-        Ejecuta el diálogo de login en un proceso hijo con su propio tk.Tk(),
-        evitando problemas de foco con ventanas pystray ocultas en Windows 11 25H2.
+        """Pide autenticacion en proceso separado, reintenta si la clave es incorrecta.
 
         Returns:
-            bool: True si autenticación exitosa, False si falló o canceló
+            bool: True si autenticacion exitosa, False si cancelo
         """
         import subprocess
         import json
         import tempfile
         import os
         import sys
+        import time
 
-        # Archivo temporal para resultado del proceso hijo
-        with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
-            result_path = f.name
+        error_msg = ""
 
-        try:
-            # Determinar cómo ejecutar el diálogo en proceso separado
-            if getattr(sys, 'frozen', False):
-                args = [sys.executable, '--auth-dialog', result_path]
-            else:
-                args = [sys.executable, __file__, '--auth-dialog', result_path]
+        while True:
+            # Archivo temporal para resultado del proceso hijo
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
+                result_path = f.name
 
-            creationflags = 0
-            if sys.platform == 'win32':
-                creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
-
-            result = subprocess.run(
-                args,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                creationflags=creationflags
-            )
-
-            if result.returncode != 0:
-                print(f"[AUTH] Error en proceso de autenticación (código {result.returncode})")
-                return False
-
-            # Leer resultado del proceso hijo
             try:
-                with open(result_path, 'r') as f:
-                    data = json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError) as e:
-                print(f"[AUTH] Error leyendo resultado: {e}")
+                # Determinar como ejecutar el dialogo en proceso separado
+                cmd_args = ['--auth-dialog', result_path]
+                if error_msg:
+                    cmd_args += ['--auth-error', error_msg]
+
+                if getattr(sys, 'frozen', False):
+                    args = [sys.executable] + cmd_args
+                else:
+                    args = [sys.executable, __file__] + cmd_args
+
+                creationflags = 0
+                if sys.platform == 'win32':
+                    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+
+                result = subprocess.run(
+                    args,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    creationflags=creationflags
+                )
+
+                if result.returncode != 0:
+                    print(f"[AUTH] Error en proceso de autenticacion (codigo {result.returncode})")
+                    if result.stderr:
+                        print(f"[AUTH] stderr: {result.stderr}")
+                    return False
+
+                # Leer resultado del proceso hijo
+                try:
+                    with open(result_path, 'r') as f:
+                        data = json.load(f)
+                except (json.JSONDecodeError, FileNotFoundError) as e:
+                    print(f"[AUTH] Error leyendo resultado: {e}")
+                    return False
+
+                email = data.get('email', '')
+                password = data.get('password', '')
+
+                if not email or not password:
+                    print("[AUTH] Autenticacion cancelada por el usuario")
+                    return False
+
+                # Validar credenciales contra la API
+                import requests
+                api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
+                response = requests.post(
+                    f"{api_url}/auth/login",
+                    headers={
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
+                    json={
+                        'email': email,
+                        'password': password,
+                        'device_name': 'tray_auth',
+                        'force_logout': True
+                    },
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('success'):
+                        user_data = data.get('data', {})
+                        user = user_data.get('user', {})
+
+                        # Validar rol
+                        role = user.get('role')
+                        if role not in ['admin', 'cajero']:
+                            mostrar_banner(
+                                "Acceso Denegado",
+                                f"Rol no autorizado: {role}
+Solo administradores y cajeros.",
+                                duracion=10
+                            )
+                            return False
+
+                        # Guardar credenciales
+                        self.api_token = user_data.get('token')
+                        self.user_email = email
+                        self.api_password = password
+                        return True
+
+                # Error de autenticacion - preparar mensaje y reintentar
+                error_msg = "Clave incorrecta. Intente de nuevo."
+                try:
+                    error_data = response.json()
+                    server_msg = error_data.get('message', '')
+                    if server_msg:
+                        error_msg = f"Clave incorrecta: {server_msg}"
+                except Exception:
+                    pass
+
+                print(f"[AUTH] Credenciales invalidas, reintentando...")
+                # Pequena pausa antes de mostrar el dialogo otra vez
+                time.sleep(0.5)
+                # Continuar el loop para mostrar el dialogo con el error
+
+            except subprocess.TimeoutExpired:
+                print("[AUTH] Tiempo de espera agotado")
+                mostrar_banner("Error", "Tiempo de espera agotado en autenticacion.", duracion=10)
                 return False
-
-            email = data.get('email', '')
-            password = data.get('password', '')
-
-            if not email or not password:
-                print("[AUTH] Autenticación cancelada por el usuario")
+            except Exception as e:
+                print(f"[AUTH] Error en autenticacion: {e}")
+                import traceback
+                traceback.print_exc()
+                mostrar_banner("Error", f"Error en autenticacion:
+{str(e)}", duracion=10)
                 return False
-
-            # Validar credenciales contra la API
-            import requests
-            api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
-            response = requests.post(
-                f"{api_url}/auth/login",
-                headers={
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                json={
-                    'email': email,
-                    'password': password,
-                    'device_name': 'tray_auth',
-                    'force_logout': True
-                },
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('success'):
-                    user_data = data.get('data', {})
-                    user = user_data.get('user', {})
-
-                    # Validar rol
-                    role = user.get('role')
-                    if role not in ['admin', 'cajero']:
-                        mostrar_banner(
-                            "Acceso Denegado",
-                            f"Rol no autorizado: {role}\nSolo administradores y cajeros.",
-                            duracion=10
-                        )
-                        return False
-
-                    # Guardar credenciales
-                    self.api_token = user_data.get('token')
-                    self.user_email = email
-                    self.api_password = password
-                    return True
-
-            # Error de autenticación
-            error_msg = "Credenciales inválidas"
-            try:
-                error_data = response.json()
-                error_msg = error_data.get('message', error_msg)
-            except Exception:
-                pass
-
-            mostrar_banner("Error de Autenticación", error_msg, duracion=10)
-            return False
-
-        except subprocess.TimeoutExpired:
-            print("[AUTH] Tiempo de espera agotado")
-            mostrar_banner("Error", "Tiempo de espera agotado en autenticación.", duracion=10)
-            return False
-        except Exception as e:
-            print(f"[AUTH] Error en autenticación: {e}")
-            mostrar_banner("Error", f"Error en autenticación:\n{str(e)}", duracion=10)
-            return False
-        finally:
-            try:
-                os.unlink(result_path)
-            except Exception:
-                pass
-
+            finally:
+                try:
+                    os.unlink(result_path)
+                except Exception:
+                    pass
     def limpiar_auto_inicio(self):
         """
         Limpia el registro de auto-inicio
@@ -5337,14 +5351,12 @@ def run_service_loop():
 # MAIN
 # ==============================================================================
 
-def _handle_auth_dialog(result_path: str) -> None:
-    """Muestra diálogo de autenticación con PySide6 en proceso separado.
-
-    Crea su propia instancia QApplication para evitar problemas de foco con
-    ventanas ocultas en Windows 11 25H2.
+def _handle_auth_dialog(result_path: str, error_message: str = "") -> None:
+    """Muestra dialogo de autenticacion con PySide6 en proceso separado.
 
     Args:
         result_path: Ruta donde guardar el resultado JSON
+        error_message: Mensaje de error opcional a mostrar (ej: "Clave incorrecta")
     """
     import json
     import sys
@@ -5355,12 +5367,12 @@ def _handle_auth_dialog(result_path: str) -> None:
     from PySide6.QtCore import Qt
 
     class AuthDialog(QDialog):
-        """Diálogo de autenticación moderno con PySide6."""
+        """Dialogo de autenticacion moderno con PySide6."""
 
-        def __init__(self) -> None:
+        def __init__(self, error_msg: str = "") -> None:
             super().__init__()
             self.setWindowTitle("Sincronizador - Verificar Identidad")
-            self.setFixedSize(420, 260)
+            self.setFixedSize(420, 300)
             self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
             self.setStyleSheet("""
                 QDialog { background-color: #f5f5f5; }
@@ -5377,14 +5389,22 @@ def _handle_auth_dialog(result_path: str) -> None:
             layout.setSpacing(10)
             layout.setContentsMargins(24, 20, 24, 20)
 
-            # Título
-            title = QLabel("🔐 Verificación Requerida")
+            # Titulo
+            title = QLabel("Verificacion Requerida")
             title.setStyleSheet("font-size: 14px; font-weight: bold; color: #1a1a1a;")
             title.setAlignment(Qt.AlignCenter)
             layout.addWidget(title)
 
-            # Instrucción
-            instr = QLabel("Para continuar, ingrese sus credenciales de administrador:")
+            # Error message (si hay)
+            if error_msg:
+                err_label = QLabel(error_msg)
+                err_label.setStyleSheet("color: red; font-weight: bold; font-size: 13px; background: #ffebee; padding: 8px; border-radius: 4px;")
+                err_label.setAlignment(Qt.AlignCenter)
+                err_label.setWordWrap(True)
+                layout.addWidget(err_label)
+
+            # Instruccion
+            instr = QLabel("Ingrese sus credenciales de administrador:")
             instr.setAlignment(Qt.AlignCenter)
             layout.addWidget(instr)
 
@@ -5394,17 +5414,17 @@ def _handle_auth_dialog(result_path: str) -> None:
             self.email_input.setPlaceholderText("usuario@ejemplo.com")
             layout.addWidget(self.email_input)
 
-            # Contraseña
-            layout.addWidget(QLabel("Contraseña:"))
+            # Contrasena
+            layout.addWidget(QLabel("Contrasena:"))
             self.password_input = QLineEdit()
             self.password_input.setEchoMode(QLineEdit.Password)
-            self.password_input.setPlaceholderText("••••••••")
+            self.password_input.setPlaceholderText("********")
             layout.addWidget(self.password_input)
 
             # Botones
             btn_layout = QHBoxLayout()
 
-            accept_btn = QPushButton("✅ Aceptar")
+            accept_btn = QPushButton("Aceptar")
             accept_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #2E7D32; color: white;
@@ -5417,7 +5437,7 @@ def _handle_auth_dialog(result_path: str) -> None:
             accept_btn.clicked.connect(self.accept)
             btn_layout.addWidget(accept_btn)
 
-            cancel_btn = QPushButton("❌ Cancelar")
+            cancel_btn = QPushButton("Cancelar")
             cancel_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #C62828; color: white;
@@ -5437,13 +5457,17 @@ def _handle_auth_dialog(result_path: str) -> None:
             self.email_input.returnPressed.connect(self.password_input.setFocus)
             self.password_input.returnPressed.connect(self.accept)
 
-            # Foco inicial en email
-            self.email_input.setFocus()
+            # Foco inicial
+            if error_msg:
+                self.password_input.setFocus()
+                self.password_input.selectAll()
+            else:
+                self.email_input.setFocus()
 
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    dialog = AuthDialog()
+    dialog = AuthDialog(error_msg=error_message)
     if dialog.exec() == QDialog.Accepted:
         email = dialog.email_input.text().strip()
         password = dialog.password_input.text().strip()
@@ -5452,8 +5476,6 @@ def _handle_auth_dialog(result_path: str) -> None:
     else:
         with open(result_path, 'w') as f:
             json.dump({"email": "", "password": ""}, f)
-
-
 def _handle_log_window(log_file: str) -> None:
     """Muestra visor de logs con PySide6 en proceso separado.
 
@@ -5998,6 +6020,9 @@ def _handle_config_window(result_path: str) -> None:
 
             except Exception as e:
                 progress.close()
+                import traceback as _tb
+                _tb.print_exc()
+                print(f"Error de verificacion: {e}", file=sys.stderr)
                 QMessageBox.critical(self, "Error de Verificacion",
                     f"La verificacion fallo:\n\n{str(e)}\n\n"
                     "La configuracion NO se guardo.")
@@ -6794,6 +6819,8 @@ def main():
                        help="En modo service, ejecutar una sola vez y salir")
     parser.add_argument("--auth-dialog", metavar="RESULT_PATH",
                        help=argparse.SUPPRESS)
+    parser.add_argument("--auth-error", metavar="MSG",
+                       help=argparse.SUPPRESS)
     parser.add_argument("--log-window", metavar="LOG_FILE",
                        help=argparse.SUPPRESS)
     parser.add_argument("--config-window", metavar="RESULT_PATH",
@@ -6809,7 +6836,7 @@ def main():
 
     # Si se pasa --auth-dialog, mostrar diálogo en proceso propio y salir
     if args.auth_dialog:
-        return _handle_auth_dialog(args.auth_dialog)
+        return _handle_auth_dialog(args.auth_dialog, args.auth_error or "")
 
     # Si se pasa --log-window, mostrar visor de logs en proceso propio y salir
     if args.log_window:
