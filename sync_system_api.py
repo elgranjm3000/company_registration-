@@ -5358,8 +5358,27 @@ def _handle_auth_dialog(result_path: str, error_message: str = "") -> None:
         result_path: Ruta donde guardar el resultado JSON
         error_message: Mensaje de error opcional a mostrar (ej: "Clave incorrecta")
     """
-    import json
     import sys
+
+    # Mutex propio para evitar múltiples ventanas de credenciales
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.CreateMutexW(None, False, "ChrystalAuthDialog-InstanceMutex")
+            if ctypes.get_last_error() == 183:
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    "La ventana de credenciales ya está abierta.\n"
+                    "Revise la barra de tareas.",
+                    "Sincronizador Chrystal",
+                    0x10 | 0x0
+                )
+                return
+        except Exception:
+            pass
+
+    import json
     from PySide6.QtWidgets import (
         QApplication, QDialog, QVBoxLayout, QHBoxLayout,
         QLabel, QLineEdit, QPushButton
@@ -6674,10 +6693,55 @@ def _handle_confirm_dialog(result_path: str) -> None:
     dialog.exec()
 
 
+def _check_single_instance() -> bool:
+    """Evita múltiples instancias del programa.
+
+    En Windows usa un mutex del sistema (CreateMutexW).
+    En Linux/macOS usa un archivo de bloqueo.
+
+    Returns:
+        True si es la única instancia, False si ya hay otra corriendo.
+    """
+    import sys as _sys
+    if _sys.platform == 'win32':
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            mutex_name = "ChrystalSyncSystem-InstanceMutex"
+            kernel32.CreateMutexW(None, False, mutex_name)
+            if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
+                # Notificar al usuario
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    "El Sincronizador Chrystal ya está ejecutándose.\n\n"
+                    "Revise la bandeja del sistema (System Tray).",
+                    "Sincronizador Chrystal",
+                    0x10 | 0x0  # MB_ICONHAND | MB_OK
+                )
+                return False
+        except Exception:
+            pass  # Si falla el mutex, permitir ejecución
+    else:
+        # Linux/macOS: lock file en /tmp
+        import os as _os
+        _lock = "/tmp/chrystal_sync.lock"
+        try:
+            _fd = _os.open(_lock, _os.O_CREAT | _os.O_EXCL | _os.O_RDWR)
+            _os.close(_fd)
+        except FileExistsError:
+            print("Ya hay una instancia del Sincronizador Chrystal ejecutándose.")
+            return False
+        except Exception:
+            pass
+    return True
+
+
 def main():
     """Función principal."""
 
     import sys
+    if not _check_single_instance():
+        return
 
 
     # Verificar si es ejecutable compilado y no hay argumentos
