@@ -4459,8 +4459,7 @@ class SystemTrayService:
                         if role not in ['admin', 'cajero']:
                             mostrar_banner(
                                 "Acceso Denegado",
-                                f"Rol no autorizado: {role}
-Solo administradores y cajeros.",
+                                f"Rol no autorizado: {role}\nSolo administradores y cajeros.",
                                 duracion=10
                             )
                             return False
@@ -4494,8 +4493,7 @@ Solo administradores y cajeros.",
                 print(f"[AUTH] Error en autenticacion: {e}")
                 import traceback
                 traceback.print_exc()
-                mostrar_banner("Error", f"Error en autenticacion:
-{str(e)}", duracion=10)
+                mostrar_banner("Error", f"Error en autenticacion:\n{str(e)}", duracion=10)
                 return False
             finally:
                 try:
