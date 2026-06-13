@@ -5369,11 +5369,15 @@ class SystemTrayService:
             # GUARDAR estado original del root
             was_overrideredirect = self._root.overrideredirect()
             original_alpha = self._root.attributes('-alpha')
+            original_geometry = self._root.geometry()
 
             # TEMPORALMENTE hacer el root NORMAL para que Windows 11 permita input
+            # PERO moverlo fuera de pantalla para que no sea visible
             try:
                 self._root.overrideredirect(False)
                 self._root.attributes('-alpha', 1.0)
+                # Mover fuera de pantalla (abajo a la derecha)
+                self._root.geometry('1x1+99999+99999')
                 self._root.update_idletasks()
             except:
                 pass
@@ -5559,6 +5563,7 @@ class SystemTrayService:
 
             # RESTAURAR el root a su estado original (invisible)
             try:
+                self._root.geometry(original_geometry)
                 self._root.overrideredirect(was_overrideredirect)
                 self._root.attributes('-alpha', original_alpha)
                 self._root.update_idletasks()
