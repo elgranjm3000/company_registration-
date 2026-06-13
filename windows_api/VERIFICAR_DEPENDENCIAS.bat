@@ -62,12 +62,17 @@ python -c "import win32con; print('     OK')" 2>nul
 if %errorlevel% neq 0 echo     FALTA: pip install pywin32
 
 echo.
+echo   - PySide6 (Autenticación moderna)
+python -c "import PySide6; print('     OK')" 2>nul
+if %errorlevel% neq 0 echo     FALTA: pip install PySide6
+
+echo.
 
 REM [3/3] Intentar instalar dependencias faltantes
 echo [3/3] Intentando instalar dependencias faltantes...
 echo.
 
-pip install psycopg2-binary requests pystray Pillow cryptography win10toast pywin32 2>nul
+pip install psycopg2-binary requests pystray Pillow cryptography win10toast pywin32 PySide6 2>nul
 
 echo.
 echo ========================================
@@ -75,7 +80,7 @@ echo   VERIFICACION FINAL
 echo ========================================
 echo.
 
-python -c "import psycopg2; import requests; import pystray; from PIL import Image; import tkinter; from cryptography.fernet import Fernet; from win10toast import ToastNotifier; import win32con; print('OK: Todas las dependencias estan instaladas')" 2>nul
+python -c "import psycopg2; import requests; import pystray; from PIL import Image; import tkinter; from cryptography.fernet import Fernet; from win10toast import ToastNotifier; import win32con; import PySide6; print('OK: Todas las dependencias estan instaladas')" 2>nul
 if %errorlevel% neq 0 (
     echo ERROR: No se pudieron instalar todas las dependencias
     echo.

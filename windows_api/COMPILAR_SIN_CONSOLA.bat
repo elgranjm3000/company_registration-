@@ -119,6 +119,16 @@ if %errorlevel% neq 0 (
 )
 
 echo.
+echo Verificando PySide6 (autenticación moderna)...
+python -c "import PySide6" 2>nul
+if %errorlevel% neq 0 (
+    echo   ❌ PySide6 NO instalado - Instalando...
+    pip install PySide6
+) else (
+    echo   ✅ PySide6 OK
+)
+
+echo.
 echo ========================================================================
 echo   TODAS LAS DEPENDENCIAS VERIFICADAS
 echo ========================================================================

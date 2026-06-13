@@ -32,13 +32,16 @@ cryptography_datas, cryptography_binaries, cryptography_hiddenimports = collect_
 # Collect all cffi data (dependencia de cryptography)
 cffi_datas, cffi_binaries, cffi_hiddenimports = collect_all('cffi')
 
+# Collect all PySide6 data (diálogo de autenticación)
+pyside6_datas, pyside6_binaries, pyside6_hiddenimports = collect_all('PySide6')
+
 # Construir lista de datas
 datas_list = [
     # Agregar módulos del sistema
     ('api_client', 'api_client'),
     ('sync', 'sync'),
     ('config_encryption.py', '.'),
-] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas + cryptography_datas + cffi_datas
+] + plyer_datas + win10toast_datas + pywin32_datas + requests_datas + urllib3_datas + certifi_datas + psycopg2_datas + cryptography_datas + cffi_datas + pyside6_datas
 
 # Agregar logo.ico (favicon de ventanas)
 if os.path.exists('logo.ico'):
@@ -55,7 +58,7 @@ if os.path.exists('icon.ico'):
 a = Analysis(
     ['sync_system_api.py'],
     pathex=[],
-    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries + cryptography_binaries + cffi_binaries,
+    binaries=plyer_binaries + win10toast_binaries + pywin32_binaries + requests_binaries + urllib3_binaries + certifi_binaries + psycopg2_binaries + cryptography_binaries + cffi_binaries + pyside6_binaries,
     datas=datas_list,
     hiddenimports=[
         # Hidden imports de collect_all
@@ -68,6 +71,7 @@ a = Analysis(
         *psycopg2_hiddenimports,
         *cryptography_hiddenimports,
         *cffi_hiddenimports,
+        *pyside6_hiddenimports,
         # Módulos principales de la aplicación
         'api_client',
         'api_client.base',
@@ -119,6 +123,11 @@ a = Analysis(
         'tkinter.scrolledtext',
         'tkinter.messagebox',
         'tkinter.filedialog',
+        # PySide6 (diálogo de autenticación)
+        'PySide6',
+        'PySide6.QtCore',
+        'PySide6.QtWidgets',
+        'PySide6.QtGui',
         # Otras dependencias
         'threading',
         'queue',
