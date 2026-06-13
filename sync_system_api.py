@@ -5941,40 +5941,56 @@ def _handle_config_window(result_path: str) -> None:
                 QApplication.processEvents()
 
                 # PASO 2: API Key
-                progress.setLabelText("🔐 Validando API Key...")
+                progress.setLabelText("Validando API Key...")
                 QApplication.processEvents()
                 import requests
                 ping = requests.get(
                     f"{config['api_url']}/sync-client/ping",
                     headers={'Authorization': f'Bearer {config["api_key"]}',
-                            'Content-Type': 'application/json'},
+                            'Content-Type': 'application/json',
+                            'X-App-Version': APP_VERSION,
+                            'X-App-Type': 'sincronizador'},
                     timeout=30
                 )
+                if ping.status_code not in [200, 201]:
+                    try:
+                        err_msg = ping.json().get('message', '') or ping.json().get('error', '')
+                    except Exception:
+                        err_msg = ''
+                    raise Exception(f"API Key invalida (HTTP {ping.status_code}): {err_msg or 'Revise la API Key y la URL'}")
                 ping_data = ping.json()
                 if not ping_data.get('success'):
-                    raise Exception(f"API Key inválida: {ping_data.get('message', 'Error')}")
+                    raise Exception(f"API Key invalida: {ping_data.get('message', 'Error')}")
                 progress.setValue(2)
                 QApplication.processEvents()
 
                 # PASO 3: Validar empresa
-                progress.setLabelText("🏢 Validando empresa...")
+                progress.setLabelText("Validando empresa...")
                 QApplication.processEvents()
                 validate = requests.post(
                     f"{config['api_url']}/sync-client/company/validate",
                     headers={'Authorization': f'Bearer {config["api_key"]}',
-                            'Content-Type': 'application/json'},
+                            'Content-Type': 'application/json',
+                            'X-App-Version': APP_VERSION,
+                            'X-App-Type': 'sincronizador'},
                     json={'rif': config['company_rif'], 'email': config['company_email']},
                     timeout=30
                 )
+                if validate.status_code not in [200, 201]:
+                    try:
+                        err_msg = validate.json().get('message', '') or validate.json().get('error', '')
+                    except Exception:
+                        err_msg = ''
+                    raise Exception(f"Validacion empresa fallo (HTTP {validate.status_code}): {err_msg or 'Revise RIF y email'}")
                 val_data = validate.json()
                 if not val_data.get('success'):
-                    raise Exception(f"Validación empresa falló: {val_data.get('message', 'Error')}")
+                    raise Exception(f"Validacion empresa fallo: {val_data.get('message', 'Error')}")
                 progress.setValue(3)
                 QApplication.processEvents()
 
                 progress.close()
 
-                # Éxito
+                # Exito
                 result_data = {k: v for k, v in config.items()}
                 result_data['saved'] = True
                 with open(result_path, 'w') as f:
@@ -5983,9 +5999,9 @@ def _handle_config_window(result_path: str) -> None:
 
             except Exception as e:
                 progress.close()
-                QMessageBox.critical(self, "❌ Error de Verificación",
-                    f"La verificación falló:\n\n{str(e)}\n\n"
-                    "La configuración NO se guardó.")
+                QMessageBox.critical(self, "Error de Verificacion",
+                    f"La verificacion fallo:\n\n{str(e)}\n\n"
+                    "La configuracion NO se guardo.")
                 return
 
     app = QApplication(sys.argv)
