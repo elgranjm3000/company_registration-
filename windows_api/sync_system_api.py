@@ -6735,41 +6735,31 @@ def main():
             return
 
         # ---- CAMINO 2: YA HAY CONFIGURACIÓN ----
-        # Mostrar menú principal (Launcher) para que el usuario elija qué hacer
+        # Ir directamente a validar API Key, sincronizar e iniciar System Tray
         print("\n" + "="*70)
-        print("📋 MOSTRANDO MENÚ PRINCIPAL...")
+        print("📬 INICIANDO SYSTEM TRAY...")
         print("="*70)
-
-        _result_path = None
         try:
-            import tempfile, json as _json
-            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as _f:
-                _result_path = _f.name
-
-            if getattr(sys, 'frozen', False):
-                _largs = [sys.executable, '--launcher-window', _result_path]
+            from config_encryption import decrypt_config
+            with open(CONFIG_FILE, 'r') as f:
+                _cfg_enc = json.load(f)
+            _cfg = decrypt_config(_cfg_enc)
+            _key = _cfg.get('api_key', '')
+            if _key:
+                print("🔐 Validando API Key...")
+                _auth = APIAuthManager(base_url=_cfg.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api'))
+                _ping = _auth.ping_api_key(_key)
+                if _ping.get('success'):
+                    _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
+                    SystemTrayService(_cfg, _key).iniciar()
+                else:
+                    print(f"❌ API Key inválida: {_ping.get('error', 'Error')}")
             else:
-                _largs = [sys.executable, __file__, '--launcher-window', _result_path]
-
-            import subprocess as _sp
-            _sp.run(_largs, capture_output=True, text=True, timeout=3600,
-                    creationflags=getattr(_sp, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
-
-            try:
-                with open(_result_path) as _f:
-                    _lr = _json.load(_f)
-            except Exception:
-                _lr = {}
-        except Exception as _e:
-            print(f"❌ Error en menú principal: {_e}")
-            _lr = {}
-        finally:
-            if _result_path and os.path.exists(_result_path):
-                try: os.unlink(_result_path)
-                except: pass
-
-        if _lr.get('action') == 'tray':
-            print("📬 System Tray iniciado desde el menú principal")
+                print("❌ No hay API Key en la configuración")
+        except Exception as e:
+            print(f"❌ Error iniciando System Tray: {e}")
+            import traceback
+            traceback.print_exc()
         return
 
     # Modo normal con argumentos de línea de comandos
