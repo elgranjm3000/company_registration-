@@ -5348,238 +5348,225 @@ class SystemTrayService:
         except Exception as e:
             print(f"⚠️ No se pudo configurar auto-inicio: {e}")
 
+    def _auth_dialog_thread(self, result_queue: 'queue.Queue[str]'):
+        """
+        Thread separado que ejecuta la ventana de autenticación.
+        Usa su propio tk.Tk() independiente para máxima compatibilidad con Windows 11.
+
+        Args:
+            result_queue: Queue para comunicar el resultado ('success', 'cancel', 'error')
+        """
+        import requests
+        import tkinter as tk
+        from tkinter import ttk, messagebox
+
+        # Crear root Tk independiente en este thread
+        auth_root = tk.Tk()
+        auth_root.title("Sincronizador - Verificar Identidad")
+        auth_root.resizable(False, False)
+
+        # Centrar ventana en la pantalla
+        window_width = 480
+        window_height = 280
+        screen_width = auth_root.winfo_screenwidth()
+        screen_height = auth_root.winfo_screenheight()
+        x = (screen_width // 2) - (window_width // 2)
+        y = (screen_height // 2) - (window_height // 2)
+        auth_root.geometry(f'{window_width}x{window_height}+{x}+{y}')
+
+        # Icono de ventana
+        set_window_favicon(auth_root)
+
+        # Frame principal
+        main_frame = ttk.Frame(auth_root, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Título
+        ttk.Label(
+            main_frame,
+            text="🔐 Verificación Requerida",
+            font=('Arial', 12, 'bold')
+        ).pack(pady=(0, 15))
+
+        # Instrucción
+        ttk.Label(
+            main_frame,
+            text="Para continuar, ingrese sus credenciales:",
+            font=('Arial', 9)
+        ).pack(pady=(0, 10))
+
+        # Variables para los campos
+        email_var = tk.StringVar()
+        password_var = tk.StringVar()
+
+        # Campo Email
+        ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
+        email_entry = ttk.Entry(main_frame, width=40, textvariable=email_var)
+        email_entry.pack(fill=tk.X, pady=(0, 10))
+
+        # Campo Password
+        ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
+        password_entry = ttk.Entry(main_frame, width=40, textvariable=password_var, show="*")
+        password_entry.pack(fill=tk.X, pady=(0, 15))
+
+        def do_auth():
+            """Valida credenciales contra la API"""
+            email = email_entry.get().strip()
+            password = password_entry.get().strip()
+
+            if not email or not password:
+                messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
+                return
+
+            try:
+                # Deshabilitar botón
+                auth_btn.config(state='disabled')
+                auth_root.update()
+
+                # Llamar a API de autenticación
+                api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
+                response = requests.post(
+                    f"{api_url}/auth/login",
+                    headers={
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
+                    json={
+                        'email': email,
+                        'password': password,
+                        'device_name': 'tray_auth',
+                        'force_logout': True
+                    },
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('success'):
+                        user_data = data.get('data', {})
+                        user = user_data.get('user', {})
+
+                        # Validar rol
+                        role = user.get('role')
+                        if role not in ['admin', 'cajero']:
+                            messagebox.showerror(
+                                "❌ Acceso Denegado",
+                                f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
+                            )
+                            auth_btn.config(state='normal')
+                            return
+
+                        # Guardar credenciales en el objeto principal
+                        self.api_token = user_data.get('token')
+                        self.user_email = email
+                        self.api_password = password
+                        result_queue.put('success')
+                        auth_root.destroy()
+                        return
+
+                # Error de autenticación
+                error_msg = "Credenciales inválidas"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('message', error_msg)
+                except:
+                    pass
+
+                messagebox.showerror("❌ Error", f"{error_msg}")
+                auth_btn.config(state='normal')
+
+            except Exception as e:
+                messagebox.showerror("❌ Error", f"Error de conexión:\n{str(e)}")
+                auth_btn.config(state='normal')
+
+        def do_cancel():
+            """Cierra la ventana sin autenticar"""
+            result_queue.put('cancel')
+            auth_root.destroy()
+
+        # Frame de botones
+        button_frame = tk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(15, 0))
+
+        # Botón Verificar
+        auth_btn = tk.Button(
+            button_frame,
+            text="✅ Verificar",
+            command=do_auth,
+            bg='#2E7D32',
+            fg='white',
+            font=('Arial', 12, 'bold'),
+            relief=tk.RAISED,
+            bd=3,
+            padx=30,
+            pady=12,
+            cursor='hand2',
+            activebackground='#1B5E20',
+            activeforeground='white'
+        )
+        auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+
+        # Botón Cancelar
+        cancel_btn = tk.Button(
+            button_frame,
+            text="❌ Cancelar",
+            command=do_cancel,
+            bg='#C62828',
+            fg='white',
+            font=('Arial', 12, 'bold'),
+            relief=tk.RAISED,
+            bd=3,
+            padx=30,
+            pady=12,
+            cursor='hand2',
+            activebackground='#B71C1C',
+            activeforeground='white'
+        )
+        cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
+
+        # Permitir Enter para autenticar
+        auth_root.bind('<Return>', lambda e: do_auth())
+
+        # Establecer foco inicial
+        email_entry.focus_set()
+
+        # Iniciar mainloop - se bloquea hasta que auth_root sea destruido
+        auth_root.mainloop()
+
     def reautenticar_usuario(self):
             """
             Pide autenticación nuevamente antes de ejecutar acciones sensibles.
-            Temporalmente hace visible el root para permitir input en Windows 11.
+            Usa un thread separado con su propio tk.Tk() para máxima compatibilidad.
 
             Returns:
                 bool: True si autenticación exitosa, False si falló
             """
-            import requests
+            import queue
+            import threading
 
-            # Si no hay root, crear uno temporal (sucede en primera config)
-            if not self._root:
-                print("[WARNING] No hay root para reautenticación, creando temporal...")
-                self._root = tk.Tk()
-                self._root.geometry('1x1+0+0')
-                self._root.overrideredirect(True)
-                self._root.attributes('-alpha', 0.01)
+            # Crear queue para comunicación entre threads
+            result_queue: queue.Queue[str] = queue.Queue()
 
-            # GUARDAR estado original del root
-            was_overrideredirect = self._root.overrideredirect()
-            original_alpha = self._root.attributes('-alpha')
-            original_geometry = self._root.geometry()
-
-            # TEMPORALMENTE hacer el root NORMAL para que Windows 11 permita input
-            # PERO moverlo fuera de pantalla para que no sea visible
-            try:
-                self._root.overrideredirect(False)
-                self._root.attributes('-alpha', 1.0)
-                # Mover fuera de pantalla (abajo a la derecha)
-                self._root.geometry('1x1+99999+99999')
-                self._root.update_idletasks()
-            except:
-                pass
-
-            # Crear ventana de autenticación como Toplevel del root
-            auth_window = tk.Toplevel(self._root)
-            auth_window.title("Sincronizador - Verificar Identidad")
-            auth_window.resizable(False, False)
-
-            # Centrar ventana en la pantalla
-            window_width = 480
-            window_height = 280
-            screen_width = auth_window.winfo_screenwidth()
-            screen_height = auth_window.winfo_screenheight()
-            x = (screen_width // 2) - (window_width // 2)
-            y = (screen_height // 2) - (window_height // 2)
-            auth_window.geometry(f'{window_width}x{window_height}+{x}+{y}')
-
-            # Icono de ventana
-            set_window_favicon(auth_window)
-
-            # Frame principal
-            main_frame = ttk.Frame(auth_window, padding="20")
-            main_frame.pack(fill=tk.BOTH, expand=True)
-
-            # Título
-            ttk.Label(
-                main_frame,
-                text="🔐 Verificación Requerida",
-                font=('Arial', 12, 'bold')
-            ).pack(pady=(0, 15))
-
-            # Instrucción
-            ttk.Label(
-                main_frame,
-                text="Para continuar, ingrese sus credenciales:",
-                font=('Arial', 9)
-            ).pack(pady=(0, 10))
-
-            # Variables para los campos (StringVar permite obtener el valor con .get())
-            email_var = tk.StringVar()
-            password_var = tk.StringVar()
-
-            # Campo Email
-            ttk.Label(main_frame, text="Email:").pack(anchor=tk.W)
-            email_entry = ttk.Entry(main_frame, width=40, textvariable=email_var)
-            email_entry.pack(fill=tk.X, pady=(0, 10))
-
-            # Campo Password
-            ttk.Label(main_frame, text="Contraseña:").pack(anchor=tk.W)
-            password_entry = ttk.Entry(main_frame, width=40, textvariable=password_var, show="*")
-            password_entry.pack(fill=tk.X, pady=(0, 15))
-
-            # Variable para almacenar resultado de autenticación
-            auth_result = {'success': False}
-
-            def do_auth():
-                """Valida credenciales contra la API"""
-                email = email_entry.get().strip()
-                password = password_entry.get().strip()
-
-                if not email or not password:
-                    messagebox.showwarning("⚠️ Campos vacíos", "Por favor ingrese email y contraseña")
-                    return
-
-                try:
-                    # Deshabilitar botón para evitar doble clic
-                    auth_btn.config(state='disabled')
-                    auth_window.update()
-
-                    # Llamar a API de autenticación
-                    api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
-                    response = requests.post(
-                        f"{api_url}/auth/login",
-                        headers={
-                            'Content-Type': 'application/json',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                        },
-                        json={
-                            'email': email,
-                            'password': password,
-                            'device_name': 'tray_auth',
-                            'force_logout': True
-                        },
-                        timeout=30
-                    )
-
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get('success'):
-                            user_data = data.get('data', {})
-                            user = user_data.get('user', {})
-
-                            # Validar rol del usuario
-                            role = user.get('role')
-                            if role not in ['admin', 'cajero']:
-                                messagebox.showerror(
-                                    "❌ Acceso Denegado",
-                                    f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
-                                )
-                                auth_btn.config(state='normal')
-                                return
-
-                            # Autenticación exitosa - guardar credenciales
-                            self.api_token = user_data.get('token')
-                            self.user_email = email
-                            self.api_password = password
-                            auth_result['success'] = True
-                            auth_window.destroy()
-                            return
-
-                    # Error de autenticación
-                    error_msg = "Credenciales inválidas"
-                    try:
-                        error_data = response.json()
-                        error_msg = error_data.get('message', error_msg)
-                    except:
-                        pass
-
-                    messagebox.showerror("❌ Error", f"{error_msg}")
-                    auth_btn.config(state='normal')
-
-                except Exception as e:
-                    messagebox.showerror("❌ Error", f"Error de conexión:\n{str(e)}")
-                    auth_btn.config(state='normal')
-
-            def do_cancel():
-                """Cierra la ventana sin autenticar"""
-                auth_window.destroy()
-
-            # Frame de botones
-            button_frame = tk.Frame(main_frame)
-            button_frame.pack(fill=tk.X, pady=(15, 0))
-
-            # Botón Verificar
-            auth_btn = tk.Button(
-                button_frame,
-                text="✅ Verificar",
-                command=do_auth,
-                bg='#2E7D32',
-                fg='white',
-                font=('Arial', 12, 'bold'),
-                relief=tk.RAISED,
-                bd=3,
-                padx=30,
-                pady=12,
-                cursor='hand2',
-                activebackground='#1B5E20',
-                activeforeground='white'
+            # Crear thread de autenticación
+            auth_thread = threading.Thread(
+                target=self._auth_dialog_thread,
+                args=(result_queue,),
+                daemon=True
             )
-            auth_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+            auth_thread.start()
 
-            # Botón Cancelar
-            cancel_btn = tk.Button(
-                button_frame,
-                text="❌ Cancelar",
-                command=do_cancel,
-                bg='#C62828',
-                fg='white',
-                font=('Arial', 12, 'bold'),
-                relief=tk.RAISED,
-                bd=3,
-                padx=30,
-                pady=12,
-                cursor='hand2',
-                activebackground='#B71C1C',
-                activeforeground='white'
-            )
-            cancel_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
-
-            # Permitir Enter para autenticar
-            auth_window.bind('<Return>', lambda e: do_auth())
-
-            # Establecer foco inicial en el campo email
-            email_entry.focus_set()
-
-            # Loop modal - espera hasta que auth_window sea destruido
+            # Esperar resultado con timeout de 5 minutos
             try:
-                if auth_window.winfo_exists():
-                    auth_window.wait_window()
-            except:
-                pass
-
-            # RESTAURAR el root a su estado original (invisible)
-            try:
-                self._root.geometry(original_geometry)
-                self._root.overrideredirect(was_overrideredirect)
-                self._root.attributes('-alpha', original_alpha)
-                self._root.update_idletasks()
-            except:
-                pass
-
-            # Limpiar referencias
-            result = auth_result['success']
-            try:
-                del auth_window, main_frame, email_entry, password_entry
-                del auth_btn, cancel_btn, auth_result
-                del email_var, password_var
-            except:
-                pass
-
-            return result
+                result = result_queue.get(timeout=300)
+                return result == 'success'
+            except queue.Empty:
+                print("[WARNING] Timeout esperando autenticación")
+                return False
+            finally:
+                if auth_thread.is_alive():
+                    # Thread aún vivo - no podemos forzar terminación,
+                    # pero al ser daemon, se cerrará cuando el proceso principal termine
+                    pass
 
     def limpiar_auto_inicio(self):
         """

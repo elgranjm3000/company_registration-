@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "plugins/python-development/skills/python-performance-optimization/SKILL.md",
       "computedHash": "5a0e5ccd00cd8e850e1068707e042339e182190eb89f8a300f58c18f53876059"
+    },
+    "python-pro": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/python-pro/SKILL.md",
+      "computedHash": "fae3b07d03d2eb9f9112ceab0ef498ebafab33f1e095dff8c5a36de55ef68445"
     }
   }
 }
