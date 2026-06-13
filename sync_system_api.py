@@ -5679,7 +5679,7 @@ class SystemTrayService:
         print(f"[DEBUG] bucle_sincronizacion: Bucle terminado")
 
     def abrir_manager(self):
-        """Abre la ventana del manager en el hilo principal usando Toplevel"""
+        """Abre ventana del manager con PySide6 en proceso separado."""
         if self._manager_open:
             print("⚠️ La ventana del Manager ya está abierta")
             return
@@ -5697,27 +5697,64 @@ class SystemTrayService:
             self._auth_in_progress = False
 
         # Si llegó aquí, autenticación exitosa
-        print("[DEBUG] abrir_manager: Autenticación exitosa, abriendo Manager...")
+        print("abrir_manager: Autenticación exitosa, abriendo Manager...")
         self._manager_open = True
         try:
-            import tkinter as tk
-            manager_window = tk.Toplevel(self._root)
-            set_window_favicon(manager_window)
+            import subprocess
+            import json
+            import sys
+            import tempfile
+            import os
 
-            def on_closing():
-                print("[DEBUG] abrir_manager: Ventana cerrada, limpiando flags...")
-                self._manager_open = False
-                manager_window.destroy()
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
+                config_path = f.name
 
-            manager_window.protocol("WM_DELETE_WINDOW", on_closing)
+            try:
+                # Escribir configuración desencriptada para el subprocess
+                cfg_for_manager = {
+                    'api_url': self.config.get('api_url', ''),
+                    'api_key': getattr(self, 'api_key', self.config.get('api_key', '')),
+                    'company_rif': self.config.get('company_rif', ''),
+                    'company_email': self.config.get('company_email', ''),
+                    'company_name': self.config.get('company_name', ''),
+                    'postgres_host': self.config.get('postgres_host', ''),
+                    'postgres_port': self.config.get('postgres_port', ''),
+                    'postgres_database': self.config.get('postgres_database', ''),
+                    'postgres_user': self.config.get('postgres_user', ''),
+                    'postgres_password': self.config.get('postgres_password', ''),
+                    'sync_interval_minutes': self.config.get('sync_interval_minutes', '30'),
+                    'company_id': getattr(self, 'api_key', None)
+                }
+                with open(config_path, 'w') as f:
+                    json.dump(cfg_for_manager, f)
 
-            app = ManagerWindow(manager_window, api_key=getattr(self, 'api_key', None))
-            print("[DEBUG] abrir_manager: ManagerWindow creado, esperando cierre...")
+                if getattr(sys, 'frozen', False):
+                    args = [sys.executable, '--manager-window', config_path]
+                else:
+                    args = [sys.executable, __file__, '--manager-window', config_path]
 
-            self._root.wait_window(manager_window)
-            print("[DEBUG] abrir_manager: Manager cerrado")
+                creationflags = 0
+                if sys.platform == 'win32':
+                    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+
+                subprocess.run(
+                    args,
+                    capture_output=True,
+                    text=True,
+                    timeout=3600,
+                    creationflags=creationflags
+                )
+
+            finally:
+                try:
+                    os.unlink(config_path)
+                except Exception:
+                    pass
+
+        except subprocess.TimeoutExpired:
+            print("[MANAGER] Timeout, el manager se cerró por tiempo")
         except Exception as e:
-            print(f"[ERROR] abrir_manager: Excepción: {e}")
+            print(f"[ERROR] abrir_manager: {e}")
             import traceback
             traceback.print_exc()
         finally:
@@ -6961,6 +6998,377 @@ def _handle_config_window(result_path: str) -> None:
     dialog.exec()
 
 
+def _handle_manager_window(config_path: str) -> None:
+    """Muestra ventana de administración con PySide6 en proceso separado.
+
+    Args:
+        config_path: Ruta al archivo JSON con la configuración
+    """
+    import sys
+    import os
+    import json
+    import time
+    from PySide6.QtWidgets import (
+        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+        QFormLayout, QLabel, QLineEdit, QPushButton, QTextEdit,
+        QMessageBox, QGroupBox, QGridLayout, QSpinBox
+    )
+    from PySide6.QtCore import Qt, QTimer, QThread, Signal
+    from PySide6.QtGui import QFont
+
+    # Cargar configuración
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"Error cargando configuración para manager: {e}")
+        return
+
+    api_key = config.get('api_key', '')
+    log_file = None
+    if config.get('company_email'):
+        email_safe = config['company_email'].replace('@', '_').replace('.', '_')
+        log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", f"sync_api_{email_safe}.log")
+
+    # --- Sync worker thread ---
+    class SyncWorker(QThread):
+        finished = Signal(dict)
+        log_msg = Signal(str, str)
+
+        def __init__(self, entity: str | None, config_data: dict) -> None:
+            super().__init__()
+            self.entity = entity
+            self.config = config_data
+
+        def run(self) -> None:
+            def logger(msg: str, level: str = "info") -> None:
+                self.log_msg.emit(msg, level)
+
+            try:
+                from api_client import APIAuthManager, APISyncManager
+
+                auth = APIAuthManager(self.config['api_url'], logger)
+                auth.ping_api_key(self.config['api_key'])
+                auth.validate_company(self.config['company_rif'], self.config['company_email'])
+
+                sync_mgr = APISyncManager(
+                    postgres_config={
+                        'host': self.config['postgres_host'],
+                        'port': self.config['postgres_port'],
+                        'database': self.config['postgres_database'],
+                        'user': self.config['postgres_user'],
+                        'password': self.config['postgres_password']
+                    },
+                    auth_manager=auth,
+                    logger=logger
+                )
+
+                if not sync_mgr.connect_postgresql():
+                    self.finished.emit({'success': False, 'error': 'Conexión PostgreSQL falló'})
+                    return
+
+                if not sync_mgr.initialize_api_clients():
+                    self.finished.emit({'success': False, 'error': 'Clientes API fallaron'})
+                    return
+
+                if self.entity:
+                    self.log_msg.emit(f"\n🔄 SINCRONIZANDO {self.entity.upper()}...", "info")
+                    result = getattr(sync_mgr, f'sync_{self.entity}')()
+                else:
+                    self.log_msg.emit("\n🔄 SINCRONIZANDO TODO...", "info")
+                    result = sync_mgr.sync_all()
+
+                sync_mgr.close()
+                self.finished.emit(result if isinstance(result, dict) else {'success': True})
+
+            except Exception as e:
+                self.finished.emit({'success': False, 'error': str(e)})
+
+    class ManagerWindow(QMainWindow):
+        """Ventana principal de administración con PySide6."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.setWindowTitle(f"Sincronizador API REST - Manager")
+            self.resize(850, 700)
+            self.setMinimumSize(700, 500)
+
+            self.sync_worker: SyncWorker | None = None
+            self._build_ui()
+            self._apply_styles()
+
+            self._log_timer = QTimer()
+            self._log_timer.timeout.connect(self._poll_logs)
+            self._log_timer.start(2000)
+            self._last_log_size = 0
+            self._poll_logs()
+
+        def _apply_styles(self) -> None:
+            self.setStyleSheet("""
+                QMainWindow { background-color: #f5f5f5; }
+                QGroupBox {
+                    font-weight: bold; border: 1px solid #ccc;
+                    border-radius: 4px; margin-top: 8px; padding: 12px 8px 8px 8px;
+                    background: white;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin; left: 10px;
+                    padding: 0 6px; color: #333;
+                }
+                QPushButton { font-size: 12px; padding: 6px 14px; border-radius: 3px; }
+                QTextEdit { font-family: Consolas, monospace; font-size: 10px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #333; }
+                QSpinBox { padding: 4px; font-size: 12px; }
+            """)
+
+        def _build_ui(self) -> None:
+            central = QWidget()
+            self.setCentralWidget(central)
+            layout = QVBoxLayout(central)
+            layout.setContentsMargins(10, 10, 10, 10)
+            layout.setSpacing(6)
+
+            header = QLabel(f"🔄 Sincronizador API REST - Manager")
+            header.setStyleSheet(
+                "background-color: #2c3e50; color: white; font-size: 16px;"
+                " font-weight: bold; padding: 14px; border-radius: 4px;")
+            header.setAlignment(Qt.AlignCenter)
+            layout.addWidget(header)
+
+            if config.get('company_rif'):
+                info = QLabel(f"🏢 {config['company_rif']}  |  📧 {config.get('company_email', '')}")
+                info.setStyleSheet("font-size: 11px; padding: 4px;")
+                info.setAlignment(Qt.AlignCenter)
+                layout.addWidget(info)
+
+            row = QHBoxLayout()
+            status_group = QGroupBox("📊 Estado del Sistema")
+            status_layout = QVBoxLayout()
+            self.lbl_status = QLabel("🟢 ACTIVO")
+            self.lbl_status.setStyleSheet("font-size: 14px; font-weight: bold; color: green;")
+            status_layout.addWidget(self.lbl_status)
+            self.lbl_last_sync = QLabel("Última sync: --")
+            status_layout.addWidget(self.lbl_last_sync)
+            status_group.setLayout(status_layout)
+            row.addWidget(status_group)
+
+            stats_group = QGroupBox("📈 Estadísticas")
+            stats_layout = QVBoxLayout()
+            self.lbl_stats = QLabel("Categories: 0 | Products: 0 | Customers: 0 | Sellers: 0 | Quotes: 0")
+            stats_layout.addWidget(self.lbl_stats)
+            self.lbl_progress = QLabel("")
+            self.lbl_progress.setStyleSheet("color: blue;")
+            stats_layout.addWidget(self.lbl_progress)
+            stats_group.setLayout(stats_layout)
+            row.addWidget(stats_group)
+            layout.addLayout(row)
+
+            interval_group = QGroupBox("⏱️ Intervalo de Sincronización Automática")
+            interval_layout = QHBoxLayout()
+            current_interval = config.get('sync_interval_minutes', '30')
+            interval_layout.addWidget(QLabel(f"Intervalo actual: {current_interval} minutos"))
+            interval_layout.addWidget(QLabel("Nuevo (minutos):"))
+            self.interval_spin = QSpinBox()
+            self.interval_spin.setMinimum(1)
+            self.interval_spin.setMaximum(1440)
+            self.interval_spin.setValue(int(current_interval) if str(current_interval).isdigit() else 30)
+            self.interval_spin.setFixedWidth(80)
+            interval_layout.addWidget(self.interval_spin)
+            save_interval_btn = QPushButton("💾 Guardar")
+            save_interval_btn.setStyleSheet(
+                "QPushButton { background-color: #2E7D32; color: white; border: none; }"
+                " QPushButton:hover { background-color: #1B5E20; }")
+            save_interval_btn.clicked.connect(self._save_interval)
+            interval_layout.addWidget(save_interval_btn)
+            interval_group.setLayout(interval_layout)
+            layout.addWidget(interval_group)
+
+            entity_group = QGroupBox("Sincronización por Entidad")
+            entity_grid = QGridLayout()
+            entities = [
+                ("📁 Categories", "categories"),
+                ("📦 Products", "products"),
+                ("👥 Customers", "customers"),
+                ("👔 Sellers", "sellers"),
+                ("💰 Quotes", "quotes"),
+            ]
+            for i, (label, entity) in enumerate(entities):
+                btn = QPushButton(label)
+                btn.setStyleSheet(
+                    "QPushButton { background-color: #1976D2; color: white; border: none; }"
+                    " QPushButton:hover { background-color: #1565C0; }")
+                btn.clicked.connect(lambda checked, e=entity: self._run_sync(e))
+                entity_grid.addWidget(btn, 0, i)
+            entity_group.setLayout(entity_grid)
+            layout.addWidget(entity_group)
+
+            action_layout = QHBoxLayout()
+            sync_all_btn = QPushButton("🔄 Sincronizar Todo")
+            sync_all_btn.setStyleSheet(
+                "QPushButton { background-color: #F57C00; color: white; font-weight: bold; border: none; }"
+                " QPushButton:hover { background-color: #E65100; }")
+            sync_all_btn.clicked.connect(lambda: self._run_sync(None))
+            action_layout.addWidget(sync_all_btn)
+
+            config_btn = QPushButton("⚙️ Configurar")
+            config_btn.clicked.connect(self._open_config)
+            action_layout.addWidget(config_btn)
+
+            logs_btn = QPushButton("📋 Ver Logs")
+            logs_btn.clicked.connect(self._open_logs)
+            action_layout.addWidget(logs_btn)
+
+            reconfig_btn = QPushButton("🔄 Reconfigurar")
+            reconfig_btn.clicked.connect(self._reconfig)
+            action_layout.addWidget(reconfig_btn)
+
+            salir_btn = QPushButton("❌ Salir")
+            salir_btn.setStyleSheet(
+                "QPushButton { background-color: #C62828; color: white; border: none; }"
+                " QPushButton:hover { background-color: #B71C1C; }")
+            salir_btn.clicked.connect(self.close)
+            action_layout.addWidget(salir_btn)
+            layout.addLayout(action_layout)
+
+            log_group = QGroupBox("📝 Logs en Tiempo Real")
+            log_layout = QVBoxLayout()
+            self.log_text = QTextEdit()
+            self.log_text.setReadOnly(True)
+            self.log_text.setFont(QFont("Consolas", 10))
+            log_layout.addWidget(self.log_text)
+            log_group.setLayout(log_layout)
+            layout.addWidget(log_group, stretch=1)
+
+        def _poll_logs(self) -> None:
+            if not log_file or not os.path.exists(log_file):
+                return
+            try:
+                current_size = os.path.getsize(log_file)
+                if current_size == self._last_log_size:
+                    return
+                self._last_log_size = current_size
+                with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                self.log_text.setPlainText(content)
+                self.log_text.verticalScrollBar().setValue(
+                    self.log_text.verticalScrollBar().maximum()
+                )
+            except Exception:
+                pass
+
+        def _log(self, message: str, level: str = "info") -> None:
+            self.log_text.append(message)
+            self.log_text.verticalScrollBar().setValue(
+                self.log_text.verticalScrollBar().maximum()
+            )
+
+        def _run_sync(self, entity: str | None) -> None:
+            if self.sync_worker and self.sync_worker.isRunning():
+                QMessageBox.warning(self, "Aviso", "Ya hay una sincronización en progreso")
+                return
+
+            self.lbl_progress.setText("⏳ Sincronizando..." if entity else "⏳ Sincronizando todo...")
+            entity_name = entity.upper() if entity else "TODO"
+            self._log(f"\n🔄 INICIANDO SINCRONIZACIÓN {entity_name}...")
+
+            self.sync_worker = SyncWorker(entity, config)
+            self.sync_worker.log_msg.connect(self._log)
+            self.sync_worker.finished.connect(self._on_sync_finished)
+            self.sync_worker.start()
+
+        def _on_sync_finished(self, result: dict) -> None:
+            self.lbl_progress.setText("")
+            if result.get('success'):
+                self._log("✅ Sincronización completada exitosamente")
+            else:
+                err = result.get('error', 'Error desconocido')
+                self._log(f"❌ Error: {err}", "error")
+                QMessageBox.warning(self, "⚠️ Error", f"Sincronización falló:\n{err}")
+
+        def _save_interval(self) -> None:
+            interval = str(self.interval_spin.value())
+            try:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=config['postgres_host'],
+                    port=config['postgres_port'],
+                    database=config['postgres_database'],
+                    user=config['postgres_user'],
+                    password=config['postgres_password'],
+                    connect_timeout=5
+                )
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO sync_config (key, value, updated_at)
+                    VALUES ('sync_interval_minutes', %s, NOW())
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+                """, (interval,))
+                conn.commit()
+                cursor.close()
+                conn.close()
+                self._log(f"✅ Intervalo actualizado a {interval} minutos")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"No se pudo guardar: {e}")
+
+        def _open_config(self) -> None:
+            import subprocess
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
+                rp = f.name
+            try:
+                sp_args = ([sys.executable, '--config-window', rp]
+                          if getattr(sys, 'frozen', False)
+                          else [sys.executable, __file__, '--config-window', rp])
+                subprocess.run(sp_args, capture_output=True, text=True, timeout=300,
+                              creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+                try:
+                    with open(rp) as f:
+                        data = json.load(f)
+                    if data.get('saved'):
+                        from config_encryption import encrypt_config
+                        CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
+                        enc = encrypt_config({k: v for k, v in data.items() if k != 'saved'})
+                        with open(CONFIG_FILE, 'w') as f:
+                            json.dump(enc, f, indent=2)
+                        self._log("✅ Configuración actualizada")
+                except Exception:
+                    pass
+            except Exception as e:
+                self._log(f"❌ Error en configuración: {e}")
+            finally:
+                try:
+                    os.unlink(rp)
+                except Exception:
+                    pass
+
+        def _open_logs(self) -> None:
+            if not log_file:
+                QMessageBox.information(self, "Logs", "No hay archivo de logs configurado")
+                return
+            import subprocess
+            sp_args = ([sys.executable, '--log-window', log_file]
+                      if getattr(sys, 'frozen', False)
+                      else [sys.executable, __file__, '--log-window', log_file])
+            subprocess.run(sp_args, capture_output=True, text=True, timeout=120,
+                          creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+
+        def _reconfig(self) -> None:
+            if QMessageBox.question(self, "Reconfigurar",
+                    "¿Está seguro de reconfigurar desde cero?\nSe borrará la configuración actual.",
+                    QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
+                if os.path.exists(CONFIG_FILE):
+                    os.remove(CONFIG_FILE)
+                QMessageBox.information(self, "Reconfiguración",
+                    "Configuración eliminada.\nEjecute --mode config para reconfigurar.")
+                self.close()
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    window = ManagerWindow()
+    window.show()
+    app.exec()
+
+
 def main():
     """Función principal."""
 
@@ -7170,6 +7578,8 @@ def main():
                        help=argparse.SUPPRESS)
     parser.add_argument("--config-window", metavar="RESULT_PATH",
                        help=argparse.SUPPRESS)
+    parser.add_argument("--manager-window", metavar="CONFIG_PATH",
+                       help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -7184,6 +7594,10 @@ def main():
     # Si se pasa --config-window, mostrar config en proceso propio y salir
     if args.config_window:
         return _handle_config_window(args.config_window)
+
+    # Si se pasa --manager-window, mostrar manager en proceso propio y salir
+    if args.manager_window:
+        return _handle_manager_window(args.manager_window)
         return _handle_log_window(args.log_window)
 
     # Si --reconfig o mode=reconfig, borrar config
