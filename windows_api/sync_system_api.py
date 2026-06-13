@@ -16,6 +16,8 @@ Características:
 - Validación de empresa y obtención de company_id
 """
 
+
+from __future__ import annotations
 # ========================================
 # VERSIÓN DE LA APLICACIÓN
 # ========================================
@@ -6487,7 +6489,7 @@ def _handle_launcher_window(result_path: str) -> None:
             self.btn_sync.setEnabled(self.has_config)
             self.btn_reconfig.setEnabled(self.has_config)
 
-        def _run_subprocess(self, args: list[str], wait: bool = True) -> int | None:
+        def _run_subprocess(self, args: list[str], wait: bool = True):
             creationflags = 0
             if sys.platform == 'win32':
                 creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
