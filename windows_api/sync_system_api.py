@@ -4240,995 +4240,6 @@ def iniciar_system_tray(config, api_key):
 
 
 
-    # Ejecutar primera sincronización y luego iniciar System Tray
-    print("="*70)
-    print("🔄 SINCRONIZACIÓN INICIAL...")
-    print("="*70)
-    
-    # Cargar configuración
-    if not os.path.exists(CONFIG_FILE):
-        print("❌ No hay configuración. Ejecute --mode config primero")
-        return False
-    
-    try:
-        from config_encryption import decrypt_config
-        with open(CONFIG_FILE, 'r') as f:
-            cfg = json.load(f)
-        config = decrypt_config(cfg)
-    except Exception as e:
-        print(f"❌ Error cargando configuración: {e}")
-        return False
-    
-    api_key = config.get('api_key', '')
-    if not api_key:
-        print("❌ No hay API Key en configuración")
-        return False
-    
-    # Ejecutar sincronización
-    try:
-        from sync_system_api import ejecutar_primera_sync_y_tray, log_startup_error
-        ejecutar_primera_sync_y_tray(api_key)
-        print("✅ Primera sincronización completada")
-        print("✅ System Tray iniciado")
-        return True
-    except Exception as e:
-        print(f"❌ Error en primera sincronización: {e}")
-        import traceback
-        print(traceback.format_exc())
-        log_startup_error("FIRST_SYNC_ERROR", str(e), traceback.format_exc())
-        return False
-
-# ==============================================================================
-# GUI - LAUNCHER WINDOW (Menú Principal)
-# ==============================================================================
-
-class LauncherWindow:
-    """Ventana principal del launcher para ejecutable .exe"""
-
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Sincronizador API REST - Chrystal")
-        self.root.geometry("600x500")
-        self.root.resizable(False, False)
-
-        # Centrar ventana
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry(f'{width}x{height}+{x}+{y}')
-
-        self.create_widgets()
-
-    def create_widgets(self):
-        """Crear widgets del launcher"""
-        # Header con gradiente simulado
-        header = tk.Frame(self.root, bg="#2c3e50", height=100)
-        header.pack(fill="x")
-        header.pack_propagate(False)
-
-        # Título
-        title = tk.Label(header, text="🔄 Sincronizador API REST",
-                        font=("Arial", 20, "bold"), bg="#2c3e50", fg="white")
-        title.pack(pady=(20, 5))
-
-        subtitle = tk.Label(header, text="Sistema de Sincronización Chrystal",
-                           font=("Arial", 11), bg="#2c3e50", fg="#bdc3c7")
-        subtitle.pack()
-
-        # Contenido principal
-        main_frame = tk.Frame(self.root, bg="#ecf0f1", padx=30, pady=30)
-        main_frame.pack(fill="both", expand=True)
-
-        # Verificar si hay configuración
-        has_config = os.path.exists(CONFIG_FILE)
-
-        if not has_config:
-            # Mostrar mensaje si no hay configuración
-            warning_frame = tk.Frame(main_frame, bg="#fff3cd", borderwidth=2, relief="solid")
-            warning_frame.pack(fill="x", pady=(0, 20))
-
-            warning_label = tk.Label(warning_frame,
-                                   text="⚠️ Primera vez: Debe configurar el sistema antes de usarlo",
-                                   font=("Arial", 11, "bold"),
-                                   bg="#fff3cd", fg="#856404",
-                                   padx=20, pady=15)
-            warning_label.pack()
-
-        # Botones principales
-        btn_frame = tk.Frame(main_frame, bg="#ecf0f1")
-        btn_frame.pack(expand=True)
-
-        button_style = {
-            'font': ('Arial', 12),
-            'width': 35,
-            'height': 2,
-            'pady': 10
-        }
-
-        # Botón Configurar
-        tk.Button(btn_frame,
-                 text="⚙️ CONFIGURAR SISTEMA",
-                 command=self.launch_config,
-                 bg="#3498db", fg="white",
-                 **button_style).pack(pady=5)
-
-        # Botón Manager
-        tk.Button(btn_frame,
-                 text="🖥️ ABRIR MANAGER",
-                 command=self.launch_manager,
-                 bg="#2ecc71", fg="white",
-                 **button_style).pack(pady=5)
-
-        # Botón System Tray
-        tk.Button(btn_frame,
-                 text="📬 MODO SYSTEM TRAY",
-                 command=self.launch_tray,
-                 bg="#9b59b6", fg="white",
-                 **button_style).pack(pady=5)
-
-        # Botón Sincronizar Ahora
-        tk.Button(btn_frame,
-                 text="🔄 SINCRONIZAR AHORA",
-                 command=self.launch_sync,
-                 bg="#e67e22", fg="white",
-                 **button_style).pack(pady=5)
-
-        # Botón Reconfigurar
-        tk.Button(btn_frame,
-                 text="🔧 RECONFIGURAR",
-                 command=self.launch_reconfig,
-                 bg="#95a5a6", fg="white",
-                 **button_style).pack(pady=5)
-
-        # Footer
-        footer = tk.Frame(main_frame, bg="#ecf0f1")
-        footer.pack(fill="x", pady=(10, 0))
-
-        version_label = tk.Label(footer,
-                                text="v1.0 - Sistema de Sincronización PostgreSQL → API REST",
-                                font=("Arial", 9),
-                                bg="#ecf0f1", fg="#7f8c8d")
-        version_label.pack()
-
-    def launch_config(self):
-        """Lanzar modo configuración con autenticación"""
-        # Verificar autenticación antes de abrir config
-        auth_result = autenticar_para_config()
-        if not auth_result or not auth_result.get('success', False):
-            print("❌ Acceso a configuración denegado: autenticación fallida o cancelada")
-            return
-
-        self.root.destroy()
-        root = tk.Tk()
-        set_window_favicon(root)
-        app = ConfigWindow(root)
-        root.mainloop()
-
-    def launch_manager(self):
-        """Lanzar modo manager"""
-        self.root.destroy()
-        root = tk.Tk()
-        set_window_favicon(root)
-        app = ManagerWindow(root)
-        root.mainloop()
-
-    def launch_tray(self):
-        """Lanzar modo system tray"""
-        self.root.destroy()
-
-        # Cargar configuración
-        if not os.path.exists(CONFIG_FILE):
-            messagebox.showerror("Error", "No hay configuración. Ejecute 'Configurar Sistema' primero")
-            return
-
-        try:
-            from config_encryption import decrypt_config
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-            # Desencriptar todos los campos sensibles
-            config = decrypt_config(config)
-        except Exception as e:
-            messagebox.showerror("Error", f"Error cargando configuración: {e}")
-            return
-
-        # Obtener API Key (ya viene desencriptado)
-        api_key = config.get('api_key')
-
-        # Si no hay API Key en config, pedirlo manualmente
-        if not api_key:
-            print("🔐 Se requiere API Key...")
-            import getpass
-            try:
-                api_key = getpass.getpass("API Key: ")
-            except:
-                # Si falla getpass (Windows a veces), usar tkinter
-                key_dialog = tk.Tk()
-                key_dialog.withdraw()
-                api_key = tk.simpledialog.askstring("API Key", "Ingrese la API Key:", show='*')
-                key_dialog.destroy()
-
-                if not api_key:
-                    return
-
-        # Iniciar System Tray
-        try:
-            tray = SystemTrayService(config, api_key)
-            tray.iniciar()
-        except Exception as e:
-            messagebox.showerror("Error", f"Error iniciando System Tray: {e}\n\nAsegúrese de tener instaladas las dependencias:\npip install pystray Pillow")
-
-    def launch_sync(self):
-        """Lanzar sincronización única"""
-        self.root.destroy()
-
-        # Cargar configuración
-        if not os.path.exists(CONFIG_FILE):
-            messagebox.showerror("Error", "No hay configuración. Ejecute 'Configurar Sistema' primero")
-            # Volver al launcher
-            root = tk.Tk()
-            set_window_favicon(root)
-            app = LauncherWindow(root)
-            root.mainloop()
-            return
-
-        # Ejecutar sincronización en consola
-        import subprocess
-        import sys
-
-        if getattr(sys, 'frozen', False):
-            # Ejecutable compilado
-            subprocess.Popen([sys.executable, '--mode', 'sync'])
-        else:
-            # Script Python
-            subprocess.Popen([sys.executable, __file__, '--mode', 'sync'])
-
-    def launch_reconfig(self):
-        """Lanzar reconfiguración"""
-        result = messagebox.askyesno("Confirmar",
-                                    "¿Está seguro que desea borrar la configuración?\n\nTendrá que configurar el sistema nuevamente.")
-        if result:
-            # Borrar configuración
-            if os.path.exists(CONFIG_FILE):
-                os.remove(CONFIG_FILE)
-
-            messagebox.showinfo("Reconfiguración", "Configuración eliminada. Configure el sistema nuevamente.")
-
-            # Abrir configuración
-            self.launch_config()
-
-
-# ==============================================================================
-# GUI - MANAGER WINDOW
-# ==============================================================================
-
-class ManagerWindow:
-    """Ventana principal de administración."""
-
-    def __init__(self, root, api_key=None):
-        self.root = root
-        self.root.title(f"Sincronizador API REST v{APP_VERSION} - Manager")
-        self.root.geometry("800x600")
-
-        # Auth Manager (en memoria)
-        self.auth_manager = None
-
-        # Sync Manager
-        self.sync_manager = None
-
-        # API Key (puede venir de reautenticar_usuario)
-        self.api_key = api_key
-
-        # Cargar configuración (puede ser None si no existe)
-        self.config = self.load_config()
-
-        # Configurar logging con archivo (o default si no hay config)
-        email = self.config.get('company_email') if self.config else 'user'
-        self.log_func = setup_logging(email)
-
-        # Colas thread-safe para logs y acciones UI desde hilos secundarios
-        self._log_queue = queue.Queue()
-        self._ui_queue = queue.Queue()
-
-        # Crear widgets PRIMERO (antes de cualquier log)
-        self.create_widgets()
-
-        # Conectar logger de Python con la GUI (después de crear widgets)
-        add_gui_handler(self.log_func, self.log)
-
-        # AHORA ya podemos usar self.log()
-        if not self.config:
-            self.log("⚠️ No hay configuración. Use el botón 'Configurar' para establecerla.")
-            self.log("ℹ️ Configure el sistema para comenzar")
-        else:
-            # Si hay configuración Y no se pasó API Key, pedirlo al inicio
-            # Si se pasó API Key (desde reautenticar_usuario), usarlo directamente
-            if self.api_key:
-                # API Key ya proporcionado - validar directamente
-                self.log("✅ API Key proporcionado desde autenticación previa")
-                self.do_validate_api_key(self.api_key, None)
-            else:
-                # Pedir API Key al usuario
-                self.root.after(100, self.ask_api_key)
-
-    def load_config(self):
-        """Cargar configuración desde archivo."""
-        try:
-            if os.path.exists(CONFIG_FILE):
-                from config_encryption import decrypt_config
-                with open(CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                # Desencriptar todos los campos sensibles
-                return decrypt_config(config)
-        except Exception as e:
-            messagebox.showerror("Error", f"Error cargando configuración:\n{e}")
-        return None
-
-    def ask_api_key(self):
-        """Pedir API Key."""
-        # Primero intentar cargar API Key del config
-        if self.config and 'api_key' in self.config:
-            api_key = self.config.get('api_key')
-            if api_key:
-                self.log("API Key cargado desde configuración")
-                self.do_validate_api_key(api_key, None)
-                return
-            else:
-                self.log("API Key en configuración está vacío")
-
-        dialog = tk.Toplevel(self.root)
-        dialog.title("API Key")
-        dialog.geometry("500x200")
-        dialog.resizable(False, False)
-
-        dialog.transient(self.root)
-        dialog.grab_set()
-
-        dialog.update_idletasks()
-        parent_x = self.root.winfo_x()
-        parent_y = self.root.winfo_y()
-        parent_width = self.root.winfo_width()
-        parent_height = self.root.winfo_height()
-
-        x = parent_x + (parent_width // 2) - 250
-        y = parent_y + (parent_height // 2) - 100
-        dialog.geometry(f"+{x}+{y}")
-
-        dialog.lift()
-        dialog.attributes('-topmost', True)
-        dialog.after_idle(lambda: dialog.attributes('-topmost', False))
-        dialog.focus_force()
-
-        frame = tk.Frame(dialog, padx=30, pady=20)
-        frame.pack(fill="both", expand=True)
-
-        tk.Label(frame, text="Ingrese la API Key:",
-                font=("Arial", 12, "bold")).pack(pady=(0, 15))
-
-        key_var = tk.StringVar()
-        entry = ttk.Entry(frame, textvariable=key_var, show="*", width=40, font=("Arial", 11))
-        entry.pack(pady=10)
-        entry.focus()
-
-        def on_validate():
-            api_key = key_var.get()
-            if not api_key:
-                messagebox.showwarning("Advertencia", "Ingrese la API Key", parent=dialog)
-                entry.focus()
-                return
-
-            self.do_validate_api_key(api_key, dialog)
-
-        def on_cancel():
-            try:
-                dialog.destroy()
-            except:
-                pass
-            try:
-                self.root.destroy()
-            except:
-                pass
-
-        button_frame = tk.Frame(frame)
-        button_frame.pack(pady=15)
-        ttk.Button(button_frame, text="Validar", command=on_validate, width=12).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Cancelar", command=on_cancel, width=12).pack(side="left", padx=5)
-
-        entry.bind("<Return>", lambda e: on_validate())
-        dialog.after(100, entry.focus)
-        def on_login():
-            password = password_var.get()
-            if not password:
-                messagebox.showwarning("Advertencia", "Ingrese el password", parent=dialog)
-                entry.focus()
-                return
-
-            self.do_login(password, dialog)
-
-        def on_cancel():
-            try:
-                dialog.destroy()
-            except:
-                pass
-            try:
-                self.root.destroy()
-            except:
-                pass
-
-        button_frame = tk.Frame(frame)
-        button_frame.pack(pady=15)
-        ttk.Button(button_frame, text="✅ Login", command=on_login, width=12).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="❌ Cancelar", command=on_cancel, width=12).pack(side="left", padx=5)
-
-        entry.bind("<Return>", lambda e: on_login())
-
-        # Asegurar focus
-        dialog.after(100, entry.focus)
-
-    def do_validate_api_key(self, api_key: str, dialog: tk.Tk):
-        """Validar API Key mediante ping."""
-        try:
-            self.log("Validando API Key...")
-
-            base_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
-            self.auth_manager = APIAuthManager(base_url, self.log)
-
-            result = self.auth_manager.ping_api_key(api_key)
-
-            if not result.get('success'):
-                messagebox.showerror("Error", f"API Key inv\u00e1lida: {result.get('error')}")
-                if dialog:
-                    try:
-                        dialog.destroy()
-                    except:
-                        pass
-                try:
-                    self.root.destroy()
-                except:
-                    pass
-                return
-
-            self.log("Validando empresa...")
-            result = self.auth_manager.validate_company(
-                self.config.get('company_rif'),
-                self.config.get('company_email')
-            )
-
-            if not result.get('success'):
-                messagebox.showerror("Error", f"Validaci\u00f3n fall\u00f3: {result.get('error')}")
-                if dialog:
-                    try:
-                        dialog.destroy()
-                    except:
-                        pass
-                try:
-                    self.root.destroy()
-                except:
-                    pass
-                return
-
-            pg_config = {
-                'host': self.config.get('postgres_host'),
-                'port': self.config.get('postgres_port'),
-                'database': self.config.get('postgres_database'),
-                'user': self.config.get('postgres_user'),
-                'password': self.config.get('postgres_password')
-            }
-
-            self.sync_manager = APISyncManager(pg_config, self.auth_manager, self.log)
-
-            if not self.sync_manager.connect_postgresql():
-                messagebox.showerror("Error", "No se pudo conectar a PostgreSQL")
-                if dialog:
-                    try:
-                        dialog.destroy()
-                    except:
-                        pass
-                try:
-                    self.root.destroy()
-                except:
-                    pass
-                return
-
-            try:
-                company_id = self.auth_manager.company_id
-                cursor = self.sync_manager.pg_conn.cursor()
-
-                self.log(f"Guardando company_id {company_id} en sync_config...")
-
-                cursor.execute("""
-                    SELECT value FROM sync_config WHERE key = 'company_id'
-                """)
-                existe = cursor.fetchone()
-
-                if existe:
-                    valor_actual = existe[0]
-                    self.log(f"   sync_config tiene: {valor_actual}")
-                    self.log(f"   Actualizando a: {company_id}")
-                    cursor.execute("""
-                        UPDATE sync_config
-                        SET value = %s, updated_at = NOW()
-                        WHERE key = 'company_id'
-                    """, (str(company_id),))
-                    self.log(f"   Filas afectadas: {cursor.rowcount}")
-                else:
-                    self.log(f"   No existe, insertando nuevo registro...")
-                    cursor.execute("""
-                        INSERT INTO sync_config (key, value, updated_at)
-                        VALUES ('company_id', %s, NOW())
-                    """, (str(company_id),))
-                    self.log(f"   Insertado: {company_id}")
-
-                self.sync_manager.pg_conn.commit()
-                self.log(f"Company_id {company_id} guardado en sync_config")
-            except Exception as e:
-                self.log(f"Error guardando company_id en sync_config: {e}", "warning")
-                self.sync_manager.pg_conn.rollback()
-
-            if not self.sync_manager.initialize_api_clients():
-                messagebox.showerror("Error", "No se pudieron inicializar los clientes API")
-                if dialog:
-                    try:
-                        dialog.destroy()
-                    except:
-                        pass
-                try:
-                    self.root.destroy()
-                except:
-                    pass
-                return
-
-            if dialog:
-                try:
-                    dialog.destroy()
-                except:
-                    pass
-            self.log("Sistema listo para sincronizar")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Error validando API Key: {e}")
-            import traceback
-            self.log(traceback.format_exc(), "error")
-            if dialog:
-                try:
-                    dialog.destroy()
-                except:
-                    pass
-            try:
-                self.root.destroy()
-            except:
-                pass
-    def create_widgets(self):
-        """Crear widgets de la interfaz."""
-
-        # Header
-        header = tk.Frame(self.root, bg="#2c3e50", height=60)
-        header.pack(fill="x")
-
-        title = tk.Label(header, text=f"🔄 Sincronizador API REST v{APP_VERSION} - Manager",
-                        font=("Arial", 18, "bold"), bg="#2c3e50", fg="white")
-        title.pack(pady=15)
-
-        # Contenido principal
-        main_frame = tk.Frame(self.root)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-        # Info de empresa
-        info_frame = tk.Frame(main_frame)
-        info_frame.pack(fill="x", pady=5)
-
-        if self.config:
-            tk.Label(info_frame, text=f"🏢 Empresa: {self.config.get('company_rif')}",
-                    font=("Arial", 10)).pack(side="left")
-            tk.Label(info_frame, text=f"📧 Email: {self.config.get('company_email')}",
-                    font=("Arial", 10)).pack(side="left", padx=20)
-        else:
-            tk.Label(info_frame, text="⚠️ No configurado",
-                    font=("Arial", 10), fg="orange").pack(side="left")
-
-        # Panel de estado
-        status_frame = tk.LabelFrame(main_frame, text="📊 Estado del Sistema", font=("Arial", 12, "bold"))
-        status_frame.pack(fill="x", pady=5, padx=5)
-
-        self.lbl_estado = tk.Label(status_frame, text="🟢 ACTIVO", font=("Arial", 14), fg="green")
-        self.lbl_estado.pack()
-
-        self.lbl_ultima_sync = tk.Label(status_frame, text="Última sync: --", font=("Arial", 10))
-        self.lbl_ultima_sync.pack(pady=5)
-
-        # Panel de estadísticas
-        stats_frame = tk.LabelFrame(main_frame, text="📈 Estadísticas", font=("Arial", 12, "bold"))
-        stats_frame.pack(fill="x", pady=5, padx=5)
-
-        self.lbl_stats = tk.Label(stats_frame, text="Categories: 0 | Products: 0 | Customers: 0 | Sellers: 0 | Quotes: 0",
-                                 font=("Arial", 10))
-        self.lbl_stats.pack()
-
-        self.lbl_progress = tk.Label(stats_frame, text="Listo para sincronizar", font=("Arial", 9), fg="blue")
-        self.lbl_progress.pack(pady=(5,0))
-
-        # Panel de configuración de intervalo
-        interval_frame = tk.LabelFrame(main_frame, text="⏱️ Intervalo de Sincronización Automática", font=("Arial", 12, "bold"))
-        interval_frame.pack(fill="x", pady=5, padx=5)
-
-        interval_input_frame = tk.Frame(interval_frame)
-        interval_input_frame.pack(pady=5)
-
-        current_interval = self.config.get('sync_interval_minutes', '30')
-        tk.Label(interval_input_frame, text=f"Intervalo actual: {current_interval} minutos",
-                font=("Arial", 10)).pack(side="left", padx=5)
-
-        tk.Label(interval_input_frame, text="Nuevo intervalo (minutos):").pack(side="left", padx=5)
-        self.interval_var = tk.StringVar(value=current_interval)
-        interval_entry = ttk.Entry(interval_input_frame, textvariable=self.interval_var, width=10)
-        interval_entry.pack(side="left", padx=5)
-
-        ttk.Button(interval_input_frame, text="💾 Guardar", command=self.actualizar_interval, width=15).pack(side="left", padx=5)
-        tk.Label(interval_input_frame, text="(1-1440 minutos)", font=("Arial", 8), fg="gray").pack(side="left", padx=5)
-
-        # Botones de sincronización individual
-        sync_btn_frame = tk.Frame(main_frame)
-        sync_btn_frame.pack(fill="x", pady=5)
-
-        ttk.Button(sync_btn_frame, text="📁 Categories",
-                  command=lambda: self.sync_entity('categories'), width=15).pack(side="left", padx=3)
-
-        ttk.Button(sync_btn_frame, text="📦 Products",
-                  command=lambda: self.sync_entity('products'), width=15).pack(side="left", padx=3)
-
-        ttk.Button(sync_btn_frame, text="👥 Customers",
-                  command=lambda: self.sync_entity('customers'), width=15).pack(side="left", padx=3)
-
-        ttk.Button(sync_btn_frame, text="👔 Sellers",
-                  command=lambda: self.sync_entity('sellers'), width=15).pack(side="left", padx=3)
-
-        ttk.Button(sync_btn_frame, text="💰 Quotes",
-                  command=lambda: self.sync_entity('quotes'), width=15).pack(side="left", padx=3)
-
-        # Botones principales
-        btn_frame = tk.Frame(main_frame)
-        btn_frame.pack(fill="x", pady=10)
-
-        self.btn_sync = ttk.Button(btn_frame, text="🔄 Sincronizar Todo", command=self.sync_all, width=20)
-        self.btn_sync.pack(side="left", padx=5)
-
-        ttk.Button(btn_frame, text="🔄 Reconfigurar", command=self.reconfig, width=20).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="📋 Ver Logs", command=self.ver_logs, width=20).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="❌ Salir", command=self.cerrar_ventana, width=20).pack(side="right", padx=5)
-
-        # Logs
-        log_frame = tk.LabelFrame(main_frame, text="📝 Logs en Tiempo Real", font=("Arial", 12, "bold"))
-        log_frame.pack(fill="both", expand=True, pady=5, padx=5)
-
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=10, state="disabled")
-        self.log_text.pack(fill="both", expand=True)
-
-        # Configurar colores para los logs
-        self.log_text.tag_config("error", foreground="red")
-        self.log_text.tag_config("warning", foreground="orange")
-        self.log_text.tag_config("success", foreground="green")
-
-        # Cargar últimos logs
-        self.cargar_logs()
-
-        # Iniciar polling de logs thread-safe
-        self._poll_log_queue()
-
-    def _poll_log_queue(self):
-        """Procesa logs y acciones UI desde hilos secundarios en el hilo principal."""
-        # Procesar logs pendientes
-        try:
-            while True:
-                msg, level = self._log_queue.get_nowait()
-                if self.log_text:
-                    try:
-                        self.log_text.config(state="normal")
-                        tag = {'error': 'error', 'warning': 'warning', 'success': 'success'}.get(level, 'normal')
-                        self.log_text.insert("end", f"{msg}\n", tag)
-                        self.log_text.see("end")
-                        self.log_text.config(state="disabled")
-                    except Exception:
-                        pass
-        except queue.Empty:
-            pass
-        # Procesar acciones UI pendientes (messagebox, etc.)
-        try:
-            while True:
-                callback = self._ui_queue.get_nowait()
-                try:
-                    callback()
-                except Exception:
-                    pass
-        except queue.Empty:
-            pass
-        # Repetir cada 100ms
-        self.root.after(100, self._poll_log_queue)
-
-    def cargar_logs(self):
-        """Cargar últimos logs del archivo."""
-        try:
-            email = self.config.get('company_email') if self.config else 'user'
-            log_file = get_log_file(email)
-            if os.path.exists(log_file):
-                with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
-                    # Leer últimas 50 líneas
-                    lines = f.readlines()[-50:]
-                    for line in lines:
-                        self.log_text.config(state="normal")
-                        self.log_text.insert("end", line.strip() + "\n")
-                        self.log_text.config(state="disabled")
-                self.log_text.see("end")
-        except Exception as e:
-            pass  # Silencioso, si no hay archivo de log aún
-
-    def cerrar_ventana(self):
-        """Cierra la ventana de forma segura"""
-        try:
-            if self.sync_manager:
-                self.sync_manager.close()
-            self.root.destroy()
-        except Exception as e:
-            print(f"Error cerrando ventana: {e}")
-            try:
-                self.root.destroy()
-            except:
-                pass
-
-    def configurar(self):
-        """Abrir ventana de configuración."""
-        # Crear ventana de configuración como Toplevel
-        config_window = tk.Toplevel(self.root)
-        config_window.title("⚙️ Configuración del Sincronizador API")
-        config_window.geometry("700x600")
-        config_window.transient(self.root)
-        config_window.grab_set()
-
-        # Crear instancia de ConfigWindow con callback
-        ConfigWindow(config_window, callback=self.on_config_saved)
-
-    def on_config_saved(self, config):
-        """Callback cuando se guarda la configuración desde el Manager."""
-        # Recargar configuración
-        self.config = self.load_config()
-
-        # Actualizar info de empresa en la UI
-        # (destruimos y recreamos los widgets para actualizar)
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        self.create_widgets()
-
-        # Si hay configuración, pedir password
-        if self.config:
-            self.root.after(100, self.ask_api_key)
-
-        self.log("✅ Configuración guardada exitosamente")
-
-    def ver_logs(self):
-        """Abrir archivo de logs en editor de texto."""
-        try:
-            import subprocess
-            log_file = get_log_file(self.config.get('company_email'))
-
-            if not os.path.exists(log_file):
-                messagebox.showinfo("Logs", f"No existe archivo de logs aún:\n{log_file}")
-                return
-
-            # Mostrar información
-            self.log(f"📂 Abriendo archivo de logs: {log_file}")
-
-            # Lista de editores a intentar (en orden de preferencia)
-            if sys.platform == 'win32':
-                # Windows
-                os.startfile(log_file)
-                self.log(f"   ✅ Archivo abierto")
-            elif sys.platform == 'darwin':
-                # macOS
-                subprocess.Popen(['open', log_file],
-                              stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL)
-                self.log(f"   ✅ Archivo abierto con open")
-            else:
-                # Linux - intentar varios editores
-                editores = [
-                    # Editores gráficos livianos (sin dependencias de D-Bus pesadas)
-                    ['mousepad', log_file],      # Muy liviano, sin D-Bus
-                    ['leafpad', log_file],       # Muy liviano
-                    ['geany', log_file],         # Liviano
-                    ['kate', log_file],          # KDE
-                    ['gedit', log_file],         # GNOME (puede dar warnings)
-                    ['code', '--new-window', log_file],  # VS Code
-                    ['subl', log_file],          # Sublime Text
-                    # Último recurso: xdg-open
-                    ['xdg-open', log_file]
-                ]
-
-                abierto = False
-                for editor_cmd in editores:
-                    try:
-                        self.log(f"   Intentando con: {editor_cmd[0]}")
-                        # Usar Popen para no bloquear
-                        process = subprocess.Popen(
-                            editor_cmd,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            start_new_session=True  # Desacoplar completamente el proceso
-                        )
-                        # Si no lanzó excepción, asumimos que se abrió
-                        self.log(f"   ✅ Archivo abierto con: {editor_cmd[0]}")
-                        abierto = True
-                        break
-                    except FileNotFoundError:
-                        # Editor no encontrado, intentar el siguiente
-                        continue
-                    except Exception as e:
-                        # Otro error, intentar el siguiente
-                        self.log(f"   ⚠️ Error con {editor_cmd[0]}: {e}", "warning")
-                        continue
-
-                if not abierto:
-                    # Si ningún editor funcionó, mostrar la ruta para abrir manualmente
-                    self.log(f"   ⚠️ No se pudo abrir automáticamente", "warning")
-                    messagebox.showinfo(
-                        "Logs - Abrir Manualmente",
-                        f"No se pudo abrir el editor automáticamente.\n\n"
-                        f"Ruta del archivo:\n{log_file}\n\n"
-                        f"Puede abrirlo manualmente con:\n"
-                        f"cat '{log_file}'\n\n"
-                        f"o su editor favorito:\n"
-                        f"'{log_file}'"
-                    )
-
-        except Exception as e:
-            self.log(f"❌ Error abriendo logs: {e}", "error")
-            import traceback
-            self.log(traceback.format_exc(), "error")
-            messagebox.showerror("Error", f"No se pudo abrir el archivo de logs:\n{e}")
-
-    def log(self, message: str, level: str = "info"):
-        """Escribir log a la GUI desde cualquier hilo (thread-safe via cola)."""
-        # Usar cola thread-safe en lugar de modificar Tkinter directamente.
-        # _poll_log_queue procesa la cola en el hilo principal vía after().
-        self._log_queue.put((message, level))
-
-    def sync_all(self):
-        """Sincronizar todas las entidades."""
-        if not self.sync_manager:
-            messagebox.showwarning("Advertencia", "El sistema no está inicializado")
-            return
-
-        def run_sync():
-            try:
-                result = self.sync_manager.sync_all()
-
-                if result.get('success'):
-                    self._ui_queue.put(lambda: messagebox.showinfo("✅ Éxito", "Sincronización completada exitosamente"))
-                else:
-                    self._ui_queue.put(lambda: messagebox.showwarning("⚠️ Advertencia", "La sincronización tuvo errores. Revise el log."))
-
-            except Exception as e:
-                self._ui_queue.put(lambda: messagebox.showerror("❌ Error", f"Error durante sincronización:\n{e}"))
-                import traceback
-                self.log(traceback.format_exc(), "error")
-
-        # Ejecutar en thread para no bloquear GUI
-        import threading
-        thread = threading.Thread(target=run_sync)
-        thread.daemon = True
-        thread.start()
-
-    def sync_entity(self, entity: str):
-        """Sincronizar una entidad específica."""
-        if not self.sync_manager:
-            messagebox.showwarning("Advertencia", "El sistema no está inicializado")
-            return
-
-        def run_sync():
-            try:
-                self.log(f"\n🔄 SINCRONIZANDO {entity.upper()}...", "info")
-
-                if entity == 'categories':
-                    result = self.sync_manager.sync_categories()
-                elif entity == 'products':
-                    result = self.sync_manager.sync_products()
-                elif entity == 'customers':
-                    result = self.sync_manager.sync_customers()
-                elif entity == 'sellers':
-                    result = self.sync_manager.sync_sellers()
-                elif entity == 'quotes':
-                    result = self.sync_manager.sync_quotes()
-                else:
-                    self.log(f"❌ Entidad desconocida: {entity}", "error")
-                    return
-
-                stats = result.get('stats', {})
-                created = stats.get('created', 0)
-                updated = stats.get('updated', 0)
-                deleted = stats.get('deleted', 0)
-                errors = stats.get('errors', 0)
-
-                if errors == 0:
-                    self.log(f"✅ {entity.capitalize()} sincronizados: {created} creados, {updated} actualizados, {deleted} eliminados", "success")
-                    self._ui_queue.put(lambda e=entity, c=created, u=updated, d=deleted: messagebox.showinfo("✅ Éxito", f"{e.capitalize()} sincronizados:\n{c} creados\n{u} actualizados\n{d} eliminados"))
-                else:
-                    self.log(f"⚠️ {entity.capitalize()} sincronizados con errores: {created} creados, {updated} actualizados, {errors} errores", "warning")
-                    self._ui_queue.put(lambda e=entity, errs=errors: messagebox.showwarning("⚠️ Advertencia", f"{e.capitalize()} sincronizados con {errs} errores.\nRevise el log."))
-
-            except Exception as e:
-                self.log(f"❌ Error sincronizando {entity}: {e}", "error")
-                self._ui_queue.put(lambda e=entity, err=e: messagebox.showerror("❌ Error", f"Error durante sincronización de {e}:\n{err}"))
-                import traceback
-                self.log(traceback.format_exc(), "error")
-
-        # Ejecutar en thread para no bloquear GUI
-        import threading
-        thread = threading.Thread(target=run_sync)
-        thread.daemon = True
-        thread.start()
-
-    def reconfig(self):
-        """Reconfigurar desde cero."""
-        if messagebox.askyesno("Reconfigurar", "¿Está seguro de reconfigurar desde cero?\nSe borrará la configuración actual."):
-            try:
-                if os.path.exists(CONFIG_FILE):
-                    os.remove(CONFIG_FILE)
-
-                messagebox.showinfo("Reconfiguración", "Configuración eliminada.\nEl sistema se cerrará. Ejecute --mode config para reconfigurar.")
-                self.root.destroy()
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Error reconfigurando:\n{e}")
-
-    def actualizar_interval(self):
-        """Actualizar el intervalo de sincronización automática."""
-        try:
-            nuevo_interval = self.interval_var.get().strip()
-
-            # Validar
-            if not nuevo_interval.isdigit():
-                messagebox.showerror("Error", "El intervalo debe ser un número entero")
-                return
-
-            interval_int = int(nuevo_interval)
-            if interval_int < 1:
-                messagebox.showerror("Error", "El intervalo mínimo es 1 minuto")
-                return
-            if interval_int > 1440:
-                messagebox.showerror("Error", "El intervalo máximo es 1440 minutos (24 horas)")
-                return
-
-            # Leer archivo existente y modificar solo sync_interval_minutes
-            import os
-            if os.path.exists(CONFIG_FILE):
-                with open(CONFIG_FILE, 'r') as f:
-                    config_data = json.load(f)
-
-                # Modificar solo el campo sync_interval_minutes
-                config_data['sync_interval_minutes'] = nuevo_interval
-
-                # Guardar solo modificado (reescribir archivo con solo ese cambio)
-                with open(CONFIG_FILE, 'w') as f:
-                    json.dump(config_data, f, indent=2)
-            else:
-                # Si no existe archivo, error
-                messagebox.showerror("Error", "No existe archivo de configuración")
-                return
-
-            # Actualizar en memoria también
-            self.config['sync_interval_minutes'] = nuevo_interval
-
-            messagebox.showinfo("✅ Intervalo Actualizado",
-                              f"El intervalo de sincronización se ha actualizado a {nuevo_interval} minutos.\n\n"
-                              f"NOTA: Para que el cambio tome efecto en la sincronización automática,\n"
-                              f"debe reiniciar el sistema tray (cerrar y abrir nuevamente).")
-
-            self.log(f"⏱️ Intervalo actualizado a {nuevo_interval} minutos", "success")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Error actualizando intervalo:\n{e}")
-            import traceback
-            traceback.print_exc()
-
 
 # ==============================================================================
 # SYSTEM TRAY SERVICE
@@ -5257,9 +4268,6 @@ class SystemTrayService:
         self._logs_open = False
         self._operation_lock = None  # Thread lock para operaciones críticas
 
-        # Ventana Tk raíz oculta para reautenticación (creada en iniciar())
-        self._root = None
-
         # Configurar auto-inicio al encender el equipo
         self.configurar_auto_inicio()
 
@@ -5267,6 +4275,7 @@ class SystemTrayService:
         """Crea icono para la bandeja del sistema usando el logo"""
         try:
             from PIL import Image
+            import sys
 
             # Determinar el directorio base para encontrar logo.png
             # Si está compilado con PyInstaller, usar sys._MEIPASS
@@ -5347,7 +4356,6 @@ class SystemTrayService:
             print("⚠️ winreg no disponible (solo Windows)")
         except Exception as e:
             print(f"⚠️ No se pudo configurar auto-inicio: {e}")
-
 
     def reautenticar_usuario(self):
         """Pide autenticación en proceso separado (compatible Win11 25H2).
@@ -5723,7 +4731,7 @@ class SystemTrayService:
                     'postgres_user': self.config.get('postgres_user', ''),
                     'postgres_password': self.config.get('postgres_password', ''),
                     'sync_interval_minutes': self.config.get('sync_interval_minutes', '30'),
-                    'company_id': getattr(self, 'api_key', None)  # será validado
+                    'company_id': getattr(self, 'api_key', None)
                 }
                 with open(config_path, 'w') as f:
                     json.dump(cfg_for_manager, f)
@@ -5759,10 +4767,6 @@ class SystemTrayService:
             traceback.print_exc()
         finally:
             self._manager_open = False
-
-    def _abrir_manager_thread(self):
-        """Ya no se usa - se mantiene por compatibilidad"""
-        pass
 
     def ver_logs(self):
         """Abre ventana de logs con PySide6 en proceso separado."""
@@ -5816,10 +4820,6 @@ class SystemTrayService:
             traceback.print_exc()
         finally:
             self._logs_open = False
-
-    def _ver_logs_thread(self):
-        """Ya no se usa - se mantiene por compatibilidad"""
-        pass
 
     def sincronizar_ahora(self):
         """Ejecuta sincronización manual desde el menú con protección contra múltiples clicks"""
@@ -5938,44 +4938,37 @@ class SystemTrayService:
         threading.Thread(target=self._salir_thread, daemon=True).start()
 
     def _salir_thread(self):
-        """Muestra diálogo de confirmación y sale"""
+        """Muestra confirmación con PySide6 en proceso separado y sale"""
+        import subprocess, tempfile, json as _json, os, sys
+
+        _cf_path = None
         try:
-            import tkinter as tk
-            from tkinter import messagebox
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as _f:
+                _cf_path = _f.name
+            _cf_args = ([sys.executable, '--confirm-dialog', _cf_path]
+                       if getattr(sys, 'frozen', False)
+                       else [sys.executable, __file__, '--confirm-dialog', _cf_path])
+            subprocess.run(_cf_args, capture_output=True, text=True, timeout=60)
+            try:
+                with open(_cf_path) as _f:
+                    _cf_data = _json.load(_f)
+            except Exception:
+                _cf_data = {}
+        except Exception:
+            _cf_data = {}
+        finally:
+            if _cf_path and os.path.exists(_cf_path):
+                try: os.unlink(_cf_path)
+                except: pass
 
-            # Usar la ventana raíz oculta existente (no crear otra)
-            root = self._root if self._root else tk.Tk()
-            if not self._root:
-                root.withdraw()
-
-            # Mostrar confirmación
-            respuesta = messagebox.askyesno(
-                "Confirmar Salida",
-                "¿Estás seguro que deseas salir del Sistema de Sincronización?\n\n"
-                "Esto detendrá la sincronización automática.",
-                icon=messagebox.WARNING,
-                default=messagebox.NO
-            )
-
-            if respuesta:
-                print("\n👋 Deteniendo servicio...")
-                self.sync_running = False
-                if self.icon:
-                    self.icon.stop()
-                import os
-                os._exit(0)
-            else:
-                print("❌ Salida cancelada")
-
-        except Exception as e:
-            print(f"Error en diálogo de salida: {e}")
-            # En caso de error, salir de todos modos
+        if _cf_data.get('confirmed'):
             print("\n👋 Deteniendo servicio...")
             self.sync_running = False
             if self.icon:
                 self.icon.stop()
-            import os
             os._exit(0)
+        else:
+            print("❌ Salida cancelada")
 
     def iniciar(self):
         """Inicia el servicio system tray"""
@@ -6034,21 +5027,6 @@ Clic derecho para opciones"""
             sync_thread.start()
             log_debug("[DEBUG] Thread de sincronización iniciado")
 
-            # Crear ventana Tk raíz oculta para reautenticación
-            # IMPORTANTE: Una sola ventana Tk raíz evita crear múltiples
-            # intérpretes Tcl, lo que causa problemas de teclado en Windows 11
-            log_debug("[DEBUG] Creando ventana Tk raíz para reautenticación...")
-            import tkinter as tk
-            self._root = tk.Tk()
-            self._root.title("SyncAPI - Raíz")
-            # 1x1 píxel + overrideredirect + alpha mínimo: invisible para el usuario,
-            # pero visible para Windows 11 (necesario para el foco en Toplevel hijos)
-            self._root.geometry('1x1+0+0')
-            self._root.overrideredirect(True)
-            self._root.attributes('-alpha', 0.01)
-            set_window_favicon(self._root)
-            log_debug("[DEBUG] Ventana Tk raíz creada (invisible, 1x1 en 0,0)")
-
             # Notificación de inicio
             try:
                 mostrar_banner(
@@ -6098,13 +5076,6 @@ Clic derecho para opciones"""
             log_debug(traceback.format_exc())
             raise
         finally:
-            # Limpiar ventana Tk raíz
-            try:
-                if self._root:
-                    self._root.destroy()
-                    self._root = None
-            except:
-                pass
             try:
                 log_file.close()
             except:
@@ -6596,11 +5567,11 @@ def _handle_config_window(result_path: str) -> None:
     from PySide6.QtCore import Qt
 
     # Cargar configuración existente si hay
-    CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
+    CONFIG_FILE_CFG = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
     existing_config = {}
-    if os.path.exists(CONFIG_FILE):
+    if os.path.exists(CONFIG_FILE_CFG):
         try:
-            with open(CONFIG_FILE, 'r') as f:
+            with open(CONFIG_FILE_CFG, 'r') as f:
                 cfg_enc = json.load(f)
             from config_encryption import decrypt_config
             existing_config = decrypt_config(cfg_enc)
@@ -6723,7 +5694,10 @@ def _handle_config_window(result_path: str) -> None:
             form.addRow("Password:", self.pg_pass_edit)
 
             test_btn = QPushButton("🧪 Probar Conexión PostgreSQL")
-            test_btn.setStyleSheet("QPushButton { background-color: #1976D2; color: white; border: none; border-radius: 3px; padding: 6px 12px; } QPushButton:hover { background-color: #1565C0; }")
+            test_btn.setStyleSheet(
+                "QPushButton { background-color: #1976D2; color: white;"
+                " border: none; border-radius: 3px; padding: 6px 12px; }"
+                " QPushButton:hover { background-color: #1565C0; }")
             test_btn.clicked.connect(self._test_pg)
             form.addRow("", test_btn)
 
@@ -6747,7 +5721,10 @@ def _handle_config_window(result_path: str) -> None:
             layout.addLayout(form)
 
             test_btn = QPushButton("🧪 Probar API Key")
-            test_btn.setStyleSheet("QPushButton { background-color: #1976D2; color: white; border: none; border-radius: 3px; padding: 6px 12px; } QPushButton:hover { background-color: #1565C0; }")
+            test_btn.setStyleSheet(
+                "QPushButton { background-color: #1976D2; color: white;"
+                " border: none; border-radius: 3px; padding: 6px 12px; }"
+                " QPushButton:hover { background-color: #1565C0; }")
             test_btn.clicked.connect(self._test_api)
             layout.addWidget(test_btn)
 
@@ -6883,7 +5860,6 @@ def _handle_config_window(result_path: str) -> None:
 
         def _on_save(self) -> None:
             """Validar y guardar configuración."""
-            # Recoger valores
             api_key = self.api_key_edit.text().strip()
             pg_host = self.pg_host_edit.text().strip()
             pg_port = self.pg_port_edit.text().strip()
@@ -6892,7 +5868,6 @@ def _handle_config_window(result_path: str) -> None:
             pg_pass = self.pg_pass_edit.text().strip()
             interval = str(self.interval_spin.value())
 
-            # Validar campos
             if not api_key or not pg_db:
                 QMessageBox.warning(self, "Advertencia", "API Key y Database son obligatorios")
                 return
@@ -6902,7 +5877,6 @@ def _handle_config_window(result_path: str) -> None:
                     "Debe probar la API Key primero para obtener los datos de la empresa.")
                 return
 
-            # Verificación: PostgreSQL → API Key → Empresa
             self._run_verification({
                 'api_url': self.api_url,
                 'api_key': api_key,
@@ -6982,7 +5956,7 @@ def _handle_config_window(result_path: str) -> None:
 
                 progress.close()
 
-                # Éxito — escribir resultado
+                # Éxito
                 result_data = {k: v for k, v in config.items()}
                 result_data['saved'] = True
                 with open(result_path, 'w') as f:
@@ -7041,7 +6015,7 @@ def _handle_manager_window(config_path: str) -> None:
 
         def __init__(self, entity: str | None, config_data: dict) -> None:
             super().__init__()
-            self.entity = entity  # None = sync all
+            self.entity = entity
             self.config = config_data
 
         def run(self) -> None:
@@ -7101,13 +6075,10 @@ def _handle_manager_window(config_path: str) -> None:
             self._build_ui()
             self._apply_styles()
 
-            # Poll log file every 2s
             self._log_timer = QTimer()
             self._log_timer.timeout.connect(self._poll_logs)
             self._log_timer.start(2000)
             self._last_log_size = 0
-
-            # Load initial logs
             self._poll_logs()
 
         def _apply_styles(self) -> None:
@@ -7134,7 +6105,6 @@ def _handle_manager_window(config_path: str) -> None:
             layout.setContentsMargins(10, 10, 10, 10)
             layout.setSpacing(6)
 
-            # Header
             header = QLabel(f"🔄 Sincronizador API REST - Manager")
             header.setStyleSheet(
                 "background-color: #2c3e50; color: white; font-size: 16px;"
@@ -7142,17 +6112,13 @@ def _handle_manager_window(config_path: str) -> None:
             header.setAlignment(Qt.AlignCenter)
             layout.addWidget(header)
 
-            # Company info
             if config.get('company_rif'):
                 info = QLabel(f"🏢 {config['company_rif']}  |  📧 {config.get('company_email', '')}")
                 info.setStyleSheet("font-size: 11px; padding: 4px;")
                 info.setAlignment(Qt.AlignCenter)
                 layout.addWidget(info)
 
-            # --- Status + Stats row ---
             row = QHBoxLayout()
-
-            # Status
             status_group = QGroupBox("📊 Estado del Sistema")
             status_layout = QVBoxLayout()
             self.lbl_status = QLabel("🟢 ACTIVO")
@@ -7163,7 +6129,6 @@ def _handle_manager_window(config_path: str) -> None:
             status_group.setLayout(status_layout)
             row.addWidget(status_group)
 
-            # Stats
             stats_group = QGroupBox("📈 Estadísticas")
             stats_layout = QVBoxLayout()
             self.lbl_stats = QLabel("Categories: 0 | Products: 0 | Customers: 0 | Sellers: 0 | Quotes: 0")
@@ -7173,10 +6138,8 @@ def _handle_manager_window(config_path: str) -> None:
             stats_layout.addWidget(self.lbl_progress)
             stats_group.setLayout(stats_layout)
             row.addWidget(stats_group)
-
             layout.addLayout(row)
 
-            # --- Interval ---
             interval_group = QGroupBox("⏱️ Intervalo de Sincronización Automática")
             interval_layout = QHBoxLayout()
             current_interval = config.get('sync_interval_minutes', '30')
@@ -7197,7 +6160,6 @@ def _handle_manager_window(config_path: str) -> None:
             interval_group.setLayout(interval_layout)
             layout.addWidget(interval_group)
 
-            # --- Entity sync buttons ---
             entity_group = QGroupBox("Sincronización por Entidad")
             entity_grid = QGridLayout()
             entities = [
@@ -7217,9 +6179,7 @@ def _handle_manager_window(config_path: str) -> None:
             entity_group.setLayout(entity_grid)
             layout.addWidget(entity_group)
 
-            # --- Action buttons ---
             action_layout = QHBoxLayout()
-
             sync_all_btn = QPushButton("🔄 Sincronizar Todo")
             sync_all_btn.setStyleSheet(
                 "QPushButton { background-color: #F57C00; color: white; font-weight: bold; border: none; }"
@@ -7245,10 +6205,8 @@ def _handle_manager_window(config_path: str) -> None:
                 " QPushButton:hover { background-color: #B71C1C; }")
             salir_btn.clicked.connect(self.close)
             action_layout.addWidget(salir_btn)
-
             layout.addLayout(action_layout)
 
-            # --- Log panel ---
             log_group = QGroupBox("📝 Logs en Tiempo Real")
             log_layout = QVBoxLayout()
             self.log_text = QTextEdit()
@@ -7259,7 +6217,6 @@ def _handle_manager_window(config_path: str) -> None:
             layout.addWidget(log_group, stretch=1)
 
         def _poll_logs(self) -> None:
-            """Lee logs del archivo y actualiza el panel."""
             if not log_file or not os.path.exists(log_file):
                 return
             try:
@@ -7277,7 +6234,6 @@ def _handle_manager_window(config_path: str) -> None:
                 pass
 
         def _log(self, message: str, level: str = "info") -> None:
-            """Añadir mensaje al log local."""
             self.log_text.append(message)
             self.log_text.verticalScrollBar().setValue(
                 self.log_text.verticalScrollBar().maximum()
@@ -7332,7 +6288,6 @@ def _handle_manager_window(config_path: str) -> None:
                 QMessageBox.warning(self, "Error", f"No se pudo guardar: {e}")
 
         def _open_config(self) -> None:
-            """Abrir configuración como subprocess PySide6."""
             import subprocess
             import tempfile
             with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
@@ -7364,7 +6319,6 @@ def _handle_manager_window(config_path: str) -> None:
                     pass
 
         def _open_logs(self) -> None:
-            """Abrir visor de logs como subprocess PySide6."""
             if not log_file:
                 QMessageBox.information(self, "Logs", "No hay archivo de logs configurado")
                 return
@@ -7391,6 +6345,290 @@ def _handle_manager_window(config_path: str) -> None:
     window = ManagerWindow()
     window.show()
     app.exec()
+
+
+def _handle_launcher_window(result_path: str) -> None:
+    """Muestra menú principal con PySide6 en proceso separado.
+
+    Args:
+        result_path: Ruta donde guardar el resultado JSON
+    """
+    import sys
+    import os
+    import json
+    import subprocess
+    from PySide6.QtWidgets import (
+        QApplication, QDialog, QVBoxLayout, QHBoxLayout,
+        QLabel, QPushButton, QMessageBox
+    )
+    from PySide6.QtCore import Qt
+
+    CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
+
+    class LauncherDialog(QDialog):
+        def __init__(self) -> None:
+            super().__init__()
+            self.setWindowTitle("Sincronizador API REST - Chrystal")
+            self.setFixedSize(600, 500)
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            self.setStyleSheet("""
+                QDialog { background-color: #ecf0f1; }
+                QPushButton {
+                    font-size: 13px; padding: 12px 24px;
+                    border-radius: 4px; border: none; font-weight: bold;
+                }
+                QPushButton:hover { opacity: 0.9; }
+            """)
+
+            self.has_config = os.path.exists(CONFIG_FILE)
+            self.action = "exit"  # tray | exit
+            self._build_ui()
+            self._update_buttons()
+
+        def _build_ui(self) -> None:
+            layout = QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+
+            # --- Header ---
+            header = QLabel("🔄 Sincronizador API REST")
+            header.setStyleSheet(
+                "background-color: #2c3e50; color: white; font-size: 20px;"
+                " font-weight: bold; padding: 24px;")
+            header.setAlignment(Qt.AlignCenter)
+            header.setFixedHeight(100)
+            layout.addWidget(header)
+
+            subtitle = QLabel("Sistema de Sincronización Chrystal")
+            subtitle.setStyleSheet(
+                "background-color: #2c3e50; color: #bdc3c7;"
+                " font-size: 11px; padding: 0 0 16px 0; margin-top: -10px;")
+            subtitle.setAlignment(Qt.AlignCenter)
+            layout.addWidget(subtitle)
+
+            # --- Warning ---
+            self.warning_label = QLabel(
+                "⚠️ Primera vez: Debe configurar el sistema antes de usarlo")
+            self.warning_label.setStyleSheet(
+                "background-color: #fff3cd; color: #856404;"
+                " font-size: 11px; font-weight: bold; padding: 14px 20px;"
+                " margin: 10px 20px 0 20px; border: 1px solid #ffc107;"
+                " border-radius: 4px;")
+            layout.addWidget(self.warning_label)
+
+            # --- Buttons ---
+            btn_container = QVBoxLayout()
+            btn_container.setAlignment(Qt.AlignCenter)
+            btn_container.setSpacing(8)
+            btn_container.setContentsMargins(40, 20, 40, 10)
+
+            self.btn_config = QPushButton("⚙️ CONFIGURAR SISTEMA")
+            self.btn_config.setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; min-width: 320px; }"
+                " QPushButton:hover { background-color: #2980b9; }")
+            self.btn_config.clicked.connect(self._on_config)
+            btn_container.addWidget(self.btn_config)
+
+            self.btn_manager = QPushButton("🖥️ ABRIR MANAGER")
+            self.btn_manager.setStyleSheet(
+                "QPushButton { background-color: #2ecc71; color: white; min-width: 320px; }"
+                " QPushButton:hover { background-color: #27ae60; }")
+            self.btn_manager.clicked.connect(self._on_manager)
+            btn_container.addWidget(self.btn_manager)
+
+            self.btn_tray = QPushButton("📬 MODO SYSTEM TRAY")
+            self.btn_tray.setStyleSheet(
+                "QPushButton { background-color: #9b59b6; color: white; min-width: 320px; }"
+                " QPushButton:hover { background-color: #8e44ad; }")
+            self.btn_tray.clicked.connect(self._on_tray)
+            btn_container.addWidget(self.btn_tray)
+
+            self.btn_sync = QPushButton("🔄 SINCRONIZAR AHORA")
+            self.btn_sync.setStyleSheet(
+                "QPushButton { background-color: #e67e22; color: white; min-width: 320px; }"
+                " QPushButton:hover { background-color: #d35400; }")
+            self.btn_sync.clicked.connect(self._on_sync)
+            btn_container.addWidget(self.btn_sync)
+
+            self.btn_reconfig = QPushButton("🔧 RECONFIGURAR")
+            self.btn_reconfig.setStyleSheet(
+                "QPushButton { background-color: #95a5a6; color: white; min-width: 320px; }"
+                " QPushButton:hover { background-color: #7f8c8d; }")
+            self.btn_reconfig.clicked.connect(self._on_reconfig)
+            btn_container.addWidget(self.btn_reconfig)
+
+            layout.addLayout(btn_container)
+
+            # --- Salir ---
+            exit_layout = QHBoxLayout()
+            exit_layout.setContentsMargins(40, 0, 40, 10)
+            self.btn_exit = QPushButton("❌ Salir")
+            self.btn_exit.setStyleSheet(
+                "QPushButton { background-color: #C62828; color: white; min-width: 100px; }"
+                " QPushButton:hover { background-color: #B71C1C; }")
+            self.btn_exit.clicked.connect(self.reject)
+            exit_layout.addStretch()
+            exit_layout.addWidget(self.btn_exit)
+            layout.addLayout(exit_layout)
+
+            # --- Footer ---
+            footer = QLabel("v1.0 - Sistema de Sincronización PostgreSQL → API REST")
+            footer.setStyleSheet("color: #7f8c8d; font-size: 9px; padding: 6px;")
+            footer.setAlignment(Qt.AlignCenter)
+            layout.addWidget(footer)
+
+            self.setLayout(layout)
+
+        def _update_buttons(self) -> None:
+            self.has_config = os.path.exists(CONFIG_FILE)
+            self.warning_label.setVisible(not self.has_config)
+            self.btn_manager.setEnabled(self.has_config)
+            self.btn_tray.setEnabled(self.has_config)
+            self.btn_sync.setEnabled(self.has_config)
+            self.btn_reconfig.setEnabled(self.has_config)
+
+        def _run_subprocess(self, args: list[str], wait: bool = True) -> int | None:
+            creationflags = 0
+            if sys.platform == 'win32':
+                creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+            try:
+                if wait:
+                    result = subprocess.run(args, capture_output=True, text=True, timeout=600,
+                                           creationflags=creationflags)
+                    return result.returncode
+                else:
+                    subprocess.Popen(args, creationflags=creationflags)
+                    return None
+            except Exception as e:
+                print(f"Error launching subprocess: {e}")
+                return -1
+
+        def _exe_args(self, *extra: str) -> list[str]:
+            if getattr(sys, 'frozen', False):
+                return [sys.executable, *extra]
+            return [sys.executable, __file__, *extra]
+
+        def _on_config(self) -> None:
+            self._run_subprocess(self._exe_args('--mode', 'config'), wait=True)
+            self._update_buttons()
+
+        def _on_manager(self) -> None:
+            import tempfile
+            cfg_data = {}
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    from config_encryption import decrypt_config
+                    with open(CONFIG_FILE) as f:
+                        cfg_data = decrypt_config(json.load(f))
+                except Exception:
+                    cfg_data = {}
+            cfg_path = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
+                    cfg_path = f.name
+                    json.dump(cfg_data, f)
+                self._run_subprocess(self._exe_args('--manager-window', cfg_path), wait=True)
+            except Exception as e:
+                print(f"Error en manager: {e}")
+            finally:
+                if cfg_path:
+                    try: os.unlink(cfg_path)
+                    except: pass
+
+        def _on_tray(self) -> None:
+            self.action = "tray"
+            self._run_subprocess(self._exe_args('--mode', 'tray'), wait=False)
+            self.accept()
+
+        def _on_sync(self) -> None:
+            self._run_subprocess(self._exe_args('--mode', 'sync'), wait=True)
+
+        def _on_reconfig(self) -> None:
+            if QMessageBox.question(self, "Reconfigurar",
+                    "¿Está seguro que desea borrar la configuración?\n\n"
+                    "Tendrá que configurar el sistema nuevamente.",
+                    QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                if os.path.exists(CONFIG_FILE):
+                    os.remove(CONFIG_FILE)
+                self._update_buttons()
+                self._on_config()
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    dialog = LauncherDialog()
+    dialog.exec()
+
+    with open(result_path, 'w') as f:
+        json.dump({"action": dialog.action}, f)
+
+
+def _handle_confirm_dialog(result_path: str) -> None:
+    """Muestra diálogo de confirmación Sí/No con PySide6 en proceso separado.
+
+    Args:
+        result_path: Ruta donde guardar el resultado JSON
+    """
+    import sys
+    import json
+    from PySide6.QtWidgets import (
+        QApplication, QDialog, QVBoxLayout, QHBoxLayout,
+        QLabel, QPushButton
+    )
+    from PySide6.QtCore import Qt
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+
+    dialog = QDialog()
+    dialog.setWindowTitle("Confirmar")
+    dialog.setFixedSize(400, 160)
+    dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+    dialog.setStyleSheet("""
+        QDialog { background-color: #f5f5f5; }
+        QLabel { font-size: 13px; color: #333; }
+        QPushButton { font-size: 13px; padding: 8px 24px; border-radius: 4px; border: none; font-weight: bold; }
+    """)
+
+    layout = QVBoxLayout()
+    layout.setContentsMargins(20, 20, 20, 20)
+    layout.setSpacing(16)
+
+    msg = QLabel(
+        "¿Estás seguro que deseas salir del\n"
+        "Sistema de Sincronización?\n\n"
+        "Esto detendrá la sincronización automática."
+    )
+    msg.setAlignment(Qt.AlignCenter)
+    layout.addWidget(msg)
+
+    btn_layout = QHBoxLayout()
+    btn_layout.addStretch()
+
+    yes_btn = QPushButton("✅ Sí, salir")
+    yes_btn.setStyleSheet(
+        "QPushButton { background-color: #C62828; color: white; }"
+        " QPushButton:hover { background-color: #B71C1C; }")
+    yes_btn.clicked.connect(lambda: (
+        open(result_path, 'w').write(json.dumps({"confirmed": True})),
+        dialog.accept()
+    ))
+    btn_layout.addWidget(yes_btn)
+
+    no_btn = QPushButton("❌ Cancelar")
+    no_btn.setStyleSheet(
+        "QPushButton { background-color: #555; color: white; }"
+        " QPushButton:hover { background-color: #444; }")
+    no_btn.clicked.connect(lambda: (
+        open(result_path, 'w').write(json.dumps({"confirmed": False})),
+        dialog.reject()
+    ))
+    btn_layout.addWidget(no_btn)
+
+    btn_layout.addStretch()
+    layout.addLayout(btn_layout)
+    dialog.setLayout(layout)
+
+    dialog.exec()
 
 
 def main():
@@ -7488,106 +6726,41 @@ def main():
             return
 
         # ---- CAMINO 2: YA HAY CONFIGURACIÓN ----
-        # No pedir email/password, validar API Key directamente
+        # Mostrar menú principal (Launcher) para que el usuario elija qué hacer
         print("\n" + "="*70)
-        print("🔄 INICIANDO SINCRONIZACIÓN AUTOMÁTICA...")
+        print("📋 MOSTRANDO MENÚ PRINCIPAL...")
         print("="*70)
 
-        # Cargar configuración
+        _result_path = None
         try:
-            from config_encryption import decrypt_config
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-            config = decrypt_config(config)
-        except Exception as e:
-            print(f"❌ Error cargando configuración: {e}")
-            return
+            import tempfile, json as _json
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as _f:
+                _result_path = _f.name
 
-        api_key = config.get('api_key')
+            if getattr(sys, 'frozen', False):
+                _largs = [sys.executable, '--launcher-window', _result_path]
+            else:
+                _largs = [sys.executable, __file__, '--launcher-window', _result_path]
 
-        # Si no hay API Key en config, pedirlo con ventana GUI
-        if not api_key:
-            import tkinter.simpledialog as simpledialog
-            key_root = tk.Tk()
-            key_root.withdraw()
-            api_key = simpledialog.askstring("🔐 API Key", "Ingrese la API Key:", show='*')
-            key_root.destroy()
-            if not api_key:
-                return
+            import subprocess as _sp
+            _sp.run(_largs, capture_output=True, text=True, timeout=3600,
+                    creationflags=getattr(_sp, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
 
-        # Validar API Key
-        print("🔐 Validando API Key...")
-        auth_manager = APIAuthManager(base_url=config['api_url'])
-        ping_result = auth_manager.ping_api_key(api_key)
-        if not ping_result.get('success'):
-            print(f"❌ API Key inválida: {ping_result.get('error', 'Error desconocido')}")
-            return
-
-        print("✅ API Key válida")
-
-        # Validar empresa
-        print("🏢 Validando empresa...")
-        validate_result = auth_manager.validate_company(config['company_rif'], config['company_email'])
-        if not validate_result.get('success'):
-            print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
-            return
-
-        company_id = validate_result.get('company_id')
-        print(f"✅ Company ID: {company_id}")
-
-        # Ejecutar sincronización
-        print("\n🔄 SINCRONIZANDO...")
-        try:
-            sync_manager = APISyncManager(
-                postgres_config={
-                    'host': config['postgres_host'],
-                    'port': int(config['postgres_port']),
-                    'database': config['postgres_database'],
-                    'user': config['postgres_user'],
-                    'password': config['postgres_password']
-                },
-                auth_manager=auth_manager,
-                logger=lambda msg, level="info": print(f"{'✅' if level == 'info' else '❌'} {msg}")
-            )
-
-            if not sync_manager.connect_postgresql():
-                print("❌ No se pudo conectar a PostgreSQL")
-                return
-
-            if not sync_manager.initialize_api_clients():
-                print("❌ No se pudieron inicializar los clientes API")
-                return
-
-            sync_manager.sync_all()
-            print("\n✅ Sincronización completada")
             try:
-                mostrar_banner(
-                    "✅ Sincronización Inicial Completada",
-                    "Iniciando System Tray en segundo plano...",
-                    duracion=3
-                )
+                with open(_result_path) as _f:
+                    _lr = _json.load(_f)
             except Exception:
-                pass
+                _lr = {}
+        except Exception as _e:
+            print(f"❌ Error en menú principal: {_e}")
+            _lr = {}
+        finally:
+            if _result_path and os.path.exists(_result_path):
+                try: os.unlink(_result_path)
+                except: pass
 
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-
-        # Iniciar System Tray (bloqueante, mantiene proceso vivo)
-        print("\n" + "="*70)
-        print("📬 INICIANDO SYSTEM TRAY...")
-        print("="*70)
-        print("El icono aparecerá junto al reloj")
-        print("Se sincronizará automáticamente cada", config.get('sync_interval_minutes', '30'), "minutos")
-        print("="*70 + "\n")
-
-        try:
-            tray = SystemTrayService(config, api_key, company_id)
-            tray.iniciar()
-        except Exception as e:
-            print(f"❌ Error iniciando System Tray: {e}")
-
+        if _lr.get('action') == 'tray':
+            print("📬 System Tray iniciado desde el menú principal")
         return
 
     # Modo normal con argumentos de línea de comandos
@@ -7603,6 +6776,10 @@ def main():
     parser.add_argument("--config-window", metavar="RESULT_PATH",
                        help=argparse.SUPPRESS)
     parser.add_argument("--manager-window", metavar="CONFIG_PATH",
+                       help=argparse.SUPPRESS)
+    parser.add_argument("--launcher-window", metavar="RESULT_PATH",
+                       help=argparse.SUPPRESS)
+    parser.add_argument("--confirm-dialog", metavar="RESULT_PATH",
                        help=argparse.SUPPRESS)
 
     args = parser.parse_args()
@@ -7622,7 +6799,14 @@ def main():
     # Si se pasa --manager-window, mostrar manager en proceso propio y salir
     if args.manager_window:
         return _handle_manager_window(args.manager_window)
-        return _handle_log_window(args.log_window)
+
+    # Si se pasa --launcher-window, mostrar menú principal en proceso propio y salir
+    if args.launcher_window:
+        return _handle_launcher_window(args.launcher_window)
+
+    # Si se pasa --confirm-dialog, mostrar confirmación en proceso propio y salir
+    if args.confirm_dialog:
+        return _handle_confirm_dialog(args.confirm_dialog)
 
     # Si --reconfig o mode=reconfig, borrar config
     if args.mode == "reconfig":
@@ -7723,12 +6907,34 @@ def main():
             sys.exit(1)
 
     elif args.mode == "manager":
-        # Manager siempre abre, con o sin configuración
-        # (puede configurarse desde el botón "Configurar")
-        root = tk.Tk()
-        set_window_favicon(root)
-        app = ManagerWindow(root)
-        root.mainloop()
+        # Manager con PySide6 en proceso separado
+        import tempfile, subprocess as _sp_mgr
+        _cfg_mgr = {}
+        if os.path.exists(CONFIG_FILE):
+            try:
+                from config_encryption import decrypt_config
+                with open(CONFIG_FILE) as _f:
+                    _cfg_mgr = decrypt_config(json.load(_f))
+            except Exception:
+                _cfg_mgr = {}
+
+        _cfg_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as _f:
+                _cfg_path = _f.name
+                json.dump(_cfg_mgr, _f)
+
+            _mgr_args = ([sys.executable, '--manager-window', _cfg_path]
+                       if getattr(sys, 'frozen', False)
+                       else [sys.executable, __file__, '--manager-window', _cfg_path])
+            _sp_mgr.run(_mgr_args, capture_output=True, text=True, timeout=None,
+                       creationflags=getattr(_sp_mgr, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+        except Exception as _e:
+            print(f"❌ Error en Manager: {_e}")
+        finally:
+            if _cfg_path:
+                try: os.unlink(_cfg_path)
+                except: pass
 
         # Despues de cerrar el Manager, si hay configuracion, iniciar System Tray
         if os.path.exists(CONFIG_FILE):
@@ -7741,7 +6947,6 @@ def main():
 
                 api_key = _cfg.get('api_key', '')
                 if api_key:
-                    # Iniciar tray en un hilo
                     tray_thread = threading.Thread(
                         target=iniciar_system_tray,
                         args=(_cfg, api_key),
