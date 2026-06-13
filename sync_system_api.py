@@ -6334,6 +6334,9 @@ def _handle_manager_window(config_path: str) -> None:
 
         def _save_interval(self) -> None:
             interval = str(self.interval_spin.value())
+            errors = []
+
+            # Guardar en PostgreSQL
             try:
                 import psycopg2
                 conn = psycopg2.connect(
@@ -6353,9 +6356,30 @@ def _handle_manager_window(config_path: str) -> None:
                 conn.commit()
                 cursor.close()
                 conn.close()
-                self._log(f"✅ Intervalo actualizado a {interval} minutos")
             except Exception as e:
-                QMessageBox.warning(self, "Error", f"No se pudo guardar: {e}")
+                errors.append(f"PostgreSQL: {e}")
+
+            # Guardar en archivo de configuracion
+            try:
+                import os
+                cfg_path = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
+                if os.path.exists(cfg_path):
+                    from config_encryption import decrypt_config, encrypt_config
+                    with open(cfg_path, 'r') as f:
+                        enc_data = json.load(f)
+                    cfg_data = decrypt_config(enc_data)
+                    cfg_data['sync_interval_minutes'] = interval
+                    new_enc = encrypt_config(cfg_data)
+                    with open(cfg_path, 'w') as f:
+                        json.dump(new_enc, f, indent=2)
+            except Exception as e:
+                errors.append(f"Config file: {e}")
+
+            if errors:
+                QMessageBox.warning(self, "Error",
+                    f"Intervalo guardado con advertencias:\n\n" + "\n".join(errors))
+            else:
+                self._log(f"Intervalo actualizado a {interval} minutos")
 
         def _open_logs(self) -> None:
             if not log_file:
