@@ -5349,245 +5349,127 @@ class SystemTrayService:
         except Exception as e:
             print(f"⚠️ No se pudo configurar auto-inicio: {e}")
 
-    class AuthDialog(tk.Toplevel):
-        """Diálogo simple de autenticación con email y contraseña."""
-
-        def __init__(self, parent, config, callback):
-            """
-            Inicializa el diálogo de autenticación.
-
-            Args:
-                parent: Ventana padre (root de pystray)
-                config: Configuración con api_url
-                callback: Función a llamar con (email, password) o None si cancelado
-            """
-            super().__init__(parent)
-            self.config = config
-            self.callback = callback
-            self.result = None
-
-            # Configurar ventana
-            self.title("Sincronizador - Verificar Identidad")
-            self.resizable(False, False)
-
-            # Centrar en pantalla
-            self.update_idletasks()
-            width = 400
-            height = 250
-            x = (self.winfo_screenwidth() // 2) - (width // 2)
-            y = (self.winfo_screenheight() // 2) - (height // 2)
-            self.geometry(f'{width}x{height}+{x}+{y}')
-
-            # Icono
-            set_window_favicon(self)
-
-            self._create_widgets()
-
-            # Hacer modal
-            self.transient(parent)
-            self.grab_set()
-
-            # Protocolo de cierre
-            self.protocol("WM_DELETE_WINDOW", self.on_cancel)
-
-        def _create_widgets(self):
-            """Crea los widgets del diálogo."""
-            import tkinter.ttk as ttk
-
-            # Frame principal con padding
-            frame = ttk.Frame(self, padding="20")
-            frame.pack(fill=tk.BOTH, expand=True)
-
-            # Título
-            ttk.Label(
-                frame,
-                text="🔐 Verificación Requerida",
-                font=('Arial', 12, 'bold')
-            ).pack(pady=(0, 15))
-
-            # Instrucción
-            ttk.Label(
-                frame,
-                text="Para continuar, ingrese sus credenciales:",
-                font=('Arial', 9)
-            ).pack(pady=(0, 10))
-
-            # Email
-            ttk.Label(frame, text="Email:").pack(anchor=tk.W)
-            self.email_var = tk.StringVar()
-            self.email_entry = ttk.Entry(frame, width=40, textvariable=self.email_var)
-            self.email_entry.pack(fill=tk.X, pady=(0, 10))
-
-            # Contraseña
-            ttk.Label(frame, text="Contraseña:").pack(anchor=tk.W)
-            self.password_var = tk.StringVar()
-            self.password_entry = ttk.Entry(frame, width=40, textvariable=self.password_var, show="*")
-            self.password_entry.pack(fill=tk.X, pady=(0, 15))
-
-            # Frame de botones
-            button_frame = tk.Frame(frame)
-            button_frame.pack(fill=tk.X, pady=(10, 0))
-
-            # Botón Aceptar
-            tk.Button(
-                button_frame,
-                text="✅ Aceptar",
-                command=self.on_accept,
-                bg='#2E7D32',
-                fg='white',
-                font=('Arial', 11, 'bold'),
-                relief=tk.RAISED,
-                bd=2,
-                padx=25,
-                pady=8,
-                cursor='hand2'
-            ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
-
-            # Botón Cancelar
-            tk.Button(
-                button_frame,
-                text="❌ Cancelar",
-                command=self.on_cancel,
-                bg='#C62828',
-                fg='white',
-                font=('Arial', 11, 'bold'),
-                relief=tk.RAISED,
-                bd=2,
-                padx=25,
-                pady=8,
-                cursor='hand2'
-            ).pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(5, 0))
-
-            # Enter para aceptar
-            self.bind('<Return>', lambda e: self.on_accept())
-            self.bind('<Escape>', lambda e: self.on_cancel())
-
-            # Foco inicial en email
-            self.email_entry.focus_set()
-
-        def on_accept(self):
-            """Maneja el clic en Aceptar."""
-            email = self.email_var.get().strip()
-            password = self.password_var.get().strip()
-
-            if email and password:
-                self.result = (email, password)
-            self.destroy()
-
-        def on_cancel(self):
-            """Maneja el clic en Cancelar o cierre de ventana."""
-            self.result = None
-            self.destroy()
-
-        def run(self):
-            """Ejecuta el diálogo modal y retorna el resultado."""
-            self.wait_window()
-            return self.result
-
     def reautenticar_usuario(self):
-            """
-            Pide autenticación nuevamente antes de ejecutar acciones sensibles.
-            Usa AuthDialog simplificado para máxima compatibilidad con Windows 11.
+        """Pide autenticación en proceso separado (compatible Win11 25H2).
 
-            Returns:
-                bool: True si autenticación exitosa, False si falló
-            """
-            import requests
+        Ejecuta el diálogo de login en un proceso hijo con su propio tk.Tk(),
+        evitando problemas de foco con ventanas pystray ocultas en Windows 11 25H2.
 
-            # Si no hay root, crear uno temporal
-            if not self._root:
-                print("[WARNING] No hay root para reautenticación, creando temporal...")
-                self._root = tk.Tk()
-                self._root.geometry('1x1+0+0')
-                self._root.overrideredirect(True)
-                self._root.attributes('-alpha', 0.01)
+        Returns:
+            bool: True si autenticación exitosa, False si falló o canceló
+        """
+        import subprocess
+        import json
+        import tempfile
+        import os
+        import sys
 
-            # Guardar estado original del root
-            was_overrideredirect = self._root.overrideredirect()
-            original_alpha = self._root.attributes('-alpha')
-            original_geometry = self._root.geometry()
+        # Archivo temporal para resultado del proceso hijo
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
+            result_path = f.name
 
-            # Temporalmente hacer el root NORMAL para Windows 11
-            try:
-                self._root.overrideredirect(False)
-                self._root.attributes('-alpha', 1.0)
-                self._root.geometry('1x1+99999+99999')  # Fuera de pantalla
-                self._root.update_idletasks()
-            except:
-                pass
+        try:
+            # Determinar cómo ejecutar el diálogo en proceso separado
+            if getattr(sys, 'frozen', False):
+                args = [sys.executable, '--auth-dialog', result_path]
+            else:
+                args = [sys.executable, __file__, '--auth-dialog', result_path]
 
-            # Crear y mostrar diálogo de autenticación
-            dialog = self.AuthDialog(self._root, self.config, None)
-            credentials = dialog.run()
+            creationflags = 0
+            if sys.platform == 'win32':
+                creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 
-            # Restaurar root a estado original
-            try:
-                self._root.geometry(original_geometry)
-                self._root.overrideredirect(was_overrideredirect)
-                self._root.attributes('-alpha', original_alpha)
-                self._root.update_idletasks()
-            except:
-                pass
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                creationflags=creationflags
+            )
 
-            # Si canceló, retornar False
-            if not credentials:
+            if result.returncode != 0:
+                print(f"[AUTH] Error en proceso de autenticación (código {result.returncode})")
                 return False
 
-            email, password = credentials
+            # Leer resultado del proceso hijo
+            try:
+                with open(result_path, 'r') as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                print(f"[AUTH] Error leyendo resultado: {e}")
+                return False
+
+            email = data.get('email', '')
+            password = data.get('password', '')
+
+            if not email or not password:
+                print("[AUTH] Autenticación cancelada por el usuario")
+                return False
 
             # Validar credenciales contra la API
+            import requests
+            api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
+            response = requests.post(
+                f"{api_url}/auth/login",
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                json={
+                    'email': email,
+                    'password': password,
+                    'device_name': 'tray_auth',
+                    'force_logout': True
+                },
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    user_data = data.get('data', {})
+                    user = user_data.get('user', {})
+
+                    # Validar rol
+                    role = user.get('role')
+                    if role not in ['admin', 'cajero']:
+                        mostrar_banner(
+                            "Acceso Denegado",
+                            f"Rol no autorizado: {role}\nSolo administradores y cajeros.",
+                            duracion=10
+                        )
+                        return False
+
+                    # Guardar credenciales
+                    self.api_token = user_data.get('token')
+                    self.user_email = email
+                    self.api_password = password
+                    return True
+
+            # Error de autenticación
+            error_msg = "Credenciales inválidas"
             try:
-                api_url = self.config.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api')
-                response = requests.post(
-                    f"{api_url}/auth/login",
-                    headers={
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    },
-                    json={
-                        'email': email,
-                        'password': password,
-                        'device_name': 'tray_auth',
-                        'force_logout': True
-                    },
-                    timeout=30
-                )
+                error_data = response.json()
+                error_msg = error_data.get('message', error_msg)
+            except Exception:
+                pass
 
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('success'):
-                        user_data = data.get('data', {})
-                        user = user_data.get('user', {})
+            mostrar_banner("Error de Autenticación", error_msg, duracion=10)
+            return False
 
-                        # Validar rol
-                        role = user.get('role')
-                        if role not in ['admin', 'cajero']:
-                            messagebox.showerror(
-                                "❌ Acceso Denegado",
-                                f"Rol no autorizado: {role}\n\nSolo pueden acceder:\n- Administradores\n- Cajeros"
-                            )
-                            return False
-
-                        # Guardar credenciales
-                        self.api_token = user_data.get('token')
-                        self.user_email = email
-                        self.api_password = password
-                        return True
-
-                # Error de autenticación
-                error_msg = "Credenciales inválidas"
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('message', error_msg)
-                except:
-                    pass
-
-                messagebox.showerror("❌ Error", error_msg)
-                return False
-
-            except Exception as e:
-                messagebox.showerror("❌ Error", f"Error de conexión:\n{str(e)}")
-                return False
+        except subprocess.TimeoutExpired:
+            print("[AUTH] Tiempo de espera agotado")
+            mostrar_banner("Error", "Tiempo de espera agotado en autenticación.", duracion=10)
+            return False
+        except Exception as e:
+            print(f"[AUTH] Error en autenticación: {e}")
+            mostrar_banner("Error", f"Error en autenticación:\n{str(e)}", duracion=10)
+            return False
+        finally:
+            try:
+                os.unlink(result_path)
+            except Exception:
+                pass
 
     def limpiar_auto_inicio(self):
         """
@@ -6423,6 +6305,51 @@ def run_service_loop():
 # MAIN
 # ==============================================================================
 
+def _handle_auth_dialog(result_path: str) -> None:
+    """Muestra diálogo de autenticación en proceso separado.
+
+    Crea su propia instancia tk.Tk() para evitar problemas de foco con
+    ventanas ocultas en Windows 11 25H2.
+
+    Args:
+        result_path: Ruta donde guardar el resultado JSON
+    """
+    import json
+    import tkinter.simpledialog as simpledialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.lift()
+    root.focus_force()
+
+    email = simpledialog.askstring(
+        "Sincronizador - Verificar Identidad",
+        "Ingrese su email de administrador:",
+        parent=root
+    )
+
+    if not email:
+        root.destroy()
+        with open(result_path, 'w') as f:
+            json.dump({"email": "", "password": ""}, f)
+        return
+
+    password = simpledialog.askstring(
+        "Sincronizador - Verificar Identidad",
+        "Ingrese su contraseña:",
+        show="*",
+        parent=root
+    )
+
+    root.destroy()
+
+    with open(result_path, 'w') as f:
+        json.dump({
+            "email": email.strip(),
+            "password": (password or "").strip()
+        }, f)
+
+
 def main():
     """Función principal."""
 
@@ -6601,8 +6528,14 @@ def main():
                        default="manager", help="Modo de ejecución")
     parser.add_argument("--once", action="store_true",
                        help="En modo service, ejecutar una sola vez y salir")
+    parser.add_argument("--auth-dialog", metavar="RESULT_PATH",
+                       help=argparse.SUPPRESS)
 
     args = parser.parse_args()
+
+    # Si se pasa --auth-dialog, mostrar diálogo en proceso propio y salir
+    if args.auth_dialog:
+        return _handle_auth_dialog(args.auth_dialog)
 
     # Si --reconfig o mode=reconfig, borrar config
     if args.mode == "reconfig":
