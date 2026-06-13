@@ -6313,48 +6313,120 @@ def run_service_loop():
 # ==============================================================================
 
 def _handle_auth_dialog(result_path: str) -> None:
-    """Muestra diálogo de autenticación en proceso separado.
+    """Muestra diálogo de autenticación con PySide6 en proceso separado.
 
-    Crea su propia instancia tk.Tk() para evitar problemas de foco con
+    Crea su propia instancia QApplication para evitar problemas de foco con
     ventanas ocultas en Windows 11 25H2.
 
     Args:
         result_path: Ruta donde guardar el resultado JSON
     """
     import json
-    import tkinter.simpledialog as simpledialog
-
-    root = tk.Tk()
-    root.withdraw()
-    root.lift()
-    root.focus_force()
-
-    email = simpledialog.askstring(
-        "Sincronizador - Verificar Identidad",
-        "Ingrese su email de administrador:",
-        parent=root
+    import sys
+    from PySide6.QtWidgets import (
+        QApplication, QDialog, QVBoxLayout, QHBoxLayout,
+        QLabel, QLineEdit, QPushButton
     )
+    from PySide6.QtCore import Qt
 
-    if not email:
-        root.destroy()
+    class AuthDialog(QDialog):
+        """Diálogo de autenticación moderno con PySide6."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.setWindowTitle("Sincronizador - Verificar Identidad")
+            self.setFixedSize(420, 260)
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            self.setStyleSheet("""
+                QDialog { background-color: #f5f5f5; }
+                QLabel { font-size: 12px; color: #333; }
+                QLineEdit {
+                    padding: 8px; font-size: 13px;
+                    border: 1px solid #ccc; border-radius: 4px;
+                    background: white;
+                }
+                QLineEdit:focus { border-color: #2E7D32; }
+            """)
+
+            layout = QVBoxLayout()
+            layout.setSpacing(10)
+            layout.setContentsMargins(24, 20, 24, 20)
+
+            # Título
+            title = QLabel("🔐 Verificación Requerida")
+            title.setStyleSheet("font-size: 14px; font-weight: bold; color: #1a1a1a;")
+            title.setAlignment(Qt.AlignCenter)
+            layout.addWidget(title)
+
+            # Instrucción
+            instr = QLabel("Para continuar, ingrese sus credenciales de administrador:")
+            instr.setAlignment(Qt.AlignCenter)
+            layout.addWidget(instr)
+
+            # Email
+            layout.addWidget(QLabel("Email:"))
+            self.email_input = QLineEdit()
+            self.email_input.setPlaceholderText("usuario@ejemplo.com")
+            layout.addWidget(self.email_input)
+
+            # Contraseña
+            layout.addWidget(QLabel("Contraseña:"))
+            self.password_input = QLineEdit()
+            self.password_input.setEchoMode(QLineEdit.Password)
+            self.password_input.setPlaceholderText("••••••••")
+            layout.addWidget(self.password_input)
+
+            # Botones
+            btn_layout = QHBoxLayout()
+
+            accept_btn = QPushButton("✅ Aceptar")
+            accept_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2E7D32; color: white;
+                    font-weight: bold; padding: 8px 24px;
+                    border-radius: 4px; font-size: 13px; border: none;
+                }
+                QPushButton:hover { background-color: #1B5E20; }
+                QPushButton:pressed { background-color: #145214; }
+            """)
+            accept_btn.clicked.connect(self.accept)
+            btn_layout.addWidget(accept_btn)
+
+            cancel_btn = QPushButton("❌ Cancelar")
+            cancel_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #C62828; color: white;
+                    font-weight: bold; padding: 8px 24px;
+                    border-radius: 4px; font-size: 13px; border: none;
+                }
+                QPushButton:hover { background-color: #B71C1C; }
+                QPushButton:pressed { background-color: #8E0000; }
+            """)
+            cancel_btn.clicked.connect(self.reject)
+            btn_layout.addWidget(cancel_btn)
+
+            layout.addLayout(btn_layout)
+            self.setLayout(layout)
+
+            # Enter navega entre campos y acepta
+            self.email_input.returnPressed.connect(self.password_input.setFocus)
+            self.password_input.returnPressed.connect(self.accept)
+
+            # Foco inicial en email
+            self.email_input.setFocus()
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+
+    dialog = AuthDialog()
+    if dialog.exec() == QDialog.Accepted:
+        email = dialog.email_input.text().strip()
+        password = dialog.password_input.text().strip()
+        with open(result_path, 'w') as f:
+            json.dump({"email": email, "password": password}, f)
+    else:
         with open(result_path, 'w') as f:
             json.dump({"email": "", "password": ""}, f)
-        return
-
-    password = simpledialog.askstring(
-        "Sincronizador - Verificar Identidad",
-        "Ingrese su contraseña:",
-        show="*",
-        parent=root
-    )
-
-    root.destroy()
-
-    with open(result_path, 'w') as f:
-        json.dump({
-            "email": email.strip(),
-            "password": (password or "").strip()
-        }, f)
 
 
 def main():
