@@ -98,6 +98,10 @@ a = Analysis(
         'tkinter.scrolledtext',
         'tkinter.messagebox',
         'tkinter.filedialog',
+        # PySide6 (diálogo de autenticación, solo QtWidgets/QtCore/QtGui)
+        'PySide6.QtCore',
+        'PySide6.QtWidgets',
+        'PySide6.QtGui',
         # Otras dependencias
         'threading',
         'queue',

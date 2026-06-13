@@ -6334,32 +6334,8 @@ def _handle_manager_window(config_path: str) -> None:
 
         def _save_interval(self) -> None:
             interval = str(self.interval_spin.value())
-            errors = []
 
-            # Guardar en PostgreSQL
-            try:
-                import psycopg2
-                conn = psycopg2.connect(
-                    host=config['postgres_host'],
-                    port=config['postgres_port'],
-                    database=config['postgres_database'],
-                    user=config['postgres_user'],
-                    password=config['postgres_password'],
-                    connect_timeout=5
-                )
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO sync_config (key, value, updated_at)
-                    VALUES ('sync_interval_minutes', %s, NOW())
-                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
-                """, (interval,))
-                conn.commit()
-                cursor.close()
-                conn.close()
-            except Exception as e:
-                errors.append(f"PostgreSQL: {e}")
-
-            # Guardar en archivo de configuracion
+            # Guardar solo en archivo de configuracion
             try:
                 import os
                 cfg_path = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
@@ -6373,13 +6349,17 @@ def _handle_manager_window(config_path: str) -> None:
                     with open(cfg_path, 'w') as f:
                         json.dump(new_enc, f, indent=2)
             except Exception as e:
-                errors.append(f"Config file: {e}")
+                QMessageBox.critical(self, "Error",
+                    f"No se pudo guardar el intervalo:\n{e}")
+                return
 
-            if errors:
-                QMessageBox.warning(self, "Error",
-                    f"Intervalo guardado con advertencias:\n\n" + "\n".join(errors))
-            else:
-                self._log(f"Intervalo actualizado a {interval} minutos")
+            QMessageBox.information(self, "Intervalo guardado",
+                f"Intervalo actualizado a {interval} minutos.\n\n"
+                "IMPORTANTE: Para que el cambio tenga efecto debe:\n"
+                "  1. Cerrar completamente el programa\n"
+                "  2. Volver a iniciarlo")
+
+            self._log(f"Intervalo actualizado a {interval} minutos (requiere reinicio)")
 
         def _open_logs(self) -> None:
             if not log_file:

@@ -2,7 +2,7 @@
 # Spec file para compilar sync_system_api.py CON CONSOLA
 # Incluye todas las dependencias para System Tray y API REST
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 # Collect all plyer data (notificaciones)
 plyer_datas, plyer_binaries, plyer_hiddenimports = collect_all('plyer')
@@ -32,8 +32,11 @@ cryptography_datas, cryptography_binaries, cryptography_hiddenimports = collect_
 # Collect all cffi data (dependencia de cryptography)
 cffi_datas, cffi_binaries, cffi_hiddenimports = collect_all('cffi')
 
-# Collect all PySide6 data (diálogo de autenticación)
-pyside6_datas, pyside6_binaries, pyside6_hiddenimports = collect_all('PySide6')
+# Collect PySide6 data (solo los submódulos que realmente se usan)
+# PySide6.QtWidgets, QtCore, QtGui — NO incluir QtQml, QtQuick, QtNetwork, QtWebEngine, etc.
+pyside6_datas = collect_data_files('PySide6')
+pyside6_binaries = []
+pyside6_hiddenimports = ['PySide6.QtWidgets', 'PySide6.QtCore', 'PySide6.QtGui']
 
 # Construir lista de datas
 datas_list = [
@@ -123,8 +126,7 @@ a = Analysis(
         'tkinter.scrolledtext',
         'tkinter.messagebox',
         'tkinter.filedialog',
-        # PySide6 (diálogo de autenticación)
-        'PySide6',
+        # PySide6 (solo QtWidgets, QtCore, QtGui — nada más)
         'PySide6.QtCore',
         'PySide6.QtWidgets',
         'PySide6.QtGui',
