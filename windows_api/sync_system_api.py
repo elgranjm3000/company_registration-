@@ -5969,15 +5969,24 @@ def _handle_config_window(result_path: str) -> None:
                     f"{config['api_url']}/sync-client/ping",
                     headers={'Authorization': f'Bearer {config["api_key"]}',
                             'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                             'X-App-Version': APP_VERSION,
                             'X-App-Type': 'sincronizador'},
                     timeout=30
                 )
                 if ping.status_code not in [200, 201]:
                     try:
-                        err_msg = ping.json().get('message', '') or ping.json().get('error', '')
+                        err_data = ping.json()
+                        err_msg = err_data.get('message', '') or err_data.get('error', '')
                     except Exception:
+                        err_data = {}
                         err_msg = ''
+
+                    if ping.status_code == 403:
+                        api_msg = err_data.get('message', '') if err_data else ''
+                        detail = api_msg or "La API Key esta suspendida o bloqueada. Contacte a su proveedor."
+                        raise Exception(f"Acceso denegado (HTTP 403): {detail}")
+
                     raise Exception(f"API Key invalida (HTTP {ping.status_code}): {err_msg or 'Revise la API Key y la URL'}")
                 ping_data = ping.json()
                 if not ping_data.get('success'):
@@ -5992,6 +6001,7 @@ def _handle_config_window(result_path: str) -> None:
                     f"{config['api_url']}/sync-client/company/validate",
                     headers={'Authorization': f'Bearer {config["api_key"]}',
                             'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                             'X-App-Version': APP_VERSION,
                             'X-App-Type': 'sincronizador'},
                     json={'rif': config['company_rif'], 'email': config['company_email']},
