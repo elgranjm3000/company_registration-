@@ -5789,12 +5789,12 @@ def _handle_config_window(result_path: str) -> None:
 
             form = QFormLayout()
             self.interval_spin = QSpinBox()
-            self.interval_spin.setMinimum(1)
+            self.interval_spin.setMinimum(0)
             self.interval_spin.setMaximum(1440)
-            self.interval_spin.setValue(int(self.sync_interval) if self.sync_interval.isdigit() else 30)
-            self.interval_spin.setSuffix(" minutos")
-            self.interval_spin.setFixedWidth(160)
-            form.addRow("Intervalo de sincronización:", self.interval_spin)
+            self.interval_spin.setValue(0)
+            self.interval_spin.setSuffix(" minutos (0 = preguntar al guardar)")
+            self.interval_spin.setFixedWidth(200)
+            form.addRow("Intervalo de sincronizacion:", self.interval_spin)
             layout.addLayout(form)
 
             info = QLabel("ℹ️ El sistema se sincronizará automáticamente cada X minutos.")
@@ -5907,6 +5907,12 @@ def _handle_config_window(result_path: str) -> None:
 
             if not api_key or not pg_db:
                 QMessageBox.warning(self, "Advertencia", "API Key y Database son obligatorios")
+                return
+
+            if int(interval) <= 0:
+                QMessageBox.warning(self, "Intervalo requerido",
+                    "Debe establecer un intervalo de sincronizacion.\n\n"
+                    "Indique cada cuantos minutos desea que el sistema sincronice automaticamente.")
                 return
 
             if not self.company_rif or not self.company_email:
@@ -6089,8 +6095,6 @@ def _handle_manager_window(config_path: str) -> None:
                 self.log_msg.emit(msg, level)
 
             try:
-                from api_client import APIAuthManager, APISyncManager
-
                 auth = APIAuthManager(self.config['api_url'], logger)
                 auth.ping_api_key(self.config['api_key'])
                 auth.validate_company(self.config['company_rif'], self.config['company_email'])
@@ -6253,10 +6257,6 @@ def _handle_manager_window(config_path: str) -> None:
             sync_all_btn.clicked.connect(lambda: self._run_sync(None))
             action_layout.addWidget(sync_all_btn)
 
-            config_btn = QPushButton("⚙️ Configurar")
-            config_btn.clicked.connect(self._open_config)
-            action_layout.addWidget(config_btn)
-
             logs_btn = QPushButton("📋 Ver Logs")
             logs_btn.clicked.connect(self._open_logs)
             action_layout.addWidget(logs_btn)
@@ -6352,37 +6352,6 @@ def _handle_manager_window(config_path: str) -> None:
                 self._log(f"✅ Intervalo actualizado a {interval} minutos")
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"No se pudo guardar: {e}")
-
-        def _open_config(self) -> None:
-            import subprocess
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as f:
-                rp = f.name
-            try:
-                sp_args = ([sys.executable, '--config-window', rp]
-                          if getattr(sys, 'frozen', False)
-                          else [sys.executable, __file__, '--config-window', rp])
-                subprocess.run(sp_args, capture_output=True, text=True, timeout=300,
-                              creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
-                try:
-                    with open(rp) as f:
-                        data = json.load(f)
-                    if data.get('saved'):
-                        from config_encryption import encrypt_config
-                        CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
-                        enc = encrypt_config({k: v for k, v in data.items() if k != 'saved'})
-                        with open(CONFIG_FILE, 'w') as f:
-                            json.dump(enc, f, indent=2)
-                        self._log("✅ Configuración actualizada")
-                except Exception:
-                    pass
-            except Exception as e:
-                self._log(f"❌ Error en configuración: {e}")
-            finally:
-                try:
-                    os.unlink(rp)
-                except Exception:
-                    pass
 
         def _open_logs(self) -> None:
             if not log_file:
