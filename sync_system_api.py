@@ -5724,7 +5724,7 @@ class SystemTrayService:
             self._manager_open = False
 
     def ver_logs(self):
-        """Abre ventana de logs en el hilo principal usando Toplevel"""
+        """Abre ventana de logs con PySide6 en proceso separado."""
         if self._logs_open:
             print("⚠️ La ventana de Logs ya está abierta")
             return
@@ -5744,66 +5744,30 @@ class SystemTrayService:
         # Si llegó aquí, autenticación exitosa
         self._logs_open = True
         try:
-            import tkinter as tk
-            from tkinter import scrolledtext, ttk
+            import subprocess
+            import sys
 
-            log_window = tk.Toplevel(self._root)
-            set_window_favicon(log_window)
-            log_window.title(f"Logs - Sync API ({self.config.get('company_rif', 'N/A')})")
-            log_window.geometry("900x700")
-
-            def on_closing():
-                print("[DEBUG] ver_logs: Ventana cerrada, limpiando flags...")
-                self._logs_open = False
-                log_window.destroy()
-
-            log_window.protocol("WM_DELETE_WINDOW", on_closing)
-
-            # Centrar ventana
-            log_window.update_idletasks()
-            width = log_window.winfo_width()
-            height = log_window.winfo_height()
-            x = (log_window.winfo_screenwidth() // 2) - (width // 2)
-            y = (log_window.winfo_screenheight() // 2) - (height // 2)
-            log_window.geometry(f'{width}x{height}+{x}+{y}')
-
-            # Header
-            header = tk.Frame(log_window, bg="#2c3e50", height=50)
-            header.pack(fill="x")
-            header.pack_propagate(False)
-
-            tk.Label(header, text="📊 Logs del Sistema",
-                    font=("Arial", 14, "bold"), bg="#2c3e50", fg="white").pack(pady=12)
-
-            # Área de texto
-            txt = scrolledtext.ScrolledText(log_window, state="normal", font=("Consolas", 10))
-            txt.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
-            # Cargar logs
             log_file = get_log_file(self.config.get('company_email'))
-            if os.path.exists(log_file):
-                try:
-                    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-                        content = f.read()
-                    if not content.strip():
-                        content = "El archivo de logs está vacío."
-                    txt.insert("1.0", content)
-                    txt.see("end")
-                except Exception as e:
-                    txt.insert("1.0", f"Error cargando logs: {e}")
+
+            if getattr(sys, 'frozen', False):
+                args = [sys.executable, '--log-window', log_file]
             else:
-                txt.insert("1.0", f"No hay archivo de logs aún.\nUbicación esperada: {log_file}")
+                args = [sys.executable, __file__, '--log-window', log_file]
 
-            txt.config(state="disabled")
+            creationflags = 0
+            if sys.platform == 'win32':
+                creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 
-            # Botón cerrar
-            btn_frame = tk.Frame(log_window)
-            btn_frame.pack(fill="x", pady=10)
-            tk.Button(btn_frame, text="❌ Cerrar", command=on_closing,
-                     font=("Arial", 11), width=20).pack()
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                creationflags=creationflags
+            )
 
-            # wait_window() procesa eventos sin crear un segundo Tcl interpreter
-            self._root.wait_window(log_window)
+            if result.returncode != 0:
+                print(f"[LOGS] Error en proceso de logs (código {result.returncode})")
 
         except Exception as e:
             print(f"Error abriendo logs: {e}")
@@ -6422,6 +6386,111 @@ def _handle_auth_dialog(result_path: str) -> None:
             json.dump({"email": "", "password": ""}, f)
 
 
+def _handle_log_window(log_file: str) -> None:
+    """Muestra visor de logs con PySide6 en proceso separado.
+
+    Args:
+        log_file: Ruta al archivo de logs a mostrar
+    """
+    import sys
+    import os
+    from PySide6.QtWidgets import (
+        QApplication, QDialog, QVBoxLayout, QHBoxLayout,
+        QLabel, QTextEdit, QPushButton
+    )
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+
+    class LogDialog(QDialog):
+        """Ventana de visualización de logs con PySide6."""
+
+        def __init__(self, log_path: str) -> None:
+            super().__init__()
+            self.setWindowTitle("📊 Logs del Sistema - Visor")
+            self.resize(900, 700)
+            self.setMinimumSize(500, 300)
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            self.setStyleSheet("""
+                QDialog { background-color: #f0f0f0; }
+                QTextEdit {
+                    font-family: Consolas, "Courier New", monospace;
+                    font-size: 10px;
+                    background-color: #1e1e1e;
+                    color: #d4d4d4;
+                    border: 1px solid #333;
+                }
+            """)
+
+            layout = QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+
+            # Header oscuro
+            header = QLabel("📊 Logs del Sistema")
+            header.setStyleSheet("""
+                QLabel {
+                    background-color: #2c3e50;
+                    color: white;
+                    font-size: 14px;
+                    font-weight: bold;
+                    padding: 14px 20px;
+                }
+            """)
+            header.setAlignment(Qt.AlignCenter)
+            layout.addWidget(header)
+
+            # Área de texto con los logs
+            self.text_edit = QTextEdit()
+            self.text_edit.setReadOnly(True)
+            self.text_edit.setFont(QFont("Consolas", 10))
+
+            # Cargar contenido del archivo
+            if os.path.exists(log_path):
+                try:
+                    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                    if not content.strip():
+                        content = "El archivo de logs está vacío."
+                except Exception as e:
+                    content = f"Error cargando logs: {e}"
+            else:
+                content = f"No hay archivo de logs aún.\nUbicación esperada: {log_path}"
+
+            self.text_edit.setText(content)
+            self.text_edit.verticalScrollBar().setValue(
+                self.text_edit.verticalScrollBar().maximum()
+            )
+            layout.addWidget(self.text_edit)
+
+            # Botón cerrar
+            btn_layout = QHBoxLayout()
+            btn_layout.setContentsMargins(10, 10, 10, 10)
+
+            close_btn = QPushButton("❌ Cerrar")
+            close_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #C62828; color: white;
+                    font-weight: bold; padding: 8px 32px;
+                    border-radius: 4px; font-size: 12px; border: none;
+                }
+                QPushButton:hover { background-color: #B71C1C; }
+                QPushButton:pressed { background-color: #8E0000; }
+            """)
+            close_btn.clicked.connect(self.accept)
+            btn_layout.addStretch()
+            btn_layout.addWidget(close_btn)
+            btn_layout.addStretch()
+
+            layout.addLayout(btn_layout)
+            self.setLayout(layout)
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+
+    dialog = LogDialog(log_file)
+    dialog.exec()
+
+
 def main():
     """Función principal."""
 
@@ -6602,12 +6671,18 @@ def main():
                        help="En modo service, ejecutar una sola vez y salir")
     parser.add_argument("--auth-dialog", metavar="RESULT_PATH",
                        help=argparse.SUPPRESS)
+    parser.add_argument("--log-window", metavar="LOG_FILE",
+                       help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
     # Si se pasa --auth-dialog, mostrar diálogo en proceso propio y salir
     if args.auth_dialog:
         return _handle_auth_dialog(args.auth_dialog)
+
+    # Si se pasa --log-window, mostrar visor de logs en proceso propio y salir
+    if args.log_window:
+        return _handle_log_window(args.log_window)
 
     # Si --reconfig o mode=reconfig, borrar config
     if args.mode == "reconfig":
