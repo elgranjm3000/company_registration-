@@ -479,7 +479,8 @@ def _get_chrystal_version(postgres_config: dict) -> str | None:
         conn.close()
         if row:
             return str(row[0])
-    except Exception:
+    except Exception as e:
+        print(f"[DEBUG _get_chrystal_version] Error: {e}")
         pass
     return None
 
@@ -6049,6 +6050,7 @@ def _handle_config_window(result_path: str) -> None:
                     'user': self.pg_user_edit.text().strip(),
                     'password': self.pg_pass_edit.text().strip(),
                 }
+                print(f"[DEBUG] pg_config host={_pg_cfg.get('host')} db={_pg_cfg.get('database')}")
                 _cv = _get_chrystal_version(_pg_cfg)
                 print(f"[DEBUG] _cv={_cv!r}")
                 if not _cv:
