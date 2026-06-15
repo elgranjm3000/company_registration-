@@ -578,7 +578,6 @@ class APIAuthManager:
                 if data.get('success'):
                     response_data = data.get('data', {})
                     self.api_key = api_key
-                    self.company_id = response_data.get('id')
                     self.company_data = {
                         'name': response_data.get('empresa'),
                         'rif': response_data.get('rif'),
@@ -593,7 +592,6 @@ class APIAuthManager:
 
                     return {
                         'success': True,
-                        'company_id': self.company_id,
                         'company': self.company_data
                     }
 
