@@ -669,7 +669,7 @@ class APIAuthManager:
                     'X-App-Version': APP_VERSION,
                     'X-App-Type': 'sincronizador',
                     'X-App-Type-Chrystal': 'chrystal',
-                    'X-App-Version-Chrystal': APP_VERSION,
+                    'X-App-Version-Chrystal': chrystal_version or APP_VERSION,
                     'X-Device-UUID': _hdd_serial or 'unknown',
                     'X-App-ApiKey': self.api_key,
                 },
@@ -3069,7 +3069,8 @@ class ConfigWindow:
                     try:
                         validate_result = auth_manager.validate_company(
                             config['company_rif'],
-                            config['company_email']
+                            config['company_email'],
+                            chrystal_version=_cv_ping
                         )
 
                         if validate_result.get('success'):
@@ -3328,7 +3329,7 @@ class ConfigWindow:
                             'password': config.get('postgres_password', ''),
                         })
                         auth_manager.ping_api_key(config['api_key'], chrystal_version=_cv_ping)
-                        auth_manager.validate_company(config['company_rif'], config['company_email'])
+                        auth_manager.validate_company(config['company_rif'], config['company_email'], chrystal_version=_cv_ping)
                         log_debug("[DEBUG] Login exitoso")
 
                         log_debug("[DEBUG] Creando APISyncManager...")
@@ -3932,7 +3933,7 @@ class ConfigWindow:
                     })
                     return
 
-                auth_manager.validate_company(config['company_rif'], config['company_email'])
+                auth_manager.validate_company(config['company_rif'], config['company_email'], chrystal_version=_cv_ping)
                 time.sleep(0.3)
                 sync_queue.put({'type': 'progress', 'porcentaje': 10,
                                'text': 'Configuración cargada correctamente'})
@@ -4685,7 +4686,7 @@ class SystemTrayService:
                 )
                 return
 
-            auth_manager.validate_company(self.config['company_rif'], self.config['company_email'])
+            auth_manager.validate_company(self.config['company_rif'], self.config['company_email'], chrystal_version=_cv_ping)
 
             sync_manager = APISyncManager(
                 postgres_config={
@@ -5287,7 +5288,7 @@ def run_sync_console():
 
         # Validar empresa
         print("🏢 Validando empresa...")
-        result = auth_manager.validate_company(config['company_rif'], config['company_email'])
+        result = auth_manager.validate_company(config['company_rif'], config['company_email'], chrystal_version=_cv_ping)
         if not result.get('success'):
             print(f"❌ Validación falló: {result.get('error')}")
             sys.exit(1)
@@ -5440,7 +5441,7 @@ def run_service_loop():
                     'password': config.get('postgres_password', ''),
                 })
                 auth_manager.ping_api_key(api_key, chrystal_version=_cv_ping)
-                auth_manager.validate_company(config['company_rif'], config['company_email'])
+                auth_manager.validate_company(config['company_rif'], config['company_email'], chrystal_version=_cv_ping)
 
                 sync_manager = APISyncManager(
                     postgres_config={
@@ -6356,7 +6357,7 @@ def _handle_manager_window(config_path: str) -> None:
                     'password': self.config['postgres_password'],
                 })
                 auth.ping_api_key(self.config['api_key'], chrystal_version=_cv_ping)
-                auth.validate_company(self.config['company_rif'], self.config['company_email'])
+                auth.validate_company(self.config['company_rif'], self.config['company_email'], chrystal_version=_cv_ping)
 
                 sync_mgr = APISyncManager(
                     postgres_config={
@@ -7070,7 +7071,7 @@ def main():
                         })
                         _ping = _auth.ping_api_key(_key, chrystal_version=_cv_ping)
                         if _ping.get('success'):
-                            _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
+                            _auth.validate_company(_cfg['company_rif'], _cfg['company_email'], chrystal_version=_cv_ping)
                             SystemTrayService(_cfg, _key).iniciar()
                         else:
                             print(f"❌ API Key inválida: {_ping.get('error', 'Error')}")
@@ -7105,7 +7106,7 @@ def main():
                 })
                 _ping = _auth.ping_api_key(_key, chrystal_version=_cv_ping)
                 if _ping.get('success'):
-                    _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
+                    _auth.validate_company(_cfg['company_rif'], _cfg['company_email'], chrystal_version=_cv_ping)
                     SystemTrayService(_cfg, _key).iniciar()
                 else:
                     print(f"❌ API Key inválida: {_ping.get('error', 'Error')}")
@@ -7255,7 +7256,7 @@ def main():
                         })
                         _ping = _auth.ping_api_key(_key, chrystal_version=_cv_ping)
                         if _ping.get('success'):
-                            _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
+                            _auth.validate_company(_cfg['company_rif'], _cfg['company_email'], chrystal_version=_cv_ping)
                             SystemTrayService(_cfg, _key).iniciar()
                         else:
                             print(f"❌ API Key inválida: {_ping.get('error', 'Error')}")
@@ -7398,7 +7399,7 @@ def main():
 
         # Validar empresa para obtener company_id
         print("🏢 Validando empresa...")
-        validate_result = auth_manager.validate_company(config['company_rif'], config['company_email'])
+        validate_result = auth_manager.validate_company(config['company_rif'], config['company_email'], chrystal_version=_cv_ping)
         if not validate_result.get('success'):
             print(f"❌ Error validando empresa: {validate_result.get('error', 'Error desconocido')}")
             sys.exit(1)
