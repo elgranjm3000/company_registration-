@@ -5816,6 +5816,9 @@ def _handle_config_window(result_path: str) -> None:
             self.company_email = ''
             self.company_name = ''
 
+            # Credenciales PostgreSQL verificadas (las setea _test_pg)
+            self._pg_verified_config = None
+
             self._build_ui()
             self._apply_styles()
 
@@ -6017,6 +6020,13 @@ def _handle_config_window(result_path: str) -> None:
                 count = cursor.fetchone()[0]
                 cursor.close()
                 conn.close()
+                self._pg_verified_config = {
+                    'host': host,
+                    'port': port,
+                    'database': db,
+                    'user': user,
+                    'password': password,
+                }
                 self.pg_status.setText(f"✅ Conexión exitosa ({count:,} productos)")
                 self.pg_status.setStyleSheet("color: green;")
             except Exception as e:
@@ -6038,17 +6048,15 @@ def _handle_config_window(result_path: str) -> None:
             try:
                 import requests
 
-                # Obtener versión Chrystal desde PostgreSQL si hay credenciales
-                _pg_cfg = {
-                    'host': self.pg_host_edit.text().strip(),
-                    'port': self.pg_port_edit.text().strip(),
-                    'database': self.pg_db_edit.text().strip(),
-                    'user': self.pg_user_edit.text().strip(),
-                    'password': self.pg_pass_edit.text().strip(),
-                }
-                print(f"[DEBUG] pg_config host={_pg_cfg.get('host')} db={_pg_cfg.get('database')}")
-                _cv = _get_chrystal_version(_pg_cfg)
-                print(f"[DEBUG] _cv={_cv!r}")
+                # Obtener versión Chrystal desde PostgreSQL (obligatorio)
+                if not self._pg_verified_config:
+                    self.api_status.setText("❌ Primero pruebe la conexión PostgreSQL")
+                    self.api_status.setStyleSheet("color: red;")
+                    QMessageBox.critical(self, "Error de Validación",
+                        "Debe probar la conexión PostgreSQL primero en la pestaña Base de Datos.\n\n"
+                        "Luego vuelva a intentar probar la API Key.")
+                    return
+                _cv = _get_chrystal_version(self._pg_verified_config)
                 if not _cv:
                     self.api_status.setText("❌ No se pudo obtener la versión de Chrystal desde PostgreSQL")
                     self.api_status.setStyleSheet("color: red;")
