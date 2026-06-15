@@ -457,6 +457,62 @@ def add_gui_handler(logger_func, gui_log_func):
     logger_func._gui_handler = gui_handler
 
 
+def _get_chrystal_version(postgres_config: dict) -> str | None:
+    """Obtiene la versión del sistema Chrystal desde PostgreSQL.
+
+    Consulta la tabla system_version, columna system_vesion.
+
+    Args:
+        postgres_config: Diccionario con credenciales de PostgreSQL
+
+    Returns:
+        Versión del sistema como string, o None si no se puede obtener
+    """
+    try:
+        import psycopg2
+        conn = psycopg2.connect(**postgres_config, connect_timeout=5)
+        cursor = conn.cursor()
+        cursor.execute("SELECT system_vesion FROM system_version LIMIT 1")
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if row:
+            return str(row[0])
+    except Exception:
+        pass
+    return None
+
+
+def _get_hdd_serial() -> str | None:
+    """Obtiene el serial único del disco duro (no cambia al formatear).
+
+    En Windows usa wmic para obtener el serial físico del disco.
+    En Linux/macOS lee /etc/machine-id como fallback.
+
+    Returns:
+        Serial del disco como string, o None si no se puede obtener
+    """
+    import sys as _sys
+    import subprocess as _sp
+    try:
+        if _sys.platform == 'win32':
+            result = _sp.run(
+                'wmic diskdrive get serialnumber',
+                capture_output=True, text=True, shell=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                lines = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
+                if len(lines) > 1:
+                    return lines[-1]
+        else:
+            with open('/etc/machine-id') as _f:
+                return _f.read().strip()
+    except Exception:
+        pass
+    return None
+
+
 class APIAuthManager:
     """
     Gestor de autenticación API Key.
@@ -500,7 +556,9 @@ class APIAuthManager:
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'X-App-Version': APP_VERSION,
-                    'X-App-Type': 'sincronizador'
+                    'X-App-Type': 'sincronizador',
+                    'X-App-Type-Chrystal': 'chrystal',
+                    'X-App-Version-Chrystal': APP_VERSION,
                 },
                 timeout=30
             )
@@ -593,7 +651,9 @@ class APIAuthManager:
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'X-App-Version': APP_VERSION,
-                    'X-App-Type': 'sincronizador'
+                    'X-App-Type': 'sincronizador',
+                    'X-App-Type-Chrystal': 'chrystal',
+                    'X-App-Version-Chrystal': APP_VERSION,
                 },
                 json={
                     'rif': rif,
@@ -1924,40 +1984,48 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             # Obtener logger compartido para todos los clientes
             api_logger = logging.getLogger('sync_api')
 
+            # Obtener versión del sistema Chrystal desde PostgreSQL
+            chrystal_ver = _get_chrystal_version(self.postgres_config)
+
             # Crear clientes
             self.categories_client = CategoriesClient(
                 base_url=base_url,
                 api_key=api_key,
                 logger=api_logger,
-                app_version=APP_VERSION
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver
             )
 
             self.products_client = ProductsClient(
                 base_url=base_url,
                 api_key=api_key,
                 logger=api_logger,
-                app_version=APP_VERSION
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver
             )
 
             self.customers_client = CustomersClient(
                 base_url=base_url,
                 api_key=api_key,
                 logger=api_logger,
-                app_version=APP_VERSION
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver
             )
 
             self.sellers_client = SellersClient(
                 base_url=base_url,
                 api_key=api_key,
                 logger=api_logger,
-                app_version=APP_VERSION
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver
             )
 
             self.quotes_client = QuotesClient(
                 base_url=base_url,
                 api_key=api_key,
                 logger=api_logger,
-                app_version=APP_VERSION
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver
             )
 
             self._log("✅ Clientes API inicializados")
@@ -5902,6 +5970,21 @@ def _handle_config_window(result_path: str) -> None:
 
             try:
                 import requests
+
+                # Obtener versión Chrystal desde PostgreSQL si hay credenciales
+                _pg_cfg = {
+                    'host': self.pg_host_edit.text().strip(),
+                    'port': self.pg_port_edit.text().strip(),
+                    'database': self.pg_db_edit.text().strip(),
+                    'user': self.pg_user_edit.text().strip(),
+                    'password': self.pg_pass_edit.text().strip(),
+                }
+                _cv = _get_chrystal_version(_pg_cfg)
+
+                _chrystal_headers = {'X-App-Type-Chrystal': 'chrystal'}
+                if _cv:
+                    _chrystal_headers['X-App-Version-Chrystal'] = _cv
+
                 response = requests.get(
                     f"{self.api_url}/sync-client/ping",
                     headers={
@@ -5910,6 +5993,7 @@ def _handle_config_window(result_path: str) -> None:
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                         'X-App-Version': APP_VERSION,
                         'X-App-Type': 'sincronizador',
+                        **_chrystal_headers,
                     },
                     timeout=30
                 )
@@ -6014,6 +6098,18 @@ def _handle_config_window(result_path: str) -> None:
                 progress.setValue(1)
                 QApplication.processEvents()
 
+                # Obtener versión Chrystal desde PostgreSQL (ya verificada en paso 1)
+                _cv = _get_chrystal_version({
+                    'host': config['postgres_host'],
+                    'port': config['postgres_port'],
+                    'database': config['postgres_database'],
+                    'user': config['postgres_user'],
+                    'password': config['postgres_password'],
+                })
+                _chrystal_headers = {'X-App-Type-Chrystal': 'chrystal'}
+                if _cv:
+                    _chrystal_headers['X-App-Version-Chrystal'] = _cv
+
                 # PASO 2: API Key
                 progress.setLabelText("Validando API Key...")
                 QApplication.processEvents()
@@ -6024,7 +6120,8 @@ def _handle_config_window(result_path: str) -> None:
                             'Content-Type': 'application/json',
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                             'X-App-Version': APP_VERSION,
-                            'X-App-Type': 'sincronizador'},
+                            'X-App-Type': 'sincronizador',
+                            **_chrystal_headers},
                     timeout=30
                 )
                 if ping.status_code not in [200, 201]:
@@ -6056,7 +6153,8 @@ def _handle_config_window(result_path: str) -> None:
                             'Content-Type': 'application/json',
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                             'X-App-Version': APP_VERSION,
-                            'X-App-Type': 'sincronizador'},
+                            'X-App-Type': 'sincronizador',
+                            **_chrystal_headers},
                     json={'rif': config['company_rif'], 'email': config['company_email']},
                     timeout=30
                 )

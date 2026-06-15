@@ -76,7 +76,8 @@ class BaseAPIClient:
         timeout: int = 30,
         batch_size: int = 5000,
         logger=None,
-        app_version: Optional[str] = None
+        app_version: Optional[str] = None,
+        chrystal_version: Optional[str] = None
     ):
         """
         Args:
@@ -88,6 +89,7 @@ class BaseAPIClient:
             batch_size: Tamaño máximo de lote (default: 5000)
             logger: Logger de Python personalizado (opcional)
             app_version: Versión de la aplicación para header X-App-Version (opcional)
+            chrystal_version: Versión del sistema Chrystal desde tabla system_version
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
@@ -96,6 +98,7 @@ class BaseAPIClient:
         self.timeout = timeout
         self.batch_size = batch_size
         self.app_version = app_version  # Versión de la app
+        self.chrystal_version = chrystal_version  # Versión del sistema Chrystal
 
         # Configurar sesión con retry automático
         self.session = self._create_session()
@@ -147,6 +150,11 @@ class BaseAPIClient:
         # Agregar versión de la aplicación si está disponible
         if self.app_version:
             headers['X-App-Version'] = self.app_version
+
+        # Headers del sistema Chrystal
+        headers['X-App-Type-Chrystal'] = 'chrystal'
+        if self.chrystal_version:
+            headers['X-App-Version-Chrystal'] = self.chrystal_version
 
         session.headers.update(headers)
 
