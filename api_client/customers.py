@@ -42,7 +42,9 @@ class CustomersClient(BaseAPIClient):
         max_retries: int = 3,
         batch_size: int = 5000,
         logger=None,
-        app_version: Optional[str] = None
+        app_version: Optional[str] = None,
+        chrystal_version: Optional[str] = None,
+        device_uuid: Optional[str] = None
     ):
         """
         Args:
@@ -53,8 +55,10 @@ class CustomersClient(BaseAPIClient):
             batch_size: Tamaño máximo de lote (default: 5000)
             logger: Logger de Python personalizado (opcional)
             app_version: Versión de la aplicación para header X-App-Version (opcional)
+            chrystal_version: Versión del sistema Chrystal (opcional)
+            device_uuid: Serial único del disco duro (opcional)
         """
-        super().__init__(base_url, api_key, max_retries, 0.5, timeout, batch_size, logger=logger, app_version=app_version)
+        super().__init__(base_url, api_key, max_retries, 0.5, timeout, batch_size, logger=logger, app_version=app_version, chrystal_version=chrystal_version, device_uuid=device_uuid)
 
     # =========================================================================
     # CRUD BÁSICO

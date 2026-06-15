@@ -38,7 +38,9 @@ class CompanyClient(BaseAPIClient):
         api_key: str,
         timeout: int = 30,
         max_retries: int = 3,
-        app_version: Optional[str] = None
+        app_version: Optional[str] = None,
+        chrystal_version: Optional[str] = None,
+        device_uuid: Optional[str] = None
     ):
         """
         Args:
@@ -47,8 +49,10 @@ class CompanyClient(BaseAPIClient):
             timeout: Timeout en segundos
             max_retries: Máximo de reintentos
             app_version: Versión de la aplicación para header X-App-Version (opcional)
+            chrystal_version: Versión del sistema Chrystal (opcional)
+            device_uuid: Serial único del disco duro (opcional)
         """
-        super().__init__(base_url, api_key, max_retries, 0.5, timeout, app_version=app_version)
+        super().__init__(base_url, api_key, max_retries, 0.5, timeout, app_version=app_version, chrystal_version=chrystal_version, device_uuid=device_uuid)
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def validate(

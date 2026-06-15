@@ -16,7 +16,9 @@ class QuotesClient(BaseAPIClient):
         timeout: int = 30,
         max_retries: int = 3,
         logger=None,
-        app_version: Optional[str] = None
+        app_version: Optional[str] = None,
+        chrystal_version: Optional[str] = None,
+        device_uuid: Optional[str] = None
     ):
         """
         Args:
@@ -26,6 +28,8 @@ class QuotesClient(BaseAPIClient):
             max_retries: Máximo de reintentos
             logger: Logger de Python personalizado (opcional)
             app_version: Versión de la aplicación para header X-App-Version (opcional)
+            chrystal_version: Versión del sistema Chrystal (opcional)
+            device_uuid: Serial único del disco duro (opcional)
         """
         super().__init__(
             base_url=base_url,
@@ -33,7 +37,9 @@ class QuotesClient(BaseAPIClient):
             timeout=timeout,
             max_retries=max_retries,
             logger=logger,
-            app_version=app_version
+            app_version=app_version,
+            chrystal_version=chrystal_version,
+            device_uuid=device_uuid
         )
 
     def get_pending_quotes(self, company_id: int) -> List[Dict]:
