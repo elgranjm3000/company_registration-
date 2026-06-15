@@ -549,6 +549,7 @@ class APIAuthManager:
 
             self._log("🔑 Validando API Key...")
 
+            _hdd_serial_ping = _get_hdd_serial()
             response = requests.get(
                 f"{self.base_url}/sync-client/ping",
                 headers={
@@ -559,6 +560,8 @@ class APIAuthManager:
                     'X-App-Type': 'sincronizador',
                     'X-App-Type-Chrystal': 'chrystal',
                     'X-App-Version-Chrystal': APP_VERSION,
+                    'X-Device-UUID': _hdd_serial_ping or 'unknown',
+                    'X-App-ApiKey': api_key,
                 },
                 timeout=30
             )
@@ -625,13 +628,14 @@ class APIAuthManager:
 
 
 
-    def validate_company(self, rif: str, email: str) -> dict:
+    def validate_company(self, rif: str, email: str, chrystal_version: str | None = None) -> dict:
         """
         Validar empresa y obtener company_id.
 
         Args:
             rif: RIF de la empresa
             email: Email de la empresa
+            chrystal_version: Versión del sistema Chrystal (de tabla system_version)
 
         Returns:
             Dict con success, company_id, company_data
@@ -644,6 +648,14 @@ class APIAuthManager:
             if not self.api_key:
                 return {'success': False, 'error': 'No hay API Key configurada.'}
 
+            _hdd_serial = _get_hdd_serial()
+            _json_body = {
+                'rif': rif,
+                'email': email,
+                'uuid_hard_drive': _hdd_serial or 'unknown',
+                'app_version_chrystal': chrystal_version or APP_VERSION,
+            }
+
             response = requests.post(
                 f"{self.base_url}/sync-client/company/validate",
                 headers={
@@ -654,11 +666,10 @@ class APIAuthManager:
                     'X-App-Type': 'sincronizador',
                     'X-App-Type-Chrystal': 'chrystal',
                     'X-App-Version-Chrystal': APP_VERSION,
+                    'X-Device-UUID': _hdd_serial or 'unknown',
+                    'X-App-ApiKey': self.api_key,
                 },
-                json={
-                    'rif': rif,
-                    'email': email
-                },
+                json=_json_body,
                 timeout=30
             )
 
@@ -1987,13 +1998,17 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             # Obtener versión del sistema Chrystal desde PostgreSQL
             chrystal_ver = _get_chrystal_version(self.postgres_config)
 
+            # Obtener UUID del dispositivo (serial de disco)
+            _device_uuid = _get_hdd_serial()
+
             # Crear clientes
             self.categories_client = CategoriesClient(
                 base_url=base_url,
                 api_key=api_key,
                 logger=api_logger,
                 app_version=APP_VERSION,
-                chrystal_version=chrystal_ver
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
             )
 
             self.products_client = ProductsClient(
@@ -2001,7 +2016,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                 api_key=api_key,
                 logger=api_logger,
                 app_version=APP_VERSION,
-                chrystal_version=chrystal_ver
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
             )
 
             self.customers_client = CustomersClient(
@@ -2009,7 +2025,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                 api_key=api_key,
                 logger=api_logger,
                 app_version=APP_VERSION,
-                chrystal_version=chrystal_ver
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
             )
 
             self.sellers_client = SellersClient(
@@ -2017,7 +2034,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                 api_key=api_key,
                 logger=api_logger,
                 app_version=APP_VERSION,
-                chrystal_version=chrystal_ver
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
             )
 
             self.quotes_client = QuotesClient(
@@ -2025,7 +2043,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                 api_key=api_key,
                 logger=api_logger,
                 app_version=APP_VERSION,
-                chrystal_version=chrystal_ver
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
             )
 
             self._log("✅ Clientes API inicializados")
@@ -5985,6 +6004,12 @@ def _handle_config_window(result_path: str) -> None:
                 if _cv:
                     _chrystal_headers['X-App-Version-Chrystal'] = _cv
 
+                _hdd_serial_test = _get_hdd_serial()
+                _device_headers = {
+                    'X-Device-UUID': _hdd_serial_test or 'unknown',
+                    'X-App-ApiKey': api_key,
+                }
+
                 response = requests.get(
                     f"{self.api_url}/sync-client/ping",
                     headers={
@@ -5994,6 +6019,7 @@ def _handle_config_window(result_path: str) -> None:
                         'X-App-Version': APP_VERSION,
                         'X-App-Type': 'sincronizador',
                         **_chrystal_headers,
+                        **_device_headers,
                     },
                     timeout=30
                 )
@@ -6110,6 +6136,12 @@ def _handle_config_window(result_path: str) -> None:
                 if _cv:
                     _chrystal_headers['X-App-Version-Chrystal'] = _cv
 
+                _hdd_serial_run = _get_hdd_serial()
+                _device_headers = {
+                    'X-Device-UUID': _hdd_serial_run or 'unknown',
+                    'X-App-ApiKey': config['api_key'],
+                }
+
                 # PASO 2: API Key
                 progress.setLabelText("Validando API Key...")
                 QApplication.processEvents()
@@ -6121,7 +6153,8 @@ def _handle_config_window(result_path: str) -> None:
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                             'X-App-Version': APP_VERSION,
                             'X-App-Type': 'sincronizador',
-                            **_chrystal_headers},
+                            **_chrystal_headers,
+                            **_device_headers},
                     timeout=30
                 )
                 if ping.status_code not in [200, 201]:
@@ -6147,6 +6180,7 @@ def _handle_config_window(result_path: str) -> None:
                 # PASO 3: Validar empresa
                 progress.setLabelText("Validando empresa...")
                 QApplication.processEvents()
+                _hdd_serial = _get_hdd_serial()
                 validate = requests.post(
                     f"{config['api_url']}/sync-client/company/validate",
                     headers={'Authorization': f'Bearer {config["api_key"]}',
@@ -6154,8 +6188,14 @@ def _handle_config_window(result_path: str) -> None:
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                             'X-App-Version': APP_VERSION,
                             'X-App-Type': 'sincronizador',
-                            **_chrystal_headers},
-                    json={'rif': config['company_rif'], 'email': config['company_email']},
+                            **_chrystal_headers,
+                            **_device_headers},
+                    json={
+                        'rif': config['company_rif'],
+                        'email': config['company_email'],
+                        'uuid_hard_drive': _hdd_serial or 'unknown',
+                        'app_version_chrystal': _cv or APP_VERSION,
+                    },
                     timeout=30
                 )
                 if validate.status_code not in [200, 201]:

@@ -77,7 +77,8 @@ class BaseAPIClient:
         batch_size: int = 5000,
         logger=None,
         app_version: Optional[str] = None,
-        chrystal_version: Optional[str] = None
+        chrystal_version: Optional[str] = None,
+        device_uuid: Optional[str] = None
     ):
         """
         Args:
@@ -90,6 +91,7 @@ class BaseAPIClient:
             logger: Logger de Python personalizado (opcional)
             app_version: Versión de la aplicación para header X-App-Version (opcional)
             chrystal_version: Versión del sistema Chrystal desde tabla system_version
+            device_uuid: Identificador único del dispositivo (serial de disco duro)
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
@@ -99,6 +101,7 @@ class BaseAPIClient:
         self.batch_size = batch_size
         self.app_version = app_version  # Versión de la app
         self.chrystal_version = chrystal_version  # Versión del sistema Chrystal
+        self.device_uuid = device_uuid  # Serial único del disco duro
 
         # Configurar sesión con retry automático
         self.session = self._create_session()
@@ -155,6 +158,13 @@ class BaseAPIClient:
         headers['X-App-Type-Chrystal'] = 'chrystal'
         if self.chrystal_version:
             headers['X-App-Version-Chrystal'] = self.chrystal_version
+
+        # Identificador único del dispositivo
+        if self.device_uuid:
+            headers['X-Device-UUID'] = self.device_uuid
+
+        # API Key para tracking
+        headers['X-App-ApiKey'] = self.api_key
 
         session.headers.update(headers)
 
