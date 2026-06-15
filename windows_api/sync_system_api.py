@@ -6046,10 +6046,18 @@ def _handle_config_window(result_path: str) -> None:
                     'password': self.pg_pass_edit.text().strip(),
                 }
                 _cv = _get_chrystal_version(_pg_cfg)
+                if not _cv:
+                    self.api_status.setText("❌ No se pudo obtener la versión de Chrystal desde PostgreSQL")
+                    self.api_status.setStyleSheet("color: red;")
+                    QMessageBox.critical(self, "Error de Validación",
+                        "No se pudo obtener la versión de Chrystal desde la base de datos.\n\n"
+                        "Verifique la conexión en la pestaña Base de Datos.")
+                    return
 
-                _chrystal_headers = {'X-App-Type-Chrystal': 'chrystal'}
-                if _cv:
-                    _chrystal_headers['X-App-Version-Chrystal'] = _cv
+                _chrystal_headers = {
+                    'X-App-Type-Chrystal': 'chrystal',
+                    'X-App-Version-Chrystal': _cv,
+                }
 
                 _hdd_serial_test = _get_hdd_serial()
                 _device_headers = {
@@ -6179,9 +6187,10 @@ def _handle_config_window(result_path: str) -> None:
                     'user': config['postgres_user'],
                     'password': config['postgres_password'],
                 })
-                _chrystal_headers = {'X-App-Type-Chrystal': 'chrystal'}
-                if _cv:
-                    _chrystal_headers['X-App-Version-Chrystal'] = _cv
+                _chrystal_headers = {
+                    'X-App-Type-Chrystal': 'chrystal',
+                    'X-App-Version-Chrystal': _cv or 'unknown',
+                }
 
                 _hdd_serial_run = _get_hdd_serial()
                 _device_headers = {
