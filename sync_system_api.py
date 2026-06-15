@@ -535,12 +535,13 @@ class APIAuthManager:
         self.api_key = None
         self.company_id = None
         self.company_data = None
-    def ping_api_key(self, api_key: str) -> dict:
+    def ping_api_key(self, api_key: str, chrystal_version: str | None = None) -> dict:
         """
         Validar API Key mediante endpoint ping y obtener info de la empresa.
 
         Args:
             api_key: API Key del sistema Chrystal
+            chrystal_version: Versión del sistema Chrystal desde PostgreSQL (opcional)
 
         Returns:
             Dict con success, company_id, company_data, rif, email
@@ -551,19 +552,23 @@ class APIAuthManager:
             self._log("🔑 Validando API Key...")
 
             _hdd_serial_ping = _get_hdd_serial()
+            _ping_headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'X-App-Version': APP_VERSION,
+                'X-App-Type': 'sincronizador',
+                'X-App-Type-Chrystal': 'chrystal',
+                'X-Device-UUID': _hdd_serial_ping or 'unknown',
+                'X-App-ApiKey': api_key,
+            }
+            # Solo enviar X-App-Version-Chrystal si tenemos la versión real desde PostgreSQL
+            if chrystal_version:
+                _ping_headers['X-App-Version-Chrystal'] = chrystal_version
+
             response = requests.get(
                 f"{self.base_url}/sync-client/ping",
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'X-App-Version': APP_VERSION,
-                    'X-App-Type': 'sincronizador',
-                    'X-App-Type-Chrystal': 'chrystal',
-                    'X-App-Version-Chrystal': APP_VERSION,
-                    'X-Device-UUID': _hdd_serial_ping or 'unknown',
-                    'X-App-ApiKey': api_key,
-                },
+                headers=_ping_headers,
                 timeout=30
             )
 
@@ -3038,8 +3043,15 @@ class ConfigWindow:
                     auth_manager = None
                     try:
                         auth_manager = APIAuthManager(config['api_url'])
+                        _cv_ping = _get_chrystal_version({
+                            'host': config.get('postgres_host', ''),
+                            'port': config.get('postgres_port', ''),
+                            'database': config.get('postgres_database', ''),
+                            'user': config.get('postgres_user', ''),
+                            'password': config.get('postgres_password', ''),
+                        })
                         ping_result = auth_manager.ping_api_key(
-                            config['api_key']
+                            config['api_key'], chrystal_version=_cv_ping
                         )
 
                         if ping_result.get('success'):
@@ -3310,7 +3322,14 @@ class ConfigWindow:
                         # Login
                         log_debug("[DEBUG] Haciendo login a API...")
                         sync_queue.put("🔐 Autenticando con API...")
-                        auth_manager.ping_api_key(config['api_key'])
+                        _cv_ping = _get_chrystal_version({
+                            'host': config.get('postgres_host', ''),
+                            'port': config.get('postgres_port', ''),
+                            'database': config.get('postgres_database', ''),
+                            'user': config.get('postgres_user', ''),
+                            'password': config.get('postgres_password', ''),
+                        })
+                        auth_manager.ping_api_key(config['api_key'], chrystal_version=_cv_ping)
                         auth_manager.validate_company(config['company_rif'], config['company_email'])
                         log_debug("[DEBUG] Login exitoso")
 
@@ -3900,7 +3919,14 @@ class ConfigWindow:
                                'text': 'Cargando configuración...'})
 
                 auth_manager = APIAuthManager(config['api_url'])
-                ping_result = auth_manager.ping_api_key(config['api_key'])
+                _cv_ping = _get_chrystal_version({
+                    'host': config['postgres_host'],
+                    'port': config['postgres_port'],
+                    'database': config['postgres_database'],
+                    'user': config['postgres_user'],
+                    'password': config['postgres_password'],
+                })
+                ping_result = auth_manager.ping_api_key(config['api_key'], chrystal_version=_cv_ping)
                 if not ping_result.get('success'):
                     sync_queue.put({
                         'type': 'error',
@@ -4640,7 +4666,14 @@ class SystemTrayService:
 
             # Ping API Key (usar self.api_key si está disponible, sino leer de config)
             api_key = self.api_key or self.config.get('api_key')
-            ping_result = auth_manager.ping_api_key(api_key)
+            _cv_ping = _get_chrystal_version({
+                'host': self.config['postgres_host'],
+                'port': self.config['postgres_port'],
+                'database': self.config['postgres_database'],
+                'user': self.config['postgres_user'],
+                'password': self.config['postgres_password'],
+            })
+            ping_result = auth_manager.ping_api_key(api_key, chrystal_version=_cv_ping)
             if not ping_result.get('success'):
                 error_msg = ping_result.get('error', 'Error de autenticación')
                 tray_logger(f"❌ Error de autenticación: {error_msg}", "error")
@@ -5243,7 +5276,14 @@ def run_sync_console():
 
         # Login
         print("\n🔐 Autenticando...")
-        result = auth_manager.ping_api_key(api_key)
+        _cv_ping = _get_chrystal_version({
+            'host': config.get('postgres_host', ''),
+            'port': config.get('postgres_port', ''),
+            'database': config.get('postgres_database', ''),
+            'user': config.get('postgres_user', ''),
+            'password': config.get('postgres_password', ''),
+        })
+        result = auth_manager.ping_api_key(api_key, chrystal_version=_cv_ping)
         if not result.get('success'):
             print(f"❌ API Key inválida: {result.get('error')}")
             sys.exit(1)
@@ -5395,7 +5435,14 @@ def run_service_loop():
                     logger=console_logger
                 )
 
-                auth_manager.ping_api_key(api_key)
+                _cv_ping = _get_chrystal_version({
+                    'host': config.get('postgres_host', ''),
+                    'port': config.get('postgres_port', ''),
+                    'database': config.get('postgres_database', ''),
+                    'user': config.get('postgres_user', ''),
+                    'password': config.get('postgres_password', ''),
+                })
+                auth_manager.ping_api_key(api_key, chrystal_version=_cv_ping)
                 auth_manager.validate_company(config['company_rif'], config['company_email'])
 
                 sync_manager = APISyncManager(
@@ -6287,7 +6334,14 @@ def _handle_manager_window(config_path: str) -> None:
 
             try:
                 auth = APIAuthManager(self.config['api_url'], logger)
-                auth.ping_api_key(self.config['api_key'])
+                _cv_ping = _get_chrystal_version({
+                    'host': self.config['postgres_host'],
+                    'port': self.config['postgres_port'],
+                    'database': self.config['postgres_database'],
+                    'user': self.config['postgres_user'],
+                    'password': self.config['postgres_password'],
+                })
+                auth.ping_api_key(self.config['api_key'], chrystal_version=_cv_ping)
                 auth.validate_company(self.config['company_rif'], self.config['company_email'])
 
                 sync_mgr = APISyncManager(
@@ -6995,7 +7049,14 @@ def main():
                     if _key:
                         print("🔐 Validando API Key...")
                         _auth = APIAuthManager(base_url=_cfg.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api'))
-                        _ping = _auth.ping_api_key(_key)
+                        _cv_ping = _get_chrystal_version({
+                            'host': _cfg.get('postgres_host', ''),
+                            'port': _cfg.get('postgres_port', ''),
+                            'database': _cfg.get('postgres_database', ''),
+                            'user': _cfg.get('postgres_user', ''),
+                            'password': _cfg.get('postgres_password', ''),
+                        })
+                        _ping = _auth.ping_api_key(_key, chrystal_version=_cv_ping)
                         if _ping.get('success'):
                             _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
                             SystemTrayService(_cfg, _key).iniciar()
@@ -7023,7 +7084,14 @@ def main():
             if _key:
                 print("🔐 Validando API Key...")
                 _auth = APIAuthManager(base_url=_cfg.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api'))
-                _ping = _auth.ping_api_key(_key)
+                _cv_ping = _get_chrystal_version({
+                    'host': _cfg.get('postgres_host', ''),
+                    'port': _cfg.get('postgres_port', ''),
+                    'database': _cfg.get('postgres_database', ''),
+                    'user': _cfg.get('postgres_user', ''),
+                    'password': _cfg.get('postgres_password', ''),
+                })
+                _ping = _auth.ping_api_key(_key, chrystal_version=_cv_ping)
                 if _ping.get('success'):
                     _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
                     SystemTrayService(_cfg, _key).iniciar()
@@ -7166,7 +7234,14 @@ def main():
                     if _key:
                         print("🔐 Validando API Key...")
                         _auth = APIAuthManager(base_url=_cfg.get('api_url', 'https://chrystal.com.ve/mobiletest/public/api'))
-                        _ping = _auth.ping_api_key(_key)
+                        _cv_ping = _get_chrystal_version({
+                            'host': _cfg.get('postgres_host', ''),
+                            'port': _cfg.get('postgres_port', ''),
+                            'database': _cfg.get('postgres_database', ''),
+                            'user': _cfg.get('postgres_user', ''),
+                            'password': _cfg.get('postgres_password', ''),
+                        })
+                        _ping = _auth.ping_api_key(_key, chrystal_version=_cv_ping)
                         if _ping.get('success'):
                             _auth.validate_company(_cfg['company_rif'], _cfg['company_email'])
                             SystemTrayService(_cfg, _key).iniciar()
@@ -7295,7 +7370,14 @@ def main():
         )
 
         # Ping API Key
-        ping_result = auth_manager.ping_api_key(config.get('api_key', api_key))
+        _cv_ping = _get_chrystal_version({
+            'host': config.get('postgres_host', ''),
+            'port': config.get('postgres_port', ''),
+            'database': config.get('postgres_database', ''),
+            'user': config.get('postgres_user', ''),
+            'password': config.get('postgres_password', ''),
+        })
+        ping_result = auth_manager.ping_api_key(config.get('api_key', api_key), chrystal_version=_cv_ping)
         if not ping_result.get('success'):
             print(f"❌ API Key inválida: {ping_result.get('error', 'Error desconocido')}")
             sys.exit(1)
