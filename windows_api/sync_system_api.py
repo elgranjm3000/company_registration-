@@ -460,7 +460,7 @@ def add_gui_handler(logger_func, gui_log_func):
 def _get_chrystal_version(postgres_config: dict) -> str | None:
     """Obtiene la versión del sistema Chrystal desde PostgreSQL.
 
-    Consulta la tabla system_version, columna system_vesion.
+    Consulta la tabla system_version, columna system_version.
 
     Args:
         postgres_config: Diccionario con credenciales de PostgreSQL
@@ -472,7 +472,7 @@ def _get_chrystal_version(postgres_config: dict) -> str | None:
         import psycopg2
         conn = psycopg2.connect(**postgres_config, connect_timeout=5)
         cursor = conn.cursor()
-        cursor.execute("SELECT system_vesion FROM system_version LIMIT 1")
+        cursor.execute("SELECT system_version FROM system_version LIMIT 1")
         row = cursor.fetchone()
         cursor.close()
         conn.close()
