@@ -6046,6 +6046,7 @@ def _handle_config_window(result_path: str) -> None:
                     'password': self.pg_pass_edit.text().strip(),
                 }
                 _cv = _get_chrystal_version(_pg_cfg)
+                print(f"[DEBUG] _cv={_cv!r}")
                 if not _cv:
                     self.api_status.setText("❌ No se pudo obtener la versión de Chrystal desde PostgreSQL")
                     self.api_status.setStyleSheet("color: red;")
