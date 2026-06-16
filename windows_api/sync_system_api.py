@@ -497,6 +497,7 @@ def _get_hdd_serial() -> str | None:
     import subprocess as _sp
     try:
         if _sys.platform == 'win32':
+            # Intento 1: wmic (deprecado pero aún presente en muchas versiones)
             result = _sp.run(
                 'wmic diskdrive get serialnumber',
                 capture_output=True, text=True, shell=True,
@@ -506,6 +507,17 @@ def _get_hdd_serial() -> str | None:
                 lines = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
                 if len(lines) > 1:
                     return lines[-1]
+
+            # Intento 2: PowerShell (fallback cuando wmic falla)
+            result = _sp.run(
+                'powershell -Command "Get-CimInstance -ClassName Win32_DiskDrive | Select-Object -First 1 -ExpandProperty SerialNumber"',
+                capture_output=True, text=True, shell=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                serial = result.stdout.strip()
+                if serial:
+                    return serial
         else:
             with open('/etc/machine-id') as _f:
                 return _f.read().strip()
