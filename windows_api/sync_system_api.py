@@ -530,8 +530,7 @@ def _check_wmic_disponible() -> bool:
     """Verificar si WMIC está disponible en el sistema.
 
     En Windows 11+ WMIC está deprecado y puede no estar instalado.
-    Si no está disponible, se usa PowerShell como fallback en _get_hdd_serial(),
-    pero es mejor advertir al usuario para que lo active si prefiere.
+    Si no está disponible, muestra una alerta GUI y retorna False.
 
     Returns:
         True si WMIC está disponible, False si no
@@ -540,7 +539,7 @@ def _check_wmic_disponible() -> bool:
     import subprocess as _sp
 
     if _sys.platform != 'win32':
-        return True  # No aplica en Linux/macOS
+        return True
 
     try:
         result = _sp.run(
@@ -548,35 +547,32 @@ def _check_wmic_disponible() -> bool:
             capture_output=True, text=True, shell=True,
             timeout=5
         )
-        disponible = result.returncode == 0
+        if result.returncode == 0:
+            return True
 
-        if not disponible:
-            _msg = (
-                "WMIC no está disponible en este equipo.\n\n"
-                "Esto puede ocurrir en Windows 11+ donde WMIC está deprecado.\n\n"
-                "El sistema usará PowerShell como alternativa para obtener\n"
-                "el serial del disco, pero si experimentas problemas puedes\n"
-                "reactivar WMIC desde:\n"
-                "  'Activar o desactivar características de Windows'\n"
-                "  → 'Componentes heredados' → 'Windows Management Instrumentation (WBEM)'"
-            )
-            print("⚠️  " + "="*60)
-            print("⚠️  WMIC NO DISPONIBLE")
-            print("⚠️  " + "="*60)
-            print(f"⚠️  {_msg}")
-            print("⚠️  " + "="*60)
+        _msg = (
+            "WMIC no está instalado en este equipo.\n\n"
+            "Este componente es necesario para identificar el equipo\n"
+            "y sincronizar correctamente con Chrystal Mobile.\n\n"
+            "Para activarlo:\n"
+            "  1. Abre 'Activar o desactivar características de Windows'\n"
+            "  2. Despliega 'Componentes heredados'\n"
+            "  3. Marca 'Windows Management Instrumentation (WBEM)'\n"
+            "  4. Acepta y reinicia el sistema\n\n"
+            "Después de activarlo, vuelve a ejecutar el programa."
+        )
 
-            try:
-                mostrar_banner(
-                    "⚠️ WMIC no disponible",
-                    "WMIC no está disponible. El sistema usará PowerShell. "
-                    "Reactívalo desde 'Características de Windows' si hay problemas.",
-                    duracion=8
-                )
-            except Exception:
-                pass
+        try:
+            import tkinter as _tk
+            from tkinter import messagebox as _mb
+            _root = _tk.Tk()
+            _root.withdraw()
+            _mb.showerror("WMIC no disponible", _msg)
+            _root.destroy()
+        except Exception:
+            print(_msg)
 
-        return disponible
+        return False
 
     except Exception:
         return False
