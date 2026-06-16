@@ -401,6 +401,7 @@ class BaseSync(ABC):
                 UPDATE sync_hashes
                 SET record_hash = %s,
                     last_sync_data = %s,
+                    pending_sync = FALSE,
                     updated_at = NOW()
                 WHERE table_name = %s
                   AND record_key = %s
