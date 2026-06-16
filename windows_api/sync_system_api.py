@@ -526,6 +526,62 @@ def _get_hdd_serial() -> str | None:
     return None
 
 
+def _check_wmic_disponible() -> bool:
+    """Verificar si WMIC está disponible en el sistema.
+
+    En Windows 11+ WMIC está deprecado y puede no estar instalado.
+    Si no está disponible, se usa PowerShell como fallback en _get_hdd_serial(),
+    pero es mejor advertir al usuario para que lo active si prefiere.
+
+    Returns:
+        True si WMIC está disponible, False si no
+    """
+    import sys as _sys
+    import subprocess as _sp
+
+    if _sys.platform != 'win32':
+        return True  # No aplica en Linux/macOS
+
+    try:
+        result = _sp.run(
+            'wmic diskdrive get serialnumber',
+            capture_output=True, text=True, shell=True,
+            timeout=5
+        )
+        disponible = result.returncode == 0
+
+        if not disponible:
+            _msg = (
+                "WMIC no está disponible en este equipo.\n\n"
+                "Esto puede ocurrir en Windows 11+ donde WMIC está deprecado.\n\n"
+                "El sistema usará PowerShell como alternativa para obtener\n"
+                "el serial del disco, pero si experimentas problemas puedes\n"
+                "reactivar WMIC desde:\n"
+                "  'Activar o desactivar características de Windows'\n"
+                "  → 'Componentes heredados' → 'Windows Management Instrumentation (WBEM)'"
+            )
+            print("⚠️  " + "="*60)
+            print("⚠️  WMIC NO DISPONIBLE")
+            print("⚠️  " + "="*60)
+            print(f"⚠️  {_msg}")
+            print("⚠️  " + "="*60)
+
+            try:
+                mostrar_banner(
+                    "⚠️ WMIC no disponible",
+                    "WMIC no está disponible. El sistema usará PowerShell. "
+                    "Reactívalo desde 'Características de Windows' si hay problemas.",
+                    duracion=8
+                )
+            except Exception:
+                pass
+
+        return disponible
+
+    except Exception:
+        return False
+
+
 class APIAuthManager:
     """
     Gestor de autenticación API Key.
@@ -7191,6 +7247,11 @@ def main():
 
     # Ejecutar según modo
     if args.mode == "config":
+        # Verificar disponibilidad de WMIC antes de pedir credenciales
+        if sys.platform == 'win32' and not _check_wmic_disponible():
+            print("❌ WMIC no disponible. El sistema no puede continuar.")
+            sys.exit(1)
+
         # Verificar identidad del usuario (email/password) primero
         try:
             _cfg = None
