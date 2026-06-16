@@ -164,9 +164,7 @@ def detect_changes_optimized(self) -> Dict[str, List]:
 
         self.info(f"   ✅ Obtenidos {len(hashes_guardados)} hashes guardados")
 
-        # 4. Detectar cambios y preparar datos para guardar
-        hashes_para_guardar = []
-
+        # 4. Detectar cambios (los hashes se guardan en _update_sync_hashes tras éxito API)
         for i, customer in enumerate(customers):
             # Mostrar progreso cada 5000 clientes
             if (i + 1) % 5000 == 0:
@@ -183,13 +181,11 @@ def detect_changes_optimized(self) -> Dict[str, List]:
             elif hash_guardado != hash_actual:
                 cambios['modificados'].append(customer)
 
-            # Preparar para guardar en lote
-            hashes_para_guardar.append((code, hash_actual))
-
-        # 5. ✅ GUARDAR TODOS LOS HASHES DE UNA VEZ
-        self.info(f"   💾 Guardando {len(hashes_para_guardar)} hashes...")
-        self._guardar_hashes_masivo('customers', hashes_para_guardar)
-        self.info(f"   ✅ Hashes guardados")
+            # Guardar hash solo si la API confirma (se hace en _update_sync_hashes)
+            cambios.setdefault('_hashes', []).append({
+                'code': code,
+                'hash': hash_actual,
+            })
 
         # 6. Detectar eliminados
         self.pg_cursor.execute("""

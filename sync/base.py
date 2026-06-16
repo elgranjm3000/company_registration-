@@ -544,35 +544,75 @@ class BaseSync(ABC):
     def _update_sync_hashes(self, changes: Dict[str, List]) -> None:
         """
         Actualizar sync_hashes después de sincronizar exitosamente.
-        Marca pending_sync = FALSE para los registros sincronizados.
+        Guarda el hash y marca pending_sync = FALSE solo si la API confirmó.
+
+        Los hashes se almacenan en changes['_hashes'] durante la detección
+        de cambios y se persisten aquí solo tras confirmación exitosa de la API.
 
         Args:
             changes: Dict con nuevos, modificados
         """
         try:
-            # Marcar nuevos y modificados como sincronizados
-            todos = changes.get('nuevos', []) + changes.get('modificados', [])
+            hash_data = changes.get('_hashes', [])
 
-            if not todos:
+            if not hash_data:
+                # Fallback: marcar pendientes como sincronizados sin hash
+                todos = changes.get('nuevos', []) + changes.get('modificados', [])
+                if not todos:
+                    return
+                for registro in todos:
+                    record_key = self._extract_record_key(registro)
+                    self.pg_cursor.execute("""
+                        UPDATE sync_hashes
+                        SET pending_sync = FALSE,
+                            updated_at = NOW()
+                        WHERE table_name = %s
+                          AND record_key = %s
+                          AND company_id = %s
+                    """, (self._get_table_name(), record_key, self.company_id))
+                self.pg_conn.commit()
                 return
 
-            # Actualizar cada registro
-            for registro in todos:
-                # Extraer record_key (varía según la entidad)
-                record_key = self._extract_record_key(registro)
+            # Guardar hash y limpiar pending_sync para cada registro
+            for entry in hash_data:
+                code = entry.get('code', entry.get('record_key'))
+                if not code:
+                    continue
+                record_hash = entry.get('hash')
 
-                self.pg_cursor.execute("""
-                    UPDATE sync_hashes
-                    SET pending_sync = FALSE,
-                        updated_at = NOW()
-                    WHERE table_name = %s
-                      AND record_key = %s
-                      AND company_id = %s
-                """, (self._get_table_name(), record_key, self.company_id))
+                if record_hash:
+                    self.pg_cursor.execute("""
+                        UPDATE sync_hashes
+                        SET record_hash = %s,
+                            pending_sync = FALSE,
+                            updated_at = NOW()
+                        WHERE table_name = %s
+                          AND record_key = %s
+                          AND company_id = %s
+                    """, (record_hash, self._get_table_name(), str(code), self.company_id))
+
+                    # Si no afectó ninguna fila, hacer INSERT
+                    if self.pg_cursor.rowcount == 0:
+                        self.pg_cursor.execute("""
+                            INSERT INTO sync_hashes (
+                                table_name, record_key, record_hash, company_id,
+                                pending_sync, updated_at
+                            ) VALUES (%s, %s, %s, %s, FALSE, NOW())
+                        """, (self._get_table_name(), str(code), record_hash, self.company_id))
+                else:
+                    # Sin hash, solo limpiar pending
+                    self.pg_cursor.execute("""
+                        UPDATE sync_hashes
+                        SET pending_sync = FALSE,
+                            updated_at = NOW()
+                        WHERE table_name = %s
+                          AND record_key = %s
+                          AND company_id = %s
+                    """, (self._get_table_name(), str(code), self.company_id))
 
             self.pg_conn.commit()
 
-            self.debug(f"Updated {len(todos)} sync_hashes records")
+            self.debug(f"Updated {len(hash_data)} sync_hashes records with hashes")
 
         except Exception as e:
             self.error(f"Error updating sync_hashes: {e}")

@@ -194,8 +194,11 @@ class SellersSync(BaseSync):
                     cambios['modificados'].append(seller)
                     self.debug(f"  🔄 MODIFICADO: {code}")
 
-                # Guardar hash actual
-                self._guardar_hash(self.table_name, code, hash_actual)
+                # Guardar hash solo si la API confirma (se hace en _update_sync_hashes)
+                cambios.setdefault('_hashes', []).append({
+                    'code': code,
+                    'hash': hash_actual,
+                })
 
             # Detectar eliminados (usando trigger deleted_at)
             self.pg_cursor.execute("""

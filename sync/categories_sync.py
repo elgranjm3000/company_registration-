@@ -101,8 +101,11 @@ class CategoriesSync(BaseSync):
                     cambios['modificados'].append(category)
                     self.debug(f"  🔄 MODIFICADO: {code}")
 
-                # Guardar hash actual
-                self._guardar_hash(self.table_name, code, hash_actual)
+                # Guardar hash solo si la API confirma (se hace en _update_sync_hashes)
+                cambios.setdefault('_hashes', []).append({
+                    'code': code,
+                    'hash': hash_actual,
+                })
 
             # Detectar eliminados (están en sync_hashes pero no en PostgreSQL)
             if claves_actuales:

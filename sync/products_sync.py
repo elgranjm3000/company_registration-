@@ -242,12 +242,12 @@ class ProductsSync(BaseSync):
                         cambios['modificados'].append(producto)
                         self.debug(f"  🔄 MODIFICADO: {code}")
 
-                    # Guardar hash actual con last_sync_data (incluye coin)
-                    data_sync = {
+                    # Guardar hash solo si la API confirma (se hace en _update_sync_hashes)
+                    cambios.setdefault('_hashes', []).append({
+                        'code': code,
+                        'hash': hash_actual,
                         'coin': coin_actual,
-                        'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    }
-                    self._guardar_hash(self.table_name, code, hash_actual, data_sync)
+                    })
 
             # Detectar eliminados (usando trigger deleted_at)
             self.pg_cursor.execute("""

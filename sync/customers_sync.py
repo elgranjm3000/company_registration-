@@ -172,14 +172,11 @@ class CustomersSync(BaseSync):
                         # Modificado
                         cambios['modificados'].append(customer)
 
-                    # Preparar para guardado masivo
-                    hashes_para_guardar.append((code, hash_actual))
-
-                # ✅ OPTIMIZACIÓN: Guardar todos los hashes de una vez
-                if hashes_para_guardar:
-                    self.info(f"   💾 Guardando {len(hashes_para_guardar)} hashes (modo optimizado)...")
-                    self._guardar_hashes_masivo(self.table_name, hashes_para_guardar)
-                    self.info(f"   ✅ Hashes guardados")
+                    # Guardar hash solo si la API confirma (se hace en _update_sync_hashes)
+                    cambios.setdefault('_hashes', []).append({
+                        'code': code,
+                        'hash': hash_actual,
+                    })
 
             # Detectar eliminados (usando trigger deleted_at)
             self.pg_cursor.execute("""
