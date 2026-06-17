@@ -2658,6 +2658,17 @@ class ConfigWindow:
         ttk.Button(button_frame, text="❌ Cancelar",
                   command=self.root.quit).pack(side="left", padx=5)
 
+        # Área de logs visible
+        log_frame = ttk.LabelFrame(self.root, text="  Logs  ")
+        log_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        self.log_text = tk.Text(log_frame, height=8, width=70, font=("Consolas", 9))
+        self.log_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        scrollbar = ttk.Scrollbar(self.log_text, command=self.log_text.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.log_text.config(yscrollcommand=scrollbar.set)
+
     def log(self, message: str, level: str = "info"):
         """Escribir log."""
         if self.log_text:
