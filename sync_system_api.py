@@ -3899,35 +3899,70 @@ class ConfigWindow:
                                   bg="#f0f0f0", fg="#2c3e50")
         estado_general.pack(pady=(0, 15))
 
-        # Frame de pasos con checkboxes
-        pasos_frame = tk.LabelFrame(main_frame, text="  Progreso  ",
-                                    font=("Arial", 10, "bold"),
-                                    bg="#f0f0f0", fg="#2c3e50",
-                                    padx=15, pady=12)
-        pasos_frame.pack(fill="x", padx=5)
+        # Frame de entidades con estado visual
+        entidades_frame = tk.LabelFrame(main_frame, text="  Progreso por entidad  ",
+                                        font=("Arial", 10, "bold"),
+                                        bg="#f0f0f0", fg="#2c3e50",
+                                        padx=15, pady=12)
+        entidades_frame.pack(fill="x", padx=5)
 
-        pasos = [
-            "Cargando configuración",
-            "Conectando a la base de datos",
-            "Sincronizando productos",
-            "Sincronizando categorías",
-            "Sincronizando clientes",
-            "Sincronizando vendedores",
-            "Finalizando"
+        # Definir entidades en orden real de sync_all
+        entidades = [
+            ('setup',      'Configuración',      '◻'),
+            ('database',   'Conexión PostgreSQL','◻'),
+            ('categories', 'Categorías',         '◻'),
+            ('products',   'Productos',          '◻'),
+            ('customers',  'Clientes',           '◻'),
+            ('sellers',    'Vendedores',         '◻'),
+            ('quotes',     'Cotizaciones',       '◻'),
+            ('final',      'Finalizando',        '◻'),
         ]
 
-        paso_vars = []
-        for i, paso_text in enumerate(pasos, 1):
-            paso_frame = tk.Frame(pasos_frame, bg="#f0f0f0")
-            paso_frame.pack(fill="x", pady=1)
-            var = tk.IntVar(value=0)
-            cb = tk.Checkbutton(paso_frame, text=f"  {i}. {paso_text}",
-                               variable=var, font=("Arial", 10),
-                               bg="#f0f0f0", fg="#555555",
-                               selectcolor="white", state="disabled",
-                               disabledforeground="#555555", anchor="w")
-            cb.pack(fill="x")
-            paso_vars.append(var)
+        def icono_estado(estado):
+            return {
+                'pending': '◻',
+                'running': '⏳',
+                'done':    '✅',
+                'error':   '❌',
+            }.get(estado, '◻')
+
+        entidad_widgets = {}
+        for eid, ename, _ in entidades:
+            row = tk.Frame(entidades_frame, bg="#f0f0f0")
+            row.pack(fill="x", pady=2)
+
+            icon_lbl = tk.Label(row, text="◻", font=("Arial", 12),
+                                bg="#f0f0f0", fg="#95a5a6", width=2)
+            icon_lbl.pack(side="left")
+
+            name_lbl = tk.Label(row, text=ename, font=("Arial", 10),
+                                bg="#f0f0f0", fg="#555555", width=18, anchor="w")
+            name_lbl.pack(side="left")
+
+            detail_lbl = tk.Label(row, text="Pendiente...", font=("Arial", 9),
+                                  bg="#f0f0f0", fg="#95a5a6", anchor="w")
+            detail_lbl.pack(side="left", padx=(5, 0))
+
+            entidad_widgets[eid] = {
+                'icon': icon_lbl,
+                'name': name_lbl,
+                'detail': detail_lbl,
+                'estado': 'pending',
+            }
+
+        def actualizar_entidad(eid, estado, detalle=""):
+            """Actualizar estado visual de una entidad."""
+            if eid not in entidad_widgets:
+                return
+            w = entidad_widgets[eid]
+            w['estado'] = estado
+            w['icon'].config(text=icono_estado(estado))
+            colores = {'pending': '#95a5a6', 'running': '#2980b9',
+                       'done': '#27ae60', 'error': '#c0392b'}
+            w['icon'].config(fg=colores.get(estado, '#95a5a6'))
+            w['name'].config(fg=colores.get(estado, '#555555'))
+            if detalle:
+                w['detail'].config(text=detalle, fg=colores.get(estado, '#95a5a6'))
 
         # Barra de progreso con porcentaje
         barra_frame = tk.Frame(main_frame, bg="#f0f0f0")
@@ -3976,10 +4011,12 @@ class ConfigWindow:
                     if isinstance(msg, dict):
                         msg_type = msg.get('type', '')
 
-                        if msg_type == 'paso':
-                            paso_idx = msg.get('paso', 1) - 1
-                            if 0 <= paso_idx < len(paso_vars):
-                                paso_vars[paso_idx].set(1)
+                        if msg_type == 'entity':
+                            actualizar_entidad(
+                                msg['entity'],
+                                msg.get('status', 'pending'),
+                                msg.get('detail', '')
+                            )
 
                         elif msg_type == 'progress':
                             progress_bar['value'] = msg.get('porcentaje', 0)
@@ -4033,8 +4070,9 @@ class ConfigWindow:
         def ejecutar_sync():
             """Ejecutar sincronización en thread separado."""
             try:
-                # Paso 1: Cargando configuración
-                sync_queue.put({'type': 'paso', 'paso': 1})
+                # ── ENTIDAD 1: Configuración ──
+                sync_queue.put({'type': 'entity', 'entity': 'setup',
+                               'status': 'running', 'detail': 'Validando API Key...'})
                 sync_queue.put({'type': 'progress', 'porcentaje': 5,
                                'text': 'Cargando configuración...'})
 
@@ -4055,12 +4093,14 @@ class ConfigWindow:
                     return
 
                 auth_manager.validate_company(config['company_rif'], config['company_email'], chrystal_version=_cv_ping)
-                time.sleep(0.3)
+                sync_queue.put({'type': 'entity', 'entity': 'setup',
+                               'status': 'done', 'detail': 'API Key válida'})
                 sync_queue.put({'type': 'progress', 'porcentaje': 10,
                                'text': 'Configuración cargada correctamente'})
 
-                # Paso 2: Conectando a la base de datos
-                sync_queue.put({'type': 'paso', 'paso': 2})
+                # ── ENTIDAD 2: Conexión PostgreSQL ──
+                sync_queue.put({'type': 'entity', 'entity': 'database',
+                               'status': 'running', 'detail': 'Conectando...'})
                 sync_queue.put({'type': 'progress', 'porcentaje': 15,
                                'text': 'Conectando a la base de datos...'})
 
@@ -4072,38 +4112,23 @@ class ConfigWindow:
                     'password': config['postgres_password']
                 }
 
-                # Logger que captura mensajes de sync_all para actualizar pasos
-                paso_map = {
-                    'CATEGORIES': (4, 40, 'Sincronizando categorías...'),
-                    'PRODUCTS': (3, 55, 'Sincronizando productos...'),
-                    'CUSTOMERS': (5, 70, 'Sincronizando clientes...'),
-                    'SELLERS': (6, 85, 'Sincronizando vendedores...'),
-                    'RESUMEN': (7, 95, 'Finalizando sincronización...'),
-                }
-
-                def sync_logger(msg, level="info"):
-                    try:
-                        msg_str = str(msg)
-                        sync_queue.put({'type': 'log', 'text': msg_str})
-                        for key, (paso_num, pct, text) in paso_map.items():
-                            if key in msg_str:
-                                sync_queue.put({'type': 'paso', 'paso': paso_num})
-                                sync_queue.put({'type': 'progress',
-                                               'porcentaje': pct, 'text': text})
-                                break
-                    except:
-                        pass
-
                 sync_manager = APISyncManager(
-                    postgres_config, auth_manager, logger=sync_logger
+                    postgres_config, auth_manager, logger=None
                 )
 
                 if not sync_manager.connect_postgresql():
+                    sync_queue.put({'type': 'entity', 'entity': 'database',
+                                   'status': 'error', 'detail': 'Error de conexión'})
                     sync_queue.put({
                         'type': 'error',
                         'text': 'Error conectando a PostgreSQL. Verifique la conexión.'
                     })
                     return
+
+                sync_queue.put({'type': 'entity', 'entity': 'database',
+                               'status': 'done', 'detail': 'Conectado'})
+                sync_queue.put({'type': 'progress', 'porcentaje': 25,
+                               'text': 'Conectado a la base de datos'})
 
                 if not sync_manager.initialize_api_clients():
                     sync_queue.put({
@@ -4112,17 +4137,106 @@ class ConfigWindow:
                     })
                     return
 
-                time.sleep(0.3)
-                sync_queue.put({'type': 'progress', 'porcentaje': 25,
-                               'text': 'Conectado a la base de datos'})
+                # ── OBTENER TOTALES DESDE BD ──
+                totales = {}
+                try:
+                    cursor = sync_manager.pg_conn.cursor()
+                    consultas = {
+                        'categories': 'SELECT COUNT(*) FROM department WHERE code IS NOT NULL AND code != \'\'',
+                        'products':   'SELECT COUNT(*) FROM products WHERE code IS NOT NULL AND code != \'\' AND product_type <> \'C\'',
+                        'customers':  'SELECT COUNT(*) FROM clients WHERE code IS NOT NULL AND code != \'\'',
+                        'sellers':    'SELECT COUNT(*) FROM sellers s LEFT JOIN users u ON s.user_code = u.code WHERE s.code IS NOT NULL AND s.code != \'\' AND s.code <> \'N/A\' AND u.email IS NOT NULL',
+                        'quotes':     'SELECT COUNT(*) FROM quotes',
+                    }
+                    for ent, sql in consultas.items():
+                        cursor.execute(sql)
+                        totales[ent] = cursor.fetchone()[0]
+                except Exception:
+                    pass
+
+                # ── LOGGER CON MÁQUINA DE ESTADOS POR ENTIDAD ──
+                entidades_sync = ['categories', 'products', 'customers', 'sellers', 'quotes', 'final']
+                idx_actual = [0]  # mutable para cerrar sobre él
+
+                pct_map = {
+                    'categories': 35,
+                    'products':   50,
+                    'customers':  65,
+                    'sellers':    80,
+                    'quotes':     90,
+                    'final':      95,
+                }
+
+                def sync_logger(msg, level="info"):
+                    try:
+                        msg_str = str(msg).upper()
+                        for key, eid in [
+                            ('CATEGORIES', 'categories'),
+                            ('PRODUCTS',   'products'),
+                            ('CUSTOMERS',  'customers'),
+                            ('SELLERS',    'sellers'),
+                            ('QUOTES',     'quotes'),
+                            ('RESUMEN',    'final'),
+                        ]:
+                            if key in msg_str:
+                                # Marcar entidad anterior como completada
+                                if idx_actual[0] > 0:
+                                    prev = entidades_sync[idx_actual[0] - 1]
+                                    sync_queue.put({'type': 'entity',
+                                                   'entity': prev,
+                                                   'status': 'done',
+                                                   'detail': 'Completado'})
+
+                                # Marcar la actual como en progreso
+                                total = totales.get(eid, 0)
+                                detalle = f"Procesando {total} registro(s)..." if total else "Sincronizando..."
+                                sync_queue.put({'type': 'entity',
+                                               'entity': eid,
+                                               'status': 'running',
+                                               'detail': detalle})
+
+                                # Avanzar progreso
+                                pct = pct_map.get(eid, 50)
+                                texto = f"Sincronizando {eid}..."
+                                sync_queue.put({'type': 'progress',
+                                               'porcentaje': pct, 'text': texto})
+
+                                idx_actual[0] += 1
+                                break
+                    except:
+                        pass
+
+                # Asignar logger con callback de progreso
+                sync_manager._log = sync_logger
+
+                # Marcar primera entidad como running antes de empezar
+                sync_queue.put({'type': 'entity', 'entity': 'categories',
+                               'status': 'running',
+                               'detail': f"Procesando {totales.get('categories', 0)} registro(s)..."})
+                sync_queue.put({'type': 'entity', 'entity': 'products', 'status': 'pending', 'detail': 'Pendiente...'})
+                sync_queue.put({'type': 'entity', 'entity': 'customers', 'status': 'pending', 'detail': 'Pendiente...'})
+                sync_queue.put({'type': 'entity', 'entity': 'sellers', 'status': 'pending', 'detail': 'Pendiente...'})
+                sync_queue.put({'type': 'entity', 'entity': 'quotes', 'status': 'pending', 'detail': 'Pendiente...'})
+                sync_queue.put({'type': 'entity', 'entity': 'final', 'status': 'pending', 'detail': 'Pendiente...'})
 
                 # Ejecutar sincronización completa
                 result = sync_manager.sync_all()
 
                 if result.get('success'):
-                    # Marcar todos los pasos como completados
-                    for i in range(len(paso_vars)):
-                        paso_vars[i].set(1)
+                    # Marcar última entidad como completada
+                    if idx_actual[0] > 0:
+                        prev = entidades_sync[idx_actual[0] - 1]
+                        sync_queue.put({'type': 'entity', 'entity': prev,
+                                       'status': 'done', 'detail': 'Completado'})
+
+                    detalle_final = "Completado"
+                    total = result.get('total', {})
+                    creados = total.get('created', 0)
+                    actualizados = total.get('updated', 0)
+                    if creados or actualizados:
+                        detalle_final += f" | +{creados} creados, +{actualizados} actualizados"
+                    sync_queue.put({'type': 'entity', 'entity': 'final',
+                                   'status': 'done', 'detail': detalle_final})
                     sync_queue.put({'type': 'complete'})
                 else:
                     sync_queue.put({
