@@ -4277,6 +4277,304 @@ class ConfigWindow:
 # PRIMERA SINCRONIZACIÓN Y SYSTEM TRAY
 # ==============================================================================
 
+def mostrar_progreso_primera_sync(config: dict, al_completar=None):
+    """
+    Ventana independiente de progreso de primera sincronización con entidades.
+
+    Args:
+        config: Dict con configuración completa (api_url, api_key, postgres_*, company_*)
+        al_completar: Callable opcional al finalizar la sync (para iniciar System Tray)
+    """
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+    import json
+    import os
+    import queue
+    import threading
+
+    sync_window = tk.Tk()
+    set_window_favicon(sync_window)
+    sync_window.title("Primera Sincronización")
+    sync_window.geometry("650x580")
+    sync_window.resizable(False, False)
+    sync_window.protocol("WM_DELETE_WINDOW", lambda: None)
+    sync_window.update_idletasks()
+    x = (sync_window.winfo_screenwidth() // 2) - (650 // 2)
+    y = (sync_window.winfo_screenheight() // 2) - (580 // 2)
+    sync_window.geometry(f"+{x}+{y}")
+    sync_window.attributes('-topmost', True)
+    sync_window.lift()
+    sync_window.focus_force()
+
+    main_frame = tk.Frame(sync_window, bg="#f0f0f0", padx=30, pady=25)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    tk.Label(main_frame, text="PRIMERA SINCRONIZACIÓN",
+             font=("Arial", 18, "bold"), bg="#f0f0f0", fg="#2c3e50").pack(pady=(0, 5))
+    tk.Label(main_frame, text="Por favor espere mientras se realiza la primera sincronización",
+             font=("Arial", 10), bg="#f0f0f0", fg="#7f8c8d").pack(pady=(0, 15))
+
+    spinner_label = tk.Label(main_frame, text="⟳", font=("Arial", 60),
+                             bg="#f0f0f0", fg="#3498db")
+    spinner_label.pack(pady=(0, 10))
+
+    estado_general = tk.Label(main_frame, text="Iniciando...",
+                              font=("Arial", 11, "bold"),
+                              bg="#f0f0f0", fg="#2c3e50")
+    estado_general.pack(pady=(0, 15))
+
+    entidades_frame = tk.LabelFrame(main_frame, text="  Progreso por entidad  ",
+                                    font=("Arial", 10, "bold"),
+                                    bg="#f0f0f0", fg="#2c3e50",
+                                    padx=15, pady=12)
+    entidades_frame.pack(fill="x", padx=5)
+
+    entidades = [
+        ('setup',      'Configuración',      '◻'),
+        ('database',   'Conexión PostgreSQL', '◻'),
+        ('categories', 'Categorías',          '◻'),
+        ('products',   'Productos',           '◻'),
+        ('customers',  'Clientes',            '◻'),
+        ('sellers',    'Vendedores',          '◻'),
+        ('quotes',     'Cotizaciones',        '◻'),
+        ('final',      'Finalizando',         '◻'),
+    ]
+
+    def icono_estado(estado):
+        return {'pending': '◻', 'running': '⏳', 'done': '✅', 'error': '❌'}.get(estado, '◻')
+
+    entidad_widgets = {}
+    for eid, ename, _ in entidades:
+        row = tk.Frame(entidades_frame, bg="#f0f0f0")
+        row.pack(fill="x", pady=2)
+        icon_lbl = tk.Label(row, text="◻", font=("Arial", 12),
+                            bg="#f0f0f0", fg="#95a5a6", width=2)
+        icon_lbl.pack(side="left")
+        name_lbl = tk.Label(row, text=ename, font=("Arial", 10),
+                            bg="#f0f0f0", fg="#555555", width=18, anchor="w")
+        name_lbl.pack(side="left")
+        detail_lbl = tk.Label(row, text="Pendiente...", font=("Arial", 9),
+                              bg="#f0f0f0", fg="#95a5a6", anchor="w")
+        detail_lbl.pack(side="left", padx=(5, 0))
+        entidad_widgets[eid] = {'icon': icon_lbl, 'name': name_lbl,
+                                'detail': detail_lbl, 'estado': 'pending'}
+
+    def actualizar_entidad(eid, estado, detalle=""):
+        if eid not in entidad_widgets:
+            return
+        w = entidad_widgets[eid]
+        w['estado'] = estado
+        w['icon'].config(text=icono_estado(estado))
+        colores = {'pending': '#95a5a6', 'running': '#2980b9',
+                   'done': '#27ae60', 'error': '#c0392b'}
+        w['icon'].config(fg=colores.get(estado, '#95a5a6'))
+        w['name'].config(fg=colores.get(estado, '#555555'))
+        if detalle:
+            w['detail'].config(text=detalle, fg=colores.get(estado, '#95a5a6'))
+
+    barra_frame = tk.Frame(main_frame, bg="#f0f0f0")
+    barra_frame.pack(fill="x", pady=(20, 5), padx=5)
+    progress_bar = ttk.Progressbar(barra_frame, mode='determinate', length=500)
+    progress_bar.pack(side="left")
+    pct_label = tk.Label(barra_frame, text="0%", font=("Arial", 11, "bold"),
+                         bg="#f0f0f0", fg="#0066cc")
+    pct_label.pack(side="right", padx=(10, 0))
+
+    sync_queue = queue.Queue()
+    sync_completada = [False]
+    sync_error = [None]
+    spinner_frames = ["◐", "◓", "◑", "◒"]
+    current_frame = [0]
+
+    def animar_spinner():
+        if sync_completada[0]:
+            return
+        try:
+            if sync_window.winfo_exists():
+                current_frame[0] = (current_frame[0] + 1) % len(spinner_frames)
+                spinner_label.config(text=spinner_frames[current_frame[0]])
+                sync_window.after(200, animar_spinner)
+        except:
+            pass
+
+    animar_spinner()
+
+    def procesar_mensajes():
+        if sync_completada[0] or not sync_window.winfo_exists():
+            return
+        try:
+            while not sync_queue.empty():
+                msg = sync_queue.get_nowait()
+                if isinstance(msg, dict):
+                    t = msg.get('type', '')
+                    if t == 'entity':
+                        actualizar_entidad(msg['entity'], msg.get('status', 'pending'), msg.get('detail', ''))
+                    elif t == 'progress':
+                        progress_bar['value'] = msg.get('porcentaje', 0)
+                        pct_label.config(text=f"{int(msg.get('porcentaje', 0))}%")
+                        if 'text' in msg:
+                            estado_general.config(text=msg['text'])
+                    elif t == 'complete':
+                        sync_completada[0] = True
+                        spinner_label.config(text="✅")
+                        estado_general.config(text="Sincronización completada exitosamente", fg="#27ae60")
+                        progress_bar['value'] = 100
+                        pct_label.config(text="100%")
+
+                        def cerrar_y_continuar():
+                            try:
+                                if sync_window.winfo_exists():
+                                    sync_window.destroy()
+                            except:
+                                pass
+                            if al_completar:
+                                al_completar()
+
+                        sync_window.after(2000, cerrar_y_continuar)
+                    elif t == 'error':
+                        sync_completada[0] = True
+                        sync_error[0] = msg.get('text', 'Error desconocido')
+                        spinner_label.config(text="❌")
+                        estado_general.config(text=f"Error: {sync_error[0]}", fg="#c0392b")
+                        progress_bar['value'] = 0
+                        pct_label.config(text="Error")
+        except queue.Empty:
+            pass
+        except:
+            pass
+        if not sync_completada[0]:
+            try:
+                sync_window.after(100, procesar_mensajes)
+            except:
+                pass
+
+    def ejecutar_sync():
+        try:
+            sync_queue.put({'type': 'entity', 'entity': 'setup',
+                           'status': 'running', 'detail': 'Validando API Key...'})
+            sync_queue.put({'type': 'progress', 'porcentaje': 5,
+                           'text': 'Cargando configuración...'})
+
+            auth_manager = APIAuthManager(config['api_url'])
+
+            _cv_ping = _get_chrystal_version({
+                'host': config['postgres_host'],
+                'port': config['postgres_port'],
+                'database': config['postgres_database'],
+                'user': config['postgres_user'],
+                'password': config['postgres_password'],
+            })
+            ping_result = auth_manager.ping_api_key(config['api_key'], chrystal_version=_cv_ping)
+            if not ping_result.get('success'):
+                sync_queue.put({'type': 'error',
+                               'text': f"Error autenticación: {ping_result.get('error', 'Error desconocido')}"})
+                return
+
+            auth_manager.validate_company(config['company_rif'], config['company_email'],
+                                          chrystal_version=_cv_ping)
+            sync_queue.put({'type': 'entity', 'entity': 'setup', 'status': 'done', 'detail': 'API Key válida'})
+            sync_queue.put({'type': 'progress', 'porcentaje': 10, 'text': 'Configuración cargada correctamente'})
+
+            sync_queue.put({'type': 'entity', 'entity': 'database', 'status': 'running', 'detail': 'Conectando...'})
+            sync_queue.put({'type': 'progress', 'porcentaje': 15, 'text': 'Conectando a la base de datos...'})
+
+            postgres_config = {
+                'host': config['postgres_host'], 'port': config['postgres_port'],
+                'database': config['postgres_database'], 'user': config['postgres_user'],
+                'password': config['postgres_password']
+            }
+
+            sync_manager = APISyncManager(postgres_config, auth_manager, logger=None)
+            if not sync_manager.connect_postgresql():
+                sync_queue.put({'type': 'entity', 'entity': 'database',
+                               'status': 'error', 'detail': 'Error de conexión'})
+                sync_queue.put({'type': 'error', 'text': 'Error conectando a PostgreSQL.'})
+                return
+
+            sync_queue.put({'type': 'entity', 'entity': 'database', 'status': 'done', 'detail': 'Conectado'})
+            sync_queue.put({'type': 'progress', 'porcentaje': 25, 'text': 'Conectado a la base de datos'})
+
+            if not sync_manager.initialize_api_clients():
+                sync_queue.put({'type': 'error', 'text': 'Error inicializando clientes API.'})
+                return
+
+            totales = {}
+            try:
+                cursor = sync_manager.pg_conn.cursor()
+                consultas = {
+                    'categories': 'SELECT COUNT(*) FROM department WHERE code IS NOT NULL AND code != \'\'',
+                    'products':   'SELECT COUNT(*) FROM products WHERE code IS NOT NULL AND code != \'\' AND product_type <> \'C\'',
+                    'customers':  'SELECT COUNT(*) FROM clients WHERE code IS NOT NULL AND code != \'\'',
+                    'sellers':    'SELECT COUNT(*) FROM sellers s LEFT JOIN users u ON s.user_code = u.code WHERE s.code IS NOT NULL AND s.code != \'\' AND s.code <> \'N/A\' AND u.email IS NOT NULL',
+                    'quotes':     'SELECT COUNT(*) FROM quotes',
+                }
+                for ent, sql in consultas.items():
+                    cursor.execute(sql)
+                    totales[ent] = cursor.fetchone()[0]
+            except:
+                pass
+
+            entidades_sync = ['categories', 'products', 'customers', 'sellers', 'quotes', 'final']
+            idx_actual = [0]
+            pct_map = {
+                'categories': 35, 'products': 50, 'customers': 65,
+                'sellers': 80, 'quotes': 90, 'final': 95,
+            }
+
+            def sync_logger(msg, level="info"):
+                try:
+                    msg_str = str(msg).upper()
+                    for key, eid in [
+                        ('CATEGORIES', 'categories'), ('PRODUCTS', 'products'),
+                        ('CUSTOMERS', 'customers'), ('SELLERS', 'sellers'),
+                        ('QUOTES', 'quotes'), ('RESUMEN', 'final'),
+                    ]:
+                        if key in msg_str:
+                            if idx_actual[0] > 0:
+                                prev = entidades_sync[idx_actual[0] - 1]
+                                sync_queue.put({'type': 'entity', 'entity': prev,
+                                               'status': 'done', 'detail': 'Completado'})
+                            total = totales.get(eid, 0)
+                            detalle = f"Procesando {total} registro(s)..." if total else "Sincronizando..."
+                            sync_queue.put({'type': 'entity', 'entity': eid, 'status': 'running', 'detail': detalle})
+                            pct = pct_map.get(eid, 50)
+                            sync_queue.put({'type': 'progress', 'porcentaje': pct, 'text': f"Sincronizando {eid}..."})
+                            idx_actual[0] += 1
+                            break
+                except:
+                    pass
+
+            sync_manager._log = sync_logger
+
+            sync_queue.put({'type': 'entity', 'entity': 'categories', 'status': 'running',
+                           'detail': f"Procesando {totales.get('categories', 0)} registro(s)..."})
+            for e in ['products', 'customers', 'sellers', 'quotes', 'final']:
+                sync_queue.put({'type': 'entity', 'entity': e, 'status': 'pending', 'detail': 'Pendiente...'})
+
+            result = sync_manager.sync_all()
+
+            if result.get('success'):
+                if idx_actual[0] > 0:
+                    prev = entidades_sync[idx_actual[0] - 1]
+                    sync_queue.put({'type': 'entity', 'entity': prev, 'status': 'done', 'detail': 'Completado'})
+                detalle_final = "Completado"
+                total = result.get('total', {})
+                creados = total.get('created', 0)
+                actualizados = total.get('updated', 0)
+                if creados or actualizados:
+                    detalle_final += f" | +{creados} creados, +{actualizados} actualizados"
+                sync_queue.put({'type': 'entity', 'entity': 'final', 'status': 'done', 'detail': detalle_final})
+                sync_queue.put({'type': 'complete'})
+            else:
+                sync_queue.put({'type': 'error', 'text': result.get('error', 'Error durante la sincronización')})
+        except Exception as e:
+            sync_queue.put({'type': 'error', 'text': str(e)})
+
+    sync_window.after(100, procesar_mensajes)
+    threading.Thread(target=ejecutar_sync, daemon=True).start()
+    sync_window.mainloop()
+
+
 def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
     """
     Ejecuta la primera sincronización y luego inicia el System Tray
@@ -7345,10 +7643,15 @@ def main():
                     _cfg_data = {}
                 if _cfg_data.get('saved'):
                     from config_encryption import encrypt_config
-                    _encrypted = encrypt_config({k: v for k, v in _cfg_data.items() if k != 'saved'})
+                    _cfg_clean = {k: v for k, v in _cfg_data.items() if k != 'saved'}
+                    _encrypted = encrypt_config(_cfg_clean)
                     with open(CONFIG_FILE, 'w') as _f:
                         _json.dump(_encrypted, _f, indent=2)
                     print("✅ Configuración guardada")
+
+                    # Mostrar pantalla de progreso de primera sincronización
+                    print("\n📊 Mostrando progreso de primera sincronización...")
+                    mostrar_progreso_primera_sync(_cfg_clean, al_completar=None)
             except Exception as _e:
                 print(f"❌ Error en configuración: {_e}")
             finally:
@@ -7531,10 +7834,15 @@ def main():
                     _cfg_data = {}
                 if _cfg_data.get('saved'):
                     from config_encryption import encrypt_config
-                    _encrypted = encrypt_config({k: v for k, v in _cfg_data.items() if k != 'saved'})
+                    _cfg_clean = {k: v for k, v in _cfg_data.items() if k != 'saved'}
+                    _encrypted = encrypt_config(_cfg_clean)
                     with open(CONFIG_FILE, 'w') as _f:
                         _json.dump(_encrypted, _f, indent=2)
                     print("✅ Configuración guardada")
+
+                    # Mostrar pantalla de progreso de primera sincronización
+                    print("\n📊 Mostrando progreso de primera sincronización...")
+                    mostrar_progreso_primera_sync(_cfg_clean, al_completar=None)
                 else:
                     print("❌ Configuración no completada o cancelada")
                     sys.exit(1)
