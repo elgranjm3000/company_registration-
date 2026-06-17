@@ -6334,9 +6334,53 @@ def _handle_config_window(result_path: str) -> None:
                     data = response.json()
                     if data.get('success'):
                         rd = data.get('data', {})
+                        api_email = rd.get('email', '')
                         self.company_name = rd.get('empresa', '')
                         self.company_rif = rd.get('rif', '')
-                        self.company_email = rd.get('email', '')
+                        self.company_email = api_email
+
+                        # Validar email del API contra PostgreSQL local
+                        if self._pg_verified_config:
+                            try:
+                                import psycopg2
+                                pg_conn = psycopg2.connect(
+                                    host=self._pg_verified_config.get('host', self.pg_host_edit.text().strip()),
+                                    port=self._pg_verified_config.get('port', self.pg_port_edit.text().strip()),
+                                    database=self._pg_verified_config.get('database', self.pg_db_edit.text().strip()),
+                                    user=self._pg_verified_config.get('user', self.pg_user_edit.text().strip()),
+                                    password=self._pg_verified_config.get('password', self.pg_password_edit.text().strip()),
+                                )
+                                pg_cursor = pg_conn.cursor()
+                                pg_cursor.execute("""
+                                    SELECT b.description
+                                    FROM public.company a
+                                    INNER JOIN emails b ON b.account = a.email
+                                    LIMIT 1
+                                """)
+                                row = pg_cursor.fetchone()
+                                pg_email = row[0] if row and row[0] else None
+                                pg_cursor.close()
+                                pg_conn.close()
+
+                                if not pg_email:
+                                    self.api_status.setText("Su email no esta registrado en nuestra base de dato")
+                                    self.api_status.setStyleSheet("color: red;")
+                                    QMessageBox.critical(self, "Error de Validación",
+                                        "Su email no esta registrado en nuestra base de dato")
+                                    return
+
+                                if api_email.lower().strip() != pg_email.lower().strip():
+                                    self.api_status.setText("Su email no esta registrado en nuestra base de dato")
+                                    self.api_status.setStyleSheet("color: red;")
+                                    QMessageBox.critical(self, "Error de Validación",
+                                        "Su email no esta registrado en nuestra base de dato")
+                                    return
+                            except Exception as e:
+                                self.api_status.setText(f"Error validando email local: {str(e)[:60]}")
+                                self.api_status.setStyleSheet("color: red;")
+                                QMessageBox.critical(self, "Error de Validación",
+                                    f"Error validando email contra base de datos local:\n{e}")
+                                return
 
                         self.emp_name_label.setText(f"Empresa: {self.company_name or '--'}")
                         self.emp_rif_label.setText(f"RIF: {self.company_rif or '--'}")
