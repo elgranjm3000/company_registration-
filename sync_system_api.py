@@ -4279,128 +4279,174 @@ class ConfigWindow:
 
 def mostrar_progreso_primera_sync(config: dict, al_completar=None):
     """
-    Ventana independiente de progreso de primera sincronización con entidades.
+    Ventana PySide6 de progreso de primera sincronización con entidades.
 
     Args:
         config: Dict con configuración completa (api_url, api_key, postgres_*, company_*)
         al_completar: Callable opcional al finalizar la sync (para iniciar System Tray)
     """
-    import tkinter as tk
-    from tkinter import ttk, messagebox
-    import json
-    import os
+    from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                                    QLabel, QProgressBar, QGroupBox)
+    from PySide6.QtCore import Qt, QTimer
     import queue
     import threading
 
-    sync_window = tk.Tk()
-    set_window_favicon(sync_window)
-    sync_window.title("Primera Sincronización")
-    sync_window.geometry("650x580")
-    sync_window.resizable(False, False)
-    sync_window.protocol("WM_DELETE_WINDOW", lambda: None)
-    sync_window.update_idletasks()
-    x = (sync_window.winfo_screenwidth() // 2) - (650 // 2)
-    y = (sync_window.winfo_screenheight() // 2) - (580 // 2)
-    sync_window.geometry(f"+{x}+{y}")
-    sync_window.attributes('-topmost', True)
-    sync_window.lift()
-    sync_window.focus_force()
+    app = QApplication.instance() or QApplication([])
 
-    main_frame = tk.Frame(sync_window, bg="#f0f0f0", padx=30, pady=25)
-    main_frame.pack(fill=tk.BOTH, expand=True)
+    window = QWidget()
+    window.setWindowTitle("Primera Sincronización")
+    window.setFixedSize(650, 580)
+    window.setStyleSheet("QWidget { background-color: #f5f5f5; }")
 
-    tk.Label(main_frame, text="PRIMERA SINCRONIZACIÓN",
-             font=("Arial", 18, "bold"), bg="#f0f0f0", fg="#2c3e50").pack(pady=(0, 5))
-    tk.Label(main_frame, text="Por favor espere mientras se realiza la primera sincronización",
-             font=("Arial", 10), bg="#f0f0f0", fg="#7f8c8d").pack(pady=(0, 15))
+    screen_geom = app.primaryScreen().geometry()
+    window.move((screen_geom.width() - 650) // 2, (screen_geom.height() - 580) // 2)
 
-    spinner_label = tk.Label(main_frame, text="⟳", font=("Arial", 60),
-                             bg="#f0f0f0", fg="#3498db")
-    spinner_label.pack(pady=(0, 10))
+    window.setWindowFlags(window.windowFlags() | Qt.WindowStaysOnTopHint)
+    window.setWindowModality(Qt.ApplicationModal)
 
-    estado_general = tk.Label(main_frame, text="Iniciando...",
-                              font=("Arial", 11, "bold"),
-                              bg="#f0f0f0", fg="#2c3e50")
-    estado_general.pack(pady=(0, 15))
+    # Bloquear cierre manual mientras la sync no haya terminado
+    sync_completada = [False]
+    sync_error = [None]
 
-    entidades_frame = tk.LabelFrame(main_frame, text="  Progreso por entidad  ",
-                                    font=("Arial", 10, "bold"),
-                                    bg="#f0f0f0", fg="#2c3e50",
-                                    padx=15, pady=12)
-    entidades_frame.pack(fill="x", padx=5)
+    def _custom_close_event(event):
+        if sync_completada[0]:
+            event.accept()
+        else:
+            event.ignore()
+    window.closeEvent = _custom_close_event
 
-    entidades = [
-        ('setup',      'Configuración',      '◻'),
-        ('database',   'Conexión PostgreSQL', '◻'),
-        ('categories', 'Categorías',          '◻'),
-        ('products',   'Productos',           '◻'),
-        ('customers',  'Clientes',            '◻'),
-        ('sellers',    'Vendedores',          '◻'),
-        ('quotes',     'Cotizaciones',        '◻'),
-        ('final',      'Finalizando',         '◻'),
+    main_layout = QVBoxLayout()
+    main_layout.setContentsMargins(30, 25, 30, 25)
+    main_layout.setSpacing(8)
+
+    # Título
+    title = QLabel("PRIMERA SINCRONIZACIÓN")
+    title.setStyleSheet("font-size: 18px; font-weight: bold; color: #1a1a1a; padding: 4px 0;")
+    title.setAlignment(Qt.AlignCenter)
+    main_layout.addWidget(title)
+
+    subtitle = QLabel("Por favor espere mientras se realiza la primera sincronización")
+    subtitle.setStyleSheet("font-size: 10px; color: #7f8c8d;")
+    subtitle.setAlignment(Qt.AlignCenter)
+    main_layout.addWidget(subtitle)
+    main_layout.addSpacing(5)
+
+    # Spinner
+    spinner_label = QLabel("⟳")
+    spinner_label.setStyleSheet("font-size: 60px; color: #3498db;")
+    spinner_label.setAlignment(Qt.AlignCenter)
+    main_layout.addWidget(spinner_label)
+    main_layout.addSpacing(5)
+
+    # Estado general
+    estado_general = QLabel("Iniciando...")
+    estado_general.setStyleSheet("font-size: 11px; font-weight: bold; color: #2c3e50;")
+    estado_general.setAlignment(Qt.AlignCenter)
+    main_layout.addWidget(estado_general)
+    main_layout.addSpacing(10)
+
+    # Grupo de entidades
+    entidades_frame = QGroupBox("  Progreso por entidad  ")
+    entidades_frame.setStyleSheet("""
+        QGroupBox { font-weight: bold; font-size: 10px; color: #2c3e50;
+            border: 1px solid #ccc; border-radius: 4px;
+            background: white; padding: 12px 15px; margin-top: 8px; }
+        QGroupBox::title { subcontrol-origin: margin; padding: 0 5px; }
+    """)
+
+    entities = [
+        ('setup',      'Configuración'),
+        ('database',   'Conexión PostgreSQL'),
+        ('categories', 'Categorías'),
+        ('products',   'Productos'),
+        ('customers',  'Clientes'),
+        ('sellers',    'Vendedores'),
+        ('quotes',     'Cotizaciones'),
+        ('final',      'Finalizando'),
     ]
+
+    ent_layout = QVBoxLayout()
+    ent_layout.setSpacing(3)
+
+    entidad_widgets = {}
+    for eid, ename in entities:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        icon_lbl = QLabel("◻")
+        icon_lbl.setFixedWidth(20)
+        icon_lbl.setStyleSheet("font-size: 12px; color: #95a5a6; background: transparent;")
+        name_lbl = QLabel(ename)
+        name_lbl.setFixedWidth(160)
+        name_lbl.setStyleSheet("font-size: 10px; color: #555555; background: transparent;")
+        detail_lbl = QLabel("Pendiente...")
+        detail_lbl.setStyleSheet("font-size: 9px; color: #95a5a6; background: transparent;")
+
+        row.addWidget(icon_lbl)
+        row.addWidget(name_lbl)
+        row.addWidget(detail_lbl)
+        row.addStretch()
+        ent_layout.addLayout(row)
+        entidad_widgets[eid] = {'icon': icon_lbl, 'name': name_lbl,
+                                'detail': detail_lbl, 'estado': 'pending'}
+
+    entidades_frame.setLayout(ent_layout)
+    main_layout.addWidget(entidades_frame)
+    main_layout.addSpacing(10)
+
+    # Barra de progreso
+    bar_layout = QHBoxLayout()
+    bar_layout.setContentsMargins(5, 0, 5, 0)
+    bar_layout.setSpacing(10)
+
+    progress_bar = QProgressBar()
+    progress_bar.setFixedWidth(500)
+    progress_bar.setFixedHeight(22)
+    progress_bar.setRange(0, 100)
+    progress_bar.setValue(0)
+    progress_bar.setTextVisible(False)
+    progress_bar.setStyleSheet("""
+        QProgressBar { border: 1px solid #ccc; border-radius: 4px;
+            background: #e0e0e0; }
+        QProgressBar::chunk { background-color: #3498db; border-radius: 3px; }
+    """)
+
+    pct_label = QLabel("0%")
+    pct_label.setFixedWidth(50)
+    pct_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #0066cc; background: transparent;")
+
+    bar_layout.addWidget(progress_bar)
+    bar_layout.addWidget(pct_label)
+    bar_layout.addStretch()
+    main_layout.addLayout(bar_layout)
+
+    window.setLayout(main_layout)
+
+    sync_queue = queue.Queue()
+    spinner_frames = ["◐", "◓", "◑", "◒"]
+    current_frame = [0]
 
     def icono_estado(estado):
         return {'pending': '◻', 'running': '⏳', 'done': '✅', 'error': '❌'}.get(estado, '◻')
-
-    entidad_widgets = {}
-    for eid, ename, _ in entidades:
-        row = tk.Frame(entidades_frame, bg="#f0f0f0")
-        row.pack(fill="x", pady=2)
-        icon_lbl = tk.Label(row, text="◻", font=("Arial", 12),
-                            bg="#f0f0f0", fg="#95a5a6", width=2)
-        icon_lbl.pack(side="left")
-        name_lbl = tk.Label(row, text=ename, font=("Arial", 10),
-                            bg="#f0f0f0", fg="#555555", width=18, anchor="w")
-        name_lbl.pack(side="left")
-        detail_lbl = tk.Label(row, text="Pendiente...", font=("Arial", 9),
-                              bg="#f0f0f0", fg="#95a5a6", anchor="w")
-        detail_lbl.pack(side="left", padx=(5, 0))
-        entidad_widgets[eid] = {'icon': icon_lbl, 'name': name_lbl,
-                                'detail': detail_lbl, 'estado': 'pending'}
 
     def actualizar_entidad(eid, estado, detalle=""):
         if eid not in entidad_widgets:
             return
         w = entidad_widgets[eid]
         w['estado'] = estado
-        w['icon'].config(text=icono_estado(estado))
-        colores = {'pending': '#95a5a6', 'running': '#2980b9',
-                   'done': '#27ae60', 'error': '#c0392b'}
-        w['icon'].config(fg=colores.get(estado, '#95a5a6'))
-        w['name'].config(fg=colores.get(estado, '#555555'))
+        colors = {'pending': '#95a5a6', 'running': '#2980b9',
+                  'done': '#27ae60', 'error': '#c0392b'}
+        c = colors.get(estado, '#95a5a6')
+        w['icon'].setText(icono_estado(estado))
+        w['icon'].setStyleSheet(f"font-size: 12px; color: {c}; background: transparent;")
+        w['name'].setStyleSheet(f"font-size: 10px; color: {c}; background: transparent;")
         if detalle:
-            w['detail'].config(text=detalle, fg=colores.get(estado, '#95a5a6'))
-
-    barra_frame = tk.Frame(main_frame, bg="#f0f0f0")
-    barra_frame.pack(fill="x", pady=(20, 5), padx=5)
-    progress_bar = ttk.Progressbar(barra_frame, mode='determinate', length=500)
-    progress_bar.pack(side="left")
-    pct_label = tk.Label(barra_frame, text="0%", font=("Arial", 11, "bold"),
-                         bg="#f0f0f0", fg="#0066cc")
-    pct_label.pack(side="right", padx=(10, 0))
-
-    sync_queue = queue.Queue()
-    sync_completada = [False]
-    sync_error = [None]
-    spinner_frames = ["◐", "◓", "◑", "◒"]
-    current_frame = [0]
-
-    def animar_spinner():
-        if sync_completada[0]:
-            return
-        try:
-            if sync_window.winfo_exists():
-                current_frame[0] = (current_frame[0] + 1) % len(spinner_frames)
-                spinner_label.config(text=spinner_frames[current_frame[0]])
-                sync_window.after(200, animar_spinner)
-        except:
-            pass
-
-    animar_spinner()
+            w['detail'].setText(detalle)
+            w['detail'].setStyleSheet(f"font-size: 9px; color: {c}; background: transparent;")
 
     def procesar_mensajes():
-        if sync_completada[0] or not sync_window.winfo_exists():
+        if sync_completada[0]:
             return
         try:
             while not sync_queue.empty():
@@ -4410,43 +4456,60 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
                     if t == 'entity':
                         actualizar_entidad(msg['entity'], msg.get('status', 'pending'), msg.get('detail', ''))
                     elif t == 'progress':
-                        progress_bar['value'] = msg.get('porcentaje', 0)
-                        pct_label.config(text=f"{int(msg.get('porcentaje', 0))}%")
+                        pct = int(msg.get('porcentaje', 0))
+                        progress_bar.setValue(pct)
+                        pct_label.setText(f"{pct}%")
                         if 'text' in msg:
-                            estado_general.config(text=msg['text'])
+                            estado_general.setText(msg['text'])
                     elif t == 'complete':
                         sync_completada[0] = True
-                        spinner_label.config(text="✅")
-                        estado_general.config(text="Sincronización completada exitosamente", fg="#27ae60")
-                        progress_bar['value'] = 100
-                        pct_label.config(text="100%")
+                        spinner_label.setText("✅")
+                        spinner_label.setStyleSheet("font-size: 60px; color: #27ae60;")
+                        estado_general.setText("Sincronización completada exitosamente")
+                        estado_general.setStyleSheet("font-size: 11px; font-weight: bold; color: #27ae60;")
+                        progress_bar.setValue(100)
+                        pct_label.setText("100%")
+                        pct_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #27ae60;")
 
-                        def cerrar_y_continuar():
-                            try:
-                                if sync_window.winfo_exists():
-                                    sync_window.destroy()
-                            except:
-                                pass
+                        def cerrar():
+                            window.close()
+                            app.quit()
                             if al_completar:
                                 al_completar()
 
-                        sync_window.after(2000, cerrar_y_continuar)
+                        QTimer.singleShot(2000, cerrar)
+                        return
                     elif t == 'error':
                         sync_completada[0] = True
                         sync_error[0] = msg.get('text', 'Error desconocido')
-                        spinner_label.config(text="❌")
-                        estado_general.config(text=f"Error: {sync_error[0]}", fg="#c0392b")
-                        progress_bar['value'] = 0
-                        pct_label.config(text="Error")
-        except queue.Empty:
-            pass
+                        spinner_label.setText("❌")
+                        spinner_label.setStyleSheet("font-size: 60px; color: #c0392b;")
+                        estado_general.setText(f"Error: {sync_error[0]}")
+                        estado_general.setStyleSheet("font-size: 11px; font-weight: bold; color: #c0392b;")
+                        progress_bar.setValue(0)
+                        pct_label.setText("Error")
+                        pct_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #c0392b;")
+
+                        def cerrar_error():
+                            window.close()
+                            app.quit()
+
+                        QTimer.singleShot(5000, cerrar_error)
+                        return
         except:
             pass
         if not sync_completada[0]:
-            try:
-                sync_window.after(100, procesar_mensajes)
-            except:
-                pass
+            QTimer.singleShot(100, procesar_mensajes)
+
+    def animar_spinner():
+        if sync_completada[0]:
+            return
+        current_frame[0] = (current_frame[0] + 1) % len(spinner_frames)
+        spinner_label.setText(spinner_frames[current_frame[0]])
+        QTimer.singleShot(200, animar_spinner)
+
+    QTimer.singleShot(0, animar_spinner)
+    QTimer.singleShot(100, procesar_mensajes)
 
     def ejecutar_sync():
         try:
@@ -4458,10 +4521,8 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
             auth_manager = APIAuthManager(config['api_url'])
 
             _cv_ping = _get_chrystal_version({
-                'host': config['postgres_host'],
-                'port': config['postgres_port'],
-                'database': config['postgres_database'],
-                'user': config['postgres_user'],
+                'host': config['postgres_host'], 'port': config['postgres_port'],
+                'database': config['postgres_database'], 'user': config['postgres_user'],
                 'password': config['postgres_password'],
             })
             ping_result = auth_manager.ping_api_key(config['api_key'], chrystal_version=_cv_ping)
@@ -4481,7 +4542,7 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
             postgres_config = {
                 'host': config['postgres_host'], 'port': config['postgres_port'],
                 'database': config['postgres_database'], 'user': config['postgres_user'],
-                'password': config['postgres_password']
+                'password': config['postgres_password'],
             }
 
             sync_manager = APISyncManager(postgres_config, auth_manager, logger=None)
@@ -4570,9 +4631,10 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
         except Exception as e:
             sync_queue.put({'type': 'error', 'text': str(e)})
 
-    sync_window.after(100, procesar_mensajes)
     threading.Thread(target=ejecutar_sync, daemon=True).start()
-    sync_window.mainloop()
+
+    window.show()
+    app.exec()
 
 
 def ejecutar_primera_sync_y_tray(api_key, cerrar_ventana_callback=None):
