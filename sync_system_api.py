@@ -6359,7 +6359,7 @@ def _handle_config_window(result_path: str) -> None:
                                     port=self._pg_verified_config.get('port', self.pg_port_edit.text().strip()),
                                     database=self._pg_verified_config.get('database', self.pg_db_edit.text().strip()),
                                     user=self._pg_verified_config.get('user', self.pg_user_edit.text().strip()),
-                                    password=self._pg_verified_config.get('password', self.pg_password_edit.text().strip()),
+                                    password=self._pg_verified_config.get('password', self.pg_pass_edit.text().strip()),
                                 )
                                 pg_cursor = pg_conn.cursor()
                                 pg_cursor.execute("""
