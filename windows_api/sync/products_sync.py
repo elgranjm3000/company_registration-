@@ -453,6 +453,9 @@ class ProductsSync(BaseSync):
         name = (short_name[:255] if short_name else '')[:255]
         if not name:
             name = (description[:255] if description else '')[:255]
+        if not name:
+            name = (code[:255] if code else 'SIN_NOMBRE')
+            self.warning(f"   ⚠️ Producto '{code}' sin nombre (short_name y description vacíos), se usó el code como name")
 
         # Mapeo de moneda a descripción
         coin_descriptions = {
