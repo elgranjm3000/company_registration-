@@ -6376,10 +6376,13 @@ def _handle_config_window(result_path: str) -> None:
                                         "Su email no esta registrado en nuestra base de dato")
                                     return
                             except Exception as e:
-                                self.api_status.setText(f"Error validando email local: {str(e)[:60]}")
+                                import traceback
+                                err_detail = traceback.format_exc()
+                                print(f"[DEBUG] Error validando email local:\n{err_detail}")
+                                self.api_status.setText(f"Error validando email local: {str(e)[:120]}")
                                 self.api_status.setStyleSheet("color: red;")
                                 QMessageBox.critical(self, "Error de Validación",
-                                    f"Error validando email contra base de datos local:\n{e}")
+                                    f"Error validando email contra base de datos local:\n\n{str(e)}")
                                 return
 
                         self.emp_name_label.setText(f"Empresa: {self.company_name or '--'}")
