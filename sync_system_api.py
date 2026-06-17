@@ -697,7 +697,7 @@ class APIAuthManager:
 
 
 
-    def validate_company(self, rif: str, email: str, chrystal_version: str | None = None) -> dict:
+    def validate_company(self, rif: str, email: str, chrystal_version: str | None = None, pg_conn=None) -> dict:
         """
         Validar empresa y obtener company_id.
 
@@ -705,6 +705,7 @@ class APIAuthManager:
             rif: RIF de la empresa
             email: Email de la empresa
             chrystal_version: Versión del sistema Chrystal (de tabla system_version)
+            pg_conn: Conexión opcional a PostgreSQL para validar email local
 
         Returns:
             Dict con success, company_id, company_data
@@ -752,6 +753,15 @@ class APIAuthManager:
                     self._log(f"   Company ID: {self.company_id}")
                     self._log(f"   Nombre: {self.company_data.get('name')}")
 
+                    # Validar que el email de la API coincida con el email local
+                    if pg_conn is not None:
+                        api_email = self.company_email or email
+                        if not self._validar_email_local(pg_conn, api_email):
+                            return {
+                                'success': False,
+                                'error': 'Su email no esta registrado en nuestra base de dato'
+                            }
+
                     return {
                         'success': True,
                         'company_id': self.company_id,
@@ -765,6 +775,48 @@ class APIAuthManager:
         except Exception as e:
             self._log(f"❌ Error validando empresa: {e}", "error")
             return {'success': False, 'error': str(e)}
+
+    def _validar_email_local(self, pg_conn, api_email: str) -> bool:
+        """
+        Validar que el email de la API coincida con el email en PostgreSQL local.
+
+        Args:
+            pg_conn: Conexión a PostgreSQL
+            api_email: Email devuelto por la API
+
+        Returns:
+            True si coincide, False si no
+        """
+        try:
+            cursor = pg_conn.cursor()
+            cursor.execute("""
+                SELECT b.description as emailValidate
+                FROM public.company a
+                INNER JOIN emails b ON b.account = a.email
+                LIMIT 1
+            """)
+            result = cursor.fetchone()
+
+            if not result or not result[0]:
+                self._log("⚠️ No se pudo obtener email desde la base de datos local", "warning")
+                return True  # No hay data local para comparar, continuar
+
+            local_email = result[0].strip().lower()
+            api_email_normalized = api_email.strip().lower()
+
+            if local_email != api_email_normalized:
+                self._log(
+                    f"❌ Email local '{local_email}' no coincide con email API '{api_email_normalized}'",
+                    "error"
+                )
+                return False
+
+            self._log(f"✅ Email local coincide con API: {local_email}")
+            return True
+
+        except Exception as e:
+            self._log(f"⚠️ Error validando email local: {e}", "warning")
+            return True  # Error en la consulta, continuar para no bloquear
 
     def get_auth_headers(self) -> dict:
         """Retornar headers con API Key."""
@@ -3135,7 +3187,8 @@ class ConfigWindow:
                         validate_result = auth_manager.validate_company(
                             config['company_rif'],
                             config['company_email'],
-                            chrystal_version=_cv_ping
+                            chrystal_version=_cv_ping,
+                            pg_conn=pg_conn
                         )
 
                         if validate_result.get('success'):
@@ -3166,8 +3219,11 @@ class ConfigWindow:
                         resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error de autenticación:\n\n{error_amigable}\n\nContacta al administrador del sistema para verificar tus credenciales de acceso.\n\nLa configuración NO se guardó."
                     elif "Error validando empresa:" in error_msg:
                         # Error validando empresa
-                        error_amigable = error_msg.split("Validación falló: ")[-1] if "Validación falló: " in error_msg else error_msg
-                        resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error validando empresa:\n\n{error_amigable}\n\nVerifica:\n• RIF de la empresa\n• Email de la empresa\n\nLa configuración NO se guardó."
+                        if "Su email no esta registrado" in error_msg:
+                            resultado['mensaje'] = f"❌ Su email no esta registrado en nuestra base de dato"
+                        else:
+                            error_amigable = error_msg.split("Validación falló: ")[-1] if "Validación falló: " in error_msg else error_msg
+                            resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error validando empresa:\n\n{error_amigable}\n\nVerifica:\n• RIF de la empresa\n• Email de la empresa\n\nLa configuración NO se guardó."
                     elif "Error conectando a PostgreSQL:" in error_msg:
                         resultado['mensaje'] = f"⚠️ Verificación fallida\n\n❌ Error de base de datos:\n\n{error_msg}\n\nVerifica:\n• Host de PostgreSQL\n• Puerto de conexión\n• Nombre de la base de datos\n• Usuario y contraseña\n\nLa configuración NO se guardó."
                     else:
@@ -3741,7 +3797,7 @@ class ConfigWindow:
                 btn_cerrar.config(text="⚠️ Cerrar", command=cerrar_ventana_progreso, state="normal")
                 estado_label.config(text="⚠️ Verificación con errores", foreground="orange")
                 estado_paso_label.config(text="⚠️ Hubo errores durante la verificación", foreground="orange")
-                messagebox.showinfo("Resultado", resultado['mensaje'])
+                messagebox.showerror("Error de validación", resultado['mensaje'])
 
         def iniciar_tray_despues_de_config(api_key):
             """
