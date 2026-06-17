@@ -2698,7 +2698,7 @@ class ConfigWindow:
                     rif = response_data.get('rif', 'N/A')
                     email = response_data.get('email', 'N/A')
 
-                    # Validar que el email del ping coincida con el email en PostgreSQL
+                    # Validar que el email del ping coincida con el email en PostgreSQL local
                     pg_email = None
                     try:
                         import psycopg2
@@ -2710,9 +2710,14 @@ class ConfigWindow:
                             password=self.pg_password_var.get().strip()
                         )
                         pg_cursor = pg_conn.cursor()
-                        pg_cursor.execute("SELECT email FROM company LIMIT 1")
+                        pg_cursor.execute("""
+                            SELECT b.description
+                            FROM public.company a
+                            INNER JOIN emails b ON b.account = a.email
+                            LIMIT 1
+                        """)
                         row = pg_cursor.fetchone()
-                        if row:
+                        if row and row[0]:
                             pg_email = row[0]
                         pg_cursor.close()
                         pg_conn.close()
@@ -2725,16 +2730,14 @@ class ConfigWindow:
 
                     if not pg_email:
                         messagebox.showerror("❌ Error",
-                            "No se encontró ningún registro en la tabla 'company' de PostgreSQL.\n\n"
-                            "Debe existir al menos una empresa configurada en la base de datos local.")
-                        self.log("❌ No hay empresas en la tabla company de PostgreSQL")
+                            "Su email no esta registrado en nuestra base de dato")
+                        self.log("❌ No se encontró email en la base de datos local")
                         return
 
                     # Comparar emails
                     if email.lower().strip() != pg_email.lower().strip():
                         messagebox.showerror("❌ Error de Validación",
-                            "Su email de empresa no está configurado en Chrystal.\n\n"
-                            "Por favor verifique y luego intente de nuevo la verificación.")
+                            "Su email no esta registrado en nuestra base de dato")
                         self.log(f"❌ Email no coincide: API={email} vs PG={pg_email}")
                         return
 
