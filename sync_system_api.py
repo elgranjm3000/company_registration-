@@ -6374,6 +6374,8 @@ def _handle_config_window(result_path: str) -> None:
                                 pg_conn.close()
 
                                 if not pg_email:
+                                    self.company_rif = ''
+                                    self.company_email = ''
                                     self.api_status.setText("Su email no esta registrado en nuestra base de dato")
                                     self.api_status.setStyleSheet("color: red;")
                                     QMessageBox.critical(self, "Error de Validación",
@@ -6381,6 +6383,8 @@ def _handle_config_window(result_path: str) -> None:
                                     return
 
                                 if api_email.lower().strip() != pg_email.lower().strip():
+                                    self.company_rif = ''
+                                    self.company_email = ''
                                     self.api_status.setText("Su email no esta registrado en nuestra base de dato")
                                     self.api_status.setStyleSheet("color: red;")
                                     QMessageBox.critical(self, "Error de Validación",
@@ -6390,6 +6394,8 @@ def _handle_config_window(result_path: str) -> None:
                                 import traceback
                                 err_detail = traceback.format_exc()
                                 print(f"[DEBUG] Error validando email local:\n{err_detail}")
+                                self.company_rif = ''
+                                self.company_email = ''
                                 self.api_status.setText(f"Error validando email local: {str(e)[:120]}")
                                 self.api_status.setStyleSheet("color: red;")
                                 QMessageBox.critical(self, "Error de Validación",
