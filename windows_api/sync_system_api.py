@@ -797,8 +797,8 @@ class APIAuthManager:
             result = cursor.fetchone()
 
             if not result or not result[0]:
-                self._log("⚠️ No se pudo obtener email desde la base de datos local", "warning")
-                return True  # No hay data local para comparar, continuar
+                self._log("❌ No se encontró email en la base de datos local para comparar", "error")
+                return False
 
             local_email = result[0].strip().lower()
             api_email_normalized = api_email.strip().lower()
@@ -814,8 +814,8 @@ class APIAuthManager:
             return True
 
         except Exception as e:
-            self._log(f"⚠️ Error validando email local: {e}", "warning")
-            return True  # Error en la consulta, continuar para no bloquear
+            self._log(f"❌ Error validando email local: {e}", "error")
+            return False
 
     def get_auth_headers(self) -> dict:
         """Retornar headers con API Key."""
