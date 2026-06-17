@@ -24,10 +24,19 @@ PostgreSQL Local ← Sincronizador Chrystal → API REST (Chrystal Mobile)
 
 | Archivo | Propósito |
 |---------|----------|
-| `sync_system_api.py` | Punto de entrada principal, contiene GUI (Tkinter), gestión de autenticación, System Tray y coordinación |
+| `sync_system_api.py` | Punto de entrada principal, contiene GUI (Tkinter + PySide6), gestión de autenticación, System Tray y coordinación |
 | `api_client/` | Clientes HTTP para comunicarse con la API REST |
 | `sync/` | Módulos de sincronización específicos para cada entidad |
 | `config_encryption.py` | Cifrado/decifrado de configuración |
+
+## IMPORTANTE: Dos GUI distintas
+
+Hay **dos ventanas de configuración** en este proyecto:
+
+1. **`ConfigWindow` (Tkinter)** — clase en línea ~2507, usa `tkinter.ttk`. Solo se abre desde `ManagerWindow` o en `--mode manager`.
+2. **`ConfigDialog` (PySide6)** — clase anidada en `_handle_config_window()` línea ~6042, usa `PySide6.QtWidgets`. **Esta es la que se abre con `--mode config`**.
+
+Siempre que se habla de "Configuración" o `--mode config`, se usa la **PySide6**, no la Tkinter.
 
 ## Clases y Funciones Principales
 
@@ -58,13 +67,20 @@ PostgreSQL Local ← Sincronizador Chrystal → API REST (Chrystal Mobile)
   - Rate limiting (HTTP 429)
   - Logging detallado de requests
 
-### `ConfigWindow` (GUI de configuración)
-- **Propósito**: Ventana para primera configuración
+### `ConfigWindow` (GUI de configuración - Tkinter)
+- **⚠️ NO se usa con `--mode config`** (ese usa PySide6 ConfigDialog)
+- **Propósito**: Ventana para primera configuración (solo desde ManagerWindow)
 - **Elementos**:
   - Pestaña "API KEY" para ingresar API Key
   - Campos de empresa (RIF, email) que se autocompletan desde el ping
   - Configuración de intervalo de sincronización
   - Botón "Probar Conexión API" que valida el ping
+
+### `ConfigDialog` (GUI de configuración - PySide6)  ← **ESTA es la que se abre con `--mode config`**
+- **Ubicación**: Función `_handle_config_window()` → clase anidada `ConfigDialog`
+- **Propósito**: Ventana de configuración principal del sistema
+- **Botón "Probar API Key"** (`_test_api()`): Ping + validación email contra BD local (JOIN `company` + `emails`)
+- **Botón "Guardar y Salir"** (`_on_save()`): Verificación 3 pasos (PG → Ping → Validate) antes de guardar
 
 ### `SystemTrayService` (System Tray)
 - **Propósito**: Ejecutar en segundo plano como icono en barra de tareas
