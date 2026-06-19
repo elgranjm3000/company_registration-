@@ -25,11 +25,20 @@ PostgreSQL Local ← Sincronizador Chrystal → API REST (Chrystal Mobile)
 | Archivo | Propósito |
 |---------|----------|
 | `sync_system_api.py` | Punto de entrada principal, contiene GUI (Tkinter + PySide6), gestión de autenticación, System Tray y coordinación |
+| `windows_api/sync_system_api.py` | **Mirror** del principal para compilación con PyInstaller. Debe mantenerse sincronizado manualmente. |
 | `api_client/` | Clientes HTTP para comunicarse con la API REST |
 | `sync/` | Módulos de sincronización específicos para cada entidad |
+| `windows_api/sync/` | Mirror de `sync/` para compilación |
+| `windows_api/api_client/` | Mirror de `api_client/` para compilación |
 | `config_encryption.py` | Cifrado/decifrado de configuración |
 
-## IMPORTANTE: Dos GUI distintas
+### Estructura Mirror `windows_api/`
+- `windows_api/` contiene copias exactas de los archivos necesarios para compilar con PyInstaller
+- Incluye: `sync_system_api.py`, `sync/`, `api_client/`
+- **Siempre que se modifica un archivo en la raíz, debe actualizarse su mirror en `windows_api/`**
+- Los archivos `.spec` de PyInstaller apuntan a `windows_api/`
+
+## IMPORTANTE: Dos GUI distintas + Progreso PySide6
 
 Hay **dos ventanas de configuración** en este proyecto:
 
@@ -37,6 +46,20 @@ Hay **dos ventanas de configuración** en este proyecto:
 2. **`ConfigDialog` (PySide6)** — clase anidada en `_handle_config_window()` línea ~6042, usa `PySide6.QtWidgets`. **Esta es la que se abre con `--mode config`**.
 
 Siempre que se habla de "Configuración" o `--mode config`, se usa la **PySide6**, no la Tkinter.
+
+### Ventana de Progreso por Entidad (PySide6)
+- **Función**: `mostrar_progreso_primera_sync(config, al_completar=None)` — línea ~4280
+- **Propósito**: Muestra ventana con progreso entidad-por-entidad durante la primera sincronización
+- **Framework**: PySide6 (consistente con ConfigDialog)
+- **Entidades que muestra**: Configuración → Conexión PostgreSQL → Categorías → Productos → Clientes → Vendedores → Cotizaciones → Finalizando
+- **Comportamiento**: Se ejecuta DESPUÉS de guardar la configuración, ANTES del System Tray
+- **Ubicación**: `sync_system_api.py` y `windows_api/sync_system_api.py`
+
+### Flujo Subprocess PySide6
+- `--mode config` y el modo automático .exe lanzan un **subproceso** con `--config-window <tempfile>`
+- El subproceso ejecuta PySide6 ConfigDialog
+- Al guardar, escribe config en temp file y sale
+- El proceso principal lee el temp file, guarda config definitiva, muestra `mostrar_progreso_primera_sync()`, luego inicia System Tray
 
 ## Clases y Funciones Principales
 
@@ -79,8 +102,13 @@ Siempre que se habla de "Configuración" o `--mode config`, se usa la **PySide6*
 ### `ConfigDialog` (GUI de configuración - PySide6)  ← **ESTA es la que se abre con `--mode config`**
 - **Ubicación**: Función `_handle_config_window()` → clase anidada `ConfigDialog`
 - **Propósito**: Ventana de configuración principal del sistema
-- **Botón "Probar API Key"** (`_test_api()`): Ping + validación email contra BD local (JOIN `company` + `emails`)
+- **Botón "Probar API Key"** (`_test_api()`): 
+  1. Ping a API con API Key → obtiene company RIF y email
+  2. **Valida email local**: `SELECT b.description FROM public.company a INNER JOIN emails b ON b.account = a.email LIMIT 1`
+  3. Compara el email del API con el email local
+  4. Si no coincide → `"Su email no esta registrado en nuestra base de dato"` y bloquea el guardado
 - **Botón "Guardar y Salir"** (`_on_save()`): Verificación 3 pasos (PG → Ping → Validate) antes de guardar
+- **Bloqueo de guardado**: Si el email no se validó correctamente, `self.company_rif` y `self.company_email` se limpian para que `_on_save()` no permita guardar
 
 ### `SystemTrayService` (System Tray)
 - **Propósito**: Ejecutar en segundo plano como icono en barra de tareas
@@ -147,15 +175,26 @@ Siempre que se habla de "Configuración" o `--mode config`, se usa la **PySide6*
   - Campos obligatorios antes de sincronizar
   - Categoría existente verificada
   - Manejo de datos nulos
+- **Fallback name**: Si `short_name` y `description` están vacíos o solo espacios, se envía `'sin_nombre'` como name
+- **category_id**: Se envía el `department` code de PostgreSQL (ej: '01', '02', 'GENERAL'). La API busca una categoría con `WHERE name = <code>`. Si no existe, el insert falla con NOT NULL violation.
+- **Conversión VES→USD**: Si `coin = '01'` (VES), convierte precios usando tasa de cambio obtenida de la BD
 
 ### `CustomersSync`
 - **Tabla origen**: `clients` en PostgreSQL
 - **Validación**: Email obligatorio, se valida formato
 - **Lógica especial**: Solo sincroniza si la empresa coincide
+- **Query**: SELECT simple sin JOINs (code, description, address, client_id, email, phone, contact, status)
 
 ### `SellersSync`
-- **Tabla origen**: `sellers` en PostgreSQL
+- **Tabla origen**: `sellers` en PostgreSQL con JOIN a `users`
 - **Transformación directa**: Campos mapeados uno a uno
+- **Query**: JOIN con `users` para obtener email y password. Filtra sellers con code 'N/A', sin descripción, o sin email válido.
+- **Password**: Genera bcrypt hash si no existe o está en texto plano
+
+### `CategoriesSync`
+- **Tabla origen**: `department` en PostgreSQL
+- **Transformación**: `(code, description) → {name: code, description, status: 'active'}`
+- **⚠️ Nota**: El `name` que se envía a la API es el `code` del department (ej: '01', '02', 'GENERAL'). Los productos luego usan ese mismo code como `category_id` para el lookup.
 
 ### `QuotesSync`
 - **Relaciones**: Sincroniza cotizaciones con sus detalles (líneas, productos)
