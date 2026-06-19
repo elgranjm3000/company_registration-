@@ -2181,6 +2181,112 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                 f.write(traceback.format_exc() + "\n")
             return False
 
+    # =========================================================================
+    # INICIALIZACIÓN DE PRIMERA SINCRONIZACIÓN
+    # =========================================================================
+
+    def _init_first_sync(self) -> bool:
+        """
+        Inicializar sync_hashes y sync_config en la primera sincronización.
+
+        TRUNCATE ambas tablas y las popula desde las tablas fuente de PostgreSQL.
+        Solo se ejecuta una vez (cuando sync_hashes está vacía).
+
+        Returns:
+            True si se ejecutó la inicialización, False si no era necesario
+        """
+        try:
+            # Verificar si sync_hashes ya tiene datos
+            self.pg_cursor.execute("SELECT COUNT(*) FROM sync_hashes")
+            count = self.pg_cursor.fetchone()[0]
+
+            if count > 0:
+                self._log("ℹ️  sync_hashes ya tiene datos, omitiendo inicialización")
+                return False
+
+            self._log("\n" + "=" * 70)
+            self._log("🚀 PRIMERA SINCRONIZACIÓN - Inicializando sync_hashes y sync_config")
+            self._log("=" * 70)
+
+            company_id = self.auth_manager.company_id
+
+            # TRUNCATE ambas tablas
+            self._log("   Truncando sync_hashes y sync_config...")
+            self.pg_cursor.execute("TRUNCATE TABLE sync_hashes")
+            self.pg_cursor.execute("TRUNCATE TABLE sync_config")
+
+            # Insertar company_id en sync_config
+            if company_id is not None:
+                self.pg_cursor.execute("""
+                    INSERT INTO sync_config (key, value, updated_at)
+                    VALUES ('company_id', %s, NOW())
+                """, (str(company_id),))
+                self._log(f"   ✅ company_id={company_id} insertado en sync_config")
+
+            # 1. Categories (department)
+            self._log("   📁 Cargando categorías en sync_hashes...")
+            self.pg_cursor.execute("""
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
+                SELECT 'categories', code, '', TRUE, %s, NOW(), NOW()
+                FROM department
+                WHERE code IS NOT NULL AND code != ''
+            """, (company_id,))
+            self._log(f"      → {self.pg_cursor.rowcount} categorías")
+
+            # 2. Products
+            self._log("   📦 Cargando productos en sync_hashes...")
+            self.pg_cursor.execute("""
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
+                SELECT 'products', code, '', TRUE, %s, NOW(), NOW()
+                FROM products
+                WHERE code IS NOT NULL AND code != '' AND product_type <> 'C'
+            """, (company_id,))
+            self._log(f"      → {self.pg_cursor.rowcount} productos")
+
+            # 3. Customers (clients)
+            self._log("   👥 Cargando clientes en sync_hashes...")
+            self.pg_cursor.execute("""
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
+                SELECT 'customers', code, '', TRUE, %s, NOW(), NOW()
+                FROM clients
+                WHERE code IS NOT NULL AND code != ''
+            """, (company_id,))
+            self._log(f"      → {self.pg_cursor.rowcount} clientes")
+
+            # 4. Sellers (con los mismos filtros que sellers_sync.py)
+            self._log("   👔 Cargando vendedores en sync_hashes...")
+            self.pg_cursor.execute("""
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
+                SELECT 'sellers', s.code, '', TRUE, %s, NOW(), NOW()
+                FROM sellers s
+                LEFT JOIN users u ON s.user_code = u.code
+                WHERE s.code IS NOT NULL AND s.code != '' AND s.code <> 'N/A'
+                  AND s.description IS NOT NULL AND s.description != ''
+                  AND u.email IS NOT NULL AND TRIM(u.email) <> '' AND TRIM(u.email) <> '@'
+            """, (company_id,))
+            self._log(f"      → {self.pg_cursor.rowcount} vendedores")
+
+            self.pg_conn.commit()
+
+            self._log("✅ sync_hashes y sync_config inicializados correctamente")
+            self._log("=" * 70 + "\n")
+
+            return True
+
+        except Exception as e:
+            self._log(f"❌ Error inicializando sync_hashes: {e}", "error")
+            try:
+                self.pg_conn.rollback()
+            except:
+                pass
+            import traceback
+            self._log(traceback.format_exc(), "error")
+            return False
+
+    # =========================================================================
+    # SINCRONIZACIÓN COMPLETA
+    # =========================================================================
+
     def sync_all(self) -> dict:
         """
         Ejecutar sincronización completa de todas las entidades.
@@ -2207,6 +2313,9 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             return {'success': False, 'error': 'No company_id available', 'stats': {}}
 
         self._log(f"✅ Company ID obtenido: {company_id}", "info")
+
+        # INICIALIZAR sync_hashes y sync_config en primera sincronización
+        self._init_first_sync()
 
         # ACTUALIZAR sync_config con el company_id (para que los triggers lo usen)
         try:
@@ -7303,8 +7412,19 @@ def _handle_manager_window(config_path: str) -> None:
                 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
                 if os.path.exists(CONFIG_FILE):
                     os.remove(CONFIG_FILE)
-                QMessageBox.information(self, "Reconfiguración",
-                    "Configuración eliminada.\nEjecute --mode config para reconfigurar.")
+                # Abrir pantalla de configuración automáticamente
+                import subprocess
+                _sp_args = ([sys.executable, '--mode', 'config']
+                           if getattr(sys, 'frozen', False)
+                           else [sys.executable, __file__, '--mode', 'config'])
+                creationflags = 0
+                if sys.platform == 'win32':
+                    creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                try:
+                    subprocess.run(_sp_args, capture_output=True, text=True, timeout=600,
+                                   creationflags=creationflags)
+                except Exception:
+                    pass
                 self.close()
 
     app = QApplication(sys.argv)
