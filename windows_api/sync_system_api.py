@@ -3571,7 +3571,16 @@ class ConfigWindow:
                             'user': config.get('postgres_user', ''),
                             'password': config.get('postgres_password', ''),
                         })
-                        auth_manager.ping_api_key(config['api_key'], chrystal_version=_cv_ping)
+                        ping_result = auth_manager.ping_api_key(config['api_key'], chrystal_version=_cv_ping)
+                        if not ping_result.get('success'):
+                            error_msg = ping_result.get('error', 'Error de autenticación')
+                            sync_result = {
+                                'exito': False,
+                                'mensaje': f"❌ {error_msg}",
+                                'api_key': config['api_key']
+                            }
+                            sync_queue.put("__SYNC_COMPLETE__")
+                            return
                         auth_manager.validate_company(config['company_rif'], config['company_email'], chrystal_version=_cv_ping)
                         log_debug("[DEBUG] Login exitoso")
 
@@ -3721,6 +3730,14 @@ class ConfigWindow:
                             "⚠️ Error en Primera Sincronización",
                             sync_result['mensaje'],
                             duracion=10
+                        )
+
+                        # Mostrar mensaje de error con messagebox
+                        from tkinter import messagebox
+                        messagebox.showerror(
+                            "Error de Autenticación",
+                            f"{sync_result['mensaje']}\n\n"
+                            "Verifique su API Key e intente nuevamente."
                         )
 
                         # Cerrar ventana de progreso también si falló
