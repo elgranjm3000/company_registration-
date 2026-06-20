@@ -8161,23 +8161,14 @@ def main():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
+            # Desencriptar toda la configuración
+            from config_encryption import decrypt_config
+            config = decrypt_config(config)
         except Exception as e:
             print(f"❌ Error cargando configuración: {e}")
             sys.exit(1)
 
-        # Intentar cargar API Key del config
-        api_key = None
-        if 'api_key' in config:
-            try:
-                from config_encryption import decrypt_config
-                decrypted = decrypt_config(config)
-                api_key = decrypted.get('api_key')
-                if api_key:
-                    print("✅ API Key cargado desde configuración")
-            except Exception as e:
-                print(f"⚠️  Error cargando API Key: {e}")
-
-        # Si no hay API Key en config, pedirlo
+        api_key = config.get('api_key', '')
         if not api_key:
             import getpass
             api_key = getpass.getpass("API Key: ")
@@ -8196,9 +8187,25 @@ def main():
             'user': config.get('postgres_user', ''),
             'password': config.get('postgres_password', ''),
         })
-        ping_result = auth_manager.ping_api_key(config.get('api_key', api_key), chrystal_version=_cv_ping)
+        ping_result = auth_manager.ping_api_key(api_key, chrystal_version=_cv_ping)
         if not ping_result.get('success'):
-            print(f"❌ API Key inválida: {ping_result.get('error', 'Error desconocido')}")
+            error_msg = ping_result.get('error', 'Error desconocido')
+            print(f"❌ API Key inválida: {error_msg}")
+            # Mostrar messagebox nativo de Windows
+            try:
+                import tkinter as tk
+                from tkinter import messagebox
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showerror(
+                    "Error de Autenticación",
+                    f"Error validando la API Key:\n\n{error_msg}\n\n"
+                    "Verifique su conexión a internet y que la API Key sea correcta.\n\n"
+                    "Si el problema persiste, ejecute --mode config para reconfigurar."
+                )
+                root.destroy()
+            except Exception:
+                pass  # Si falla el messagebox, al menos se imprimió el error
             sys.exit(1)
 
         print("✅ API Key válida")
