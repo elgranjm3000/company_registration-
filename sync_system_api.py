@@ -2189,21 +2189,25 @@ CREATE TRIGGER tr_sales_operation_mark_approved
         """
         Inicializar sync_hashes y sync_config.
 
-        TRUNCATE ambas tablas y las popula desde las tablas fuente de PostgreSQL
-        con record_hash='' y pending_sync=TRUE para forzar sincronización completa.
+        DELETE + COMMIT inmediato para garantizar el borrado,
+        luego repopula desde las tablas fuente con record_hash=''
+        y pending_sync=TRUE para forzar sincronización completa.
         """
         import traceback as _tb2
         print(f"\n[INIT_SYNC] DENTRO de _init_first_sync() - STACK:")
         _tb2.print_stack()
         print(f"[INIT_SYNC] pg_cursor={self.pg_cursor}, pg_conn={self.pg_conn}, company_id={self.auth_manager.company_id}")
+
+        company_id = self.auth_manager.company_id
+
+        # =========================================================
+        # PASO 1: DELETE + COMMIT (garantiza que se borre)
+        # =========================================================
         try:
             self._log("\n" + "=" * 70)
-            self._log("🚀 INICIALIZANDO sync_hashes y sync_config (TRUNCATE + REPOPULATE)")
+            self._log("🚀 INICIALIZANDO sync_hashes y sync_config (DELETE + REPOPULATE)")
             self._log("=" * 70)
 
-            company_id = self.auth_manager.company_id
-
-            # Vaciar ambas tablas
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_hashes")
             antes_hashes = self.pg_cursor.fetchone()[0]
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_config")
@@ -2211,9 +2215,11 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             print(f"\n[INIT_SYNC] sync_hashes: {antes_hashes} registros antes del DELETE")
             print(f"[INIT_SYNC] sync_config: {antes_config} registros antes del DELETE")
             self._log(f"   Registros antes del DELETE: {antes_hashes} en sync_hashes, {antes_config} en sync_config")
+
             self._log("   Eliminando registros de sync_hashes y sync_config...")
             self.pg_cursor.execute("DELETE FROM sync_hashes")
             self.pg_cursor.execute("DELETE FROM sync_config")
+
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_hashes")
             despues_hashes = self.pg_cursor.fetchone()[0]
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_config")
@@ -2221,6 +2227,12 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             print(f"[INIT_SYNC] sync_hashes: {despues_hashes} registros después del DELETE")
             print(f"[INIT_SYNC] sync_config: {despues_config} registros después del DELETE")
             self._log(f"   Registros después del DELETE: {despues_hashes} en sync_hashes, {despues_config} en sync_config")
+
+            # COMMIT inmediato del DELETE para garantizar que se persista
+            self.pg_conn.commit()
+            print("[INIT_SYNC] ✅ COMMIT del DELETE ejecutado - borrado permanente")
+            self._log("   ✅ DELETE commiteado - borrado permanente")
+
             if antes_hashes > 0 and despues_hashes == 0:
                 self._log("   ✅ sync_hashes vaciado correctamente")
                 print("[INIT_SYNC] ✅ sync_hashes vaciado correctamente")
@@ -2231,6 +2243,19 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                 self._log("   ⚠️  No había registros para eliminar en sync_hashes ni sync_config")
                 print("[INIT_SYNC] ⚠️  No había registros para eliminar")
 
+        except Exception as e:
+            print(f"[INIT_SYNC] ❌ Error en DELETE: {e}")
+            self._log(f"❌ Error eliminando registros: {e}", "error")
+            try:
+                self.pg_conn.rollback()
+            except:
+                pass
+            return False
+
+        # =========================================================
+        # PASO 2: INSERT company_id + repopulate (transacción separada)
+        # =========================================================
+        try:
             # Insertar company_id en sync_config
             if company_id is not None:
                 self.pg_cursor.execute("""
@@ -2283,6 +2308,7 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             self._log(f"      → {self.pg_cursor.rowcount} vendedores")
 
             self.pg_conn.commit()
+            print("[INIT_SYNC] ✅ INSERTs commiteados correctamente")
 
             self._log("✅ sync_hashes y sync_config inicializados correctamente")
             self._log("=" * 70 + "\n")
@@ -2290,7 +2316,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             return True
 
         except Exception as e:
-            self._log(f"❌ Error inicializando sync_hashes: {e}", "error")
+            print(f"[INIT_SYNC] ❌ Error en INSERTs (DELETE ya fue commiteado): {e}")
+            self._log(f"❌ Error repopulando sync_hashes (DELETE ya fue commiteado): {e}", "error")
             try:
                 self.pg_conn.rollback()
             except:
