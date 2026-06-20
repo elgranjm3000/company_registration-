@@ -4299,6 +4299,12 @@ class ConfigWindow:
 
                 def sync_logger(msg, level="info"):
                     try:
+                        file_logger = logging.getLogger('sync_api')
+                        log_level_map = {'error': logging.ERROR, 'warning': logging.WARNING, 'info': logging.INFO, 'debug': logging.DEBUG}
+                        file_logger.log(log_level_map.get(level, logging.INFO), f"[progreso] {msg}")
+                    except:
+                        pass
+                    try:
                         msg_str = str(msg).upper()
                         for key, eid in [
                             ('CATEGORIES', 'categories'),
@@ -4406,6 +4412,9 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
         config: Dict con configuración completa (api_url, api_key, postgres_*, company_*)
         al_completar: Callable opcional al finalizar la sync (para iniciar System Tray)
     """
+    # Asegurar que el file logger esté configurado
+    setup_logging(config.get('company_email'))
+
     from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                                     QLabel, QProgressBar, QGroupBox)
     from PySide6.QtCore import Qt, QTimer
@@ -4704,6 +4713,12 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
             }
 
             def sync_logger(msg, level="info"):
+                try:
+                    file_logger = logging.getLogger('sync_api')
+                    log_level_map = {'error': logging.ERROR, 'warning': logging.WARNING, 'info': logging.INFO, 'debug': logging.DEBUG}
+                    file_logger.log(log_level_map.get(level, logging.INFO), f"[progreso] {msg}")
+                except:
+                    pass
                 try:
                     msg_str = str(msg).upper()
                     for key, eid in [
