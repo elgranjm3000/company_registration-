@@ -2186,25 +2186,14 @@ CREATE TRIGGER tr_sales_operation_mark_approved
 
     def _init_first_sync(self) -> bool:
         """
-        Inicializar sync_hashes y sync_config en la primera sincronización.
+        Inicializar sync_hashes y sync_config.
 
-        TRUNCATE ambas tablas y las popula desde las tablas fuente de PostgreSQL.
-        Solo se ejecuta una vez (cuando sync_hashes está vacía).
-
-        Returns:
-            True si se ejecutó la inicialización, False si no era necesario
+        TRUNCATE ambas tablas y las popula desde las tablas fuente de PostgreSQL
+        con record_hash='' y pending_sync=TRUE para forzar sincronización completa.
         """
         try:
-            # Verificar si sync_hashes ya tiene datos
-            self.pg_cursor.execute("SELECT COUNT(*) FROM sync_hashes")
-            count = self.pg_cursor.fetchone()[0]
-
-            if count > 0:
-                self._log("ℹ️  sync_hashes ya tiene datos, omitiendo inicialización")
-                return False
-
             self._log("\n" + "=" * 70)
-            self._log("🚀 PRIMERA SINCRONIZACIÓN - Inicializando sync_hashes y sync_config")
+            self._log("🚀 INICIALIZANDO sync_hashes y sync_config (TRUNCATE + REPOPULATE)")
             self._log("=" * 70)
 
             company_id = self.auth_manager.company_id
