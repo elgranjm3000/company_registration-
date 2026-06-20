@@ -8214,7 +8214,7 @@ def main():
                     "Error de Autenticación",
                     f"Error validando la API Key:\n\n{error_msg}\n\n"
                     "Verifique su conexión a internet y que la API Key sea correcta.\n\n"
-                    "Si el problema persiste, ejecute --mode config para reconfigurar."
+                    "Si el problema persiste contacte con el administrador del sistema"
                 )
                 root.destroy()
             except Exception:
