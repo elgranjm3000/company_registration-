@@ -2192,6 +2192,10 @@ CREATE TRIGGER tr_sales_operation_mark_approved
         TRUNCATE ambas tablas y las popula desde las tablas fuente de PostgreSQL
         con record_hash='' y pending_sync=TRUE para forzar sincronización completa.
         """
+        import traceback as _tb2
+        print(f"\n[INIT_SYNC] DENTRO de _init_first_sync() - STACK:")
+        _tb2.print_stack()
+        print(f"[INIT_SYNC] pg_cursor={self.pg_cursor}, pg_conn={self.pg_conn}, company_id={self.auth_manager.company_id}")
         try:
             self._log("\n" + "=" * 70)
             self._log("🚀 INICIALIZANDO sync_hashes y sync_config (TRUNCATE + REPOPULATE)")
@@ -4774,6 +4778,7 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
             sync_queue.put({'type': 'progress', 'porcentaje': 28,
                            'text': 'Inicializando sync_hashes...'})
             sync_manager._init_first_sync()
+            print("[INIT_SYNC] _init_first_sync() FINALIZÓ")
 
             result = sync_manager.sync_all()
 
