@@ -2200,10 +2200,25 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             company_id = self.auth_manager.company_id
 
             # Vaciar ambas tablas
+            self.pg_cursor.execute("SELECT COUNT(*) FROM sync_hashes")
+            antes_hashes = self.pg_cursor.fetchone()[0]
+            self.pg_cursor.execute("SELECT COUNT(*) FROM sync_config")
+            antes_config = self.pg_cursor.fetchone()[0]
+            self._log(f"   Registros antes del DELETE: {antes_hashes} en sync_hashes, {antes_config} en sync_config")
             self._log("   Eliminando registros de sync_hashes y sync_config...")
             self.pg_cursor.execute("DELETE FROM sync_hashes")
             self.pg_cursor.execute("DELETE FROM sync_config")
-            self._log("   ✅ sync_hashes y sync_config vaciados correctamente")
+            self.pg_cursor.execute("SELECT COUNT(*) FROM sync_hashes")
+            despues_hashes = self.pg_cursor.fetchone()[0]
+            self.pg_cursor.execute("SELECT COUNT(*) FROM sync_config")
+            despues_config = self.pg_cursor.fetchone()[0]
+            self._log(f"   Registros después del DELETE: {despues_hashes} en sync_hashes, {despues_config} en sync_config")
+            if antes_hashes > 0 and despues_hashes == 0:
+                self._log("   ✅ sync_hashes vaciado correctamente")
+            if antes_config > 0 and despues_config == 0:
+                self._log("   ✅ sync_config vaciado correctamente")
+            if antes_hashes == 0 and antes_config == 0:
+                self._log("   ⚠️  No había registros para eliminar en sync_hashes ni sync_config")
 
             # Insertar company_id en sync_config
             if company_id is not None:
