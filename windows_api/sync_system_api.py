@@ -2203,6 +2203,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             antes_hashes = self.pg_cursor.fetchone()[0]
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_config")
             antes_config = self.pg_cursor.fetchone()[0]
+            print(f"\n[INIT_SYNC] sync_hashes: {antes_hashes} registros antes del DELETE")
+            print(f"[INIT_SYNC] sync_config: {antes_config} registros antes del DELETE")
             self._log(f"   Registros antes del DELETE: {antes_hashes} en sync_hashes, {antes_config} en sync_config")
             self._log("   Eliminando registros de sync_hashes y sync_config...")
             self.pg_cursor.execute("DELETE FROM sync_hashes")
@@ -2211,13 +2213,18 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             despues_hashes = self.pg_cursor.fetchone()[0]
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_config")
             despues_config = self.pg_cursor.fetchone()[0]
+            print(f"[INIT_SYNC] sync_hashes: {despues_hashes} registros después del DELETE")
+            print(f"[INIT_SYNC] sync_config: {despues_config} registros después del DELETE")
             self._log(f"   Registros después del DELETE: {despues_hashes} en sync_hashes, {despues_config} en sync_config")
             if antes_hashes > 0 and despues_hashes == 0:
                 self._log("   ✅ sync_hashes vaciado correctamente")
+                print("[INIT_SYNC] ✅ sync_hashes vaciado correctamente")
             if antes_config > 0 and despues_config == 0:
                 self._log("   ✅ sync_config vaciado correctamente")
+                print("[INIT_SYNC] ✅ sync_config vaciado correctamente")
             if antes_hashes == 0 and antes_config == 0:
                 self._log("   ⚠️  No había registros para eliminar en sync_hashes ni sync_config")
+                print("[INIT_SYNC] ⚠️  No había registros para eliminar")
 
             # Insertar company_id en sync_config
             if company_id is not None:
