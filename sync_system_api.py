@@ -2214,6 +2214,7 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             self._log("   Truncando sync_hashes y sync_config...")
             self.pg_cursor.execute("TRUNCATE TABLE sync_hashes")
             self.pg_cursor.execute("TRUNCATE TABLE sync_config")
+            self._log("   ✅ sync_hashes y sync_config truncados correctamente")
 
             # Insertar company_id en sync_config
             if company_id is not None:
@@ -5630,6 +5631,15 @@ class SystemTrayService:
                     creationflags=creationflags
                 )
 
+                # Si el Manager borró la configuración (Reconfigurar), detener el tray
+                CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
+                if not os.path.exists(CONFIG_FILE):
+                    print("🔄 Configuración eliminada desde Manager, deteniendo System Tray...")
+                    self.sync_running = False
+                    if self.icon:
+                        self.icon.stop()
+                    os._exit(0)
+
             finally:
                 try:
                     os.unlink(config_path)
@@ -7429,7 +7439,7 @@ def _handle_manager_window(config_path: str) -> None:
                 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".chrystal_sync_config.json")
                 if os.path.exists(CONFIG_FILE):
                     os.remove(CONFIG_FILE)
-                # Abrir pantalla de configuración automáticamente
+                # Abrir pantalla de configuración automáticamente (no bloqueante)
                 import subprocess
                 _sp_args = ([sys.executable, '--mode', 'config']
                            if getattr(sys, 'frozen', False)
@@ -7438,8 +7448,7 @@ def _handle_manager_window(config_path: str) -> None:
                 if sys.platform == 'win32':
                     creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
                 try:
-                    subprocess.run(_sp_args, capture_output=True, text=True, timeout=600,
-                                   creationflags=creationflags)
+                    subprocess.Popen(_sp_args, creationflags=creationflags)
                 except Exception:
                     pass
                 self.close()
