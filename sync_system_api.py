@@ -2267,8 +2267,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             # 1. Categories (department)
             self._log("   📁 Cargando categorías en sync_hashes...")
             self.pg_cursor.execute("""
-                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
-                SELECT 'categories', code, '', TRUE, %s, NOW(), NOW()
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                SELECT 'categories', code, '', TRUE, %s, NOW()
                 FROM department
                 WHERE code IS NOT NULL AND code != ''
             """, (company_id,))
@@ -2277,8 +2277,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             # 2. Products
             self._log("   📦 Cargando productos en sync_hashes...")
             self.pg_cursor.execute("""
-                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
-                SELECT 'products', code, '', TRUE, %s, NOW(), NOW()
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                SELECT 'products', code, '', TRUE, %s, NOW()
                 FROM products
                 WHERE code IS NOT NULL AND code != '' AND product_type <> 'C'
             """, (company_id,))
@@ -2287,8 +2287,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             # 3. Customers (clients)
             self._log("   👥 Cargando clientes en sync_hashes...")
             self.pg_cursor.execute("""
-                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
-                SELECT 'customers', code, '', TRUE, %s, NOW(), NOW()
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                SELECT 'customers', code, '', TRUE, %s, NOW()
                 FROM clients
                 WHERE code IS NOT NULL AND code != ''
             """, (company_id,))
@@ -2297,8 +2297,8 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             # 4. Sellers (con los mismos filtros que sellers_sync.py)
             self._log("   👔 Cargando vendedores en sync_hashes...")
             self.pg_cursor.execute("""
-                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, created_at, updated_at)
-                SELECT 'sellers', s.code, '', TRUE, %s, NOW(), NOW()
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                SELECT 'sellers', s.code, '', TRUE, %s, NOW()
                 FROM sellers s
                 LEFT JOIN users u ON s.user_code = u.code
                 WHERE s.code IS NOT NULL AND s.code != '' AND s.code <> 'N/A'
