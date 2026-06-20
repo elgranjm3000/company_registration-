@@ -4307,7 +4307,10 @@ class ConfigWindow:
                         cursor.execute(sql)
                         totales[ent] = cursor.fetchone()[0]
                 except Exception:
-                    pass
+                    try:
+                        sync_manager.pg_conn.rollback()
+                    except:
+                        pass
 
                 # ── LOGGER CON MÁQUINA DE ESTADOS POR ENTIDAD ──
                 entidades_sync = ['categories', 'products', 'customers', 'sellers', 'quotes', 'final']
@@ -4721,7 +4724,10 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
                     cursor.execute(sql)
                     totales[ent] = cursor.fetchone()[0]
             except:
-                pass
+                try:
+                    sync_manager.pg_conn.rollback()
+                except:
+                    pass
 
             entidades_sync = ['categories', 'products', 'customers', 'sellers', 'quotes', 'final']
             idx_actual = [0]
@@ -4769,6 +4775,10 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
             # Inicializar sync_hashes y sync_config (DELETE FROM + REPOPULATE)
             sync_queue.put({'type': 'progress', 'porcentaje': 28,
                            'text': 'Inicializando sync_hashes...'})
+            try:
+                sync_manager.pg_conn.rollback()
+            except:
+                pass
             sync_manager._init_first_sync()
             print("[INIT_SYNC] _init_first_sync() FINALIZÓ")
 
