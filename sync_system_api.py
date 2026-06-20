@@ -2304,9 +2304,6 @@ CREATE TRIGGER tr_sales_operation_mark_approved
 
         self._log(f"✅ Company ID obtenido: {company_id}", "info")
 
-        # INICIALIZAR sync_hashes y sync_config en primera sincronización
-        self._init_first_sync()
-
         # ACTUALIZAR sync_config con el company_id (para que los triggers lo usen)
         try:
             # Primero hacer rollback para limpiar cualquier transacción abortada
@@ -3592,6 +3589,9 @@ class ConfigWindow:
                         log_debug("[DEBUG] Conectando a PostgreSQL...")
                         sync_queue.put("🔗 Conectando a PostgreSQL...")
                         if sync_manager.connect_postgresql() and sync_manager.initialize_api_clients():
+                            log_debug("[DEBUG] Inicializando sync_hashes...")
+                            sync_queue.put("🔄 Inicializando sync_hashes...")
+                            sync_manager._init_first_sync()
                             log_debug("[DEBUG] Conectado, iniciando sync_all()...")
                             sync_queue.put("🔄 Sincronizando datos (puede tardar varios minutos)...")
                             result = sync_manager.sync_all()
@@ -4349,6 +4349,11 @@ class ConfigWindow:
                 sync_queue.put({'type': 'entity', 'entity': 'quotes', 'status': 'pending', 'detail': 'Pendiente...'})
                 sync_queue.put({'type': 'entity', 'entity': 'final', 'status': 'pending', 'detail': 'Pendiente...'})
 
+                # Inicializar sync_hashes y sync_config (DELETE FROM + REPOPULATE)
+                sync_queue.put({'type': 'progress', 'porcentaje': 28,
+                               'text': 'Inicializando sync_hashes...'})
+                sync_manager._init_first_sync()
+
                 # Ejecutar sincronización completa
                 result = sync_manager.sync_all()
 
@@ -4727,6 +4732,11 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
                            'detail': f"Procesando {totales.get('categories', 0)} registro(s)..."})
             for e in ['products', 'customers', 'sellers', 'quotes', 'final']:
                 sync_queue.put({'type': 'entity', 'entity': e, 'status': 'pending', 'detail': 'Pendiente...'})
+
+            # Inicializar sync_hashes y sync_config (DELETE FROM + REPOPULATE)
+            sync_queue.put({'type': 'progress', 'porcentaje': 28,
+                           'text': 'Inicializando sync_hashes...'})
+            sync_manager._init_first_sync()
 
             result = sync_manager.sync_all()
 
