@@ -2198,11 +2198,11 @@ CREATE TRIGGER tr_sales_operation_mark_approved
 
             company_id = self.auth_manager.company_id
 
-            # TRUNCATE ambas tablas
-            self._log("   Truncando sync_hashes y sync_config...")
-            self.pg_cursor.execute("TRUNCATE TABLE sync_hashes")
-            self.pg_cursor.execute("TRUNCATE TABLE sync_config")
-            self._log("   ✅ sync_hashes y sync_config truncados correctamente")
+            # Vaciar ambas tablas
+            self._log("   Eliminando registros de sync_hashes y sync_config...")
+            self.pg_cursor.execute("DELETE FROM sync_hashes")
+            self.pg_cursor.execute("DELETE FROM sync_config")
+            self._log("   ✅ sync_hashes y sync_config vaciados correctamente")
 
             # Insertar company_id en sync_config
             if company_id is not None:
