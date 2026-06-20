@@ -85,6 +85,10 @@ Siempre que se habla de "Configuración" o `--mode config`, se usa la **PySide6*
   - `connect_postgresql()`: Conexión a PostgreSQL
   - `initialize_api_clients()`: Inicializar clientes API
   - `sync_all()`: Ejecutar sincronización de todas las entidades
+  - `_init_first_sync()`: Inicializa sync_hashes y sync_config para primera sincronización
+    - **PASO 1**: DELETE FROM sync_hashes + DELETE FROM sync_config + **COMMIT inmediato**
+    - **PASO 2**: INSERT company_id + repopular sync_hashes desde tablas fuente + COMMIT
+    - Las dos transacciones separadas garantizan que el DELETE persista aunque los INSERTs fallen
 - **Características**:
   - Retry automático con exponential backoff
   - Rate limiting (HTTP 429)
@@ -107,8 +111,13 @@ Siempre que se habla de "Configuración" o `--mode config`, se usa la **PySide6*
   2. **Valida email local**: `SELECT b.description FROM public.company a INNER JOIN emails b ON b.account = a.email LIMIT 1`
   3. Compara el email del API con el email local
   4. Si no coincide → `"Su email no esta registrado en nuestra base de dato"` y bloquea el guardado
-- **Botón "Guardar y Salir"** (`_on_save()`): Verificación 3 pasos (PG → Ping → Validate) antes de guardar
+- **Botón "Guardar y Salir"** (`_on_save()`): Verificación 3 pasos (PG → Ping → Validate) antes de guardar:
+  1. **PostgreSQL**: Conexión de prueba a la base de datos
+  2. **API Key (Ping)**: GET `/sync-client/ping` con headers `X-Device-UUID` y `X-App-Version-Chrystal`
+  3. **Validar Empresa**: POST `/sync-client/company/validate` con `{rif, email, uuid_hard_drive}`
+  - Si falla → `QMessageBox.critical("Error de Verificacion", ...)` y NO guarda
 - **Bloqueo de guardado**: Si el email no se validó correctamente, `self.company_rif` y `self.company_email` se limpian para que `_on_save()` no permita guardar
+- **API Key inválida en inicio automático** (línea ~8300): Muestra `messagebox.showerror("Error de Autenticación")` con el error del ping y cierra el proceso
 
 ### `SystemTrayService` (System Tray)
 - **Propósito**: Ejecutar en segundo plano como icono en barra de tareas
@@ -270,6 +279,14 @@ base64            # Codificación
     - 60s: server errors (5xx)
   - Límite de rate: espera HTTP 429 antes de reintentar
 
+### 5. PostgreSQL Transaction Isolation - DELETE garantizado
+- **Problema**: DELETE FROM sync_hashes se perdía si los INSERTs posteriores fallaban (todo en misma transacción, rollback deshacía el DELETE)
+- **Causa**: PostgreSQL transaction model — una excepción aborta toda la transacción, y `except: pass` sin rollback mataba todas las queries subsecuentes
+- **Solución**: `_init_first_sync()` dividido en dos transacciones separadas:
+  - PASO 1: DELETE + COMMIT (garantiza persistencia)
+  - PASO 2: INSERT + COMMIT (si falla, el DELETE ya está commiteado)
+  - COUNT queries antes de DELETE tienen rollback en except para no abortar la transacción
+
 ## Flujo de Sincronización Detallado
 
 ```
@@ -332,13 +349,27 @@ base64            # Codificación
 | Tabla | Propósito |
 |-------|----------|
 | `sync_hashes` | Registro de hashes MD5 para detección de cambios |
+| `sync_config` | Configuración de sincronización (pares key-value) |
 
 ```sql
 CREATE TABLE sync_hashes (
-    table_name VARCHAR(50),
-    record_key VARCHAR(50),
-    record_hash VARCHAR(32),
-    pending_sync BOOLEAN DEFAULT TRUE
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL,
+    record_key VARCHAR(100) NOT NULL,
+    record_hash VARCHAR(32) NOT NULL,
+    last_sync_data TEXT,
+    synced_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    company_id INTEGER,
+    deleted_at TIMESTAMP,
+    pending_sync BOOLEAN DEFAULT FALSE,
+    UNIQUE(table_name, record_key, company_id)
+);
+
+CREATE TABLE sync_config (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT,
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
@@ -389,7 +420,9 @@ pyinstaller sync_system_api_console.spec
 ```bash
 python sync_system_api.py --mode config
 ```
-Abre ventana de configuración (requiere autenticación previa con email/password).
+Abre ventana de configuración PySide6. Valida API Key contra `/sync-client/ping`,
+verifica email contra PostgreSQL local y ejecuta `/sync-client/company/validate`
+antes de guardar.
 
 ### Modo Administración
 ```bash
