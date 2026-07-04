@@ -461,6 +461,7 @@ class QuotesSync:
         discount_amount = float(item.get('discount_amount', 0))
         tax_amount = float(item.get('tax_amount', 0))
         item_total = float(item.get('total', 0))
+        type_price = item.get('type_price')
 
         # Calcular subtotal (precio * cantidad)
         subtotal = unit_price * quantity
@@ -491,9 +492,10 @@ class QuotesSync:
                 unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot,
                 total_net_cost, total_tax_cost, total_cost,
                 total_net_gross, total_tax_gross, total_gross,
-                total_net, total_tax, pending_amount, buy_tax, buy_aliquot, product_type
+                total_net, total_tax, pending_amount, buy_tax, buy_aliquot, product_type,
+                type_price
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING line
         """
@@ -530,7 +532,8 @@ class QuotesSync:
             pending_amount,
             buy_tax,
             buy_aliquot,
-            product_type
+            product_type,
+            type_price
         ))
 
         # Obtener el line del detalle insertado
