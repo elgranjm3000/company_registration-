@@ -6726,7 +6726,8 @@ def _handle_config_window(result_path: str) -> None:
             form.addRow("Database:", self.pg_db_edit)
 
             self.pg_user_edit = QLineEdit(self.pg_user)
-            self.pg_user_edit.setPlaceholderText("postgres")
+            self.pg_user_edit.setEchoMode(QLineEdit.Password)
+            self.pg_user_edit.setPlaceholderText("••••••••")
             form.addRow("User:", self.pg_user_edit)
 
             self.pg_pass_edit = QLineEdit(self.pg_password)
@@ -6794,7 +6795,8 @@ def _handle_config_window(result_path: str) -> None:
             self.pg_user_edit.setReadOnly(True)
             self.pg_pass_edit.setReadOnly(True)
 
-            # Ocultar el texto del password (ya estaba en Password mode)
+            # Mantener modo Password para ambos campos
+            self.pg_user_edit.setEchoMode(QLineEdit.Password)
             self.pg_pass_edit.setEchoMode(QLineEdit.Password)
 
         def _build_api_tab(self) -> QWidget:
