@@ -6745,8 +6745,57 @@ def _handle_config_window(result_path: str) -> None:
             self.pg_status = QLabel("")
             form.addRow("", self.pg_status)
 
+            # Botones de autocompletar credenciales
+            sep = QFrame()
+            sep.setFrameShape(QFrame.HLine)
+            sep.setStyleSheet("color: #ccc;")
+            form.addRow("", sep)
+
+            btn_layout = QHBoxLayout()
+            btn_layout.setSpacing(8)
+
+            # Botón: Versión inferior a 1030
+            btn_v1030 = QPushButton("Versión inferior a 10.3.0")
+            btn_v1030.setStyleSheet(
+                "QPushButton { background-color: #FF9800; color: white;"
+                " border: none; border-radius: 3px; padding: 6px 12px; }"
+                " QPushButton:hover { background-color: #F57C00; }")
+            btn_v1030.clicked.connect(lambda: self._autocompletar_pg("postgres", "root"))
+            btn_layout.addWidget(btn_v1030)
+
+            # Botón: Superior a 1030
+            btn_s1030 = QPushButton("Superior a 10.3.0")
+            btn_s1030.setStyleSheet(
+                "QPushButton { background-color: #4CAF50; color: white;"
+                " border: none; border-radius: 3px; padding: 6px 12px; }"
+                " QPushButton:hover { background-color: #388E3C; }")
+            btn_s1030.clicked.connect(lambda: self._autocompletar_pg("sys_admin_1987", "*sys*_*admin*_*1987*"))
+            btn_layout.addWidget(btn_s1030)
+
+            btn_layout_widget = QWidget()
+            btn_layout_widget.setLayout(btn_layout)
+            form.addRow("Autocompletar:", btn_layout_widget)
+
             tab.setLayout(form)
             return tab
+
+        def _autocompletar_pg(self, usuario: str, clave: str) -> None:
+            """Autocompletar credenciales PostgreSQL y deshabilitar copia."""
+            from PySide6.QtCore import Qt
+
+            self.pg_user_edit.setText(usuario)
+            self.pg_pass_edit.setText(clave)
+
+            # Deshabilitar menú contextual (clic derecho)
+            self.pg_user_edit.setContextMenuPolicy(Qt.NoContextMenu)
+            self.pg_pass_edit.setContextMenuPolicy(Qt.NoContextMenu)
+
+            # Deshabilitar selección y foco para evitar copiado
+            self.pg_user_edit.setReadOnly(True)
+            self.pg_pass_edit.setReadOnly(True)
+
+            # Ocultar el texto del password (ya estaba en Password mode)
+            self.pg_pass_edit.setEchoMode(QLineEdit.Password)
 
         def _build_api_tab(self) -> QWidget:
             tab = QWidget()
