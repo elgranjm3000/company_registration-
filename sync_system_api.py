@@ -2220,6 +2220,9 @@ CREATE TRIGGER tr_sales_operation_mark_approved
             self.pg_cursor.execute("DELETE FROM sync_hashes")
             self.pg_cursor.execute("DELETE FROM sync_config")
 
+            self._log("   Eliminando presupuestos (document_no LIKE 'W%')...")
+            self.pg_cursor.execute("DELETE FROM sales_operation WHERE document_no LIKE 'W%'")
+
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_hashes")
             despues_hashes = self.pg_cursor.fetchone()[0]
             self.pg_cursor.execute("SELECT COUNT(*) FROM sync_config")
