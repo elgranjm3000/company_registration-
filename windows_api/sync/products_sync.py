@@ -149,7 +149,7 @@ class ProductsSync(BaseSync):
 
                 # Query complejo con todos los joins necesarios
                 query = f"""
-                    SELECT DISTINCT ON (a.code)
+                    SELECT
                         a.code,
                         b.unit,
                         a.description,
@@ -205,7 +205,6 @@ class ProductsSync(BaseSync):
                       AND a.code != ''
                       AND a.product_type <> 'C'
                       AND b.unit != ''
-                      AND b.main_unit = true
                     ORDER BY a.code, b.maximum_price DESC
                 """
 
