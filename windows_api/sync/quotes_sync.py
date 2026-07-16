@@ -404,17 +404,18 @@ class QuotesSync:
         product = item.get('product', {})
         code_product = product.get('code') if product else None
 
-        # Obtener description del producto
+        # Obtener description del producto y unit que viene del endpoint
         description_product = product.get('description', '') if product else item.get('name', '')
+        unit_from_api = product.get('unit') if product else None
 
-        # Buscar unit y conversion_factor en products_units usando product_code
+        # Buscar unit y conversion_factor en products_units usando product_code + unit
         unit = None
         conversion_factor = 0.0
-        if code_product:
+        if code_product and unit_from_api:
             try:
                 self.pg_cursor.execute("""
-                    SELECT correlative, conversion_factor FROM products_units WHERE product_code = %s LIMIT 1
-                """, (code_product,))
+                    SELECT correlative, conversion_factor FROM products_units WHERE product_code = %s AND unit = %s LIMIT 1
+                """, (code_product, unit_from_api))
                 result = self.pg_cursor.fetchone()
                 if result:
                     # Manejo seguro de índices
