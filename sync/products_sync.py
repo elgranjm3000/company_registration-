@@ -162,7 +162,7 @@ class ProductsSync(BaseSync):
                         a.product_type,
                         a.coin,
                         f.description AS description_coin,
-                        COALESCE(b.maximum_price, b.higher_price, 0) AS price,
+                        COALESCE(b.maximum_price, b.higher_price, b.minimum_price, 0) AS price,
                         CASE
                             WHEN b.offer_price IS NULL
                             THEN 0
@@ -173,6 +173,7 @@ class ProductsSync(BaseSync):
                             THEN 0
                             ELSE b.higher_price
                         END AS higher_price,
+                        CASE WHEN b.minimum_price IS NULL THEN 0 ELSE b.minimum_price END AS minimum_price,
                         CASE
                             WHEN a.minimal_stock IS NULL
                             THEN 0
@@ -391,16 +392,17 @@ class ProductsSync(BaseSync):
             price,                   # 12
             cost,                    # 13
             higher_price,            # 14
-            min_stock,               # 15
-            status,                  # 16
-            image_type,              # 17
-            product_image,           # 18
-            sale_tax,                # 19
-            aliquot,                 # 20
-            buy_tax,                 # 21
-            buy_aliquot,             # 22
-            unitary_cost,            # 23
-            allow_decimal            # 24
+            minimum_price,           # 15
+            min_stock,               # 16
+            status,                  # 17
+            image_type,              # 18
+            product_image,           # 19
+            sale_tax,                # 20
+            aliquot,                 # 21
+            buy_tax,                 # 22
+            buy_aliquot,             # 23
+            unitary_cost,            # 24
+            allow_decimal            # 25
         ) = pg_record
 
         # =====================================================================
@@ -431,6 +433,7 @@ class ProductsSync(BaseSync):
                 price = self._convertir_ves_a_usd(safe_float(price), tipo_cambio)
                 cost = self._convertir_ves_a_usd(safe_float(cost), tipo_cambio)
                 higher_price = self._convertir_ves_a_usd(safe_float(higher_price), tipo_cambio)
+                minimum_price = self._convertir_ves_a_usd(safe_float(minimum_price), tipo_cambio)
                 unitary_cost = self._convertir_ves_a_usd(safe_float(unitary_cost), tipo_cambio)
                 self.info(f"     → Price: {price:.4f} USD | Cost: {cost:.4f} USD")
 
@@ -501,6 +504,7 @@ class ProductsSync(BaseSync):
             'price': float(safe_float(price)),
             'cost': float(safe_float(cost)),
             'higher_price': float(safe_float(higher_price)),
+            'minimum_price': float(safe_float(minimum_price)),
             'coin': coin if coin else 'USD',
             'description_coin': valid_description_coin,
             'stock': float(safe_float(stock)),
