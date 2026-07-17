@@ -1843,6 +1843,59 @@ CREATE TRIGGER tr_users_mark_seller_email_updated
     WHEN (OLD.email IS DISTINCT FROM NEW.email)
     EXECUTE PROCEDURE trigger_mark_seller_email_updated();
 
+-- Función para marcar seller cuando cambia profile en users
+CREATE OR REPLACE FUNCTION trigger_mark_seller_profile_updated()
+RETURNS TRIGGER AS $$
+DECLARE v_company_id INTEGER;
+BEGIN
+    SELECT value INTO v_company_id FROM sync_config WHERE key = 'company_id';
+    IF v_company_id IS NULL THEN v_company_id := 1; END IF;
+
+    UPDATE sync_hashes SET pending_sync = TRUE, updated_at = NOW()
+    WHERE table_name = 'sellers'
+      AND record_key = (SELECT code FROM sellers WHERE user_code = OLD.code LIMIT 1)
+      AND company_id = v_company_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_users_mark_seller_profile_updated ON users;
+CREATE TRIGGER tr_users_mark_seller_profile_updated
+    AFTER UPDATE OF profile ON users
+    FOR EACH ROW
+    WHEN (OLD.profile IS DISTINCT FROM NEW.profile)
+    EXECUTE PROCEDURE trigger_mark_seller_profile_updated();
+
+-- Función para marcar sellers cuando cambia system_value en system_properties
+CREATE OR REPLACE FUNCTION trigger_mark_sellers_system_value_updated()
+RETURNS TRIGGER AS $$
+DECLARE v_company_id INTEGER;
+BEGIN
+    SELECT value INTO v_company_id FROM sync_config WHERE key = 'company_id';
+    IF v_company_id IS NULL THEN v_company_id := 1; END IF;
+
+    UPDATE sync_hashes SET pending_sync = TRUE, updated_at = NOW()
+    WHERE table_name = 'sellers'
+      AND record_key IN (
+          SELECT s.code FROM sellers s
+          INNER JOIN users u ON s.user_code = u.code
+          WHERE u.profile = NEW.profile
+      )
+      AND company_id = v_company_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_system_properties_mark_sellers_updated ON system_properties;
+CREATE TRIGGER tr_system_properties_mark_sellers_updated
+    AFTER UPDATE OF system_value ON system_properties
+    FOR EACH ROW
+    WHEN (OLD.system_value IS DISTINCT FROM NEW.system_value
+          AND NEW.properties_group = '003' AND NEW.code = 2)
+    EXECUTE PROCEDURE trigger_mark_sellers_system_value_updated();
+
 -- ===========================================================================
 -- DEPARTMENTS (CATEGORIES)
 -- ===========================================================================
