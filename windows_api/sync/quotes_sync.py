@@ -406,7 +406,7 @@ class QuotesSync:
 
         # Obtener description del producto y unit que viene del endpoint
         description_product = product.get('description', '') if product else item.get('name', '')
-        unit_from_api = product.get('unit') if product else None
+        unit_from_api = item.get('unit')
 
         # Buscar unit y conversion_factor en products_units usando product_code + unit
         unit = None
