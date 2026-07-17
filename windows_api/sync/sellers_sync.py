@@ -146,8 +146,7 @@ class SellersSync(BaseSync):
             # Construir filtro IN para query principal
             placeholders = ','.join(['%s'] * len(pending_codes))
 
-            # Query de sellers
-            # Nota: Tu BD usa user_code/code, no user_id/id
+            # Query de sellers con profile
             query = f"""
                 SELECT
                     s.code,
@@ -155,9 +154,12 @@ class SellersSync(BaseSync):
                     u.email,
                     u.user_password,
                     u.status,
-                    s.user_code
+                    s.user_code,
+                    u.profile,
+                    p.system_value
                 FROM sellers s
                 LEFT JOIN users u ON s.user_code = u.code
+                LEFT JOIN system_properties p ON p.profile = u.profile AND p.properties_group = '003' AND p.code = 2
                 WHERE s.code IN ({placeholders})
                   AND s.code IS NOT NULL AND s.code != '' AND s.code <> 'N/A'
                   AND s.description IS NOT NULL AND s.description != ''
@@ -243,7 +245,7 @@ class SellersSync(BaseSync):
 
         Args:
             pg_record: Tuple con campos de sellers:
-                (code, description, email, user_password, status, user_code)
+                (code, description, email, user_password, status, user_code, profile, system_value)
 
         Returns:
             Dict con formato esperado por la API:
@@ -252,7 +254,9 @@ class SellersSync(BaseSync):
                     'description': 'Juan Pérez',
                     'email': 'juan@email.com',
                     'password': '$2y$10$...',  # bcrypt hash
-                    'status': 'active'
+                    'status': 'active',
+                    'profile': '001',
+                    'system_value': 'some_value'
                 }
         """
         # Extraer campos del tuple
@@ -262,7 +266,9 @@ class SellersSync(BaseSync):
             email,           # 2
             password,        # 3 - user_password (puede ser NULL si es nuevo)
             status,          # 4 - '01' = active, '02' = inactive (o 'A'/'I')
-            user_code        # 5 - No usado (interno de PG)
+            user_code,       # 5 - No usado (interno de PG)
+            profile,         # 6 - perfil del usuario
+            system_value     # 7 - valor de system_properties
         ) = pg_record
 
         # Mapear status de PostgreSQL a API
@@ -308,7 +314,9 @@ class SellersSync(BaseSync):
             'description': description,
             'email': valid_email,
             'password': password,
-            'status': api_status
+            'status': api_status,
+            'profile': profile if profile else '',
+            'system_value': system_value if system_value else ''
         }
 
     def _generate_bcrypt_hash(self, password: str) -> str:
