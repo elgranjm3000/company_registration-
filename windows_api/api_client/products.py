@@ -215,8 +215,10 @@ class ProductsClient(BaseAPIClient):
                             'aliquot': 16.0,               # REQUERIDO
                             'product_type': 'P',            # Tipo de producto (P=Producto, C=Combo)
                             'unit': 'lb',                   # Código de unidad (ej: 'lb', 'kg', 'unit')
+                            'main_unit': False,             # Indica si es la unidad principal del producto
                             'unidad': 'Pound',              # Unidad de medida
-                            'allow_decimal': False          # Permite decimales (booleano)
+                            'allow_decimal': False,         # Permite decimales (booleano)
+                            'minimum_price': 750.00         # Precio mínimo del producto
                         }
             batch_size: Tamaño de lote (default usa self.batch_size)
 

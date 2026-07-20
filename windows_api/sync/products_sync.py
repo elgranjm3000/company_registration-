@@ -152,6 +152,7 @@ class ProductsSync(BaseSync):
                     SELECT
                         a.code,
                         b.unit,
+                        b.main_unit,
                         a.description,
                         a.short_name,
                         a.department,
@@ -379,30 +380,31 @@ class ProductsSync(BaseSync):
         (
             code,                    # 0
             unit,                    # 1
-            description,             # 2
-            short_name,              # 3
-            department,              # 4 - Código de departamento
-            department_name,         # 5 - Nombre de departamento (para mapear a categoría)
-            product_code,            # 6
-            unidad,                  # 7
-            stock,                   # 8
-            product_type,            # 9
-            coin,                    # 10
-            description_coin,        # 11
-            price,                   # 12
-            cost,                    # 13
-            higher_price,            # 14
-            minimum_price,           # 15
-            min_stock,               # 16
-            status,                  # 17
-            image_type,              # 18
-            product_image,           # 19
-            sale_tax,                # 20
-            aliquot,                 # 21
-            buy_tax,                 # 22
-            buy_aliquot,             # 23
-            unitary_cost,            # 24
-            allow_decimal            # 25
+            main_unit,               # 2
+            description,             # 3
+            short_name,              # 4
+            department,              # 5 - Código de departamento
+            department_name,         # 6 - Nombre de departamento (para mapear a categoría)
+            product_code,            # 7
+            unidad,                  # 8
+            stock,                   # 9
+            product_type,            # 10
+            coin,                    # 11
+            description_coin,        # 12
+            price,                   # 13
+            cost,                    # 14
+            higher_price,            # 15
+            minimum_price,           # 16
+            min_stock,               # 17
+            status,                  # 18
+            image_type,              # 19
+            product_image,           # 20
+            sale_tax,                # 21
+            aliquot,                 # 22
+            buy_tax,                 # 23
+            buy_aliquot,             # 24
+            unitary_cost,            # 25
+            allow_decimal            # 26
         ) = pg_record
 
         # =====================================================================
@@ -519,6 +521,7 @@ class ProductsSync(BaseSync):
             'aliquot': float(safe_float(aliquot)),
             'product_type': product_type if product_type else 'P',  # Tipo de producto (P=Producto, C=Combo, etc.)
             'unit': unit if unit else 'unit',  # Código de la unidad de medida (ej: 'lb', 'kg', 'unit')
+            'main_unit': bool(main_unit) if main_unit is not None else False,  # Indica si es la unidad principal del producto
             'unidad': unidad if unidad else 'Unidad',  # Descripción de la unidad de medida
             'allow_decimal': bool(allow_decimal) if allow_decimal is not None else False,  # Permite decimales (booleano)
             'image_type': image_type,
