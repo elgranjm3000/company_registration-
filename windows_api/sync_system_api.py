@@ -1250,6 +1250,52 @@ class APISyncManager:
         except Exception as e:
             self.pg_conn.rollback()
 
+    def _crear_trigger_actualizacion_products_units(self):
+        """Crea trigger que marca productos como pendientes cuando products_units cambia."""
+        try:
+            create_function_query = """
+                CREATE OR REPLACE FUNCTION trigger_mark_products_units_pending_sync()
+                RETURNS TRIGGER AS $$
+                DECLARE
+                    v_company_id INTEGER;
+                BEGIN
+                    -- Obtener company_id desde sync_config
+                    SELECT value::INTEGER INTO v_company_id
+                    FROM sync_config
+                    WHERE key = 'company_id';
+
+                    -- Marcar el producto como pendiente de sincronización
+                    UPDATE sync_hashes
+                    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+                    WHERE table_name = 'products'
+                    AND record_key = NEW.product_code;
+
+                    IF NOT FOUND THEN
+                        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id)
+                        VALUES ('products', NEW.product_code, md5(NEW.product_code::text), TRUE, v_company_id);
+                    END IF;
+
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+                DROP TRIGGER IF EXISTS tr_products_units_mark_pending_sync ON products_units;
+
+                CREATE TRIGGER tr_products_units_mark_pending_sync
+                    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost ON products_units
+                    FOR EACH ROW
+                    EXECUTE PROCEDURE trigger_mark_products_units_pending_sync();
+                """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
     def _crear_trigger_actualizacion_customers(self):
         """Crea trigger que marca customers como pendientes de sincronización."""
         try:
@@ -1973,6 +2019,46 @@ CREATE TRIGGER tr_sales_operation_mark_approved
     FOR EACH ROW
     WHEN (OLD.pending = TRUE AND NEW.pending = FALSE AND NEW.document_no LIKE 'W%')
     EXECUTE PROCEDURE trigger_mark_sales_operation_approved();
+
+-- ===========================================================================
+-- PRODUCTS_UNITS (CAMBIOS EN UNIDADES DE PRODUCTOS)
+-- ===========================================================================
+
+CREATE OR REPLACE FUNCTION trigger_mark_products_units_pending_sync()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+BEGIN
+    -- Obtener company_id desde sync_config
+    SELECT value::INTEGER INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    -- Marcar el producto como pendiente de sincronización
+    UPDATE sync_hashes
+    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+    WHERE table_name = 'products'
+      AND record_key = NEW.product_code::text
+      AND company_id = v_company_id;
+
+    IF NOT FOUND THEN
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('products', NEW.product_code::text, md5(NEW.product_code::text), TRUE, v_company_id, NOW());
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_products_units_mark_pending_sync ON products_units;
+CREATE TRIGGER tr_products_units_mark_pending_sync
+    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost ON products_units
+    FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_products_units_pending_sync();
 """
 
         try:
@@ -2061,6 +2147,7 @@ CREATE TRIGGER tr_sales_operation_mark_approved
                 self._crear_trigger_eliminacion_customers()
                 self._crear_trigger_eliminacion_sellers()
                 self._crear_trigger_actualizacion_products()
+                self._crear_trigger_actualizacion_products_units()
                 self._crear_trigger_actualizacion_customers()
                 print("[DEBUG] ✅ Triggers creados desde código Python (fallback)")
             except Exception as e2:
