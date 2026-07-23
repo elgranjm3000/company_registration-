@@ -188,7 +188,8 @@ class ProductsSync(BaseSync):
                         a.buy_tax,
                         g.aliquot AS buy_aliquot,
                         b.unitary_cost,
-                        a.allow_decimal
+                        a.allow_decimal,
+                        a.sale_price
                     FROM products a
                     LEFT JOIN (
                         SELECT product_code, SUM(stock) as total_stock
@@ -404,7 +405,8 @@ class ProductsSync(BaseSync):
             buy_tax,                 # 23
             buy_aliquot,             # 24
             unitary_cost,            # 25
-            allow_decimal            # 26
+            allow_decimal,           # 26
+            sale_price               # 27
         ) = pg_record
 
         # =====================================================================
@@ -524,6 +526,7 @@ class ProductsSync(BaseSync):
             'main_unit': bool(main_unit) if main_unit is not None else False,  # Indica si es la unidad principal del producto
             'unidad': unidad if unidad else 'Unidad',  # Descripción de la unidad de medida
             'allow_decimal': bool(allow_decimal) if allow_decimal is not None else False,  # Permite decimales (booleano)
+            'sale_price': float(safe_float(sale_price)),  # Precio de venta desde products
             'image_type': image_type,
             'product_image': product_image_encoded
         }

@@ -128,7 +128,8 @@ class CustomersSync(BaseSync):
                         email,
                         phone,
                         contact,
-                        status
+                        status,
+                        sale_price
                     FROM clients
                     WHERE code IN ({placeholders})
                       AND code IS NOT NULL AND code != ''
@@ -243,7 +244,8 @@ class CustomersSync(BaseSync):
             email,           # 4
             phone,           # 5
             contact,         # 6
-            status           # 7 - Status del cliente
+            status,          # 7 - Status del cliente
+            sale_price       # 8 - Precio de venta
         ) = pg_record
 
         # Usar contact como name si no hay description
@@ -275,7 +277,8 @@ class CustomersSync(BaseSync):
             'email': email_clean,
             'phone': (phone or '').strip() if phone else None,
             'address': (address or '').strip() if address else None,
-            'status': status_mapped
+            'status': status_mapped,
+            'sale_price': float(sale_price) if sale_price is not None else 0.0
         }
 
     # =========================================================================
