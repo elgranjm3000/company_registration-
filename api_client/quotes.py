@@ -57,7 +57,8 @@ class QuotesClient(BaseAPIClient):
                 "/sync-client/batch/quotes",
                 params={
                     'company_id': company_id,
-                    'status': 'draft'
+                    'status': 'draft',
+                    'operation_type': 'BUDGET'
                 }
             )
 
