@@ -282,33 +282,24 @@ class SellersSync(BaseSync):
         }
         api_status = status_map.get(status, 'active')
 
-        # Enviar password en texto plano (sin hashear)
-        if not password:
-            # Password por defecto si no existe
-            password = f"Temp{code[-6:]}" if len(code) >= 6 else f"Temp{code}123"
-            self.warning(
-                f"⚠️  No password found for seller {code}, "
-                f"using default password."
-            )
+        # Validar email
+        valid_email = email if email else f"{code.lower()}@temp.com"
 
-        # Validar email: usar email por defecto si es None
-        # Nota: Los emails con valor '@', '' o solo espacios ya fueron filtrados en el query
-        valid_email = email
-        if not email:
-            valid_email = f"{code.lower()}@temp.com"
-            self.warning(
-                f"⚠️  No valid email for seller {code}, using {valid_email}. CHANGE THIS IN PRODUCTION!"
-            )
-
-        return {
+        # Construir payload base
+        payload = {
             'code': code,
             'description': description,
             'email': valid_email,
-            'password': password,
             'status': api_status,
             'profile': profile if profile else '',
             'system_value': system_value if system_value else ''
         }
+
+        # Solo incluir password si tiene valor
+        if password:
+            payload['password'] = password
+
+        return payload
 
     def _generate_bcrypt_hash(self, password: str) -> str:
         """
