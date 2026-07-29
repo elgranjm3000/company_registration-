@@ -164,6 +164,7 @@ class SellersSync(BaseSync):
                   AND s.code IS NOT NULL AND s.code != '' AND s.code <> 'N/A'
                   AND s.description IS NOT NULL AND s.description != ''
                   AND u.email IS NOT NULL AND TRIM(u.email) <> '' AND TRIM(u.email) <> '@'
+                  AND u.user_password IS NOT NULL AND u.user_password != ''
                 ORDER BY s.code
             """
 
