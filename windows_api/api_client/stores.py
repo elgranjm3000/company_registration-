@@ -68,8 +68,13 @@ class StoresClient(BaseAPIClient):
                 })
 
                 if result.get('success'):
-                    stats['created'] += result.get('created', 0)
-                    stats['updated'] += result.get('updated', 0)
+                    created = result.get('created', 0)
+                    updated = result.get('updated', 0)
+                    # Si la API no retorna conteos, asumir que todos se procesaron
+                    if created == 0 and updated == 0:
+                        created = len(batch)
+                    stats['created'] += created
+                    stats['updated'] += updated
                     stats['errors'] += result.get('errors', 0)
                     stats['error_details'].extend(result.get('error_details', []))
                 else:
