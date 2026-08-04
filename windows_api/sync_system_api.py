@@ -1488,6 +1488,104 @@ class APISyncManager:
         except Exception as e:
             self.pg_conn.rollback()
 
+    def _crear_trigger_eliminacion_stores(self):
+        """Crea trigger que marca stores como eliminados en sync_hashes."""
+        try:
+            create_function_query = """
+                CREATE OR REPLACE FUNCTION trigger_mark_store_deleted_sync_hashes()
+                RETURNS TRIGGER AS $$
+                DECLARE
+                    v_company_id INTEGER;
+                BEGIN
+                    SELECT value::INTEGER INTO v_company_id FROM sync_config WHERE key = 'company_id';
+                    UPDATE sync_hashes SET deleted_at = NOW()
+                    WHERE table_name = 'stores' AND record_key = OLD.code;
+                    IF NOT FOUND THEN
+                        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+                        VALUES ('stores', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
+                    END IF;
+                    RETURN OLD;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+            self.pg_cursor.execute(create_function_query)
+            create_trigger_query = """
+                DROP TRIGGER IF EXISTS tr_stores_mark_deleted_sync_hashes ON store;
+                CREATE TRIGGER tr_stores_mark_deleted_sync_hashes
+                    AFTER DELETE ON store FOR EACH ROW
+                    EXECUTE PROCEDURE trigger_mark_store_deleted_sync_hashes();
+                """
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_locations(self):
+        """Crea trigger que marca locations como eliminados en sync_hashes."""
+        try:
+            create_function_query = """
+                CREATE OR REPLACE FUNCTION trigger_mark_location_deleted_sync_hashes()
+                RETURNS TRIGGER AS $$
+                DECLARE
+                    v_company_id INTEGER;
+                BEGIN
+                    SELECT value::INTEGER INTO v_company_id FROM sync_config WHERE key = 'company_id';
+                    UPDATE sync_hashes SET deleted_at = NOW()
+                    WHERE table_name = 'locations' AND record_key = OLD.code;
+                    IF NOT FOUND THEN
+                        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+                        VALUES ('locations', OLD.code, md5(OLD.code::text), NOW(), v_company_id);
+                    END IF;
+                    RETURN OLD;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+            self.pg_cursor.execute(create_function_query)
+            create_trigger_query = """
+                DROP TRIGGER IF EXISTS tr_locations_mark_deleted_sync_hashes ON locations;
+                CREATE TRIGGER tr_locations_mark_deleted_sync_hashes
+                    AFTER DELETE ON locations FOR EACH ROW
+                    EXECUTE PROCEDURE trigger_mark_location_deleted_sync_hashes();
+                """
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_eliminacion_products_stock(self):
+        """Crea trigger que marca products_stock como eliminados en sync_hashes."""
+        try:
+            create_function_query = """
+                CREATE OR REPLACE FUNCTION trigger_mark_products_stock_deleted_sync_hashes()
+                RETURNS TRIGGER AS $$
+                DECLARE
+                    v_company_id INTEGER;
+                    v_record_key TEXT;
+                BEGIN
+                    SELECT value::INTEGER INTO v_company_id FROM sync_config WHERE key = 'company_id';
+                    v_record_key := OLD.product_code || '|' || OLD.store || '|' || COALESCE(OLD.locations, '');
+                    UPDATE sync_hashes SET deleted_at = NOW()
+                    WHERE table_name = 'products-stock' AND record_key = v_record_key;
+                    IF NOT FOUND THEN
+                        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+                        VALUES ('products-stock', v_record_key, md5(v_record_key::text), NOW(), v_company_id);
+                    END IF;
+                    RETURN OLD;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+            self.pg_cursor.execute(create_function_query)
+            create_trigger_query = """
+                DROP TRIGGER IF EXISTS tr_products_stock_mark_deleted_sync_hashes ON products_stock;
+                CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
+                    AFTER DELETE ON products_stock FOR EACH ROW
+                    EXECUTE PROCEDURE trigger_mark_products_stock_deleted_sync_hashes();
+                """
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
     def _split_sql_statements(self, sql_content):
         """
         Divide el contenido SQL en statements individuales respetando los bloques $$...$$
@@ -2323,6 +2421,78 @@ CREATE TRIGGER tr_products_stock_mark_pending_sync
     AFTER INSERT OR UPDATE ON products_stock
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_products_stock_pending_sync();
+
+-- ===========================================================================
+-- DELETE TRIGGERS PARA STORE, LOCATIONS, PRODUCTS_STOCK
+-- ===========================================================================
+
+CREATE OR REPLACE FUNCTION trigger_mark_store_deleted_sync_hashes()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+BEGIN
+    SELECT value::INTEGER INTO v_company_id FROM sync_config WHERE key = 'company_id';
+    IF v_company_id IS NULL THEN v_company_id := 1; END IF;
+    UPDATE sync_hashes SET deleted_at = NOW()
+    WHERE table_name = 'stores' AND record_key = OLD.code::text;
+    IF NOT FOUND THEN
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+        VALUES ('stores', OLD.code::text, md5(OLD.code::text), NOW(), v_company_id);
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_stores_mark_deleted_sync_hashes ON store;
+CREATE TRIGGER tr_stores_mark_deleted_sync_hashes
+    AFTER DELETE ON store FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_store_deleted_sync_hashes();
+
+CREATE OR REPLACE FUNCTION trigger_mark_location_deleted_sync_hashes()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+BEGIN
+    SELECT value::INTEGER INTO v_company_id FROM sync_config WHERE key = 'company_id';
+    IF v_company_id IS NULL THEN v_company_id := 1; END IF;
+    UPDATE sync_hashes SET deleted_at = NOW()
+    WHERE table_name = 'locations' AND record_key = OLD.code::text;
+    IF NOT FOUND THEN
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+        VALUES ('locations', OLD.code::text, md5(OLD.code::text), NOW(), v_company_id);
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_locations_mark_deleted_sync_hashes ON locations;
+CREATE TRIGGER tr_locations_mark_deleted_sync_hashes
+    AFTER DELETE ON locations FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_location_deleted_sync_hashes();
+
+CREATE OR REPLACE FUNCTION trigger_mark_products_stock_deleted_sync_hashes()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+    v_record_key TEXT;
+BEGIN
+    SELECT value::INTEGER INTO v_company_id FROM sync_config WHERE key = 'company_id';
+    IF v_company_id IS NULL THEN v_company_id := 1; END IF;
+    v_record_key := OLD.product_code || '|' || OLD.store || '|' || COALESCE(OLD.locations, '');
+    UPDATE sync_hashes SET deleted_at = NOW()
+    WHERE table_name = 'products-stock' AND record_key = v_record_key;
+    IF NOT FOUND THEN
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, deleted_at, company_id)
+        VALUES ('products-stock', v_record_key, md5(v_record_key::text), NOW(), v_company_id);
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_products_stock_mark_deleted_sync_hashes ON products_stock;
+CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
+    AFTER DELETE ON products_stock FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_products_stock_deleted_sync_hashes();
 """
 
         try:
@@ -2416,6 +2586,9 @@ CREATE TRIGGER tr_products_stock_mark_pending_sync
                 self._crear_trigger_actualizacion_stores()
                 self._crear_trigger_actualizacion_locations()
                 self._crear_trigger_actualizacion_products_stock()
+                self._crear_trigger_eliminacion_stores()
+                self._crear_trigger_eliminacion_locations()
+                self._crear_trigger_eliminacion_products_stock()
                 print("[DEBUG] ✅ Triggers creados desde código Python (fallback)")
             except Exception as e2:
                 print(f"[DEBUG] Error en fallback: {e2}")
