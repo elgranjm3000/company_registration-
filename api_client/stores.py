@@ -86,6 +86,9 @@ class StoresClient(BaseAPIClient):
 
         return stats
 
+    def _split_into_batches(self, items, batch_size):
+        return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+
     def delete_batch(
         self,
         company_id: int,

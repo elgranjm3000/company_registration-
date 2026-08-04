@@ -122,3 +122,6 @@ class LocationsClient(BaseAPIClient):
                 self.logger.error(f"Error deleting locations: {e}")
 
         return stats
+
+    def _split_into_batches(self, items, batch_size):
+        return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
