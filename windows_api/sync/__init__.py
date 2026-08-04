@@ -9,6 +9,9 @@ from .products_sync import ProductsSync
 from .customers_sync import CustomersSync
 from .sellers_sync import SellersSync
 from .quotes_sync import QuotesSync
+from .stores_sync import StoresSync
+from .locations_sync import LocationsSync
+from .products_stock_sync import ProductsStockSync
 
 __all__ = [
     'BaseSync',
@@ -17,4 +20,7 @@ __all__ = [
     'CustomersSync',
     'SellersSync',
     'QuotesSync',
+    'StoresSync',
+    'LocationsSync',
+    'ProductsStockSync',
 ]

@@ -79,14 +79,20 @@ try:
         ProductsClient,
         CustomersClient,
         SellersClient,
-        QuotesClient
+        QuotesClient,
+        StoresClient,
+        LocationsClient,
+        ProductsStockClient
     )
     from sync import (
         CategoriesSync,
         ProductsSync,
         CustomersSync,
         SellersSync,
-        QuotesSync
+        QuotesSync,
+        StoresSync,
+        LocationsSync,
+        ProductsStockSync
     )
 except ImportError as e:
     error_msg = f"Error: No se pueden importar los módulos: {e}"
@@ -863,6 +869,9 @@ class APISyncManager:
         self.customers_client = None
         self.sellers_client = None
         self.quotes_client = None
+        self.stores_client = None
+        self.locations_client = None
+        self.products_stock_client = None
 
         # Estadísticas
         self.stats = {
@@ -870,7 +879,10 @@ class APISyncManager:
             'quotes': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
             'products': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
             'customers': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
-            'sellers': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0}
+            'sellers': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
+            'stores': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
+            'locations': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0},
+            'products-stock': {'created': 0, 'updated': 0, 'deleted': 0, 'errors': 0}
         }
 
         self.sync_running = True
@@ -1335,6 +1347,141 @@ class APISyncManager:
                 FOR EACH ROW
                 EXECUTE PROCEDURE trigger_mark_customer_pending_sync();
             """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_actualizacion_stores(self):
+        """Crea trigger que marca stores como pendientes de sincronización."""
+        try:
+            create_function_query = """
+                CREATE OR REPLACE FUNCTION trigger_mark_store_pending_sync()
+                RETURNS TRIGGER AS $$
+                DECLARE
+                    v_company_id INTEGER;
+                BEGIN
+                    SELECT value::INTEGER INTO v_company_id
+                    FROM sync_config
+                    WHERE key = 'company_id';
+
+                    UPDATE sync_hashes
+                    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+                    WHERE table_name = 'stores'
+                    AND record_key = NEW.code;
+
+                    IF NOT FOUND THEN
+                        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id)
+                        VALUES ('stores', NEW.code, md5(NEW.code::text), TRUE, v_company_id);
+                    END IF;
+
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+                DROP TRIGGER IF EXISTS tr_stores_mark_pending_sync ON store;
+
+                CREATE TRIGGER tr_stores_mark_pending_sync
+                    AFTER INSERT OR UPDATE ON store
+                    FOR EACH ROW
+                    EXECUTE PROCEDURE trigger_mark_store_pending_sync();
+                """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_actualizacion_locations(self):
+        """Crea trigger que marca locations como pendientes de sincronización."""
+        try:
+            create_function_query = """
+                CREATE OR REPLACE FUNCTION trigger_mark_location_pending_sync()
+                RETURNS TRIGGER AS $$
+                DECLARE
+                    v_company_id INTEGER;
+                BEGIN
+                    SELECT value::INTEGER INTO v_company_id
+                    FROM sync_config
+                    WHERE key = 'company_id';
+
+                    UPDATE sync_hashes
+                    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+                    WHERE table_name = 'locations'
+                    AND record_key = NEW.code;
+
+                    IF NOT FOUND THEN
+                        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id)
+                        VALUES ('locations', NEW.code, md5(NEW.code::text), TRUE, v_company_id);
+                    END IF;
+
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+                DROP TRIGGER IF EXISTS tr_locations_mark_pending_sync ON location;
+
+                CREATE TRIGGER tr_locations_mark_pending_sync
+                    AFTER INSERT OR UPDATE ON location
+                    FOR EACH ROW
+                    EXECUTE PROCEDURE trigger_mark_location_pending_sync();
+                """
+
+            self.pg_cursor.execute(create_trigger_query)
+            self.pg_conn.commit()
+        except Exception as e:
+            self.pg_conn.rollback()
+
+    def _crear_trigger_actualizacion_products_stock(self):
+        """Crea trigger que marca stocks como pendientes de sincronización."""
+        try:
+            create_function_query = """
+                CREATE OR REPLACE FUNCTION trigger_mark_products_stock_pending_sync()
+                RETURNS TRIGGER AS $$
+                DECLARE
+                    v_company_id INTEGER;
+                    v_record_key TEXT;
+                BEGIN
+                    SELECT value::INTEGER INTO v_company_id
+                    FROM sync_config
+                    WHERE key = 'company_id';
+
+                    v_record_key := NEW.product_code || '|' || NEW.store || '|' || COALESCE(NEW.locations, '');
+
+                    UPDATE sync_hashes
+                    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+                    WHERE table_name = 'products-stock'
+                    AND record_key = v_record_key;
+
+                    IF NOT FOUND THEN
+                        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id)
+                        VALUES ('products-stock', v_record_key, md5(v_record_key::text), TRUE, v_company_id);
+                    END IF;
+
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+
+            self.pg_cursor.execute(create_function_query)
+
+            create_trigger_query = """
+                DROP TRIGGER IF EXISTS tr_products_stock_mark_pending_sync ON product_stock;
+
+                CREATE TRIGGER tr_products_stock_mark_pending_sync
+                    AFTER INSERT OR UPDATE ON product_stock
+                    FOR EACH ROW
+                    EXECUTE PROCEDURE trigger_mark_products_stock_pending_sync();
+                """
 
             self.pg_cursor.execute(create_trigger_query)
             self.pg_conn.commit()
@@ -2059,6 +2206,123 @@ CREATE TRIGGER tr_products_units_mark_pending_sync
     AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost, conversion_factor, unit_type ON products_units
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_products_units_pending_sync();
+
+-- ===========================================================================
+-- STORE (TIENDAS)
+-- ===========================================================================
+
+CREATE OR REPLACE FUNCTION trigger_mark_store_pending_sync()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+BEGIN
+    SELECT value::INTEGER INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    UPDATE sync_hashes
+    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+    WHERE table_name = 'stores'
+      AND record_key = NEW.code::text
+      AND company_id = v_company_id;
+
+    IF NOT FOUND THEN
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('stores', NEW.code::text, md5(NEW.code::text), TRUE, v_company_id, NOW());
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_stores_mark_pending_sync ON store;
+CREATE TRIGGER tr_stores_mark_pending_sync
+    AFTER INSERT OR UPDATE ON store
+    FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_store_pending_sync();
+
+-- ===========================================================================
+-- LOCATION (UBICACIONES)
+-- ===========================================================================
+
+CREATE OR REPLACE FUNCTION trigger_mark_location_pending_sync()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+BEGIN
+    SELECT value::INTEGER INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    UPDATE sync_hashes
+    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+    WHERE table_name = 'locations'
+      AND record_key = NEW.code::text
+      AND company_id = v_company_id;
+
+    IF NOT FOUND THEN
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('locations', NEW.code::text, md5(NEW.code::text), TRUE, v_company_id, NOW());
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_locations_mark_pending_sync ON location;
+CREATE TRIGGER tr_locations_mark_pending_sync
+    AFTER INSERT OR UPDATE ON location
+    FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_location_pending_sync();
+
+-- ===========================================================================
+-- PRODUCT_STOCK (INVENTARIO)
+-- ===========================================================================
+
+CREATE OR REPLACE FUNCTION trigger_mark_products_stock_pending_sync()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_company_id INTEGER;
+    v_record_key TEXT;
+BEGIN
+    SELECT value::INTEGER INTO v_company_id
+    FROM sync_config
+    WHERE key = 'company_id';
+
+    IF v_company_id IS NULL THEN
+        v_company_id := 1;
+    END IF;
+
+    v_record_key := NEW.product_code || '|' || NEW.store || '|' || COALESCE(NEW.locations, '');
+
+    UPDATE sync_hashes
+    SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
+    WHERE table_name = 'products-stock'
+      AND record_key = v_record_key
+      AND company_id = v_company_id;
+
+    IF NOT FOUND THEN
+        INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+        VALUES ('products-stock', v_record_key, md5(v_record_key::text), TRUE, v_company_id, NOW());
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_products_stock_mark_pending_sync ON product_stock;
+CREATE TRIGGER tr_products_stock_mark_pending_sync
+    AFTER INSERT OR UPDATE ON product_stock
+    FOR EACH ROW
+    EXECUTE PROCEDURE trigger_mark_products_stock_pending_sync();
 """
 
         try:
@@ -2149,6 +2413,9 @@ CREATE TRIGGER tr_products_units_mark_pending_sync
                 self._crear_trigger_actualizacion_products()
                 self._crear_trigger_actualizacion_products_units()
                 self._crear_trigger_actualizacion_customers()
+                self._crear_trigger_actualizacion_stores()
+                self._crear_trigger_actualizacion_locations()
+                self._crear_trigger_actualizacion_products_stock()
                 print("[DEBUG] ✅ Triggers creados desde código Python (fallback)")
             except Exception as e2:
                 print(f"[DEBUG] Error en fallback: {e2}")
@@ -2271,6 +2538,33 @@ CREATE TRIGGER tr_products_units_mark_pending_sync
             )
 
             self.quotes_client = QuotesClient(
+                base_url=base_url,
+                api_key=api_key,
+                logger=api_logger,
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
+            )
+
+            self.stores_client = StoresClient(
+                base_url=base_url,
+                api_key=api_key,
+                logger=api_logger,
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
+            )
+
+            self.locations_client = LocationsClient(
+                base_url=base_url,
+                api_key=api_key,
+                logger=api_logger,
+                app_version=APP_VERSION,
+                chrystal_version=chrystal_ver,
+                device_uuid=_device_uuid
+            )
+
+            self.products_stock_client = ProductsStockClient(
                 base_url=base_url,
                 api_key=api_key,
                 logger=api_logger,
@@ -2420,6 +2714,36 @@ CREATE TRIGGER tr_products_units_mark_pending_sync
                   AND u.email IS NOT NULL AND TRIM(u.email) <> '' AND TRIM(u.email) <> '@'
             """, (company_id,))
             self._log(f"      → {self.pg_cursor.rowcount} vendedores")
+
+            # 5. Stores
+            self._log("   🏪 Cargando stores en sync_hashes...")
+            self.pg_cursor.execute("""
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                SELECT 'stores', code, '', TRUE, %s, NOW()
+                FROM store
+                WHERE code IS NOT NULL AND code != ''
+            """, (company_id,))
+            self._log(f"      → {self.pg_cursor.rowcount} stores")
+
+            # 6. Locations
+            self._log("   📍 Cargando locations en sync_hashes...")
+            self.pg_cursor.execute("""
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                SELECT 'locations', code, '', TRUE, %s, NOW()
+                FROM location
+                WHERE code IS NOT NULL AND code != ''
+            """, (company_id,))
+            self._log(f"      → {self.pg_cursor.rowcount} locations")
+
+            # 7. Products Stock
+            self._log("   📊 Cargando products-stock en sync_hashes...")
+            self.pg_cursor.execute("""
+                INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
+                SELECT 'products-stock', product_code || '|' || store || '|' || COALESCE(locations, ''), '', TRUE, %s, NOW()
+                FROM product_stock
+                WHERE product_code IS NOT NULL AND product_code != ''
+            """, (company_id,))
+            self._log(f"      → {self.pg_cursor.rowcount} products-stock")
 
             self.pg_conn.commit()
             print("[INIT_SYNC] ✅ INSERTs commiteados correctamente")
@@ -2573,7 +2897,40 @@ CREATE TRIGGER tr_products_units_mark_pending_sync
         sellers_sync.execute()
         self.stats['sellers'] = sellers_sync.stats.copy()
 
-        # 5. Quotes (API → PostgreSQL)
+        # 5. Stores
+        self._log("\n🏪 SINCRONIZANDO STORES...")
+        stores_sync = StoresSync(
+            self.pg_conn,
+            self.stores_client,
+            company_id,
+            self.logger
+        )
+        stores_sync.execute()
+        self.stats['stores'] = stores_sync.stats.copy()
+
+        # 6. Locations
+        self._log("\n📍 SINCRONIZANDO LOCATIONS...")
+        locations_sync = LocationsSync(
+            self.pg_conn,
+            self.locations_client,
+            company_id,
+            self.logger
+        )
+        locations_sync.execute()
+        self.stats['locations'] = locations_sync.stats.copy()
+
+        # 7. Products Stock
+        self._log("\n📊 SINCRONIZANDO PRODUCTS-STOCK...")
+        products_stock_sync = ProductsStockSync(
+            self.pg_conn,
+            self.products_stock_client,
+            company_id,
+            self.logger
+        )
+        products_stock_sync.execute()
+        self.stats['products-stock'] = products_stock_sync.stats.copy()
+
+        # 8. Quotes (API → PostgreSQL)
         self._log("\n💰 SINCRONIZANDO QUOTES...")
         quotes_sync = QuotesSync(
             self.pg_conn,

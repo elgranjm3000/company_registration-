@@ -10,6 +10,9 @@ from .products import ProductsClient
 from .customers import CustomersClient
 from .sellers import SellersClient
 from .quotes import QuotesClient
+from .stores import StoresClient
+from .locations import LocationsClient
+from .products_stock import ProductsStockClient
 
 __all__ = [
     'BaseAPIClient',
@@ -24,4 +27,7 @@ __all__ = [
     'CustomersClient',
     'SellersClient',
     'QuotesClient',
+    'StoresClient',
+    'LocationsClient',
+    'ProductsStockClient',
 ]
