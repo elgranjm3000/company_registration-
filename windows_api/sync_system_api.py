@@ -2598,9 +2598,6 @@ CREATE TRIGGER tr_products_stock_mark_pending_sync
         luego repopula desde las tablas fuente con record_hash=''
         y pending_sync=TRUE para forzar sincronización completa.
         """
-        import traceback as _tb2
-        print(f"\n[INIT_SYNC] DENTRO de _init_first_sync() - STACK:")
-        _tb2.print_stack()
         print(f"[INIT_SYNC] pg_cursor={self.pg_cursor}, pg_conn={self.pg_conn}, company_id={self.auth_manager.company_id}")
 
         company_id = self.auth_manager.company_id
