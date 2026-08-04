@@ -5026,14 +5026,17 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
     """)
 
     entities = [
-        ('setup',      'Configuración'),
-        ('database',   'Conexión PostgreSQL'),
-        ('categories', 'Categorías'),
-        ('products',   'Productos'),
-        ('customers',  'Clientes'),
-        ('sellers',    'Vendedores'),
-        ('quotes',     'Cotizaciones'),
-        ('final',      'Finalizando'),
+        ('setup',          'Configuración'),
+        ('database',       'Conexión PostgreSQL'),
+        ('categories',     'Categorías'),
+        ('products',       'Productos'),
+        ('customers',      'Clientes'),
+        ('sellers',        'Vendedores'),
+        ('stores',         'Tiendas'),
+        ('locations',      'Ubicaciones'),
+        ('products-stock', 'Inventario'),
+        ('quotes',         'Cotizaciones'),
+        ('final',          'Finalizando'),
     ]
 
     ent_layout = QVBoxLayout()
@@ -5234,11 +5237,14 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
             try:
                 cursor = sync_manager.pg_conn.cursor()
                 consultas = {
-                    'categories': 'SELECT COUNT(*) FROM department WHERE code IS NOT NULL AND code != \'\'',
-                    'products':   'SELECT COUNT(*) FROM products WHERE code IS NOT NULL AND code != \'\' AND product_type <> \'C\'',
-                    'customers':  'SELECT COUNT(*) FROM clients WHERE code IS NOT NULL AND code != \'\'',
-                    'sellers':    'SELECT COUNT(*) FROM sellers s LEFT JOIN users u ON s.user_code = u.code WHERE s.code IS NOT NULL AND s.code != \'\' AND s.code <> \'N/A\' AND u.email IS NOT NULL',
-                    'quotes':     'SELECT COUNT(*) FROM quotes',
+                    'categories':     'SELECT COUNT(*) FROM department WHERE code IS NOT NULL AND code != \'\'',
+                    'products':       'SELECT COUNT(*) FROM products WHERE code IS NOT NULL AND code != \'\' AND product_type <> \'C\'',
+                    'customers':      'SELECT COUNT(*) FROM clients WHERE code IS NOT NULL AND code != \'\'',
+                    'sellers':        'SELECT COUNT(*) FROM sellers s LEFT JOIN users u ON s.user_code = u.code WHERE s.code IS NOT NULL AND s.code != \'\' AND s.code <> \'N/A\' AND u.email IS NOT NULL',
+                    'stores':         'SELECT COUNT(*) FROM store WHERE code IS NOT NULL AND code != \'\'',
+                    'locations':      'SELECT COUNT(*) FROM locations WHERE code IS NOT NULL AND code != \'\'',
+                    'products-stock': 'SELECT COUNT(*) FROM products_stock WHERE product_code IS NOT NULL AND product_code != \'\'',
+                    'quotes':         'SELECT COUNT(*) FROM quotes',
                 }
                 for ent, sql in consultas.items():
                     cursor.execute(sql)
@@ -5249,11 +5255,12 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
                 except:
                     pass
 
-            entidades_sync = ['categories', 'products', 'customers', 'sellers', 'quotes', 'final']
+            entidades_sync = ['categories', 'products', 'customers', 'sellers', 'stores', 'locations', 'products-stock', 'quotes', 'final']
             idx_actual = [0]
             pct_map = {
-                'categories': 35, 'products': 50, 'customers': 65,
-                'sellers': 80, 'quotes': 90, 'final': 95,
+                'categories': 35, 'products': 45, 'customers': 55,
+                'sellers': 63, 'stores': 70, 'locations': 77,
+                'products-stock': 84, 'quotes': 90, 'final': 95,
             }
 
             def sync_logger(msg, level="info"):
@@ -5268,6 +5275,8 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
                     for key, eid in [
                         ('CATEGORIES', 'categories'), ('PRODUCTS', 'products'),
                         ('CUSTOMERS', 'customers'), ('SELLERS', 'sellers'),
+                        ('STORES', 'stores'), ('LOCATIONS', 'locations'),
+                        ('PRODUCTS-STOCK', 'products-stock'),
                         ('QUOTES', 'quotes'), ('RESUMEN', 'final'),
                     ]:
                         if key in msg_str:
