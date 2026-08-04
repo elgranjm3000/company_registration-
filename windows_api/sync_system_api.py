@@ -1286,7 +1286,7 @@ class APISyncManager:
                 DROP TRIGGER IF EXISTS tr_products_units_mark_pending_sync ON products_units;
 
                 CREATE TRIGGER tr_products_units_mark_pending_sync
-                    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost ON products_units
+                    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost, conversion_factor, unit_type ON products_units
                     FOR EACH ROW
                     EXECUTE PROCEDURE trigger_mark_products_units_pending_sync();
                 """
@@ -2056,7 +2056,7 @@ $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS tr_products_units_mark_pending_sync ON products_units;
 CREATE TRIGGER tr_products_units_mark_pending_sync
-    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost ON products_units
+    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost, conversion_factor, unit_type ON products_units
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_products_units_pending_sync();
 """

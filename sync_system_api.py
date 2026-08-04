@@ -1260,12 +1260,10 @@ class APISyncManager:
                 DECLARE
                     v_company_id INTEGER;
                 BEGIN
-                    -- Obtener company_id desde sync_config
                     SELECT value::INTEGER INTO v_company_id
                     FROM sync_config
                     WHERE key = 'company_id';
 
-                    -- Marcar el producto como pendiente de sincronización
                     UPDATE sync_hashes
                     SET pending_sync = TRUE, deleted_at = NULL, updated_at = NOW()
                     WHERE table_name = 'products'
@@ -1287,7 +1285,7 @@ class APISyncManager:
                 DROP TRIGGER IF EXISTS tr_products_units_mark_pending_sync ON products_units;
 
                 CREATE TRIGGER tr_products_units_mark_pending_sync
-                    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost ON products_units
+                    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost, conversion_factor, unit_type ON products_units
                     FOR EACH ROW
                     EXECUTE PROCEDURE trigger_mark_products_units_pending_sync();
                 """
@@ -2057,7 +2055,7 @@ $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS tr_products_units_mark_pending_sync ON products_units;
 CREATE TRIGGER tr_products_units_mark_pending_sync
-    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost ON products_units
+    AFTER INSERT OR UPDATE OF main_unit, maximum_price, higher_price, minimum_price, offer_price, unitary_cost, conversion_factor, unit_type ON products_units
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_products_units_pending_sync();
 """

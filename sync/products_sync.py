@@ -188,6 +188,8 @@ class ProductsSync(BaseSync):
                         a.buy_tax,
                         g.aliquot AS buy_aliquot,
                         b.unitary_cost,
+                        b.conversion_factor,
+                        b.unit_type,
                         a.allow_decimal,
                         a.sale_price
                     FROM products a
@@ -405,8 +407,10 @@ class ProductsSync(BaseSync):
             buy_tax,                 # 23
             buy_aliquot,             # 24
             unitary_cost,            # 25
-            allow_decimal,           # 26
-            sale_price               # 27
+            conversion_factor,       # 26
+            unit_type,               # 27
+            allow_decimal,           # 28
+            sale_price               # 29
         ) = pg_record
 
         # =====================================================================
@@ -527,6 +531,8 @@ class ProductsSync(BaseSync):
             'unidad': unidad if unidad else 'Unidad',  # Descripción de la unidad de medida
             'allow_decimal': bool(allow_decimal) if allow_decimal is not None else False,  # Permite decimales (booleano)
             'sale_price': float(safe_float(sale_price)),  # Precio de venta desde products
+            'conversion_factor': float(safe_float(conversion_factor)),  # Factor de conversión de unidad
+            'unit_type': unit_type if unit_type else '',  # Tipo de unidad
             'image_type': image_type,
             'product_image': product_image_encoded
         }
