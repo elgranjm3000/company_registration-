@@ -46,7 +46,7 @@ class LocationsSync(BaseSync):
 
             if count_in_hashes == 0:
                 self.info("Primera sincronización: obteniendo TODOS los locations")
-                self.pg_cursor.execute("SELECT code FROM location")
+                self.pg_cursor.execute("SELECT code FROM locations")
                 pending_codes = [row[0] for row in self.pg_cursor.fetchall()]
             else:
                 self.pg_cursor.execute("""
@@ -99,8 +99,8 @@ class LocationsSync(BaseSync):
             placeholders = ','.join(['%s'] * len(pending_codes))
 
             query = f"""
-                SELECT code, description, store
-                FROM location
+                SELECT code, description, parent_store
+                FROM locations
                 WHERE code IN ({placeholders})
                   AND code IS NOT NULL AND code != ''
                 ORDER BY code
@@ -158,12 +158,12 @@ class LocationsSync(BaseSync):
         return cambios
 
     def transform_to_api(self, pg_record: tuple) -> Dict[str, Any]:
-        code, description, store = pg_record
+        code, description, parent_store = pg_record
 
         return {
             'code': code,
             'description': description if description else '',
-            'parent_store': store if store else ''
+            'parent_store': parent_store if parent_store else ''
         }
 
     def sync_to_api(self, changes: Dict[str, List]) -> bool:

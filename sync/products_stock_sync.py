@@ -52,7 +52,7 @@ class ProductsStockSync(BaseSync):
                 self.info("Primera sincronización: obteniendo TODOS los stocks")
                 self.pg_cursor.execute("""
                     SELECT product_code, store, locations
-                    FROM product_stock
+                    FROM products_stock
                     WHERE product_code IS NOT NULL AND product_code != ''
                 """)
                 rows = self.pg_cursor.fetchall()
@@ -107,7 +107,7 @@ class ProductsStockSync(BaseSync):
             # Obtener todos los stocks y filtrar por pending_codes
             self.pg_cursor.execute("""
                 SELECT product_code, store, locations, stock, ordered_stock, committed_stock
-                FROM product_stock
+                FROM products_stock
                 WHERE product_code IS NOT NULL AND product_code != ''
                 ORDER BY product_code, store, locations
             """)

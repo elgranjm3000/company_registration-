@@ -1428,10 +1428,10 @@ class APISyncManager:
             self.pg_cursor.execute(create_function_query)
 
             create_trigger_query = """
-                DROP TRIGGER IF EXISTS tr_locations_mark_pending_sync ON location;
+                DROP TRIGGER IF EXISTS tr_locations_mark_pending_sync ON locations;
 
                 CREATE TRIGGER tr_locations_mark_pending_sync
-                    AFTER INSERT OR UPDATE ON location
+                    AFTER INSERT OR UPDATE ON locations
                     FOR EACH ROW
                     EXECUTE PROCEDURE trigger_mark_location_pending_sync();
                 """
@@ -1475,10 +1475,10 @@ class APISyncManager:
             self.pg_cursor.execute(create_function_query)
 
             create_trigger_query = """
-                DROP TRIGGER IF EXISTS tr_products_stock_mark_pending_sync ON product_stock;
+                DROP TRIGGER IF EXISTS tr_products_stock_mark_pending_sync ON products_stock;
 
                 CREATE TRIGGER tr_products_stock_mark_pending_sync
-                    AFTER INSERT OR UPDATE ON product_stock
+                    AFTER INSERT OR UPDATE ON products_stock
                     FOR EACH ROW
                     EXECUTE PROCEDURE trigger_mark_products_stock_pending_sync();
                 """
@@ -2277,9 +2277,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS tr_locations_mark_pending_sync ON location;
+DROP TRIGGER IF EXISTS tr_locations_mark_pending_sync ON locations;
 CREATE TRIGGER tr_locations_mark_pending_sync
-    AFTER INSERT OR UPDATE ON location
+    AFTER INSERT OR UPDATE ON locations
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_location_pending_sync();
 
@@ -2318,9 +2318,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS tr_products_stock_mark_pending_sync ON product_stock;
+DROP TRIGGER IF EXISTS tr_products_stock_mark_pending_sync ON products_stock;
 CREATE TRIGGER tr_products_stock_mark_pending_sync
-    AFTER INSERT OR UPDATE ON product_stock
+    AFTER INSERT OR UPDATE ON products_stock
     FOR EACH ROW
     EXECUTE PROCEDURE trigger_mark_products_stock_pending_sync();
 """
@@ -2730,7 +2730,7 @@ CREATE TRIGGER tr_products_stock_mark_pending_sync
             self.pg_cursor.execute("""
                 INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
                 SELECT 'locations', code, '', TRUE, %s, NOW()
-                FROM location
+                FROM locations
                 WHERE code IS NOT NULL AND code != ''
             """, (company_id,))
             self._log(f"      → {self.pg_cursor.rowcount} locations")
@@ -2740,7 +2740,7 @@ CREATE TRIGGER tr_products_stock_mark_pending_sync
             self.pg_cursor.execute("""
                 INSERT INTO sync_hashes (table_name, record_key, record_hash, pending_sync, company_id, updated_at)
                 SELECT 'products-stock', product_code || '|' || store || '|' || COALESCE(locations, ''), '', TRUE, %s, NOW()
-                FROM product_stock
+                FROM products_stock
                 WHERE product_code IS NOT NULL AND product_code != ''
             """, (company_id,))
             self._log(f"      → {self.pg_cursor.rowcount} products-stock")
