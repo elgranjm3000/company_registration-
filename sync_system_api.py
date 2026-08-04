@@ -4851,7 +4851,7 @@ class ConfigWindow:
                         ]:
                             if key in msg_str:
                                 # Marcar entidad anterior como completada
-                                if idx_actual[0] > 0:
+                                if idx_actual[0] > 0 and idx_actual[0] <= len(entidades_sync):
                                     prev = entidades_sync[idx_actual[0] - 1]
                                     sync_queue.put({'type': 'entity',
                                                    'entity': prev,
@@ -4903,7 +4903,7 @@ class ConfigWindow:
 
                 if result.get('success'):
                     # Marcar última entidad como completada
-                    if idx_actual[0] > 0:
+                    if idx_actual[0] > 0 and idx_actual[0] <= len(entidades_sync):
                         prev = entidades_sync[idx_actual[0] - 1]
                         sync_queue.put({'type': 'entity', 'entity': prev,
                                        'status': 'done', 'detail': 'Completado'})
@@ -5311,7 +5311,7 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
             result = sync_manager.sync_all()
 
             if result.get('success'):
-                if idx_actual[0] > 0:
+                if idx_actual[0] > 0 and idx_actual[0] <= len(entidades_sync):
                     prev = entidades_sync[idx_actual[0] - 1]
                     sync_queue.put({'type': 'entity', 'entity': prev, 'status': 'done', 'detail': 'Completado'})
                 detalle_final = "Completado"
