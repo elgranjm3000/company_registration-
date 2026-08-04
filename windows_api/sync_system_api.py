@@ -5286,6 +5286,7 @@ def mostrar_progreso_primera_sync(config: dict, al_completar=None):
                     pass
 
             sync_manager._log = sync_logger
+            sync_manager.logger = sync_logger
 
             sync_queue.put({'type': 'entity', 'entity': 'categories', 'status': 'running',
                            'detail': f"Procesando {totales.get('categories', 0)} registro(s)..."})
