@@ -93,22 +93,22 @@ class ProductsStockClient(BaseAPIClient):
     def delete_batch(
         self,
         company_id: int,
-        codes: List[str],
-        batch_size: Optional[int] = None
+        items: List[Dict],
+        batch_size: Optional[int] = None,
     ) -> Dict:
         """
         Eliminar stocks en lote.
 
         Args:
             company_id: ID de la empresa
-            codes: Lista de identificadores a eliminar
+            items: Lista de dicts [{product_code, store, locations}]
             batch_size: Tamaño de lote
 
         Returns:
             Dict con {success, deleted}
         """
         batch_size = batch_size or self.batch_size
-        batches = self._split_into_batches(codes, batch_size)
+        batches = self._split_into_batches(items, batch_size)
 
         stats = {'success': True, 'deleted': 0}
 
@@ -116,7 +116,7 @@ class ProductsStockClient(BaseAPIClient):
             try:
                 result = self.delete('/sync-client/batch/products-stock', {
                     'company_id': company_id,
-                    'codes': batch
+                    'items': batch,
                 })
 
                 if result.get('success'):

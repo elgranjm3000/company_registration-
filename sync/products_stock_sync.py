@@ -237,12 +237,20 @@ class ProductsStockSync(BaseSync):
             return
 
         self.info(f"Eliminando {len(deleted_items)} stocks de la API...")
-        codes = [item['code'] for item in deleted_items]
+        # Parsear clave compuesta "PROD001|TIENDA01|LOC-A01" -> {product_code, store, locations}
+        items = []
+        for item in deleted_items:
+            parts = item['code'].split('|')
+            items.append({
+                'product_code': parts[0] if len(parts) > 0 else '',
+                'store': parts[1] if len(parts) > 1 else '',
+                'locations': parts[2] if len(parts) > 2 else '',
+            })
 
         try:
             result = self.api_client.delete_batch(
                 company_id=self.company_id,
-                codes=codes
+                items=items
             )
 
             self.stats['deleted'] = result.get('deleted', 0)
