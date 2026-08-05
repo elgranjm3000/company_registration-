@@ -2160,7 +2160,7 @@ CREATE TRIGGER tr_system_properties_mark_sellers_updated
     AFTER UPDATE OF system_value ON system_properties
     FOR EACH ROW
     WHEN (OLD.system_value IS DISTINCT FROM NEW.system_value
-          AND NEW.properties_group = '003' AND NEW.code = 2)
+          AND NEW.properties_group = '003' AND NEW.code IN (2, 30))
     EXECUTE PROCEDURE trigger_mark_sellers_system_value_updated();
 
 -- ===========================================================================
