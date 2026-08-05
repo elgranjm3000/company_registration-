@@ -3123,6 +3123,25 @@ CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
 
         self.stats['quotes'] = quotes_sync.get_stats()
 
+        # 9. Orders (API → PostgreSQL)
+        self._log("\n📦 SINCRONIZANDO ORDERS...")
+        orders_sync = QuotesSync(
+            self.pg_conn,
+            self.pg_conn.cursor(),
+            company_id,
+            self.quotes_client,
+            self.logger
+        )
+
+        cambios_orders = orders_sync.detect_order_changes()
+
+        if cambios_orders.get('nuevos'):
+            orders_sync.sync_orders_to_postgresql(cambios_orders)
+
+        order_stats = orders_sync.get_stats()
+        self.stats['quotes']['created'] += order_stats.get('created', 0)
+        self.stats['quotes']['errors'] += order_stats.get('errors', 0)
+
         # Resumen
         self._log("\n" + "="*70)
         self._log("📊 RESUMEN DE SINCRONIZACIÓN")

@@ -1066,3 +1066,414 @@ class QuotesSync:
 
         self.stats['updated'] += notificados
         return notificados
+
+    # =========================================================================
+    # ORDER SYNC (API → PostgreSQL)
+    # =========================================================================
+
+    def detect_order_changes(self) -> Dict[str, List]:
+        """Detectar orders en estado draft pendientes de sincronizacion desde la API"""
+        self._log("📦 Detectando orders en estado draft pendientes de sincronizacion...", "info")
+
+        cambios = {'nuevos': [], 'existentes': []}
+
+        try:
+            orders_api = self.quotes_client.get_pending_orders(self.company_id)
+
+            if not orders_api:
+                self._log("   No hay orders en estado draft", "info")
+                return cambios
+
+            self._log(f"   Orders encontradas: {len(orders_api)}", "info")
+
+            for order in orders_api:
+                order_id = order.get('id')
+                order_number = order.get('quote_number')
+
+                self.pg_cursor.execute("""
+                    SELECT record_hash FROM sync_hashes
+                    WHERE table_name = 'orders'
+                      AND record_key = %s
+                      AND company_id = %s
+                """, (str(order_id), self.company_id))
+
+                resultado = self.pg_cursor.fetchone()
+
+                if resultado is None:
+                    cambios['nuevos'].append(order)
+                    self._log(f"  ✨ NUEVA: Order #{order_id} ({order_number})", "info")
+                else:
+                    cambios['existentes'].append(order)
+                    self._log(f"  ⏭️  EXISTE: Order #{order_id} ({order_number})", "debug")
+
+            self._log(f"✅ Orders detectadas: {len(cambios['nuevos'])} nuevas", "info")
+
+        except Exception as e:
+            self._log(f"Error detectando orders: {e}", "error")
+            self.stats['errors'] += 1
+
+        return cambios
+
+    def sync_orders_to_postgresql(self, changes: Dict[str, List]) -> bool:
+        """Sincronizar orders a PostgreSQL y actualizar products_stock"""
+        nuevos_orders = changes.get('nuevos', [])
+
+        if not nuevos_orders:
+            self._log("No hay orders nuevas para sincronizar", "info")
+            return True
+
+        self._log(f"Sincronizando {len(nuevos_orders)} orders a PostgreSQL...", "info")
+
+        for order in nuevos_orders:
+            try:
+                self._log(f"  📝 Iniciando insercion de order #{order.get('id')}", "debug")
+                self._insertar_order_completo(order)
+                self.stats['created'] += 1
+
+                order_id = order.get('id')
+                order_number = order.get('quote_number')
+
+                self._log(f"  📡 Actualizando status en API: Order #{order_id} ({order_number}) → 'rejected'", "info")
+                if self.quotes_client.update_quote_status(order_id, self.company_id, 'rejected'):
+                    self._log(f"  ✅ Estado actualizado en API: Order #{order_id} ({order_number}) → rejected", "info")
+                else:
+                    self._log(f"  ⚠️ No se pudo actualizar estado en API: Order #{order_id}", "warning")
+
+                # Guardar en sync_hashes como 'orders'
+                self._guardar_hash_order(order)
+
+                self._log(f"  ✅ Order #{order_id} sincronizada completamente", "info")
+
+            except Exception as e:
+                import traceback
+                self._log(f"  ❌ Error sincronizando order #{order.get('id')}: {e}", "error")
+                tb_lines = traceback.format_exc().split('\n')
+                for line in tb_lines[-10:]:
+                    self._log(f"     {line}", "error")
+                self.stats['errors'] += 1
+
+        return self.stats['errors'] == 0
+
+    def _insertar_order_completo(self, order: dict) -> int:
+        """Insertar order completo en PostgreSQL y actualizar products_stock.committed_stock"""
+        from decimal import Decimal
+
+        quote_id = order.get('id')
+        quote_number = order.get('quote_number')
+        customer = order.get('customer') or {}
+        seller = order.get('seller') or {}
+        items = order.get('items') or []
+
+        emission_date = self._parse_date(order.get('quote_date'))
+        register_date = self._parse_date(order.get('created_at'))
+        expiration_date = self._parse_date(order.get('valid_until'))
+
+        station_mac = self._get_mac_address()
+        station = self._ensure_station_exists(station_mac)
+
+        from datetime import date
+        shopping_order_date = date.today()
+
+        customer_document_number = customer.get('document_number') or ''
+        customer_code_api = customer.get('code') or ''
+        customer_name = customer.get('name') or ''
+        client_code = customer_document_number
+        client_name = customer_name or ''
+        client_name_fiscal = 0
+        client_address = customer.get('address') or ''
+        client_phone = customer.get('phone') or ''
+
+        client_found = False
+        search_value = customer_document_number if customer_document_number else customer_code_api
+
+        if search_value:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT code, name_fiscal FROM clients WHERE code = %s LIMIT 1
+                """, (search_value,))
+                result = self.pg_cursor.fetchone()
+                if result:
+                    if len(result) > 0:
+                        client_code = result[0]
+                    if len(result) > 1:
+                        client_name_fiscal = result[1] if result[1] is not None else 0
+                    else:
+                        client_name_fiscal = 0
+                    client_found = True
+                    self._log(f"     ✅ Cliente encontrado: {search_value} → Code {client_code}", "info")
+                else:
+                    self._log(f"     ⚠️ Cliente no encontrado con code/RIF: {search_value}", "warning")
+            except Exception as e:
+                self._log(f"     ❌ Error buscando cliente: {e}", "error")
+
+        if not client_found:
+            raise Exception(f"Cliente no encontrado en tabla clients. Document_Number='{customer_document_number}'")
+
+        seller_code = seller.get('code') if seller.get('code') else '00'
+        seller_name = seller.get('name') or ''
+
+        total_amount = 0.0
+        tax_amount = float(order.get('tax_amount', 0))
+        discount_amount = float(order.get('discount_amount', 0))
+        total = float(order.get('total', 0))
+
+        total_net_details = 0.0
+        total_tax_details = 0.0
+        total_details = 0.0
+        total_net_cost = 0.0
+        total_tax_cost = 0.0
+        total_cost = 0.0
+        total_exempt = 0.0
+
+        for item in items:
+            unit_price = float(item.get('unit_price', 0))
+            quantity = float(item.get('quantity', 0))
+            item_discount = float(item.get('discount_amount', 0))
+            item_tax = float(item.get('tax_amount', 0))
+            total_amount += quantity
+            item_net = (unit_price * quantity) - item_discount
+            total_net_details += item_net
+            total_tax_details += item_tax
+            total_details += item_net + item_tax
+            if item_tax == 0:
+                total_exempt += item_net
+
+            product = item.get('product', {})
+            unitary_cost = round(float(product.get('unitary_cost', 0)) if product else 0.0, 4)
+            buy_aliquot = float(product.get('buy_aliquot', 0)) if product else 0.0
+            item_total_net_cost = round(unitary_cost * quantity, 2)
+            item_total_tax_cost = round(unitary_cost * (buy_aliquot / 100) * quantity, 2) if buy_aliquot > 0 else 0.0
+            item_total_cost = round(item_total_net_cost + item_total_tax_cost, 2)
+            total_net_cost += item_total_net_cost
+            total_tax_cost += item_total_tax_cost
+            total_cost += item_total_cost
+
+        # INSERT sales_operation con operation_type='ORDER'
+        sql_operation = """
+            INSERT INTO sales_operation (
+                operation_type, document_no, document_no_internal, emission_date, register_date, expiration_date,
+                client_code, client_id, client_name, client_name_fiscal, client_address, client_phone,
+                seller, credit_days, wait, begin_used, station, store, locations,
+                total_amount, total_net_details, total_tax_details, total_details,
+                percent_discount, discount, percent_freight, freight_tax, freight_aliquot,
+                total_net, total_tax, total,
+                total_net_cost, total_tax_cost, total_cost, total_exempt,
+                shopping_order_date, shopping_order_document_no,
+                pending, canceled, coin_code,
+                control_no, description, operation_comments,
+                address_send, contact_send, phone_send
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            RETURNING correlative
+        """
+
+        self.pg_cursor.execute(sql_operation, (
+            'ORDER',
+            str(quote_number),
+            str(quote_number),
+            emission_date,
+            register_date,
+            expiration_date,
+            client_code,
+            customer_document_number,
+            client_name,
+            client_name_fiscal,
+            client_address,
+            client_phone,
+            seller_code,
+            0, False, False,
+            station,
+            '00', '00',
+            total_amount, total_net_details, total_tax_details, total_details,
+            0, 0, 0, '01', 16,
+            total_net_details, total_tax_details, total,
+            total_net_cost, total_tax_cost, total_cost, total_exempt,
+            shopping_order_date, '',
+            True, False, '02',
+            '', '', '',
+            '', '', ''
+        ))
+
+        result = self.pg_cursor.fetchone()
+        if not result or len(result) == 0:
+            raise Exception("No se pudo obtener el correlative del sales_operation insertado")
+        correlative = result[0]
+        self._log(f"     Insertada orden #{correlative} (ORDER)", "debug")
+
+        # Insertar monedas
+        self._insertar_sales_operation_coins(
+            correlative, order,
+            total_net_details, total_tax_details, total_details, discount_amount,
+            total_net_cost, total_tax_cost, total_cost, total_exempt
+        )
+
+        # Insertar items con store y locations del API, y actualizar products_stock
+        for item in items:
+            self._insertar_order_item(correlative, item, quote_number)
+            self._actualizar_committed_stock(item)
+
+        # Insertar impuestos
+        self._insertar_impuestos(correlative, order)
+
+        self.pg_conn.commit()
+        return correlative
+
+    def _insertar_order_item(self, main_correlative: int, item: dict, quote_number: str):
+        """Insertar item de order en sales_operation_details con store y locations del item"""
+        product = item.get('product', {})
+        code_product = product.get('code') if product else None
+        description_product = product.get('description', '') if product else item.get('name', '')
+        unit_from_api = item.get('unit')
+
+        # store y locations desde el item (no hardcoded '00')
+        store = item.get('store', '00')
+        locations = item.get('locations', '00')
+
+        # unit_type y conversion_factor desde el item
+        unit_type = item.get('unit_type', 0)
+        conversion_factor = float(item.get('conversion_factor', 1.0))
+
+        # Buscar unit en products_units
+        unit = None
+        if code_product and unit_from_api:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT correlative, conversion_factor FROM products_units
+                    WHERE product_code = %s AND unit = %s LIMIT 1
+                """, (code_product, unit_from_api))
+                result = self.pg_cursor.fetchone()
+                if result:
+                    if len(result) > 0:
+                        unit = result[0]
+                    if len(result) > 1 and result[1] is not None:
+                        conversion_factor = float(result[1])
+            except Exception as e:
+                self._log(f"     ⚠️ Error buscando products_units: {e}", "warning")
+
+        # Obtener buy_tax
+        buy_tax = '01'
+        if code_product:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT buy_tax FROM products WHERE code = %s LIMIT 1
+                """, (code_product,))
+                result = self.pg_cursor.fetchone()
+                if result and result[0]:
+                    buy_tax = result[0]
+            except Exception as e:
+                self._log(f"     ⚠️ Error obteniendo buy_tax: {e}", "warning")
+
+        unitary_cost = round(float(product.get('unitary_cost', 0)) if product else 0.0, 4)
+        sale_tax = product.get('sale_tax', '01') if product else '01'
+        sale_aliquot = float(product.get('aliquot', 0)) if product else 0.0
+        buy_aliquot = float(product.get('buy_aliquot', 0)) if product else 0.0
+        product_type = product.get('product_type', '') if product else ''
+
+        quantity = float(item.get('quantity', 0))
+        unit_price = float(item.get('unit_price', 0))
+        discount_amount = float(item.get('discount_amount', 0))
+        tax_amount = float(item.get('tax_amount', 0))
+        item_total = float(item.get('total', 0))
+        type_price = item.get('type_price')
+
+        subtotal = unit_price * quantity
+        total_net = subtotal - discount_amount
+        total_tax = tax_amount
+        pending_amount = quantity
+
+        total_net_cost = round(unitary_cost * quantity, 2)
+        total_tax_cost = round(unitary_cost * (buy_aliquot / 100) * quantity, 2) if buy_aliquot > 0 else 0.0
+        total_cost = round(total_net_cost + total_tax_cost, 2)
+
+        total_net_gross = subtotal
+        total_tax_gross = tax_amount
+        total_gross = item_total
+
+        sql_detalle = """
+            INSERT INTO sales_operation_details (
+                main_correlative, code_product, description_product, description,
+                referenc, mark, model,
+                amount, price, discount, total, coin_code,
+                store, locations,
+                unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot,
+                total_net_cost, total_tax_cost, total_cost,
+                total_net_gross, total_tax_gross, total_gross,
+                total_net, total_tax, pending_amount, buy_tax, buy_aliquot, product_type,
+                type_price
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            RETURNING line
+        """
+
+        self.pg_cursor.execute(sql_detalle, (
+            main_correlative, code_product, description_product, '', '', '', '',
+            quantity, unit_price, discount_amount, item_total, '02',
+            store, locations,
+            unit, conversion_factor, unit_type, unitary_cost, sale_tax, sale_aliquot,
+            total_net_cost, total_tax_cost, total_cost,
+            total_net_gross, total_tax_gross, total_gross,
+            total_net, total_tax, pending_amount, buy_tax, buy_aliquot, product_type,
+            type_price
+        ))
+
+        result = self.pg_cursor.fetchone()
+        line = result[0] if result and len(result) > 0 else None
+
+        if line:
+            self._log(f"     Insertado item ORDER: {item.get('name')} store={store} loc={locations} unit_type={unit_type}", "debug")
+            self._insertar_detail_coins(main_correlative, line, unitary_cost, unit_price,
+                                        total_net_cost, total_tax_cost, total_cost,
+                                        total_net_gross, total_tax_gross, total_gross,
+                                        discount_amount, total_net, tax_amount, item_total)
+
+    def _actualizar_committed_stock(self, item: dict):
+        """Actualizar products_stock.committed_stock segun unit_type y conversion_factor"""
+        product = item.get('product', {})
+        code_product = product.get('code')
+        store = item.get('store', '00')
+        locations = item.get('locations', '00')
+        quantity = float(item.get('quantity', 0))
+        unit_type = item.get('unit_type', 0)
+        conversion_factor = float(item.get('conversion_factor', 1.0))
+
+        if not code_product or quantity <= 0:
+            return
+
+        # Calcular cantidad a sumar segun unit_type
+        if unit_type == 0:
+            committed_addition = quantity
+        elif unit_type == 1:
+            committed_addition = quantity * conversion_factor
+        elif unit_type == 2:
+            committed_addition = quantity / conversion_factor if conversion_factor != 0 else quantity
+        else:
+            committed_addition = quantity
+
+        self._log(f"     📊 Actualizando committed_stock: {code_product} store={store} loc={locations} "
+                  f"qty={quantity} unit_type={unit_type} cf={conversion_factor} → +{committed_addition:.4f}", "debug")
+
+        try:
+            self.pg_cursor.execute("""
+                UPDATE products_stock
+                SET committed_stock = COALESCE(committed_stock, 0) + %s
+                WHERE product_code = %s AND store = %s AND locations = %s
+            """, (committed_addition, code_product, store, locations))
+
+            if self.pg_cursor.rowcount == 0:
+                self._log(f"     ⚠️ No se encontro products_stock para {code_product}|{store}|{locations}", "warning")
+        except Exception as e:
+            self._log(f"     ❌ Error actualizando committed_stock: {e}", "error")
+
+    def _guardar_hash_order(self, order: dict):
+        """Guardar hash de order en sync_hashes"""
+        quote_id = order.get('id')
+        hash_value = self._generar_hash_quote(order)
+
+        self.pg_cursor.execute("""
+            INSERT INTO sync_hashes (table_name, record_key, record_hash, company_id, pending_sync, deleted_at)
+            VALUES ('orders', %s, %s, %s, FALSE, NULL)
+        """, (str(quote_id), hash_value, self.company_id))
+
+        self.pg_conn.commit()

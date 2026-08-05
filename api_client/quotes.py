@@ -71,6 +71,35 @@ class QuotesClient(BaseAPIClient):
             print(f"Error obteniendo quotes: {e}")
             return []
 
+    def get_pending_orders(self, company_id: int) -> List[Dict]:
+        """
+        Obtener orders pendientes de sincronizacion.
+
+        Args:
+            company_id: ID de la empresa
+
+        Returns:
+            Lista de orders con status=draft y operation_type=ORDER
+        """
+        try:
+            response = self.get(
+                "/sync-client/batch/quotes",
+                params={
+                    'company_id': company_id,
+                    'status': 'draft',
+                    'operation_type': 'ORDER'
+                }
+            )
+
+            if response.get('success'):
+                return response.get('quotes', [])
+            else:
+                return []
+
+        except Exception as e:
+            print(f"Error obteniendo orders: {e}")
+            return []
+
     def mark_quote_synced(self, quote_id: int) -> bool:
         """
         Marcar un quote como sincronizado
