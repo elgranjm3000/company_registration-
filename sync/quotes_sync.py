@@ -1330,16 +1330,14 @@ class QuotesSync:
         store = item.get('store', '00')
         locations = item.get('locations', '00')
 
-        # unit_type y conversion_factor desde el item
-        unit_type = item.get('unit_type', 0)
-        conversion_factor = float(item.get('conversion_factor', 1.0))
-
-        # Buscar unit en products_units
+        # unit_type y conversion_factor desde products_units en PostgreSQL
         unit = None
+        unit_type = 0
+        conversion_factor = 1.0
         if code_product and unit_from_api:
             try:
                 self.pg_cursor.execute("""
-                    SELECT correlative, conversion_factor FROM products_units
+                    SELECT correlative, conversion_factor, unit_type FROM products_units
                     WHERE product_code = %s AND unit = %s LIMIT 1
                 """, (code_product, unit_from_api))
                 result = self.pg_cursor.fetchone()
@@ -1348,6 +1346,8 @@ class QuotesSync:
                         unit = result[0]
                     if len(result) > 1 and result[1] is not None:
                         conversion_factor = float(result[1])
+                    if len(result) > 2 and result[2] is not None:
+                        unit_type = result[2]
             except Exception as e:
                 self._log(f"     ⚠️ Error buscando products_units: {e}", "warning")
 
@@ -1435,11 +1435,28 @@ class QuotesSync:
         store = item.get('store', '00')
         locations = item.get('locations', '00')
         quantity = float(item.get('quantity', 0))
-        unit_type = item.get('unit_type', 0)
-        conversion_factor = float(item.get('conversion_factor', 1.0))
+        unit_from_api = item.get('unit')
 
         if not code_product or quantity <= 0:
             return
+
+        # Obtener unit_type y conversion_factor desde products_units en PostgreSQL
+        unit_type = 0
+        conversion_factor = 1.0
+        if code_product and unit_from_api:
+            try:
+                self.pg_cursor.execute("""
+                    SELECT unit_type, conversion_factor FROM products_units
+                    WHERE product_code = %s AND unit = %s LIMIT 1
+                """, (code_product, unit_from_api))
+                result = self.pg_cursor.fetchone()
+                if result:
+                    if len(result) > 0 and result[0] is not None:
+                        unit_type = result[0]
+                    if len(result) > 1 and result[1] is not None:
+                        conversion_factor = float(result[1])
+            except Exception as e:
+                self._log(f"     ⚠️ Error buscando products_units: {e}", "warning")
 
         # Calcular cantidad a sumar segun unit_type
         if unit_type == 0:
