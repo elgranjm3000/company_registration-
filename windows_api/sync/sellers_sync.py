@@ -156,10 +156,12 @@ class SellersSync(BaseSync):
                     u.status,
                     s.user_code,
                     u.profile,
-                    p.system_value
+                    p.system_value,
+                    p2.system_value AS store_default
                 FROM sellers s
                 LEFT JOIN users u ON s.user_code = u.code
                 LEFT JOIN system_properties p ON p.profile = u.profile AND p.properties_group = '003' AND p.code = 2
+                LEFT JOIN system_properties p2 ON p2.profile = u.profile AND p2.properties_group = '003' AND p2.code = 30
                 WHERE s.code IN ({placeholders})
                   AND s.code IS NOT NULL AND s.code != '' AND s.code <> 'N/A'
                   AND s.description IS NOT NULL AND s.description != ''
@@ -269,7 +271,8 @@ class SellersSync(BaseSync):
             status,          # 4 - '01' = active, '02' = inactive (o 'A'/'I')
             user_code,       # 5 - No usado (interno de PG)
             profile,         # 6 - perfil del usuario
-            system_value     # 7 - valor de system_properties
+            system_value,    # 7 - system_properties code=2
+            store_default    # 8 - system_properties code=30
         ) = pg_record
 
         # Mapear status de PostgreSQL a API
@@ -294,7 +297,8 @@ class SellersSync(BaseSync):
             'email': valid_email,
             'status': api_status,
             'profile': profile if profile else '',
-            'system_value': system_value if system_value else ''
+            'system_value': system_value if system_value else '',
+            'store_default': store_default if store_default else ''
         }
 
         # Solo incluir password si tiene valor
