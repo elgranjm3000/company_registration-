@@ -3151,6 +3151,23 @@ CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
         self.stats['quotes']['created'] += order_stats.get('created', 0)
         self.stats['quotes']['errors'] += order_stats.get('errors', 0)
 
+        # 10. Re-sync products-stock (committed_stock fue actualizado por orders)
+        if cambios_orders.get('nuevos'):
+            self._log("\n📊 RE-SINCRONIZANDO PRODUCTS-STOCK (cambios por orders)...")
+            products_stock_resync = ProductsStockSync(
+                self.pg_conn,
+                self.products_stock_client,
+                company_id,
+                self.logger
+            )
+            # Ejecutar solo detect_changes y sync_to_api (sin execute completo)
+            changes_ps = products_stock_resync.detect_changes()
+            if changes_ps.get('nuevos') or changes_ps.get('modificados'):
+                products_stock_resync.sync_to_api(changes_ps)
+                if changes_ps.get('_hashes'):
+                    products_stock_resync._update_sync_hashes(changes_ps)
+            self.stats['products-stock']['updated'] += products_stock_resync.stats.get('updated', 0)
+
         # Resumen
         self._log("\n" + "="*70)
         self._log("📊 RESUMEN DE SINCRONIZACIÓN")
