@@ -1,23 +1,14 @@
 @echo off
-chcp 65001 >nul
 echo ============================================================
 echo  COMPILACION CON NUITKA - SyncAPISystem
 echo  (Codigo compilado a C = protegido + sin error multi-instancia)
 echo ============================================================
 echo.
 
-REM ============================================================
-REM PREREQUISITOS:
-REM   1. pip install nuitka
-REM   2. Compilador C: MSVC (Visual Studio Build Tools) o MinGW64
-REM      - MSVC: https://visualstudio.microsoft.com/visual-cpp-build-tools/
-REM      - MinGW: pip install ordered-set zstandard, y bajar MinGW64
-REM ============================================================
-
 cd /d "%~dp0"
 
 echo [1/3] Verificando Nuitka...
-nuitka --version >nul 2>&1
+nuitka --version
 if errorlevel 1 (
     echo   ERROR: Nuitka no esta instalado.
     echo   Ejecuta: pip install nuitka
@@ -74,7 +65,7 @@ if errorlevel 1 (
     echo.
     echo   Causas comunes:
     echo   - Falta compilador C (MSVC o MinGW)
-    echo   - Falta algun modulo: pip install -r requisitos
+    echo   - Falta algun modulo
     echo.
     pause
     exit /b 1
