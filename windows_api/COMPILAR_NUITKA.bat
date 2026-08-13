@@ -1,24 +1,12 @@
 @echo off
 echo ============================================================
 echo  COMPILACION CON NUITKA - SyncAPISystem
-echo  (Codigo compilado a C = protegido + sin error multi-instancia)
 echo ============================================================
 echo.
 
 cd /d "%~dp0"
 
-echo [1/3] Verificando Nuitka...
-nuitka --version
-if errorlevel 1 (
-    echo   ERROR: Nuitka no esta instalado.
-    echo   Ejecuta: pip install nuitka
-    pause
-    exit /b 1
-)
-echo   OK - Nuitka instalado
-echo.
-
-echo [2/3] Compilando (esto tarda varios minutos)...
+echo Compilando con Nuitka (esto tarda varios minutos)...
 echo.
 
 nuitka ^
@@ -51,34 +39,11 @@ nuitka ^
   --windows-icon-from-ico=logo.ico ^
   --output-filename=SyncAPISystem.exe ^
   --output-dir=dist_nuitka ^
-  --company-name="Chrystal" ^
-  --product-name="SyncAPI System" ^
-  --file-version=1.0.0 ^
-  --product-version=1.0.0 ^
   --assume-yes-for-downloads ^
   sync_system_api.py
 
-if errorlevel 1 (
-    echo.
-    echo [ERROR] La compilacion fallo.
-    echo   Revisa los mensajes de arriba.
-    echo.
-    echo   Causas comunes:
-    echo   - Falta compilador C (MSVC o MinGW)
-    echo   - Falta algun modulo
-    echo.
-    pause
-    exit /b 1
-)
-
-echo.
-echo [3/3] Compilacion exitosa.
-echo.
-echo   El ejecutable esta en:
-echo   dist_nuitka\SyncAPISystem.exe
 echo.
 echo ============================================================
-echo  IMPORTANTE: Distribuye SOLO el .exe (un solo archivo)
-echo  Tu codigo esta compilado a C (no recuperable)
+echo  Terminado. Revisa la carpeta dist_nuitka
 echo ============================================================
 pause
