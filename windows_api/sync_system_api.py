@@ -30,6 +30,17 @@ import sys
 import os
 import traceback
 
+# ========================================
+# NUITKA COMPATIBILITY SHIM
+# Nuitka define __compiled__ en vez de sys.frozen / sys._MEIPASS (PyInstaller)
+# ========================================
+if "__compiled__" in globals() and not getattr(sys, 'frozen', False):
+    sys.frozen = True
+    if not hasattr(sys, '_MEIPASS'):
+        # En --onefile, los datos se extraen junto al ejecutable (temp)
+        # En --standalone, estan junto al ejecutable real
+        sys._MEIPASS = os.path.dirname(os.path.abspath(sys.executable))
+
 # Forzar UTF-8 en stdout para evitar UnicodeEncodeError con emojis en Windows (cp1252)
 if hasattr(sys.stdout, 'reconfigure'):
     try:
