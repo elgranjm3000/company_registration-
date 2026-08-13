@@ -12,7 +12,7 @@ echo.
 nuitka ^
   --standalone ^
   --onefile ^
-  --windows-disable-console ^
+  --windows-console-mode=disable ^
   --enable-plugin=tk-inter ^
   --enable-plugin=pyside6 ^
   --include-package=api_client ^
@@ -34,8 +34,8 @@ nuitka ^
   --include-package=cryptography ^
   --include-package=cffi ^
   --include-package=bcrypt ^
-  --include-data-files=logo.ico=. ^
-  --include-data-files=logo.png=. ^
+  --include-data-files=logo.ico=logo.ico ^
+  --include-data-files=logo.png=logo.png ^
   --windows-icon-from-ico=logo.ico ^
   --output-filename=SyncAPISystem.exe ^
   --output-dir=dist_nuitka ^
