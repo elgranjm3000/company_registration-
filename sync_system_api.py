@@ -6583,7 +6583,6 @@ class SystemTrayService:
                     args,
                     capture_output=True,
                     text=True,
-                    timeout=300,
                     creationflags=creationflags
                 )
 
@@ -8691,7 +8690,7 @@ def main():
                     _sp_args = [sys.executable, '--config-window', _result_path]
                 else:
                     _sp_args = [sys.executable, __file__, '--config-window', _result_path]
-                _sp.run(_sp_args, capture_output=True, text=True, timeout=300,
+                _sp.run(_sp_args, capture_output=True, text=True,
                         creationflags=getattr(_sp, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
                 try:
                     with open(_result_path) as _f:
@@ -8882,7 +8881,7 @@ def main():
                 _sp_args = ([sys.executable, '--config-window', _result_path]
                            if getattr(sys, 'frozen', False)
                            else [sys.executable, __file__, '--config-window', _result_path])
-                _sp.run(_sp_args, capture_output=True, text=True, timeout=300,
+                _sp.run(_sp_args, capture_output=True, text=True,
                         creationflags=getattr(_sp, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
                 try:
                     with open(_result_path) as _f:
