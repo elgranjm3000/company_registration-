@@ -2720,6 +2720,7 @@ CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
                 device_uuid=_device_uuid,
                 timeout=120,   
                 batch_size=1500
+                
             )
 
             self.sellers_client = SellersClient(
