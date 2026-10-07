@@ -2706,7 +2706,9 @@ CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
                 logger=api_logger,
                 app_version=APP_VERSION,
                 chrystal_version=chrystal_ver,
-                device_uuid=_device_uuid
+                device_uuid=_device_uuid,
+                timeout=300,   
+                batch_size=100
             )
 
             self.customers_client = CustomersClient(
@@ -2715,7 +2717,9 @@ CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
                 logger=api_logger,
                 app_version=APP_VERSION,
                 chrystal_version=chrystal_ver,
-                device_uuid=_device_uuid
+                device_uuid=_device_uuid,
+                timeout=120,   
+                batch_size=1500
             )
 
             self.sellers_client = SellersClient(
@@ -2724,7 +2728,8 @@ CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
                 logger=api_logger,
                 app_version=APP_VERSION,
                 chrystal_version=chrystal_ver,
-                device_uuid=_device_uuid
+                device_uuid=_device_uuid,
+                timeout=60
             )
 
             self.quotes_client = QuotesClient(
@@ -2742,7 +2747,8 @@ CREATE TRIGGER tr_products_stock_mark_deleted_sync_hashes
                 logger=api_logger,
                 app_version=APP_VERSION,
                 chrystal_version=chrystal_ver,
-                device_uuid=_device_uuid
+                device_uuid=_device_uuid,
+                timeout=60
             )
 
             self.locations_client = LocationsClient(
